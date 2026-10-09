@@ -558,31 +558,28 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 	}
 }
 
-// SentPackets decodes every packet that router emitted a SendPacket event for
-// in receipt, in log order. Logs from any other address are ignored, so only
-// the source ICS26 router's packets are returned.
-func SentPackets(receipt *types.Receipt, router common.Address) ([]ics26router.IICS26RouterMsgsPacket, error) {
+// SentPackets decodes every SendPacket event router emitted in receipt, in
+// log order. Logs from any other address are ignored, so only the source
+// ICS26 router's packets are returned. Each event's Raw.Data is its packet's
+// ABI encoding, the form attestors attest.
+func SentPackets(receipt *types.Receipt, router common.Address) ([]*ics26router.ContractSendPacket, error) {
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
 	if err != nil {
 		return nil, fmt.Errorf("traffic: decode SendPacket: %w", err)
 	}
-	packets := make([]ics26router.IICS26RouterMsgsPacket, len(events))
-	for i, event := range events {
-		packets[i] = event.Packet
-	}
-	return packets, nil
+	return events, nil
 }
 
 // sendPacketSequences returns the sequences of SentPackets.
 func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
-	packets, err := SentPackets(receipt, router)
+	events, err := SentPackets(receipt, router)
 	if err != nil {
 		return nil, err
 	}
-	sequences := make([]uint64, len(packets))
-	for i, packet := range packets {
-		sequences[i] = packet.Sequence
+	sequences := make([]uint64, len(events))
+	for i, event := range events {
+		sequences[i] = event.Packet.Sequence
 	}
 	return sequences, nil
 }

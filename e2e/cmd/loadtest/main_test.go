@@ -21,6 +21,8 @@ func TestRejectsInvalidFlags(t *testing.T) {
 		"zero rps":           {"attestor", "--packets-rps", "0"},
 		"negative duration":  {"attestor", "--duration", "-1s"},
 		"error rate above 1": {"attestor", "--max-error-rate", "1.5"},
+		"NaN error rate":     {"attestor", "--max-error-rate", "NaN"},
+		"zero selected rps":  {"attestor", "--phases", "state", "--state-rps", "0"},
 		"bad phase":          {"attestor", "--phases", "packets,blocks"},
 		"unknown flag":       {"attestor", "--rps", "5"},
 		"unknown scenario":   {"prover"},
@@ -31,6 +33,15 @@ func TestRejectsInvalidFlags(t *testing.T) {
 			assert.NotEmpty(t, stderr.String(), "says why")
 		})
 	}
+}
+
+// A rate only matters for a phase that runs: this run gets past the phase
+// checks and stops at the provider.
+func TestIgnoresTheRateOfAnUnselectedPhase(t *testing.T) {
+	var stderr bytes.Buffer
+	args := []string{"attestor", "--phases", "state", "--packets-rps", "0", "--provider", "none"}
+	assert.Equal(t, exitUsage, run(args, &bytes.Buffer{}, &stderr))
+	assert.Contains(t, stderr.String(), "provider")
 }
 
 func TestHelpExitsZero(t *testing.T) {

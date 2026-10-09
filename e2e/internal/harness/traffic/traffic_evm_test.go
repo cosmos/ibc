@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
+
+	attestoribc "github.com/cosmos/ibc/cli/attestor/evm/ibc"
 )
 
 func TestReceiptEvents(t *testing.T) {
@@ -75,15 +77,18 @@ func TestSentPacketsOnlyDecodesRouterLogs(t *testing.T) {
 	}
 	router := common.HexToAddress("0x1")
 
-	packets, err := SentPackets(&types.Receipt{Logs: []*types.Log{
+	events, err := SentPackets(&types.Receipt{Logs: []*types.Log{
 		sendPacketLog(common.HexToAddress("0x2"), 1),
 		sendPacketLog(router, 2),
 		{Address: router, Topics: []common.Hash{common.HexToHash("0x3")}},
 		sendPacketLog(router, 3),
 	}}, router)
 	require.NoError(t, err)
-	require.Len(t, packets, 2)
-	require.Equal(t, uint64(2), packets[0].Sequence)
-	require.Equal(t, uint64(3), packets[1].Sequence)
-	require.Equal(t, "client-1", packets[1].DestClient)
+	require.Len(t, events, 2)
+	require.Equal(t, uint64(2), events[0].Packet.Sequence)
+	require.Equal(t, uint64(3), events[1].Packet.Sequence)
+	require.Equal(t, "client-1", events[1].Packet.DestClient)
+	attested, err := attestoribc.DecodePacket(events[1].Raw.Data)
+	require.NoError(t, err, "the log data is the encoding attestors attest")
+	require.Equal(t, uint64(3), attested.Sequence)
 }

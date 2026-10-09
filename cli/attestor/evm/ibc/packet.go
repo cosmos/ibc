@@ -27,19 +27,13 @@ func EncodePacket(p channeltypesv2.Packet) ([]byte, error) {
 		}
 	}
 
-	return EncodeRouterPacket(ics26router.IICS26RouterMsgsPacket{
+	data, err := packetArgs.Pack(ics26router.IICS26RouterMsgsPacket{
 		Sequence:         p.Sequence,
 		SourceClient:     p.SourceClient,
 		DestClient:       p.DestinationClient,
 		TimeoutTimestamp: p.TimeoutTimestamp,
 		Payloads:         payloads,
 	})
-}
-
-// EncodeRouterPacket encodes a Solidity router packet, such as one decoded
-// from a SendPacket event, as the router tuple.
-func EncodeRouterPacket(p ics26router.IICS26RouterMsgsPacket) ([]byte, error) {
-	data, err := packetArgs.Pack(p)
 	if err != nil {
 		return nil, fmt.Errorf("encode packet: %w", err)
 	}

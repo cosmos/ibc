@@ -106,28 +106,27 @@ passes when it sent its whole target without failures and every packet succeeded
 
 ## Attestor scenario
 
-`loadtest attestor` offers gRPC requests at a fixed rate to the Attestor observing chain A.
+`loadtest attestor` sends gRPC requests at a fixed rate to the Attestor observing chain A.
 No relayer runs.
 
 | Phase | Request | Default |
 | --- | --- | --- |
-| `packets` | `PacketAttestation` of a random seeded packet at its send height | 30s at 500 rps, 32 callers |
-| `state` | `StateAttestation` at a random height in `1..latest` | 30s at 100 rps, 16 callers |
+| `packets` | `PacketAttestation` of a random seeded packet at its send height | 30s at 500 rps |
+| `state` | `StateAttestation` at a random height in `1..latest` | 30s at 100 rps |
 
-`--phases` selects phases (packets runs first); `--duration`, `--packets-rps`,
-`--packets-concurrency`, `--state-rps`, and `--state-concurrency` shape them. The `packets`
-phase first deploys the applications, seeds 10 IFT transfers from chain A in one batch
-transaction, and waits until the Attestor's latest height reaches its block; the packets are
-never relayed. A `state`-only run deploys nothing.
+`--phases` lists the phases to run, in order (a phase may repeat); `--duration`,
+`--packets-rps`, and `--state-rps` shape them. The `packets` phase first deploys the
+applications (once), seeds 10 IFT transfers from chain A in one batch transaction, and waits
+until the Attestor's latest height reaches its block; the packets are never relayed. A
+`state`-only run deploys nothing.
 
-A rate limiter opens one slot per `1/rps`. A slot starts a call only if a caller is free
-(fewer than the phase's concurrency in flight); otherwise it counts as `dropped`, so
-`offered = sent + dropped`, and the achieved rate is the calls sent per second. Each call has a 3s timeout from the run's context, not the
-phase's: at the phase deadline no new calls start and the phase waits for those in flight.
-Latency covers succeeded calls. A phase passes when at least one call succeeded and failed
-plus timed-out calls are at most `--max-error-rate` (default 0.01) of the calls sent; dropped
-calls are reported, not judged. A phase that cannot start, or an interruption, ends the run,
-and the report covers the phases that completed.
+The load is open loop: a ticker starts one call per `1/rps` whether or not earlier calls have
+returned, so an attestor that cannot keep up shows as latency and timeouts, not as fewer
+calls. Each call has a 3s timeout. At the phase deadline no new calls start and the phase
+waits for those in flight. Latency covers succeeded calls. A phase passes when at least one
+call succeeded and failed plus timed-out calls are at most `--max-error-rate` (default 0.01)
+of the calls sent. A phase that cannot start, or an interruption, ends the run; an
+interrupted phase is reported with the calls it sent, over the time it ran, and fails.
 
 ## Observability
 

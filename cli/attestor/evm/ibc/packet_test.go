@@ -38,36 +38,34 @@ func TestPacketCodec(t *testing.T) {
 		}
 		contractABI, err := ics26router.ContractMetaData.GetAbi()
 		require.NoError(t, err)
-		routerPacket := ics26router.IICS26RouterMsgsPacket{
-			Sequence:         expected.Sequence,
-			SourceClient:     expected.SourceClient,
-			DestClient:       expected.DestinationClient,
-			TimeoutTimestamp: expected.TimeoutTimestamp,
-			Payloads: []ics26router.IICS26RouterMsgsPayload{
-				{
-					SourcePort: expected.Payloads[0].SourcePort,
-					DestPort:   expected.Payloads[0].DestinationPort,
-					Version:    expected.Payloads[0].Version,
-					Encoding:   expected.Payloads[0].Encoding,
-					Value:      expected.Payloads[0].Value,
-				},
-				{
-					SourcePort: expected.Payloads[1].SourcePort,
-					DestPort:   expected.Payloads[1].DestinationPort,
-					Version:    expected.Payloads[1].Version,
-					Encoding:   expected.Payloads[1].Encoding,
-					Value:      expected.Payloads[1].Value,
+		encoded, err := contractABI.Events["SendPacket"].Inputs.NonIndexed().Pack(
+			ics26router.IICS26RouterMsgsPacket{
+				Sequence:         expected.Sequence,
+				SourceClient:     expected.SourceClient,
+				DestClient:       expected.DestinationClient,
+				TimeoutTimestamp: expected.TimeoutTimestamp,
+				Payloads: []ics26router.IICS26RouterMsgsPayload{
+					{
+						SourcePort: expected.Payloads[0].SourcePort,
+						DestPort:   expected.Payloads[0].DestinationPort,
+						Version:    expected.Payloads[0].Version,
+						Encoding:   expected.Payloads[0].Encoding,
+						Value:      expected.Payloads[0].Value,
+					},
+					{
+						SourcePort: expected.Payloads[1].SourcePort,
+						DestPort:   expected.Payloads[1].DestinationPort,
+						Version:    expected.Payloads[1].Version,
+						Encoding:   expected.Payloads[1].Encoding,
+						Value:      expected.Payloads[1].Value,
+					},
 				},
 			},
-		}
-		encoded, err := contractABI.Events["SendPacket"].Inputs.NonIndexed().Pack(routerPacket)
+		)
 		require.NoError(t, err)
 		actualEncoded, err := EncodePacket(expected)
 		require.NoError(t, err)
 		assert.Equal(t, encoded, actualEncoded)
-		routerEncoded, err := EncodeRouterPacket(routerPacket)
-		require.NoError(t, err)
-		assert.Equal(t, encoded, routerEncoded)
 
 		actual, err := DecodePacket(encoded)
 		require.NoError(t, err)

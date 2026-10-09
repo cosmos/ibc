@@ -172,50 +172,41 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 }
 
 func runAttestor(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("attestor", "Offers packet and state attestation requests at a fixed rate to the attestor\n"+
-		"observing chain-a. The packets phase first seeds packets to attest.", stderr)
+	fs := newFlagSet("attestor", "Sends packet and state attestation requests at a fixed rate to the attestor\n"+
+		"observing chain-a, without waiting for replies. The packets phase first seeds packets to attest.", stderr)
 	var c common
 	c.register(fs)
-	phases := fs.String(
-		"phases",
-		"packets,state",
-		"comma-separated phases to run, packets before state: packets, state",
-	)
+	phases := fs.String("phases", "packets,state", "comma-separated phases to run in order: packets, state")
 	duration := fs.Duration("duration", 30*time.Second, "duration of each phase")
 	packetsRPS := fs.Int("packets-rps", 500, "packet phase requests per second")
-	packetsConc := fs.Int("packets-concurrency", 32, "packet phase concurrent callers")
 	stateRPS := fs.Int("state-rps", 100, "state phase requests per second")
-	stateConc := fs.Int("state-concurrency", 16, "state phase concurrent callers")
 	maxErrorRate := fs.Float64("max-error-rate", 0.01, "largest share of sent calls that may fail or time out "+
 		"in a passing phase, 0 to 1")
 	if err := parse(fs, args); err != nil {
 		return parseExit(err)
 	}
 	cfg := attestorload.Config{
-		Packets:      simpleload.Spec{Duration: *duration, RatePerSecond: *packetsRPS, Concurrency: *packetsConc},
-		State:        simpleload.Spec{Duration: *duration, RatePerSecond: *stateRPS, Concurrency: *stateConc},
+		Packets:      simpleload.Spec{Duration: *duration, RatePerSecond: *packetsRPS},
+		State:        simpleload.Spec{Duration: *duration, RatePerSecond: *stateRPS},
 		MaxErrorRate: *maxErrorRate,
 		JSON:         c.jsonOut,
 	}
-	selected := map[string]bool{}
+	if *duration <= 0 {
+		return usageError(stderr, errors.New("--duration must be positive"))
+	}
+	rates := map[string]int{attestorload.PhasePackets: *packetsRPS, attestorload.PhaseState: *stateRPS}
 	for phase := range strings.SplitSeq(*phases, ",") {
 		phase = strings.TrimSpace(phase)
-		if phase != attestorload.PhasePackets && phase != attestorload.PhaseState {
+		switch rate, ok := rates[phase]; {
+		case !ok:
 			return usageError(stderr, fmt.Errorf("unknown phase %q: want packets or state", phase))
+		case rate <= 0:
+			return usageError(stderr, fmt.Errorf("--%s-rps must be positive", phase))
 		}
-		selected[phase] = true
+		cfg.Phases = append(cfg.Phases, phase)
 	}
-	for _, phase := range []string{attestorload.PhasePackets, attestorload.PhaseState} {
-		if selected[phase] {
-			cfg.Phases = append(cfg.Phases, phase)
-		}
-	}
-	for _, spec := range []simpleload.Spec{cfg.Packets, cfg.State} {
-		if spec.Duration <= 0 || spec.RatePerSecond <= 0 || spec.Concurrency <= 0 {
-			return usageError(stderr, errors.New("--duration, rates, and concurrencies must be positive"))
-		}
-	}
-	if cfg.MaxErrorRate < 0 || cfg.MaxErrorRate > 1 {
+	// Written to reject NaN, which fails every comparison.
+	if !(cfg.MaxErrorRate >= 0 && cfg.MaxErrorRate <= 1) {
 		return usageError(stderr, errors.New("--max-error-rate must be between 0 and 1"))
 	}
 	opts, err := c.sessionOptions()
