@@ -27,10 +27,7 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	routes := []traffic.Route{
-		{ID: "b-to-a", Source: chainB, Destination: chainA},
-		{ID: "c-to-a", Source: chainC, Destination: chainA},
-	}
+	routes := []traffic.Route{traffic.NewRoute(chainB, chainA), traffic.NewRoute(chainC, chainA)}
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, routes...)
 	bToAApp, err := traffic.NewTransfer(env, deployment, sender, routes[0])
 	require.NoError(t, err)

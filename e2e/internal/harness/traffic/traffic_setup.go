@@ -85,16 +85,21 @@ func distinctRoutes(routes []Route) error {
 	return nil
 }
 
-func AtoB(a, b environment.ChainID) Route {
-	return Route{ID: routeID(a, b), Source: a, Destination: b}
+// NewRoute is the relayed route from source to destination. AtoB and BtoA
+// name it for a two-Chain mesh.
+func NewRoute(source, destination environment.ChainID) Route {
+	return Route{ID: routeID(source, destination), Source: source, Destination: destination}
 }
 
-func BtoA(b, a environment.ChainID) Route {
-	return Route{ID: routeID(b, a), Source: b, Destination: a}
-}
+func AtoB(a, b environment.ChainID) Route { return NewRoute(a, b) }
 
+func BtoA(b, a environment.ChainID) Route { return NewRoute(b, a) }
+
+// ManualAtoB is AtoB with automatic relaying off.
 func ManualAtoB(a, b environment.ChainID) Route {
-	return Route{ID: routeID(a, b), Source: a, Destination: b, Manual: true}
+	route := NewRoute(a, b)
+	route.Manual = true
+	return route
 }
 
 // ChainDeployment holds per-chain application contracts deployed for traffic.
