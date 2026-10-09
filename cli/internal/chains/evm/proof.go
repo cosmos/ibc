@@ -50,13 +50,6 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots []comm
 		return RouterProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
 	}
 
-	if len(storageProofs) != len(slots) {
-		return RouterProof{}, errors.Errorf(
-			"router proof at height %d on chain %s: %d storage proofs returned for %d slots",
-			height, c.chainID, len(storageProofs), len(slots),
-		)
-	}
-
 	return RouterProof{AccountProof: accountProof, StorageProofs: storageProofs}, nil
 }
 
