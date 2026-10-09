@@ -15,6 +15,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
 // latencyFetchers bounds concurrent receipt and header requests per Chain.
@@ -24,6 +26,36 @@ const latencyFetchers = 16
 type chainReader interface {
 	TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+}
+
+// retryingReader repeats a read the node did not answer, as a send does,
+// for at most wait.Timeout.
+type retryingReader struct {
+	chain chainReader
+	wait  evm.TransactionWait
+}
+
+// retrying reads chain with the retries of a send, within timing's
+// completion budget.
+func retrying(chain chainReader, timing environment.Timing) chainReader {
+	wait := evm.TransactionWait{Timeout: timing.CompletionBudget, PollInterval: timing.PollInterval}
+	return retryingReader{chain: chain, wait: wait}
+}
+
+func (r retryingReader) TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.wait.Timeout)
+	defer cancel()
+	return evm.Retry(ctx, r.wait, func(ctx context.Context) (*types.Receipt, error) {
+		return r.chain.TransactionReceipt(ctx, hash)
+	})
+}
+
+func (r retryingReader) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	ctx, cancel := context.WithTimeout(ctx, r.wait.Timeout)
+	defer cancel()
+	return evm.Retry(ctx, r.wait, func(ctx context.Context) (*types.Header, error) {
+		return r.chain.HeaderByNumber(ctx, number)
+	})
 }
 
 // relayLatencies measures every succeeded packet's relay from block

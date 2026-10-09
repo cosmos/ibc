@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/loadtest/stats"
 )
 
@@ -165,6 +168,18 @@ func TestSweepExplainsAnInterruption(t *testing.T) {
 	require.ErrorContains(t, err, "1 of 1 packets not terminal")
 }
 
+func TestCancelOnExitEndsTheRunWithTheExit(t *testing.T) {
+	exited := make(chan struct{})
+	ctx, stop := cancelOnExit(t.Context(), exited, func() error { return errors.New("exit status 2") })
+	defer stop()
+	require.NoError(t, ctx.Err())
+
+	close(exited)
+	<-ctx.Done()
+
+	require.EqualError(t, context.Cause(ctx), "relayer exited: exit status 2")
+}
+
 // fakeChain serves receipts and headers from maps.
 type fakeChain struct {
 	blocks map[common.Hash]uint64
@@ -253,6 +268,31 @@ func TestRelayLatenciesSkipsPacketsWithFailedReads(t *testing.T) {
 	require.ErrorContains(t, err, "not found")
 	assert.Equal(t, []time.Duration{4 * time.Second}, sendToRecv, "the other packet is still measured")
 	assert.Equal(t, []time.Duration{10 * time.Second}, sendToAck)
+}
+
+// flakyChain fails its first failures header reads without an answer.
+type flakyChain struct {
+	*fakeChain
+	failures atomic.Int32
+}
+
+func (c *flakyChain) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+	if c.failures.Add(-1) >= 0 {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return c.fakeChain.HeaderByNumber(ctx, number)
+}
+
+func TestRetryingRepeatsAnUnansweredRead(t *testing.T) {
+	chain := &flakyChain{fakeChain: &fakeChain{times: map[uint64]uint64{7: 1007}}}
+	chain.failures.Store(2)
+	reader := retrying(chain, environment.Timing{CompletionBudget: time.Second, PollInterval: time.Millisecond})
+
+	header, err := reader.HeaderByNumber(t.Context(), big.NewInt(7))
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1007), header.Time)
+	assert.Equal(t, int32(-1), chain.failures.Load(), "two failed reads, then one answered")
 }
 
 func TestVerdictSeparatesTheRelayerFromTheLoad(t *testing.T) {

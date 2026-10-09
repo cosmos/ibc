@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 	"github.com/cosmos/ibc/e2e/internal/loadtest/session"
@@ -33,9 +34,6 @@ const (
 	walletFundingCoins = 1
 	// transferAmount is the IFT base units each transfer moves.
 	transferAmount = 10_000
-	// packetTimeout keeps packets valid for any run: the router accepts at
-	// most a day.
-	packetTimeout = 23 * time.Hour
 )
 
 // Direction names one traffic direction.
@@ -46,11 +44,16 @@ const (
 	DirectionBtoA Direction = "b-to-a"
 )
 
+// route panics on an unknown direction, which the CLI rejects.
 func (d Direction) route() traffic.Route {
-	if d == DirectionBtoA {
+	switch d {
+	case DirectionAtoB:
+		return traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	case DirectionBtoA:
 		return traffic.BtoA(traffic.ChainB, traffic.ChainA)
+	default:
+		panic(fmt.Sprintf("relayerload: unknown direction %q", d))
 	}
-	return traffic.AtoB(traffic.ChainA, traffic.ChainB)
 }
 
 // LightClient names the light clients the Chains verify each other with.
@@ -96,14 +99,17 @@ func SessionOptions(base session.Options, cfg Config) session.Options {
 }
 
 // ErrLoadNotDelivered marks a run in which the relayer relayed every packet
-// sent, but the senders could not send every packet.
+// sent, but every wallet of a direction retired before its target was sent.
 var ErrLoadNotDelivered = errors.New("load not delivered")
 
 // Run funds a wallet pool, drives every direction concurrently, and returns
 // the report. Its error is the relayer's failures, if any: a packet sent but
-// not SUCCEEDED, a stalled relay, or an interruption. Otherwise it wraps
-// ErrLoadNotDelivered if a direction sent fewer packets than its target.
+// not SUCCEEDED, a stalled relay, the relayer process exiting, or an
+// interruption. Otherwise it wraps ErrLoadNotDelivered if a direction sent
+// fewer packets than its target.
 func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
+	ctx, stop := cancelOnExit(ctx, s.Relayer.Done(), s.Relayer.Err)
+	defer stop()
 	report := &Report{
 		Scenario:    "relayer",
 		Provider:    string(s.Provider),
@@ -138,7 +144,44 @@ func verdict(report *Report, failures error) error {
 	return err
 }
 
+// cancelOnExit returns ctx canceled once the relayer exits, which done
+// signals and exitErr then explains, with the exit as the cause. stop
+// releases it.
+func cancelOnExit(ctx context.Context, done <-chan struct{}, exitErr func() error) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	go func() {
+		select {
+		case <-done:
+			cause := errors.New("relayer exited")
+			if err := exitErr(); err != nil {
+				cause = fmt.Errorf("relayer exited: %w", err)
+			}
+			cancel(cause)
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, func() { cancel(nil) }
+}
+
 func run(ctx context.Context, s *session.Session, cfg Config, report *Report) error {
+	// The directions' reports exist before anything can fail, so a run that
+	// ends early shows each direction short of its target.
+	routes := make([]traffic.Route, len(cfg.Directions))
+	for i, direction := range cfg.Directions {
+		routes[i] = direction.route()
+		d := &DirectionReport{
+			Route:       string(direction),
+			Source:      string(routes[i].Source),
+			Destination: string(routes[i].Destination),
+			Target:      cfg.Packets / len(cfg.Directions),
+		}
+		// The remainder goes to the first directions.
+		if i < cfg.Packets%len(cfg.Directions) {
+			d.Target++
+		}
+		report.Directions = append(report.Directions, d)
+	}
+
 	wallets := make([]traffic.Signer, cfg.Wallets)
 	for i := range wallets {
 		signer, err := traffic.NewSigner()
@@ -147,35 +190,23 @@ func run(ctx context.Context, s *session.Session, cfg Config, report *Report) er
 		}
 		wallets[i] = signer
 	}
-	if err := fundWallets(ctx, s, cfg.Directions, wallets); err != nil {
+	if err := fundWallets(ctx, s, routes, wallets); err != nil {
 		return err
 	}
 
-	errs := make([]error, len(cfg.Directions))
+	errs := make([]error, len(report.Directions))
 	started := time.Now()
 	var wg sync.WaitGroup
-	for i, direction := range cfg.Directions {
-		route := direction.route()
-		d := &DirectionReport{
-			Route:       string(direction),
-			Source:      string(route.Source),
-			Destination: string(route.Destination),
-			Target:      cfg.Packets / len(cfg.Directions),
-		}
-		// The remainder goes to the first directions.
-		if i < cfg.Packets%len(cfg.Directions) {
-			d.Target++
-		}
-		report.Directions = append(report.Directions, d)
+	for i, d := range report.Directions {
 		wg.Go(func() {
-			if err := runDirection(ctx, s, route, wallets, cfg.PerBlock, d); err != nil {
-				errs[i] = fmt.Errorf("%s: %w", direction, err)
+			if err := runDirection(ctx, s, routes[i], wallets, cfg.PerBlock, d); err != nil {
+				errs[i] = fmt.Errorf("%s: %w", d.Route, err)
 			}
 		})
 	}
 	wg.Wait()
-	if err := ctx.Err(); err != nil && errors.Join(errs...) == nil {
-		errs = append(errs, fmt.Errorf("interrupted: %w", err))
+	if ctx.Err() != nil && errors.Join(errs...) == nil {
+		errs = append(errs, fmt.Errorf("interrupted: %w", context.Cause(ctx)))
 	}
 
 	var succeeded int
@@ -194,22 +225,28 @@ func run(ctx context.Context, s *session.Session, cfg Config, report *Report) er
 }
 
 // fundWallets gives every wallet gas and IFT on the source Chain of each
-// direction, concurrently. Receivers need no funds.
-func fundWallets(ctx context.Context, s *session.Session, directions []Direction, wallets []traffic.Signer) error {
+// route, concurrently, first topping up the deployer that pays them.
+// Receivers need no funds.
+func fundWallets(ctx context.Context, s *session.Session, routes []traffic.Route, wallets []traffic.Signer) error {
 	addresses := make([]common.Address, len(wallets))
 	for i, wallet := range wallets {
 		addresses[i] = wallet.Address()
 	}
 	amount := traffic.Coins(walletFundingCoins)
-	errs := make([]error, len(directions))
+	// The deployer keeps the harness's signer minimum after paying everyone.
+	payout := new(big.Int).Mul(amount, big.NewInt(int64(len(wallets))))
+	payout.Add(payout, traffic.RequiredSignerBalance())
+	errs := make([]error, len(routes))
 	var wg sync.WaitGroup
-	for i, direction := range directions {
+	for i, route := range routes {
 		wg.Go(func() {
 			started := time.Now()
-			route := direction.route()
-			app, err := traffic.NewIFT(s.Env, s.Deployment, s.Deployer, route)
+			err := topUp(ctx, s, route.Source, payout)
 			if err == nil {
-				err = app.FundWallets(ctx, addresses, amount, amount)
+				var app *traffic.IFT
+				if app, err = traffic.NewIFT(s.Env, s.Deployment, s.Deployer, route); err == nil {
+					err = app.FundWallets(ctx, addresses, amount, amount)
+				}
 			}
 			if err != nil {
 				errs[i] = fmt.Errorf("fund wallets on %s: %w", route.Source, err)
@@ -221,6 +258,19 @@ func fundWallets(ctx context.Context, s *session.Session, directions []Direction
 	}
 	wg.Wait()
 	return errors.Join(errs...)
+}
+
+// topUp brings the deployer's balance on chainID to at least minimum.
+func topUp(ctx context.Context, s *session.Session, chainID environment.ChainID, minimum *big.Int) error {
+	chain, err := s.Env.Chain(chainID)
+	if err != nil {
+		return err
+	}
+	funding, err := chain.Funding()
+	if err != nil {
+		return err
+	}
+	return funding.EnsureEOABalance(ctx, s.Deployer.Address(), minimum)
 }
 
 // runDirection sends d.Target packets on route while sweeping the relayer
@@ -268,7 +318,8 @@ func runDirection(
 			return err
 		}
 	}
-	timeout, err := apps[0].TransferTimeout(ctx, packetTimeout)
+	// The harness's default horizon outlasts any run.
+	timeout, err := apps[0].TransferTimeout(ctx, 0)
 	if err != nil {
 		return err
 	}
@@ -343,7 +394,8 @@ func runDirection(
 
 	// Latency is reported, not judged; an interrupted run skips it.
 	if ctx.Err() == nil {
-		sendToRecv, recvToAck, sendToAck, err := relayLatencies(ctx, sourceEVM, destinationEVM, packets)
+		sendToRecv, recvToAck, sendToAck, err := relayLatencies(ctx, retrying(sourceEVM, source.Timing()),
+			retrying(destinationEVM, destination.Timing()), packets)
 		if err != nil {
 			d.LatencyError = err.Error()
 			slog.WarnContext(ctx, "relay latency incomplete", "direction", d.Route, "err", err)

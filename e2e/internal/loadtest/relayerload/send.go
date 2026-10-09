@@ -30,12 +30,14 @@ type sentPacket struct {
 // sendFunc submits one transfer from wallet and waits for its receipt.
 type sendFunc func(ctx context.Context, wallet int) (sentPacket, error)
 
-// generate sends up to r.Target packets from one sender goroutine per wallet.
-// Each tick of ticks opens a pacing interval of perBlock tokens; a sender
-// takes a token, claims a packet slot, and sends, so every wallet has at most
-// one transaction in flight. A sender whose transfer fails is retired. Every
-// sent packet goes to out, which generate closes when it returns; out must
-// have room for r.Target packets or be drained concurrently.
+// generate sends r.Target packets from one sender goroutine per wallet. Each
+// tick of ticks opens a pacing interval of perBlock tokens; a sender takes a
+// token, claims a packet slot, and sends, so every wallet has at most one
+// transaction in flight. A sender whose transfer fails is retired and hands
+// its slot back for another wallet to send, so the target falls short only
+// if every wallet retires. Every sent packet goes to out, which generate
+// closes when it returns; out must have room for r.Target packets or be
+// drained concurrently.
 func generate(
 	ctx context.Context,
 	ticks <-chan time.Time,
@@ -46,10 +48,16 @@ func generate(
 ) {
 	defer close(out)
 	tokens := make(chan struct{}, perBlock)
-	var claimed atomic.Int64
+	var claimed, sent atomic.Int64
 	target := int64(r.Target)
-	claim := func() bool { return claimed.Add(1) <= target }
-	exhausted := func() bool { return claimed.Load() >= target }
+	claim := func() bool {
+		if claimed.Add(1) <= target {
+			return true
+		}
+		claimed.Add(-1)
+		return false
+	}
+	exhausted := func() bool { return sent.Load() >= target }
 
 	var (
 		mu        sync.Mutex
@@ -74,6 +82,7 @@ func generate(
 			return
 		}
 		r.Sent++
+		sent.Add(1)
 		samples = append(samples, now.Sub(submitted))
 		perBlocks[packet.block]++
 		r.lastSend = now
@@ -93,12 +102,14 @@ func generate(
 				case <-tokens:
 				}
 				if !claim() {
-					return
+					// Every slot is taken, but a failing send may hand one back.
+					continue
 				}
 				submitted := time.Now()
 				packet, err := send(ctx, wallet)
 				record(packet, submitted, err)
 				if err != nil {
+					claimed.Add(-1)
 					return
 				}
 			}
@@ -122,7 +133,7 @@ func generate(
 }
 
 // pace fills tokens with cap(tokens) tokens now and on every tick, until
-// exhausted reports that no packet slots remain, quit closes, or ctx ends.
+// exhausted reports that every packet was sent, quit closes, or ctx ends.
 // Tokens still unused when the next tick arrives count as backpressure: no
 // wallet was free to send them within their interval. They are discarded so
 // an interval never offers more than cap(tokens) sends.

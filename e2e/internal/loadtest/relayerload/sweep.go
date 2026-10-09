@@ -74,7 +74,7 @@ func sweep(
 	for {
 		select {
 		case <-ctx.Done():
-			return order, unresolved(ctx.Err())
+			return order, unresolved(context.Cause(ctx))
 		case packet, ok := <-sent:
 			if !ok {
 				sent = nil

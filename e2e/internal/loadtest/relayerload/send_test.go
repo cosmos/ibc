@@ -27,7 +27,7 @@ func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 	// Interval 2: the two leftovers are backpressure and the bucket refills to 3.
 	ticks <- time.Now()
 	require.Eventually(t, func() bool { return len(tokens) == 3 }, time.Second, time.Millisecond)
-	// Slots run out: the next tick ends pacing without counting leftovers.
+	// Every packet is sent: the next tick ends pacing without counting leftovers.
 	exhausted.Store(true)
 	ticks <- time.Now()
 
@@ -107,8 +107,8 @@ func TestGenerateRetiresFailingWallet(t *testing.T) {
 
 	assert.Equal(t, int32(1), calls[0].Load(), "a failed wallet sends no more")
 	assert.Equal(t, 1, r.SendFailures)
-	assert.Equal(t, target-1, r.Sent, "the failed send used up its slot")
-	assert.Equal(t, int32(target-1), calls[1].Load()+calls[2].Load())
+	assert.Equal(t, target, r.Sent, "another wallet sends the failed packet")
+	assert.Equal(t, int32(target), calls[1].Load()+calls[2].Load())
 }
 
 func TestGenerateEndsWhenEveryWalletRetired(t *testing.T) {

@@ -268,14 +268,7 @@ func execute(
 	defer cancel()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	finished := make(chan struct{})
-	defer close(finished)
-	go func() {
-		select {
-		case <-finished:
-			return
-		case <-ctx.Done():
-		}
+	announce := context.AfterFunc(ctx, func() {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			slog.Warn("interrupted; tearing down (interrupt again to force-exit, then run `make -C e2e clean`)")
 		} else {
@@ -283,7 +276,8 @@ func execute(
 		}
 		// A second signal takes the default action.
 		stop()
-	}()
+	})
+	defer announce()
 
 	s, err := session.Start(ctx, opts)
 	// finish sets the exit code once the run ends, after a panic too.

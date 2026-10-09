@@ -35,8 +35,9 @@ was built from; `IBC_BIN` overrides it.
 The report goes to stdout (text, or JSON with `--json`) and progress logs to stderr. The exit
 status is 0 only when the scenario met its target, 1 when it did not or setup failed, 2 on bad
 usage, and 3 when a relayer run is inconclusive (below), whether or not `--keep-on-failure`
-keeps the environment; invalid flag values are rejected before anything starts. A run that is interrupted
-or exceeds `--timeout` still reports what it measured.
+keeps the environment; a failed teardown exits 1 whatever the verdict. Invalid flag values
+are rejected before anything starts. A run that is interrupted or exceeds `--timeout` still
+reports what it measured.
 
 ### Common flags
 
@@ -77,9 +78,10 @@ How a direction runs:
    needs. The sender retries requests the node leaves unanswered (a dropped connection, a
    stalled request, an empty latest block, an HTTP 5xx or 429) and gives submission and
    inclusion one completion budget each. A node that refuses a resend after an unanswered
-   attempt is believed only if it does not hold the transaction. A transfer that still fails (the node refuses it, it reverts, or it is not
-   included in time) counts as a `send_failure` and retires that wallet, and the first such
-   error is reported; one cut short by an interruption does not count.
+   attempt is believed only if it does not hold the transaction. A transfer that still fails
+   (the node refuses it, it reverts, or it is not included in time) counts as a
+   `send_failure` and retires that wallet, whose packet slot goes back for another wallet to
+   send; the first such error is reported. One cut short by an interruption does not count.
 4. **Achieved pacing.** The receipts' block numbers show how the sends landed: blocks with at
    least one send, the span from the first to the last of them, and the min/p50/max sends
    per such block. Managed Anvil also mines on transaction arrival, so there sends spread
@@ -92,15 +94,17 @@ How a direction runs:
    no packet sent and none newly terminal for the route's completion budget (20 block
    intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
    stops the direction's senders. Packets sent but not terminal when it ends are
-   `unresolved`, so a direction's outcomes add up to its sent packets. Packets
-   time out after 23 hours (the router allows at most a day), well past any realistic run.
+   `unresolved`, so a direction's outcomes add up to its sent packets. If the relayer
+   process exits, every direction stops at once and the run fails with its exit status.
+   Packets time out after 12 hours (the harness default), well past any realistic run.
 6. **Latency.** After the sweep, each succeeded packet's relay is measured from chain data:
    the receipts of its relayer-reported receive and acknowledgement transactions and the
    timestamps of the including blocks. Send to receive is the destination block of the
    receive minus the source block of the transfer; receive to acknowledgement and send to
    acknowledgement end at the source block of the acknowledgement. Block timestamps have
    one-second resolution, so the precision is the block time. Latency is reported, not
-   judged: a failed chain read skips the packets that need it and shows as `latency error`.
+   judged: chain reads are retried as the sender's are, within the Chain's completion budget,
+   and one that still fails skips the packets that need it and shows as `latency error`.
    With `--observability`, the relayer's own `relay_duration` metric (`send_to_recv`,
    `recv_to_ack`) is in Grafana.
 
@@ -113,9 +117,10 @@ to receive, receive to acknowledgement, and send to acknowledgement (block time)
 
 The verdict judges the relayer on the packets that were sent. It is `PASS` when every one
 succeeded and every direction sent its target, and `FAIL` when a sent packet did not succeed,
-the relay stalled, or the run was interrupted. When the relayer relayed everything sent but
-send failures left a direction short of its target, the load was not delivered and the run is
-`INCONCLUSIVE` (exit status 3): it says nothing about the relayer at the asked load.
+the relay stalled, the relayer exited, or the run was interrupted. When the relayer relayed
+everything sent but every wallet of a direction retired before its target was sent, the load
+was not delivered and the run is `INCONCLUSIVE` (exit status 3): it says nothing about the
+relayer at the asked load.
 
 ## Attestor scenario
 
