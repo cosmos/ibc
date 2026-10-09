@@ -32,8 +32,9 @@ make -C e2e run-attestor LOADTEST_FLAGS='--duration 5s'                         
 was built from; `IBC_BIN` overrides it.
 
 The report goes to stdout (text, or JSON with `--json`) and progress logs to stderr. The exit
-status is 0 only when the scenario met its target, 1 when it did not or setup failed, and 2 on
-bad usage; invalid flag values are rejected before anything starts. A run that is interrupted
+status is 0 only when the scenario met its target, 1 when it did not or setup failed, 2 on bad
+usage, and 3 when a relayer run is inconclusive (below); invalid flag values are rejected
+before anything starts. A run that is interrupted
 or exceeds `--timeout` still reports what it measured.
 
 ### Common flags
@@ -70,9 +71,11 @@ How a direction runs:
 3. **Senders.** One goroutine per wallet takes a token, claims one of the direction's packet
    slots, and submits a transfer through the harness sender, which waits for its receipt. So
    each wallet has at most one transaction in flight, which Besu's per-sender pool limit
-   needs. A transfer that fails (send error, revert, or no receipt within the Chain's
-   completion budget) counts as a `send_failure` and retires that wallet; one cut short by an
-   interruption does not count.
+   needs. The sender retries requests the node leaves unanswered (a dropped connection, a
+   stalled request, an empty latest block) and gives submission and inclusion one completion
+   budget each. A transfer that still fails (the node refuses it, it reverts, or it is not
+   included in time) counts as a `send_failure` and retires that wallet, and the first such
+   error is reported; one cut short by an interruption does not count.
 4. **Achieved pacing.** The receipts' block numbers show how the sends landed: blocks with at
    least one send, the span from the first to the last of them, and the min/p50/max sends
    per such block. Managed Anvil also mines on transaction arrival, so there sends spread
@@ -101,8 +104,13 @@ end of the last sweep, and succeeded packets per second) and, per direction: sen
 sent, send failures, backpressure, send phase), achieved pacing, packet outcomes
 (succeeded, timed out, rejected, relay failed, unresolved, relay drain after the last send),
 and p50/p90/p95/p99/max latency for submit to receipt (wall clock, from the senders) and send
-to receive, receive to acknowledgement, and send to acknowledgement (block time). A direction
-passes when it sent its whole target without failures and every packet succeeded.
+to receive, receive to acknowledgement, and send to acknowledgement (block time).
+
+The verdict judges the relayer on the packets that were sent. It is `PASS` when every one
+succeeded and every direction sent its target, and `FAIL` when a sent packet did not succeed,
+the relay stalled, or the run was interrupted. When the relayer relayed everything sent but
+send failures left a direction short of its target, the load was not delivered and the run is
+`INCONCLUSIVE` (exit status 3): it says nothing about the relayer at the asked load.
 
 ## Attestor scenario
 

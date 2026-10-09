@@ -4,9 +4,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/cosmos/ibc/e2e/internal/loadtest/relayerload"
 )
 
 // Invalid values are rejected at parse time, before any environment starts.
@@ -42,6 +46,12 @@ func TestIgnoresTheRateOfAnUnselectedPhase(t *testing.T) {
 	args := []string{"attestor", "--phases", "state", "--packets-rps", "0", "--provider", "none"}
 	assert.Equal(t, exitUsage, run(args, &bytes.Buffer{}, &stderr))
 	assert.Contains(t, stderr.String(), "provider")
+}
+
+func TestExitCodes(t *testing.T) {
+	assert.Equal(t, exitOK, exitCode(nil))
+	assert.Equal(t, exitFailed, exitCode(errors.New("relay stalled")))
+	assert.Equal(t, exitInconclusive, exitCode(fmt.Errorf("%w: a-to-b", relayerload.ErrLoadNotDelivered)))
 }
 
 func TestHelpExitsZero(t *testing.T) {

@@ -81,8 +81,14 @@ func SessionOptions(base session.Options, cfg Config) session.Options {
 	return base
 }
 
+// ErrLoadNotDelivered marks a run in which the relayer relayed every packet
+// sent, but the senders could not send every packet.
+var ErrLoadNotDelivered = errors.New("load not delivered")
+
 // Run funds a wallet pool, drives every direction concurrently, and returns
-// the report, with an error unless every packet succeeded.
+// the report. Its error is the relayer's failures, if any: a packet sent but
+// not SUCCEEDED, a stalled relay, or an interruption. Otherwise it wraps
+// ErrLoadNotDelivered if a direction sent fewer packets than its target.
 func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
 	report := &Report{
 		Scenario: "relayer",
@@ -91,12 +97,30 @@ func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
 		PerBlock: cfg.PerBlock,
 		Packets:  cfg.Packets,
 	}
-	err := run(ctx, s, cfg, report)
-	report.Passed = err == nil
+	err := verdict(report, run(ctx, s, cfg, report))
+	return report, err
+}
+
+// verdict records in report whether the relayer passed, given its failures,
+// and whether every direction sent its target, and returns Run's error.
+func verdict(report *Report, failures error) error {
+	report.Passed = failures == nil
+	var shortfalls []error
+	for _, d := range report.Directions {
+		if d.Sent != d.Target {
+			shortfalls = append(shortfalls, fmt.Errorf("%s: sent %d of %d packets (%d send failures, first: %s)",
+				d.Route, d.Sent, d.Target, d.SendFailures, d.FirstSendError))
+		}
+	}
+	report.LoadDelivered = report.Passed && len(shortfalls) == 0
+	err := failures
+	if err == nil && len(shortfalls) > 0 {
+		err = fmt.Errorf("%w: %w", ErrLoadNotDelivered, errors.Join(shortfalls...))
+	}
 	if err != nil {
 		report.Error = err.Error()
 	}
-	return report, err
+	return err
 }
 
 func run(ctx context.Context, s *session.Session, cfg Config, report *Report) error {
@@ -135,6 +159,9 @@ func run(ctx context.Context, s *session.Session, cfg Config, report *Report) er
 		})
 	}
 	wg.Wait()
+	if err := ctx.Err(); err != nil && errors.Join(errs...) == nil {
+		errs = append(errs, fmt.Errorf("interrupted: %w", err))
+	}
 
 	var succeeded int
 	var finished time.Time
@@ -277,10 +304,6 @@ func runDirection(
 	}
 
 	var problems []error
-	if d.Sent != d.Target {
-		problems = append(problems, fmt.Errorf("sent %d of %d packets (%d send failures)",
-			d.Sent, d.Target, d.SendFailures))
-	}
 	if sweepErr != nil {
 		problems = append(problems, sweepErr)
 	}

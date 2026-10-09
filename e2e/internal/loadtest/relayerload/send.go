@@ -67,6 +67,9 @@ func generate(
 			return
 		case err != nil:
 			r.SendFailures++
+			if r.FirstSendError == "" {
+				r.FirstSendError = err.Error()
+			}
 			slog.WarnContext(ctx, "transfer failed; retiring wallet", "direction", r.Route, "err", err)
 			return
 		}

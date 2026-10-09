@@ -237,6 +237,32 @@ func TestRelayLatenciesSkipsPacketsWithFailedReads(t *testing.T) {
 	assert.Equal(t, []time.Duration{10 * time.Second}, sendToAck)
 }
 
+func TestVerdictSeparatesTheRelayerFromTheLoad(t *testing.T) {
+	short := func() *Report {
+		return &Report{Directions: []*DirectionReport{
+			{Route: "a-to-b", Target: 5, Sent: 5},
+			{Route: "b-to-a", Target: 5, Sent: 4, SendFailures: 1, FirstSendError: "boom"},
+		}}
+	}
+
+	report := short()
+	err := verdict(report, nil)
+	require.ErrorIs(t, err, ErrLoadNotDelivered)
+	require.ErrorContains(t, err, "b-to-a: sent 4 of 5 packets (1 send failures, first: boom)")
+	assert.True(t, report.Passed, "the relayer relayed every packet sent")
+	assert.False(t, report.LoadDelivered)
+
+	report = short()
+	err = verdict(report, errors.New("b-to-a: 1 packets did not succeed"))
+	require.NotErrorIs(t, err, ErrLoadNotDelivered, "a relayer failure is the verdict")
+	assert.False(t, report.Passed)
+
+	report = &Report{Directions: []*DirectionReport{{Target: 5, Sent: 5}}}
+	require.NoError(t, verdict(report, nil))
+	assert.True(t, report.Passed)
+	assert.True(t, report.LoadDelivered)
+}
+
 func TestReportJSONAndText(t *testing.T) {
 	report := &Report{
 		Scenario: "relayer", Provider: "anvil", Wallets: 4, PerBlock: 2, Packets: 10,

@@ -22,7 +22,9 @@ type DirectionReport struct {
 	// Sending.
 	Sent         int `json:"sent"`
 	SendFailures int `json:"send_failures"`
-	Backpressure int `json:"backpressure"`
+	// FirstSendError is the error that retired the first wallet.
+	FirstSendError string `json:"first_send_error,omitempty"`
+	Backpressure   int    `json:"backpressure"`
 	// SendPhaseMS runs from the first offered send to the last receipt.
 	SendPhaseMS int64 `json:"send_phase_ms"`
 	// SubmitToReceipt is wall clock from submitting a transfer to holding
@@ -62,7 +64,12 @@ type Report struct {
 	Provider string `json:"provider"`
 	Wallets  int    `json:"wallets"`
 	PerBlock int    `json:"per_block"`
-	Passed   bool   `json:"passed"`
+	// Passed reports that the relayer relayed every packet sent to
+	// SUCCEEDED, without a stall or an interruption.
+	Passed bool `json:"passed"`
+	// LoadDelivered reports that every direction also sent its target; a
+	// run that Passed without it is inconclusive.
+	LoadDelivered bool `json:"load_delivered"`
 	// Packets is the target across directions.
 	Packets int `json:"packets"`
 	// WallTimeMS runs from the start of sending to the end of the last
@@ -78,8 +85,11 @@ type Report struct {
 func (r *Report) WriteText(w io.Writer) error {
 	var out bytes.Buffer
 	verdict := "PASS"
-	if !r.Passed {
+	switch {
+	case !r.Passed:
 		verdict = "FAIL"
+	case !r.LoadDelivered:
+		verdict = "INCONCLUSIVE (load not delivered)"
 	}
 	wall := time.Duration(r.WallTimeMS) * time.Millisecond
 	fmt.Fprintf(&out, "\nRelayer load: %s (%s, %d wallets, %d per block interval): %d packets in %s, %.1f packets/s\n",

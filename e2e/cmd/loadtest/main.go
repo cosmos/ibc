@@ -27,10 +27,13 @@ import (
 )
 
 const (
-	exitOK      = 0
-	exitFailed  = 1
-	exitUsage   = 2
-	usageHeader = `Usage: loadtest <scenario> [flags]
+	exitOK     = 0
+	exitFailed = 1
+	exitUsage  = 2
+	// exitInconclusive: the relayer relayed every packet sent, but not every
+	// packet could be sent.
+	exitInconclusive = 3
+	usageHeader      = `Usage: loadtest <scenario> [flags]
 
 Scenarios:
   relayer    paced IFT transfers from a wallet pool in both directions; every packet must relay
@@ -276,7 +279,7 @@ func execute(
 	} else {
 		var r report
 		if r, err = scenario(ctx, s); err != nil {
-			slog.Error("run failed", "err", err)
+			slog.Error("run did not pass", "err", err)
 		}
 		if writeErr := writeReport(stdout, r, c.jsonOut); writeErr != nil {
 			slog.Error("write report", "err", writeErr)
@@ -298,10 +301,18 @@ func execute(
 		slog.Error("teardown failed", "err", closeErr)
 		return exitFailed
 	}
-	if err != nil {
+	return exitCode(err)
+}
+
+func exitCode(err error) int {
+	switch {
+	case err == nil:
+		return exitOK
+	case errors.Is(err, relayerload.ErrLoadNotDelivered):
+		return exitInconclusive
+	default:
 		return exitFailed
 	}
-	return exitOK
 }
 
 func writeReport(w io.Writer, r report, asJSON bool) error {
