@@ -12,7 +12,7 @@ import (
 )
 
 const getTxAttempt = `-- name: GetTxAttempt :one
-SELECT id, tx_hash, chain_id, tx_type, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at FROM relayer_tx_submissions
+SELECT id, tx_hash, chain_id, tx_type, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
 WHERE chain_id = $1 AND tx_hash = $2
 `
 
@@ -33,6 +33,8 @@ func (q *Queries) GetTxAttempt(ctx context.Context, chainID string, txHash strin
 		&i.Nonce,
 		&i.SignedTx,
 		&i.LastBroadcastAt,
+		&i.ResolvedBlockNumber,
+		&i.ResolvedBlockHash,
 	)
 	return i, err
 }
@@ -131,7 +133,7 @@ func (q *Queries) LinkTxPacket(ctx context.Context, arg LinkTxPacketParams) (int
 }
 
 const listPendingTxAttempts = `-- name: ListPendingTxAttempts :many
-SELECT id, tx_hash, chain_id, tx_type, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at FROM relayer_tx_submissions
+SELECT id, tx_hash, chain_id, tx_type, relayer_address, submitted_at, resolved_at, gas_cost_amount, status, execution_error, nonce, signed_tx, last_broadcast_at, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
 WHERE chain_id = $1 AND relayer_address = $2
 AND status = 'PENDING'
 ORDER BY nonce, id
@@ -160,6 +162,8 @@ func (q *Queries) ListPendingTxAttempts(ctx context.Context, chainID string, rel
 			&i.Nonce,
 			&i.SignedTx,
 			&i.LastBroadcastAt,
+			&i.ResolvedBlockNumber,
+			&i.ResolvedBlockHash,
 		); err != nil {
 			return nil, err
 		}
@@ -171,15 +175,21 @@ func (q *Queries) ListPendingTxAttempts(ctx context.Context, chainID string, rel
 	return items, nil
 }
 
-const listPendingTxNonces = `-- name: ListPendingTxNonces :many
+const listTxNoncesFrom = `-- name: ListTxNoncesFrom :many
 SELECT DISTINCT nonce FROM relayer_tx_submissions
 WHERE chain_id = $1 AND relayer_address = $2
-AND status = 'PENDING'
+AND nonce >= $3
 ORDER BY nonce
 `
 
-func (q *Queries) ListPendingTxNonces(ctx context.Context, chainID string, relayerAddress string) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listPendingTxNonces, chainID, relayerAddress)
+type ListTxNoncesFromParams struct {
+	ChainID        string
+	RelayerAddress string
+	MinedNonce     int64
+}
+
+func (q *Queries) ListTxNoncesFrom(ctx context.Context, arg ListTxNoncesFromParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listTxNoncesFrom, arg.ChainID, arg.RelayerAddress, arg.MinedNonce)
 	if err != nil {
 		return nil, err
 	}
@@ -230,23 +240,96 @@ func (q *Queries) ListTxPackets(ctx context.Context, submissionID int64) ([]List
 	return items, nil
 }
 
+const listTxResolutionsFrom = `-- name: ListTxResolutionsFrom :many
+SELECT DISTINCT nonce, resolved_block_number, resolved_block_hash FROM relayer_tx_submissions
+WHERE chain_id = $1 AND relayer_address = $2
+AND nonce >= $3
+AND status IN ('CONFIRMED', 'REVERTED', 'REPLACED', 'CONSUMED')
+AND resolved_block_number IS NOT NULL AND resolved_block_hash IS NOT NULL
+ORDER BY nonce
+`
+
+type ListTxResolutionsFromParams struct {
+	ChainID        string
+	RelayerAddress string
+	MinedNonce     int64
+}
+
+type ListTxResolutionsFromRow struct {
+	Nonce               int64
+	ResolvedBlockNumber *int64
+	ResolvedBlockHash   *string
+}
+
+func (q *Queries) ListTxResolutionsFrom(ctx context.Context, arg ListTxResolutionsFromParams) ([]ListTxResolutionsFromRow, error) {
+	rows, err := q.db.Query(ctx, listTxResolutionsFrom, arg.ChainID, arg.RelayerAddress, arg.MinedNonce)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTxResolutionsFromRow
+	for rows.Next() {
+		var i ListTxResolutionsFromRow
+		if err := rows.Scan(&i.Nonce, &i.ResolvedBlockNumber, &i.ResolvedBlockHash); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reopenTxAttempts = `-- name: ReopenTxAttempts :exec
+UPDATE relayer_tx_submissions
+SET status = 'PENDING', resolved_at = NULL, last_broadcast_at = NULL,
+resolved_block_number = NULL, resolved_block_hash = NULL
+WHERE chain_id = $1 AND relayer_address = $2
+AND nonce = $3 AND status IN ('CONFIRMED', 'REVERTED', 'REPLACED', 'CONSUMED')
+AND resolved_block_number = $4
+AND resolved_block_hash = $5
+`
+
+type ReopenTxAttemptsParams struct {
+	ChainID             string
+	RelayerAddress      string
+	Nonce               int64
+	ResolvedBlockNumber *int64
+	ResolvedBlockHash   *string
+}
+
+func (q *Queries) ReopenTxAttempts(ctx context.Context, arg ReopenTxAttemptsParams) error {
+	_, err := q.db.Exec(ctx, reopenTxAttempts,
+		arg.ChainID,
+		arg.RelayerAddress,
+		arg.Nonce,
+		arg.ResolvedBlockNumber,
+		arg.ResolvedBlockHash,
+	)
+	return err
+}
+
 const resolveTxNonce = `-- name: ResolveTxNonce :exec
 UPDATE relayer_tx_submissions
 SET status = CASE
     WHEN $1 = 'CONSUMED' OR tx_hash = $2 THEN $1
     ELSE 'REPLACED'
-END, resolved_at = $3
-WHERE chain_id = $4 AND relayer_address = $5
-AND nonce = $6 AND status = 'PENDING'
+END, resolved_at = $3,
+resolved_block_number = $4, resolved_block_hash = $5
+WHERE chain_id = $6 AND relayer_address = $7
+AND nonce = $8 AND status = 'PENDING'
 `
 
 type ResolveTxNonceParams struct {
-	Status         interface{}
-	TxHash         string
-	ResolvedAt     pgtype.Timestamptz
-	ChainID        string
-	RelayerAddress string
-	Nonce          int64
+	Status              interface{}
+	TxHash              string
+	ResolvedAt          pgtype.Timestamptz
+	ResolvedBlockNumber *int64
+	ResolvedBlockHash   *string
+	ChainID             string
+	RelayerAddress      string
+	Nonce               int64
 }
 
 func (q *Queries) ResolveTxNonce(ctx context.Context, arg ResolveTxNonceParams) error {
@@ -254,6 +337,8 @@ func (q *Queries) ResolveTxNonce(ctx context.Context, arg ResolveTxNonceParams) 
 		arg.Status,
 		arg.TxHash,
 		arg.ResolvedAt,
+		arg.ResolvedBlockNumber,
+		arg.ResolvedBlockHash,
 		arg.ChainID,
 		arg.RelayerAddress,
 		arg.Nonce,

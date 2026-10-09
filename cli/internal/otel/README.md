@@ -78,7 +78,7 @@ Shared label: `{otel_scope_name="ibc.relayer"}`
 In metrics that label both packet sides, `chain_id` / `client_id` refer to the packet's **source** side and
 `dest_chain_id` / `dest_client_id` to its destination.
 
-Transaction attempt and recovery metrics are owned by the transaction manager; see [EVM transaction recovery](../../docs/transaction-submission.md#monitoring).
+Transaction lifecycle metrics are deferred; see [EVM transaction recovery](../../docs/transaction-submission.md#monitoring) for available monitoring.
 Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
 EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
 Collections inside that threshold re-emit the last observed value. A failed query is logged and reported as `-1`.

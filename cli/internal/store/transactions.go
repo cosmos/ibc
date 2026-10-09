@@ -37,16 +37,35 @@ type TxAttempt struct {
 
 // TxOutcome resolves a nonce, optionally identifying the mined attempt.
 type TxOutcome struct {
-	ChainID string
-	Sender  string
-	Nonce   uint64
-	Hash    string
-	Status  string
+	ChainID     string
+	Sender      string
+	Nonce       uint64
+	Hash        string
+	Status      string
+	BlockNumber uint64
+	BlockHash   string
+}
+
+// TxResolution identifies the chain state in which a nonce was consumed.
+type TxResolution struct {
+	Nonce       uint64
+	BlockNumber uint64
+	BlockHash   string
+}
+
+func (r TxResolution) Validate() error {
+	if r.Nonce > math.MaxInt64 || r.BlockNumber > math.MaxInt64 || r.BlockHash == "" {
+		return fmt.Errorf("invalid transaction resolution")
+	}
+	return nil
 }
 
 func (o TxOutcome) Validate() error {
 	if o.ChainID == "" || o.Sender == "" || o.Nonce > math.MaxInt64 {
 		return fmt.Errorf("invalid transaction outcome")
+	}
+	if err := (TxResolution{Nonce: o.Nonce, BlockNumber: o.BlockNumber, BlockHash: o.BlockHash}).Validate(); err != nil {
+		return err
 	}
 	switch o.Status {
 	case TxConfirmed, TxReverted:

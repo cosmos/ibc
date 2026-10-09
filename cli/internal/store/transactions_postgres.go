@@ -71,8 +71,14 @@ func (db *PostgresDB) GetTxAttempt(ctx context.Context, chainID, hash string) (T
 	return txAttemptPostgresDB(row), errNormalize(err)
 }
 
-func (db *PostgresDB) ListPendingTxNonces(ctx context.Context, chainID, sender string) ([]uint64, error) {
-	rows, err := db.repo.ListPendingTxNonces(ctx, chainID, sender)
+func (db *PostgresDB) ListTxNoncesFrom(
+	ctx context.Context,
+	chainID, sender string,
+	minedNonce uint64,
+) ([]uint64, error) {
+	rows, err := db.repo.ListTxNoncesFrom(ctx, repo.ListTxNoncesFromParams{
+		ChainID: chainID, RelayerAddress: sender, MinedNonce: int64(minedNonce),
+	})
 	if err != nil {
 		return nil, errNormalize(err)
 	}
@@ -81,6 +87,39 @@ func (db *PostgresDB) ListPendingTxNonces(ctx context.Context, chainID, sender s
 		nonces[i] = uint64(nonce)
 	}
 	return nonces, nil
+}
+
+func (db *PostgresDB) ListTxResolutionsFrom(
+	ctx context.Context,
+	chainID, sender string,
+	minedNonce uint64,
+) ([]TxResolution, error) {
+	rows, err := db.repo.ListTxResolutionsFrom(ctx, repo.ListTxResolutionsFromParams{
+		ChainID: chainID, RelayerAddress: sender, MinedNonce: int64(minedNonce),
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+	resolutions := make([]TxResolution, len(rows))
+	for i, r := range rows {
+		resolutions[i] = TxResolution{
+			Nonce:       uint64(r.Nonce),
+			BlockNumber: uint64(*r.ResolvedBlockNumber),
+			BlockHash:   *r.ResolvedBlockHash,
+		}
+	}
+	return resolutions, nil
+}
+
+func (db *PostgresDB) ReopenTxAttempts(ctx context.Context, chainID, sender string, resolution TxResolution) error {
+	if err := resolution.Validate(); err != nil {
+		return err
+	}
+	number := int64(resolution.BlockNumber)
+	return errNormalize(db.repo.ReopenTxAttempts(ctx, repo.ReopenTxAttemptsParams{
+		ChainID: chainID, RelayerAddress: sender, Nonce: int64(resolution.Nonce),
+		ResolvedBlockNumber: &number, ResolvedBlockHash: &resolution.BlockHash,
+	}))
 }
 
 func (db *PostgresDB) HasPendingPacketSubmission(ctx context.Context, key PacketKey, kind string) (bool, error) {
@@ -96,7 +135,9 @@ func (db *PostgresDB) ResolveTxNonce(ctx context.Context, outcome TxOutcome) err
 		return err
 	}
 	at := time.Now().UTC()
+	number := int64(outcome.BlockNumber)
 	return errNormalize(db.repo.ResolveTxNonce(ctx, repo.ResolveTxNonceParams{
+		ResolvedBlockNumber: &number, ResolvedBlockHash: &outcome.BlockHash,
 		ChainID:        outcome.ChainID,
 		RelayerAddress: outcome.Sender,
 		Nonce:          int64(outcome.Nonce),

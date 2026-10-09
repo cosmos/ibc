@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 	mock "github.com/stretchr/testify/mock"
 	"math/big"
 )
@@ -114,70 +115,48 @@ func (_c *MockTxSubmitterETHClient_BalanceAt_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
-// BlockHashByNumber provides a mock function for the type MockTxSubmitterETHClient
-func (_mock *MockTxSubmitterETHClient) BlockHashByNumber(ctx context.Context, number uint64) (common.Hash, error) {
-	ret := _mock.Called(ctx, number)
+// Client provides a mock function for the type MockTxSubmitterETHClient
+func (_mock *MockTxSubmitterETHClient) Client() *rpc.Client {
+	ret := _mock.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for BlockHashByNumber")
+		panic("no return value specified for Client")
 	}
 
-	var r0 common.Hash
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) (common.Hash, error)); ok {
-		return returnFunc(ctx, number)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uint64) common.Hash); ok {
-		r0 = returnFunc(ctx, number)
+	var r0 *rpc.Client
+	if returnFunc, ok := ret.Get(0).(func() *rpc.Client); ok {
+		r0 = returnFunc()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(common.Hash)
+			r0 = ret.Get(0).(*rpc.Client)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, uint64) error); ok {
-		r1 = returnFunc(ctx, number)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
+	return r0
 }
 
-// MockTxSubmitterETHClient_BlockHashByNumber_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BlockHashByNumber'
-type MockTxSubmitterETHClient_BlockHashByNumber_Call struct {
+// MockTxSubmitterETHClient_Client_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Client'
+type MockTxSubmitterETHClient_Client_Call struct {
 	*mock.Call
 }
 
-// BlockHashByNumber is a helper method to define mock.On call
-//   - ctx context.Context
-//   - number uint64
-func (_e *MockTxSubmitterETHClient_Expecter) BlockHashByNumber(ctx any, number any) *MockTxSubmitterETHClient_BlockHashByNumber_Call {
-	return &MockTxSubmitterETHClient_BlockHashByNumber_Call{Call: _e.mock.On("BlockHashByNumber", ctx, number)}
+// Client is a helper method to define mock.On call
+func (_e *MockTxSubmitterETHClient_Expecter) Client() *MockTxSubmitterETHClient_Client_Call {
+	return &MockTxSubmitterETHClient_Client_Call{Call: _e.mock.On("Client")}
 }
 
-func (_c *MockTxSubmitterETHClient_BlockHashByNumber_Call) Run(run func(ctx context.Context, number uint64)) *MockTxSubmitterETHClient_BlockHashByNumber_Call {
+func (_c *MockTxSubmitterETHClient_Client_Call) Run(run func()) *MockTxSubmitterETHClient_Client_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 uint64
-		if args[1] != nil {
-			arg1 = args[1].(uint64)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run()
 	})
 	return _c
 }
 
-func (_c *MockTxSubmitterETHClient_BlockHashByNumber_Call) Return(hash common.Hash, err error) *MockTxSubmitterETHClient_BlockHashByNumber_Call {
-	_c.Call.Return(hash, err)
+func (_c *MockTxSubmitterETHClient_Client_Call) Return(client *rpc.Client) *MockTxSubmitterETHClient_Client_Call {
+	_c.Call.Return(client)
 	return _c
 }
 
-func (_c *MockTxSubmitterETHClient_BlockHashByNumber_Call) RunAndReturn(run func(ctx context.Context, number uint64) (common.Hash, error)) *MockTxSubmitterETHClient_BlockHashByNumber_Call {
+func (_c *MockTxSubmitterETHClient_Client_Call) RunAndReturn(run func() *rpc.Client) *MockTxSubmitterETHClient_Client_Call {
 	_c.Call.Return(run)
 	return _c
 }

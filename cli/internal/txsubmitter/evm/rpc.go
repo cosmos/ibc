@@ -4,26 +4,30 @@ package evm
 
 import (
 	"context"
+	"math/big"
+	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type rpcClient struct{ *ethclient.Client }
+// ETHClient is the RPC surface used by the transaction manager.
+type ETHClient interface {
+	Client() *rpc.Client
+	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)
+	EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error)
+	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
+	SendTransaction(ctx context.Context, tx *types.Transaction) error
+	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+}
 
-// Use RPC-reported hashes; geth's Header.Hash() differs on Besu QBFT.
-func (c rpcClient) BlockHashByNumber(ctx context.Context, number uint64) (common.Hash, error) {
-	var block *struct {
-		Hash common.Hash `json:"hash"`
-	}
-	if err := c.Client.Client().
-		CallContext(ctx, &block, "eth_getBlockByNumber", hexutil.EncodeUint64(number), false); err != nil {
-		return common.Hash{}, err
-	}
-	if block == nil || block.Hash == (common.Hash{}) {
-		return common.Hash{}, ethereum.NotFound
-	}
-	return block.Hash, nil
+func call[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return fn(ctx)
 }
