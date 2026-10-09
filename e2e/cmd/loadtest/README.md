@@ -84,8 +84,9 @@ How a direction runs:
    packet's state. It ends when sending finished and every sent packet is terminal
    (`SUCCEEDED`, `TIMED_OUT`, `REJECTED`, `RELAY_FAILED`). It gives up when relaying stalls:
    no packet sent and none newly terminal for the route's completion budget (20 block
-   intervals of each Chain: 40s on Anvil, 80s on Besu). Packets still not terminal then are
-   `unresolved`.
+   intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
+   stops the direction's senders. Packets still not terminal then are `unresolved`. Packets
+   time out after 23 hours (the router allows at most a day), well past any realistic run.
 6. **Latency.** After the sweep, each succeeded packet's relay is measured from chain data:
    the receipts of its relayer-reported receive and acknowledgement transactions and the
    timestamps of the including blocks. Send to receive is the destination block of the
@@ -98,7 +99,7 @@ How a direction runs:
 
 The report has one overall line (pass or fail, packets, wall time from the first send to the
 end of the last sweep, and succeeded packets per second) and, per direction: sends (target,
-sent, send failures, backpressure, ticks, send phase), achieved pacing, packet outcomes
+sent, send failures, backpressure, send phase), achieved pacing, packet outcomes
 (succeeded, timed out, rejected, relay failed, unresolved, relay drain after the last send),
 and p50/p90/p95/p99/max latency for submit to receipt (wall clock, from the senders) and send
 to receive, receive to acknowledgement, and send to acknowledgement (block time). A direction

@@ -107,7 +107,7 @@ func generate(
 		close(retired)
 	}()
 
-	r.Ticks, r.Backpressure = pace(ctx, ticks, retired, tokens, exhausted)
+	r.Backpressure = pace(ctx, ticks, retired, tokens, exhausted)
 	close(stop)
 	senders.Wait()
 
@@ -129,7 +129,7 @@ func pace(
 	quit <-chan struct{},
 	tokens chan struct{},
 	exhausted func() bool,
-) (ticked, backpressure int) {
+) (backpressure int) {
 	for {
 		for drained := false; !drained; {
 			select {
@@ -142,16 +142,15 @@ func pace(
 		for range cap(tokens) {
 			tokens <- struct{}{}
 		}
-		ticked++
 		select {
 		case <-ctx.Done():
-			return ticked, backpressure
+			return backpressure
 		case <-quit:
-			return ticked, backpressure
+			return backpressure
 		case <-ticks:
 		}
 		if exhausted() {
-			return ticked, backpressure
+			return backpressure
 		}
 	}
 }

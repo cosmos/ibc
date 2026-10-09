@@ -4,7 +4,6 @@ package relayerload
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -24,7 +23,6 @@ type DirectionReport struct {
 	Sent         int `json:"sent"`
 	SendFailures int `json:"send_failures"`
 	Backpressure int `json:"backpressure"`
-	Ticks        int `json:"ticks"`
 	// SendPhaseMS runs from the first offered send to the last receipt.
 	SendPhaseMS int64 `json:"send_phase_ms"`
 	// SubmitToReceipt is wall clock from submitting a transfer to holding
@@ -76,49 +74,38 @@ type Report struct {
 	Directions []*DirectionReport `json:"directions"`
 }
 
-func (r *Report) write(w io.Writer, asJSON bool) error {
+// WriteText writes the report for people.
+func (r *Report) WriteText(w io.Writer) error {
 	var out bytes.Buffer
-	if asJSON {
-		encoder := json.NewEncoder(&out)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(r); err != nil {
-			return err
-		}
-	} else {
-		r.text(&out)
-	}
-	_, err := w.Write(out.Bytes())
-	return err
-}
-
-func (r *Report) text(out *bytes.Buffer) {
 	verdict := "PASS"
 	if !r.Passed {
 		verdict = "FAIL"
 	}
 	wall := time.Duration(r.WallTimeMS) * time.Millisecond
-	fmt.Fprintf(out, "\nRelayer load: %s (%s, %d wallets, %d per block interval): %d packets in %s, %.1f packets/s\n",
+	fmt.Fprintf(&out, "\nRelayer load: %s (%s, %d wallets, %d per block interval): %d packets in %s, %.1f packets/s\n",
 		verdict, r.Provider, r.Wallets, r.PerBlock, r.Packets, wall, r.Throughput)
 	for _, d := range r.Directions {
-		fmt.Fprintf(out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)
-		fmt.Fprintf(out, "  sends:    target=%d sent=%d send_failures=%d backpressure=%d ticks=%d send_phase=%s\n",
-			d.Target, d.Sent, d.SendFailures, d.Backpressure, d.Ticks, ms(d.SendPhaseMS))
-		fmt.Fprintf(out, "  blocks:   with_txs=%d span=%d per_block min=%d p50=%d max=%d\n",
+		fmt.Fprintf(&out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)
+		fmt.Fprintf(&out, "  sends:    target=%d sent=%d send_failures=%d backpressure=%d send_phase=%s\n",
+			d.Target, d.Sent, d.SendFailures, d.Backpressure, ms(d.SendPhaseMS))
+		fmt.Fprintf(&out, "  blocks:   with_txs=%d span=%d per_block min=%d p50=%d max=%d\n",
 			d.BlocksWithTxs, d.BlockSpan, d.PerBlockMin, d.PerBlockP50, d.PerBlockMax)
-		fmt.Fprintf(out, "  packets:  succeeded=%d timed_out=%d rejected=%d relay_failed=%d unresolved=%d "+
+		fmt.Fprintf(&out, "  packets:  succeeded=%d timed_out=%d rejected=%d relay_failed=%d unresolved=%d "+
 			"relay_drain=%s\n", d.Succeeded, d.TimedOut, d.Rejected, d.RelayFailed, d.Unresolved, ms(d.RelayDrainMS))
-		fmt.Fprintf(out, "  submit->receipt (wall clock): %s\n", d.SubmitToReceipt)
-		fmt.Fprintf(out, "  send->recv  (block time):     %s\n", d.SendToRecv)
-		fmt.Fprintf(out, "  recv->ack   (block time):     %s\n", d.RecvToAck)
-		fmt.Fprintf(out, "  send->ack   (block time):     %s\n", d.SendToAck)
+		fmt.Fprintf(&out, "  submit->receipt (wall clock): %s\n", d.SubmitToReceipt)
+		fmt.Fprintf(&out, "  send->recv  (block time):     %s\n", d.SendToRecv)
+		fmt.Fprintf(&out, "  recv->ack   (block time):     %s\n", d.RecvToAck)
+		fmt.Fprintf(&out, "  send->ack   (block time):     %s\n", d.SendToAck)
 		if d.LatencyError != "" {
-			fmt.Fprintf(out, "  latency error: %s\n", d.LatencyError)
+			fmt.Fprintf(&out, "  latency error: %s\n", d.LatencyError)
 		}
 	}
-	fmt.Fprintf(out, "\nRelay latencies come from block timestamps, so their precision is one block.\n")
+	fmt.Fprintf(&out, "\nRelay latencies come from block timestamps, so their precision is one block.\n")
 	if r.Error != "" {
-		fmt.Fprintf(out, "\nerrors:\n%s\n", r.Error)
+		fmt.Fprintf(&out, "\nerrors:\n%s\n", r.Error)
 	}
+	_, err := w.Write(out.Bytes())
+	return err
 }
 
 func ms(v int64) time.Duration { return time.Duration(v) * time.Millisecond }

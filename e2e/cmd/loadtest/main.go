@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -136,7 +137,7 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 	if err := parse(fs, args); err != nil {
 		return parseExit(err)
 	}
-	cfg := relayerload.Config{Packets: *packets, Wallets: *wallets, PerBlock: *perBlock, JSON: c.jsonOut}
+	cfg := relayerload.Config{Packets: *packets, Wallets: *wallets, PerBlock: *perBlock}
 	switch *directions {
 	case "both":
 		cfg.Directions = []relayerload.Direction{relayerload.DirectionAtoB, relayerload.DirectionBtoA}
@@ -163,10 +164,11 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 	}
 	return execute(
 		c,
+		stdout,
 		stderr,
 		relayerload.SessionOptions(opts, cfg),
-		func(ctx context.Context, s *session.Session) error {
-			return relayerload.Run(ctx, s, cfg, stdout)
+		func(ctx context.Context, s *session.Session) (report, error) {
+			return relayerload.Run(ctx, s, cfg)
 		},
 	)
 }
@@ -189,7 +191,6 @@ func runAttestor(args []string, stdout, stderr io.Writer) int {
 		Packets:      simpleload.Spec{Duration: *duration, RatePerSecond: *packetsRPS},
 		State:        simpleload.Spec{Duration: *duration, RatePerSecond: *stateRPS},
 		MaxErrorRate: *maxErrorRate,
-		JSON:         c.jsonOut,
 	}
 	if *duration <= 0 {
 		return usageError(stderr, errors.New("--duration must be positive"))
@@ -215,22 +216,29 @@ func runAttestor(args []string, stdout, stderr io.Writer) int {
 	}
 	return execute(
 		c,
+		stdout,
 		stderr,
 		attestorload.SessionOptions(opts, cfg),
-		func(ctx context.Context, s *session.Session) error {
-			return attestorload.Run(ctx, s, cfg, stdout)
+		func(ctx context.Context, s *session.Session) (report, error) {
+			return attestorload.Run(ctx, s, cfg)
 		},
 	)
 }
 
+// report is a scenario's outcome.
+type report interface {
+	WriteText(w io.Writer) error
+}
+
 // execute wires logging, the binary override, the run budget, and signal
-// handling around a scenario, starts its session, and tears it down unless
-// setup or the run failed and --keep-on-failure asks to keep it.
+// handling around a scenario, starts its session, writes the scenario's
+// report to stdout, and tears the session down unless setup or the run
+// failed and --keep-on-failure asks to keep it.
 func execute(
 	c common,
-	stderr io.Writer,
+	stdout, stderr io.Writer,
 	opts session.Options,
-	scenario func(context.Context, *session.Session) error,
+	scenario func(context.Context, *session.Session) (report, error),
 ) int {
 	level := slog.LevelInfo
 	if c.verbose {
@@ -273,8 +281,15 @@ func execute(
 	s, err := session.Start(ctx, opts)
 	if err != nil {
 		slog.Error("setup failed", "err", err)
-	} else if err = scenario(ctx, s); err != nil {
-		slog.Error("run failed", "err", err)
+	} else {
+		var r report
+		if r, err = scenario(ctx, s); err != nil {
+			slog.Error("run failed", "err", err)
+		}
+		if writeErr := writeReport(stdout, r, c.jsonOut); writeErr != nil {
+			slog.Error("write report", "err", writeErr)
+			err = errors.Join(err, writeErr)
+		}
 	}
 	if s == nil {
 		return exitFailed
@@ -291,6 +306,15 @@ func execute(
 		return exitFailed
 	}
 	return exitOK
+}
+
+func writeReport(w io.Writer, r report, asJSON bool) error {
+	if !asJSON {
+		return r.WriteText(w)
+	}
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(r)
 }
 
 func parseExit(err error) int {

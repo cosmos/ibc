@@ -44,8 +44,8 @@ type listFunc func(ctx context.Context) ([]*relayerv2.PacketStatus, error)
 // sweep tracks every packet from sent and, every poll, lists the relayer's
 // statuses and records those of tracked packets. It returns once sent is
 // closed and every tracked packet is terminal. It gives up when relaying
-// stalls, no packet sent and none newly terminal for stall, or when ctx ends.
-// Packets still non-terminal when sweep returns are unresolved.
+// stalls, no packet sent and none seen newly terminal for stall, or when ctx
+// ends. Packets still non-terminal when sweep returns are unresolved.
 func sweep(
 	ctx context.Context,
 	label string,
@@ -54,16 +54,15 @@ func sweep(
 	sent <-chan sentPacket,
 ) ([]*trackedPacket, error) {
 	var (
-		tracked = map[packetKey]*trackedPacket{}
-		order   []*trackedPacket
-		settled int
-		listErr error
-		logged  = time.Now()
+		tracked    = map[packetKey]*trackedPacket{}
+		order      []*trackedPacket
+		settled    int
+		listErr    error
+		progressed = time.Now()
+		logged     = time.Now()
 	)
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
-	stalled := time.NewTimer(stall)
-	defer stalled.Stop()
 	// unresolved explains why sweep gave up with packets still in flight.
 	unresolved := func(cause error) error {
 		err := fmt.Errorf("%d of %d packets not terminal: %w", len(order)-settled, len(order), cause)
@@ -84,37 +83,38 @@ func sweep(
 			p := &trackedPacket{key: packet.key, sendBlock: packet.block}
 			tracked[packet.key] = p
 			order = append(order, p)
-			stalled.Reset(stall)
+			progressed = time.Now()
 			continue
-		case <-stalled.C:
-			return order, unresolved(fmt.Errorf("no relay progress for %s", stall))
 		case <-ticker.C:
 		}
 
-		statuses, err := list(ctx)
-		if err != nil {
+		if statuses, err := list(ctx); err != nil {
 			listErr = err
 			slog.WarnContext(ctx, "list relayer packets", "direction", label, "err", err)
-			continue
-		}
-		for _, status := range statuses {
-			key := packetKey{clientID: status.GetSourceClientId(), sequence: status.GetSequenceNumber()}
-			if p, ok := tracked[key]; ok {
-				p.status = status
+		} else {
+			for _, status := range statuses {
+				key := packetKey{clientID: status.GetSourceClientId(), sequence: status.GetSequenceNumber()}
+				if p, ok := tracked[key]; ok {
+					p.status = status
+				}
+			}
+			terminal := 0
+			for _, p := range order {
+				if p.terminal() {
+					terminal++
+				}
+			}
+			if terminal > settled {
+				settled = terminal
+				progressed = time.Now()
+			}
+			if sent == nil && settled == len(order) {
+				return order, nil
 			}
 		}
-		terminal := 0
-		for _, p := range order {
-			if p.terminal() {
-				terminal++
-			}
-		}
-		if terminal > settled {
-			settled = terminal
-			stalled.Reset(stall)
-		}
-		if sent == nil && settled == len(order) {
-			return order, nil
+		// A slow listing delays this check but never hides progress it saw.
+		if time.Since(progressed) >= stall {
+			return order, unresolved(fmt.Errorf("no relay progress for %s", stall))
 		}
 		if time.Since(logged) >= progressEvery {
 			logged = time.Now()

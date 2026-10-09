@@ -125,6 +125,16 @@ func TestSweepGivesUpWhenRelayingStalls(t *testing.T) {
 	assert.Nil(t, packets[2].status, "never listed")
 }
 
+func TestSweepGivesUpWhenListingKeepsFailing(t *testing.T) {
+	list := func(context.Context) ([]*relayerv2.PacketStatus, error) { return nil, errors.New("unavailable") }
+
+	_, err := sweep(t.Context(), "test", time.Millisecond, 20*time.Millisecond, list,
+		sendAll(sentPacket{key: packetKey{"client-0", 1}}))
+
+	require.ErrorContains(t, err, "1 of 1 packets not terminal: no relay progress for 20ms")
+	require.ErrorContains(t, err, "last listing error: unavailable")
+}
+
 func TestSweepExplainsAnInterruption(t *testing.T) {
 	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {pending}}}
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
@@ -238,10 +248,10 @@ func TestReportJSONAndText(t *testing.T) {
 		}},
 	}
 
-	var out bytes.Buffer
-	require.NoError(t, report.write(&out, true))
+	encoded, err := json.Marshal(report)
+	require.NoError(t, err)
 	var decoded map[string]any
-	require.NoError(t, json.Unmarshal(out.Bytes(), &decoded))
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
 	assert.Equal(t, false, decoded["passed"])
 	assert.InDelta(t, 2, decoded["throughput_packets_per_second"], 0)
 	direction := decoded["directions"].([]any)[0].(map[string]any)
@@ -249,8 +259,8 @@ func TestReportJSONAndText(t *testing.T) {
 	assert.InDelta(t, 1000, direction["send_to_recv"].(map[string]any)["p50_ms"], 0)
 	assert.NotContains(t, direction, "relayDone")
 
-	out.Reset()
-	require.NoError(t, report.write(&out, false))
+	var out bytes.Buffer
+	require.NoError(t, report.WriteText(&out))
 	text := out.String()
 	assert.Contains(t, text,
 		"Relayer load: FAIL (anvil, 4 wallets, 2 per block interval): 10 packets in 5s, 2.0 packets/s")

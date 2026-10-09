@@ -18,12 +18,8 @@ func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 	tokens := make(chan struct{}, 3)
 	ticks := make(chan time.Time)
 	var exhausted atomic.Bool
-	type result struct{ ticked, backpressure int }
-	done := make(chan result)
-	go func() {
-		ticked, backpressure := pace(t.Context(), ticks, nil, tokens, exhausted.Load)
-		done <- result{ticked, backpressure}
-	}()
+	done := make(chan int)
+	go func() { done <- pace(t.Context(), ticks, nil, tokens, exhausted.Load) }()
 
 	// Interval 1: the first fill happens at once; one token is used.
 	require.Eventually(t, func() bool { return len(tokens) == 3 }, time.Second, time.Millisecond)
@@ -35,16 +31,13 @@ func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 	exhausted.Store(true)
 	ticks <- time.Now()
 
-	got := <-done
-	assert.Equal(t, result{ticked: 2, backpressure: 2}, got)
+	assert.Equal(t, 2, <-done)
 }
 
 func TestPaceStopsWhenEverySenderRetired(t *testing.T) {
 	quit := make(chan struct{})
 	close(quit)
-	ticked, backpressure := pace(t.Context(), nil, quit, make(chan struct{}, 2), func() bool { return false })
-	assert.Equal(t, 1, ticked)
-	assert.Zero(t, backpressure)
+	assert.Zero(t, pace(t.Context(), nil, quit, make(chan struct{}, 2), func() bool { return false }))
 }
 
 // fakeTicks ticks every interval until the test ends.
@@ -92,7 +85,6 @@ func TestGenerateSendsTargetWithOneTransactionPerWallet(t *testing.T) {
 	assert.Equal(t, target, r.Sent)
 	assert.Zero(t, r.SendFailures)
 	assert.Equal(t, target, r.SubmitToReceipt.Count)
-	assert.GreaterOrEqual(t, r.Ticks, target/3)
 	assert.Positive(t, r.BlocksWithTxs)
 	assert.GreaterOrEqual(t, r.BlockSpan, r.BlocksWithTxs)
 }

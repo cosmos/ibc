@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"math/big"
 	"sync"
@@ -34,8 +33,9 @@ const (
 	walletFundingCoins = 1
 	// transferAmount is the IFT base units each transfer moves.
 	transferAmount = 10_000
-	// packetTimeout keeps packets valid for the whole run.
-	packetTimeout = time.Hour
+	// packetTimeout keeps packets valid for any run: the router accepts at
+	// most a day.
+	packetTimeout = 23 * time.Hour
 )
 
 // Direction names one traffic direction.
@@ -60,7 +60,6 @@ type Config struct {
 	Wallets    int
 	PerBlock   int
 	Directions []Direction
-	JSON       bool
 }
 
 // SessionOptions adds what cfg needs to base: the routes of its directions and
@@ -82,9 +81,25 @@ func SessionOptions(base session.Options, cfg Config) session.Options {
 	return base
 }
 
-// Run funds a wallet pool, drives every direction concurrently, writes the
-// report to w, and returns nil only if every packet succeeded.
-func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error {
+// Run funds a wallet pool, drives every direction concurrently, and returns
+// the report, with an error unless every packet succeeded.
+func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
+	report := &Report{
+		Scenario: "relayer",
+		Provider: string(s.Provider),
+		Wallets:  cfg.Wallets,
+		PerBlock: cfg.PerBlock,
+		Packets:  cfg.Packets,
+	}
+	err := run(ctx, s, cfg, report)
+	report.Passed = err == nil
+	if err != nil {
+		report.Error = err.Error()
+	}
+	return report, err
+}
+
+func run(ctx context.Context, s *session.Session, cfg Config, report *Report) error {
 	wallets := make([]traffic.Signer, cfg.Wallets)
 	for i := range wallets {
 		signer, err := traffic.NewSigner()
@@ -97,13 +112,6 @@ func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error
 		return err
 	}
 
-	report := &Report{
-		Scenario: "relayer",
-		Provider: string(s.Provider),
-		Wallets:  cfg.Wallets,
-		PerBlock: cfg.PerBlock,
-		Packets:  cfg.Packets,
-	}
 	errs := make([]error, len(cfg.Directions))
 	started := time.Now()
 	var wg sync.WaitGroup
@@ -140,12 +148,7 @@ func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error
 		report.WallTimeMS = finished.Sub(started).Milliseconds()
 		report.Throughput = float64(succeeded) / finished.Sub(started).Seconds()
 	}
-	err := errors.Join(errs...)
-	report.Passed = err == nil
-	if err != nil {
-		report.Error = err.Error()
-	}
-	return errors.Join(err, report.write(w, cfg.JSON))
+	return errors.Join(errs...)
 }
 
 // fundWallets gives every wallet gas and IFT on the source Chain of each
@@ -253,11 +256,17 @@ func runDirection(
 	var packets []*trackedPacket
 	var sweepErr error
 	var sweeping sync.WaitGroup
+	// A sweep that gives up ends sending too.
+	sendCtx, stopSending := context.WithCancel(ctx)
+	defer stopSending()
 	sweeping.Go(func() {
 		packets, sweepErr = sweep(ctx, d.Route, poll, policy.CompletionBudget, list, sent)
+		if sweepErr != nil {
+			stopSending()
+		}
 	})
 	ticker := time.NewTicker(interval)
-	generate(ctx, ticker.C, perBlock, len(wallets), send, sent, d)
+	generate(sendCtx, ticker.C, perBlock, len(wallets), send, sent, d)
 	ticker.Stop()
 	slog.InfoContext(ctx, "send phase done", "direction", d.Route, "sent", d.Sent,
 		"send_failures", d.SendFailures, "backpressure", d.Backpressure)

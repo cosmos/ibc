@@ -8,7 +8,6 @@ package attestorload
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -46,7 +45,6 @@ type Config struct {
 	// MaxErrorRate is the largest share of sent calls that may fail or time
 	// out in a phase that passes.
 	MaxErrorRate float64
-	JSON         bool
 }
 
 // PhaseReport is the outcome of one phase.
@@ -83,11 +81,21 @@ type attestablePacket struct {
 	encoded []byte
 }
 
-// Run runs the phases in order, writes the report to w, and returns nil only
-// if every phase passed judge. A phase that cannot start, or an interruption,
+// Run runs the phases in order and returns the report, with an error unless
+// every phase passed judge. A phase that cannot start, or an interruption,
 // ends the run; the report covers every phase that sent calls, the
 // interrupted one included, which fails.
-func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error {
+func Run(ctx context.Context, s *session.Session, cfg Config) (*Report, error) {
+	report := &Report{Scenario: "attestor", Provider: string(s.Provider), MaxErrorRate: cfg.MaxErrorRate}
+	err := run(ctx, s, cfg, report)
+	report.Passed = err == nil
+	if err != nil {
+		report.Error = err.Error()
+	}
+	return report, err
+}
+
+func run(ctx context.Context, s *session.Session, cfg Config, report *Report) error {
 	// The Client on chain B tracks chain A, so its Attestor observes chain A.
 	attestor, err := s.Env.Attestor(traffic.MeshAttestorFor(traffic.ChainB, traffic.ChainA))
 	if err != nil {
@@ -103,13 +111,8 @@ func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error
 		connect.WithGRPC(),
 	)
 	name := string(attestor.ID())
+	report.Attestor = name
 
-	report := &Report{
-		Scenario:     "attestor",
-		Provider:     string(s.Provider),
-		Attestor:     name,
-		MaxErrorRate: cfg.MaxErrorRate,
-	}
 	var errs []error
 	for _, phase := range cfg.Phases {
 		result, phaseErr := runPhase(ctx, s, attestor, rpc, name, phase, cfg)
@@ -129,12 +132,7 @@ func Run(ctx context.Context, s *session.Session, cfg Config, w io.Writer) error
 			break
 		}
 	}
-	err = errors.Join(errs...)
-	report.Passed = err == nil
-	if err != nil {
-		report.Error = err.Error()
-	}
-	return errors.Join(err, report.write(w, cfg.JSON))
+	return errors.Join(errs...)
 }
 
 // judge fails a phase unless at least one call succeeded and failed plus
@@ -189,34 +187,27 @@ func runPhase(
 	return &result, nil
 }
 
-func (r *Report) write(w io.Writer, asJSON bool) error {
+// WriteText writes the report for people.
+func (r *Report) WriteText(w io.Writer) error {
 	var out bytes.Buffer
-	if asJSON {
-		encoder := json.NewEncoder(&out)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(r); err != nil {
-			return err
+	verdict := "PASS"
+	if !r.Passed {
+		verdict = "FAIL"
+	}
+	fmt.Fprintf(&out, "\nAttestor load: %s (%s, attestor %s, max error rate %g)\n",
+		verdict, r.Provider, r.Attestor, r.MaxErrorRate)
+	for _, p := range r.Phases {
+		fmt.Fprintf(&out, "\n[%s] %s: %.1f of %d rps sent\n", p.Phase,
+			time.Duration(p.DurationMS)*time.Millisecond, p.AchievedRPS, p.RatePerSecond)
+		fmt.Fprintf(&out, "  calls:   sent=%d succeeded=%d failed=%d timed_out=%d\n",
+			p.Sent, p.Succeeded, p.Failed, p.TimedOut)
+		fmt.Fprintf(&out, "  latency: %s\n", p.Latency)
+		if p.FirstError != "" {
+			fmt.Fprintf(&out, "  first error: %s\n", p.FirstError)
 		}
-	} else {
-		verdict := "PASS"
-		if !r.Passed {
-			verdict = "FAIL"
-		}
-		fmt.Fprintf(&out, "\nAttestor load: %s (%s, attestor %s, max error rate %g)\n",
-			verdict, r.Provider, r.Attestor, r.MaxErrorRate)
-		for _, p := range r.Phases {
-			fmt.Fprintf(&out, "\n[%s] %s: %.1f of %d rps sent\n", p.Phase,
-				time.Duration(p.DurationMS)*time.Millisecond, p.AchievedRPS, p.RatePerSecond)
-			fmt.Fprintf(&out, "  calls:   sent=%d succeeded=%d failed=%d timed_out=%d\n",
-				p.Sent, p.Succeeded, p.Failed, p.TimedOut)
-			fmt.Fprintf(&out, "  latency: %s\n", p.Latency)
-			if p.FirstError != "" {
-				fmt.Fprintf(&out, "  first error: %s\n", p.FirstError)
-			}
-		}
-		if r.Error != "" {
-			fmt.Fprintf(&out, "\nerrors:\n%s\n", r.Error)
-		}
+	}
+	if r.Error != "" {
+		fmt.Fprintf(&out, "\nerrors:\n%s\n", r.Error)
 	}
 	_, err := w.Write(out.Bytes())
 	return err
