@@ -62,6 +62,14 @@ func TestSimpleLoad(t *testing.T) {
 		assert.GreaterOrEqual(t, time.Since(started), 400*time.Millisecond, "waits for calls in flight")
 	})
 
+	t.Run("sendsEveryCallOverAnOddDuration", func(t *testing.T) {
+		spec := Spec{Duration: 290 * time.Millisecond, RatePerSecond: 100}
+
+		result := SimpleLoad(t.Context(), spec, func(context.Context) error { return nil })
+
+		assert.EqualValues(t, 29, result.Sent)
+	})
+
 	t.Run("sendsEveryCallAtRatesAboveTheTick", func(t *testing.T) {
 		spec := Spec{Duration: 50 * time.Millisecond, RatePerSecond: 100_000}
 

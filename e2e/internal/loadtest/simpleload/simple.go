@@ -90,7 +90,10 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 	}
 
 	started := time.Now()
-	total := int64(spec.Duration.Seconds() * float64(spec.RatePerSecond))
+	due := func(elapsed time.Duration) int64 {
+		return int64(elapsed * time.Duration(spec.RatePerSecond) / time.Second)
+	}
+	total := due(spec.Duration)
 	sendUpTo := func(due int64) {
 		for ; result.Sent < due; result.Sent++ {
 			wg.Go(send)
@@ -104,7 +107,7 @@ func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
 			sendUpTo(total)
 			sending = false
 		case <-ticker.C:
-			sendUpTo(min(total, int64(time.Since(started).Seconds()*float64(spec.RatePerSecond))))
+			sendUpTo(min(total, due(time.Since(started))))
 		}
 	}
 	elapsed := time.Since(started)
