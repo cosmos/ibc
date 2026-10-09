@@ -142,12 +142,13 @@ func (i *IFT) Transfer(
 	return newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence), nil
 }
 
+// transferCalldata packs an iftTransfer. It accepts the zero receiver: tests
+// use it to force an error ack.
 func (i *IFT) transferCalldata(receiver common.Address, amount *big.Int, timeoutTimestamp uint64) ([]byte, error) {
 	amount, err := validAmount(amount)
 	if err != nil {
 		return nil, err
 	}
-	// The zero receiver stays allowed: tests use it to force an error ack.
 	if timeoutTimestamp == 0 {
 		return nil, errors.New("traffic: IFT timeout timestamp is required")
 	}
