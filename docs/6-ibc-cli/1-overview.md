@@ -75,7 +75,7 @@ Packets heading the same way are batched and delivered together, rather than one
 
 Before it can deliver anything, the relayer needs proof of the packets for the light client. It runs one prover for each light client it submits to, and the prover depends on the client type.
 
-For an attestation light client, the prover asks the client's attestors to attest to the chain's state at a height. It checks the signatures, and once enough attestors have signed the same attestation to meet the client's threshold, it packages that attestation and its signatures together. That package is the proof.
+For an attestation light client, the prover asks the client's attestors to attest to the chain's state at a height. It verifies each signature and checks that the attested data matches the expected chain state or packet claim before counting it toward the client's threshold. Once enough attestors agree, it packages the attestation and its signatures together. That package is the proof.
 
 For a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md), the prover reads the sealed header and an `eth_getProof` result from the Besu chain itself and packages the header with the account and storage proofs. The client's validator rules are checked when the transaction is simulated.
 

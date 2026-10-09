@@ -132,6 +132,7 @@ func (g *Generator) PacketProofs(
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
+	_ []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
 	slots := make([]common.Hash, len(packets))
 	for i, packet := range packets {

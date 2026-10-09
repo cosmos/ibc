@@ -97,7 +97,11 @@ func (p *Prover) PacketProofs(
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
+	acknowledgements []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
+	if kind == v2.ProofKindAcknowledgement && len(acknowledgements) != len(packets) {
+		return nil, errors.New("acknowledgement count must match packet count")
+	}
 	protoKind, err := proofKindToProto(kind)
 	if err != nil {
 		return nil, err
@@ -107,10 +111,11 @@ func (p *Prover) PacketProofs(
 	defer cancel()
 
 	res, err := p.client.PacketProofs(ctx, connect.NewRequest(&proverv2.PacketProofsRequest{
-		Client:  p.target(),
-		Height:  height,
-		Kind:    protoKind,
-		Packets: packetsToProto(packets),
+		Client:           p.target(),
+		Height:           height,
+		Kind:             protoKind,
+		Packets:          packetsToProto(packets),
+		Acknowledgements: acknowledgementsToProto(acknowledgements),
 	}))
 	if err != nil {
 		return nil, errors.Wrap(err, "remote prover: packet proofs")
@@ -177,5 +182,13 @@ func payloadsToProto(payloads []channeltypesv2.Payload) []*proverv2.Payload {
 		}
 	}
 
+	return out
+}
+
+func acknowledgementsToProto(acks []channeltypesv2.Acknowledgement) []*proverv2.Acknowledgement {
+	out := make([]*proverv2.Acknowledgement, len(acks))
+	for i, ack := range acks {
+		out[i] = &proverv2.Acknowledgement{AppAcknowledgements: ack.AppAcknowledgements}
+	}
 	return out
 }

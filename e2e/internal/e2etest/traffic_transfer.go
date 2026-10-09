@@ -225,6 +225,24 @@ func (t *TransferSend) VerifyReceiptCreated(ctx context.Context) error {
 	return nil
 }
 
+// VerifyReceiptAbsent checks that the destination has not received the packet.
+func (t *TransferSend) VerifyReceiptAbsent(ctx context.Context) error {
+	receipt, err := getCommitment(
+		ctx,
+		t.app.destination,
+		t.app.destRouter,
+		crypto.Keccak256Hash(hostv2.PacketReceiptKey(t.app.destClientID, t.packetTx.Sequence)),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("e2etest: query Transfer packet %s destination receipt: %w", t.packetTx.reference(), err)
+	}
+	if receipt != ([32]byte{}) {
+		return fmt.Errorf("e2etest: Transfer packet %s destination receipt already exists", t.packetTx.reference())
+	}
+	return nil
+}
+
 // VerifyCommitmentCleared checks that acknowledgement or timeout removed the source commitment.
 func (t *TransferSend) VerifyCommitmentCleared(ctx context.Context) error {
 	commitment, err := getCommitment(
@@ -239,6 +257,24 @@ func (t *TransferSend) VerifyCommitmentCleared(ctx context.Context) error {
 	}
 	if commitment != ([32]byte{}) {
 		return fmt.Errorf("e2etest: Transfer packet %s source commitment was not cleared", t.packetTx.reference())
+	}
+	return nil
+}
+
+// VerifyCommitmentPresent checks that the packet has not been acknowledged or timed out.
+func (t *TransferSend) VerifyCommitmentPresent(ctx context.Context) error {
+	commitment, err := getCommitment(
+		ctx,
+		t.app.source,
+		t.app.sourceRouter,
+		crypto.Keccak256Hash(hostv2.PacketCommitmentKey(t.app.sourceClientID, t.packetTx.Sequence)),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("e2etest: query Transfer packet %s source commitment: %w", t.packetTx.reference(), err)
+	}
+	if commitment == ([32]byte{}) {
+		return fmt.Errorf("e2etest: Transfer packet %s source commitment was cleared", t.packetTx.reference())
 	}
 	return nil
 }

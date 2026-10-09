@@ -259,6 +259,7 @@ func TestPacketProofs(t *testing.T) {
 			update.Height,
 			v2.ProofKindPacketCommitment,
 			[]channeltypesv2.Packet{sent},
+			nil,
 		)
 		require.NoError(t, err)
 		require.Len(t, proofs, 1)
@@ -281,6 +282,7 @@ func TestPacketProofs(t *testing.T) {
 			update.Height,
 			v2.ProofKindPacketCommitment,
 			[]channeltypesv2.Packet{sent, next},
+			nil,
 		)
 		require.NoError(t, err)
 		require.Len(t, proofs, 2)
@@ -306,6 +308,7 @@ func TestPacketProofs(t *testing.T) {
 			update.Height,
 			v2.ProofKindReceiptAbsence,
 			[]channeltypesv2.Packet{received},
+			nil,
 		)
 		require.NoError(t, err)
 		require.Len(t, proofs, 1)
