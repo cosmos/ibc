@@ -271,8 +271,8 @@
         "kind": "Panel",
         "spec": {
           "id": 11,
-          "title": "Relayer GRPC Failures / 5s",
-          "description": "Estimated failed relayer API calls in the preceding five seconds per method. Nonzero GRPC status means failure; increase extrapolates between scrapes. Only recorded error series are shown; absent series are not zero-filled.",
+          "title": "Relayer GRPC Failures / s",
+          "description": "Failed relayer API calls per second per method, averaged over Grafana's rate interval. Nonzero GRPC status means failure. Only recorded error series are shown; absent series are not zero-filled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -291,7 +291,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[$__rate_interval]))",
+                        "expr": "sum by (rpc_method) (rate(rpc_server_duration_milliseconds_count{rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -332,7 +332,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "reqps",
                   "min": 0,
                   "thresholds": {
                     "mode": "absolute",
@@ -411,12 +411,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime) (go_memory_used_bytes{service_name=\"ibc\"})",
+                        "expr": "sum by (instance) (go_memory_used_bytes{service_name=\"ibc\"})",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-process-12",
-                        "legendFormat": "{{ service_runtime }}",
+                        "legendFormat": "{{ instance }}",
                         "range": true
                       }
                     },
@@ -512,7 +512,7 @@
         "spec": {
           "id": 13,
           "title": "Goroutines",
-          "description": "Live Go goroutines per service runtime.",
+          "description": "Live Go goroutines per service instance.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -531,12 +531,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime) (go_goroutine_count{service_name=\"ibc\"})",
+                        "expr": "sum by (instance) (go_goroutine_count{service_name=\"ibc\"})",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-process-13",
-                        "legendFormat": "{{ service_runtime }}",
+                        "legendFormat": "{{ instance }}",
                         "range": true
                       }
                     },
@@ -632,7 +632,7 @@
         "spec": {
           "id": 15,
           "title": "Allocations/sec",
-          "description": "Heap allocations per second per service runtime, averaged over Grafana's rate interval. Counts allocation events, not bytes.",
+          "description": "Heap allocations per second per service instance, averaged over Grafana's rate interval. Counts allocation events, not bytes.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -651,12 +651,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime) (rate(go_memory_allocations_total{service_name=\"ibc\"}[$__rate_interval]))",
+                        "expr": "sum by (instance) (rate(go_memory_allocations_total{service_name=\"ibc\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-process-allocations-15",
-                        "legendFormat": "{{ service_runtime }}",
+                        "legendFormat": "{{ instance }}",
                         "range": true
                       }
                     },
@@ -752,7 +752,7 @@
         "spec": {
           "id": 16,
           "title": "Sign Requests Rate",
-          "description": "Sign requests per second, including all results, grouped by runtime, signer, and operation.",
+          "description": "Sign requests per second, including all results, grouped by instance, signer, and operation.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -771,12 +771,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime, signer, operation) (rate(signer_operation_milliseconds_count[$__rate_interval]))",
+                        "expr": "sum by (instance, signer, operation) (rate(signer_operation_milliseconds_count[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-panel-16-signer",
-                        "legendFormat": "{{ service_runtime }} - {{ signer }} - {{ operation }}",
+                        "legendFormat": "{{ instance }} - {{ signer }} - {{ operation }}",
                         "range": true
                       }
                     },
@@ -868,8 +868,8 @@
         "kind": "Panel",
         "spec": {
           "id": 17,
-          "title": "Sign Request Failures / 5s",
-          "description": "Estimated failed sign requests in the preceding five seconds, grouped by runtime, signer, and operation. Prometheus increase extrapolates between scrapes; first failures on newly created series may not be captured. Only recorded error series are shown.",
+          "title": "Sign Request Failures / s",
+          "description": "Failed sign requests per second, averaged over Grafana's rate interval, grouped by instance, signer, and operation. First failures on newly created series may not be captured. Only recorded error series are shown.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -888,12 +888,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime, signer, operation) (increase(signer_operation_milliseconds_count{result=\"error\"}[$__rate_interval]))",
+                        "expr": "sum by (instance, signer, operation) (rate(signer_operation_milliseconds_count{result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-panel-17-signer",
-                        "legendFormat": "{{ service_runtime }} - {{ signer }} - {{ operation }}",
+                        "legendFormat": "{{ instance }} - {{ signer }} - {{ operation }}",
                         "range": true
                       }
                     },
@@ -929,7 +929,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "reqps",
                   "min": 0,
                   "thresholds": {
                     "mode": "absolute",
@@ -989,7 +989,7 @@
         "spec": {
           "id": 18,
           "title": "Signer Latency Avg",
-          "description": "Arithmetic mean latency in milliseconds for successful sign requests over the rate interval, grouped by runtime, signer, and operation. Uses duration sum divided by request count, avoiding coarse histogram quantile interpolation. No value when no successful requests are observed.",
+          "description": "Arithmetic mean latency in milliseconds for successful sign requests over the rate interval, grouped by instance, signer, and operation. Uses duration sum divided by request count, avoiding coarse histogram quantile interpolation. No value when no successful requests are observed.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1008,12 +1008,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (service_runtime, signer, operation) (rate(signer_operation_milliseconds_sum{result=\"ok\"}[$__rate_interval])) / sum by (service_runtime, signer, operation) (rate(signer_operation_milliseconds_count{result=\"ok\"}[$__rate_interval]))",
+                        "expr": "sum by (instance, signer, operation) (rate(signer_operation_milliseconds_sum{result=\"ok\"}[$__rate_interval])) / sum by (instance, signer, operation) (rate(signer_operation_milliseconds_count{result=\"ok\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-panel-18-signer",
-                        "legendFormat": "{{ service_runtime }} - {{ signer }} - {{ operation }}",
+                        "legendFormat": "{{ instance }} - {{ signer }} - {{ operation }}",
                         "range": true
                       }
                     },
@@ -1109,7 +1109,7 @@
         "spec": {
           "id": 19,
           "title": "Attestor Latest Height",
-          "description": "Last successfully observed chain height from each attestor RPC runtime, grouped by runtime and attestor name. Gauge values are displayed directly; max collapses any duplicate series without adding heights.",
+          "description": "Last successfully observed chain height from each attestor RPC instance, grouped by instance and attestor name. Gauge values are displayed directly; max collapses any duplicate series without adding heights.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1128,12 +1128,12 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "max by (service_runtime, attestor) (latest_height{caller=\"rpc\"})",
+                        "expr": "max by (instance, attestor) (latest_height{caller=\"rpc\"})",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
                         "key": "Q-panel-19-latest-height",
-                        "legendFormat": "{{ service_runtime }} - {{ attestor }}",
+                        "legendFormat": "{{ instance }} - {{ attestor }}",
                         "range": true
                       }
                     },
@@ -2763,8 +2763,8 @@
         "kind": "Panel",
         "spec": {
           "id": 4,
-          "title": "Attestor GRPC Failures / 5s",
-          "description": "Estimated RPC failures in the preceding five seconds per attestor. Prometheus increase extrapolates between scrapes; first failures on newly created series may not be captured. Only recorded error series are shown; absent series are not zero-filled.",
+          "title": "Attestor GRPC Failures / s",
+          "description": "RPC failures per second per attestor, averaged over Grafana's rate interval. First failures on newly created series may not be captured. Only recorded error series are shown; absent series are not zero-filled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2783,7 +2783,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (attestor) (increase(attestor_operation_milliseconds_count{caller=\"rpc\", result=\"error\"}[$__rate_interval]))",
+                        "expr": "sum by (attestor) (rate(attestor_operation_milliseconds_count{caller=\"rpc\", result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2824,7 +2824,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "reqps",
                   "min": 0,
                   "thresholds": {
                     "mode": "absolute",
@@ -2883,8 +2883,8 @@
         "kind": "Panel",
         "spec": {
           "id": 5,
-          "title": "EVM RPC Failures / 5s",
-          "description": "Estimated EVM RPC failures in the preceding five seconds per chain and error code. Prometheus increase extrapolates between scrapes; first failures on newly created series may not be captured. Only recorded error-code series are shown.",
+          "title": "EVM RPC Failures / s",
+          "description": "EVM RPC failures per second per chain and error code, averaged over Grafana's rate interval. First failures on newly created series may not be captured. Only recorded error-code series are shown.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -2903,7 +2903,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (chain_id, code) (increase(evm_operation_dur_milliseconds_count{result=\"error\"}[$__rate_interval]))",
+                        "expr": "sum by (chain_id, code) (rate(evm_operation_dur_milliseconds_count{result=\"error\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -2944,7 +2944,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "reqps",
                   "min": 0,
                   "thresholds": {
                     "mode": "absolute",

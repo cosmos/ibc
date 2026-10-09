@@ -12,7 +12,6 @@ otlp:
     - service.name
     - service.namespace
     - service.version
-    - service.runtime
 
 storage:
   tsdb:

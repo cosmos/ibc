@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	observabilityTypeOTEL = "otel"
-	otelServiceRuntimeEnv = "OTEL_SERVICE_RUNTIME"
+	observabilityTypeOTEL  = "otel"
+	otelServiceInstanceEnv = "OTEL_SERVICE_INSTANCE_ID"
 )
 
 func otelFileConfig(enabled bool) observabilityConfig {
@@ -25,10 +25,11 @@ func otelFileConfig(enabled bool) observabilityConfig {
 	}
 }
 
-// otelEnvApply names the process for the service.runtime OTel attribute. It
-// has no effect unless the process's configuration enables OTel.
-func otelEnvApply(cmd *exec.Cmd, runtimeParts ...string) {
-	withEnv(cmd, otelServiceRuntimeEnv, strings.Join(runtimeParts, "/"))
+// otelEnvApply names the process for the service.instance.id OTel attribute,
+// which Prometheus stores as the instance label. It has no effect unless the
+// process's configuration enables OTel.
+func otelEnvApply(cmd *exec.Cmd, instanceParts ...string) {
+	withEnv(cmd, otelServiceInstanceEnv, strings.Join(instanceParts, "/"))
 }
 
 // defaultOTELConfigPath resolves the repository LGTM-stack OTel SDK config, cli/scripts/otel/ibc-otel.yaml,
