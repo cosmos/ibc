@@ -27,9 +27,6 @@ const (
 	gasPaddingFixed   = 10_000
 	// Anvil may suggest no priority fee on an empty mempool.
 	fallbackTipCapWei = 1_000_000_000
-	// feeMaxAge is how long concurrent senders share one fee reading. The
-	// fee cap's doubled base fee covers several blocks of base-fee growth.
-	feeMaxAge = time.Second
 	// maxConnsPerNode bounds open connections to one node; callers beyond it
 	// queue for a connection instead of piling more onto the container
 	// runtime's port forwarding.
@@ -65,7 +62,7 @@ func retry[T any](ctx context.Context, w TransactionWait, f func(context.Context
 		attempt, cancel := context.WithTimeout(ctx, w.Timeout/4)
 		v, err := f(attempt)
 		cancel()
-		if !transient(err) || ctx.Err() != nil {
+		if !transient(err) {
 			return v, err
 		}
 		select {
@@ -77,24 +74,35 @@ func retry[T any](ctx context.Context, w TransactionWait, f func(context.Context
 }
 
 // transient reports whether a request is worth repeating: the node gave no
-// answer (a transport failure or a timed-out attempt), or answered null where
-// a value must exist, as Besu briefly can for the latest block. An error the
-// node returned, such as a revert, is definitive.
+// answer (a transport failure or a timed-out attempt), answered null where a
+// value must exist, as Besu briefly can for the latest block, or answered
+// with an HTTP status that asks to come back (5xx, 429). An error the node
+// returned, such as a revert, and any other HTTP status are definitive.
 func transient(err error) bool {
-	var nodeErr rpc.Error
-	return err != nil && !errors.As(err, &nodeErr)
+	var (
+		nodeErr rpc.Error
+		httpErr rpc.HTTPError
+	)
+	switch {
+	case err == nil, errors.As(err, &nodeErr):
+		return false
+	case errors.As(err, &httpErr):
+		return httpErr.StatusCode >= http.StatusInternalServerError || httpErr.StatusCode == http.StatusTooManyRequests
+	default:
+		return true
+	}
 }
 
-// nodeTransport is shared by every Dial, so idle connections are pooled per
-// node rather than per client: geth's Close does not release a client's
-// transport. It keeps up to 512 idle connections per node for reuse; the
-// default of two makes many concurrent callers (the load test's senders)
-// dial and close a connection per request, which leaves the host's local
-// ports in TIME_WAIT until new connections fail.
+// nodeTransport is shared by every Dial, so connections are pooled per node
+// rather than per client: geth's Close does not release a client's
+// transport. Every open connection may stay idle for reuse; the default of
+// two idle connections makes many concurrent callers (the load test's
+// senders) dial and close a connection per request, which leaves the host's
+// local ports in TIME_WAIT until new connections fail.
 var nodeTransport = func() *http.Transport {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 0
-	transport.MaxIdleConnsPerHost = 512
+	transport.MaxIdleConnsPerHost = maxConnsPerNode
 	transport.MaxConnsPerHost = maxConnsPerNode
 	return transport
 }()
@@ -124,12 +132,6 @@ type EVMClient struct {
 	// floor keeps it from being reused.
 	nonceMu     sync.Mutex
 	nonceFloors map[common.Address]uint64
-
-	// The last fee reading, shared by concurrent senders for feeMaxAge.
-	feeMu      sync.Mutex
-	feeRead    time.Time
-	feeTip     *big.Int
-	feeBaseFee *big.Int
 }
 
 // The caller remains responsible for readiness.
@@ -138,7 +140,12 @@ func NewConnectedClient(ctx context.Context, c *ethclient.Client) (*EVMClient, e
 	if err != nil {
 		return nil, fmt.Errorf("query chain id: %w", err)
 	}
-	return &EVMClient{client: c, chainID: id, txGates: map[common.Address]chan struct{}{}}, nil
+	return &EVMClient{
+		client:      c,
+		chainID:     id,
+		txGates:     map[common.Address]chan struct{}{},
+		nonceFloors: map[common.Address]uint64{},
+	}, nil
 }
 
 // It closes c on failure.
@@ -268,15 +275,17 @@ func (e *EVMClient) signAndSend(
 		return nil, err
 	}
 	if err := e.send(ctx, wait, signed); err != nil {
-		return nil, fmt.Errorf("send tx with nonce %d (%s): %w", signed.Nonce(), e.nonceEvidence(ctx, from.addr), err)
+		return nil, fmt.Errorf("send tx with nonce %d (nonce floor %d): %w",
+			signed.Nonce(), e.nonceFloor(from.addr), err)
 	}
 	return signed, nil
 }
 
 // send submits signed until the node answers. Resending the same bytes is
 // safe. Once an attempt went unanswered, the node may already hold the
-// transaction, so a later refusal ("already known", or "nonce too low" once
-// it is mined) is left to the receipt wait to settle.
+// transaction, and then refuses a resend ("already known", or "nonce too
+// low" once it is mined); a refusal is accepted, and left to the receipt
+// wait, only if the node knows the transaction.
 func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *types.Transaction) error {
 	unanswered := false
 	_, err := retry(ctx, wait, func(ctx context.Context) (struct{}, error) {
@@ -284,7 +293,12 @@ func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *type
 		unanswered = unanswered || transient(err)
 		return struct{}{}, err
 	})
-	if err != nil && unanswered && !transient(err) {
+	if err == nil || !unanswered || transient(err) {
+		return err
+	}
+	attempt, cancel := context.WithTimeout(ctx, wait.Timeout/4)
+	defer cancel()
+	if _, _, lookupErr := e.client.TransactionByHash(attempt, signed.Hash()); lookupErr == nil {
 		return nil
 	}
 	return err
@@ -353,13 +367,22 @@ func (e *EVMClient) buildSignedTx(
 		gas = defaultGasLimit
 	}
 
-	tipCap, baseFee, err := e.fees(ctx, wait)
+	tipCap, err := retry(ctx, wait, e.client.SuggestGasTipCap)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("suggest gas tip cap: %w", err)
+	}
+	if tipCap == nil || tipCap.Sign() <= 0 {
+		tipCap = big.NewInt(fallbackTipCapWei)
+	}
+	head, err := retry(ctx, wait, func(ctx context.Context) (*types.Header, error) {
+		return e.client.HeaderByNumber(ctx, nil)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("latest header: %w", err)
 	}
 	feeCap := new(big.Int).Set(tipCap)
-	if baseFee != nil && baseFee.Sign() > 0 {
-		feeCap.Add(new(big.Int).Mul(baseFee, big.NewInt(2)), tipCap)
+	if head.BaseFee != nil && head.BaseFee.Sign() > 0 {
+		feeCap.Add(new(big.Int).Mul(head.BaseFee, big.NewInt(2)), tipCap)
 	}
 
 	tx := types.NewTx(&types.DynamicFeeTx{
@@ -390,49 +413,7 @@ func (e *EVMClient) nonceFloor(account common.Address) uint64 {
 func (e *EVMClient) raiseNonceFloor(account common.Address, floor uint64) {
 	e.nonceMu.Lock()
 	defer e.nonceMu.Unlock()
-	if e.nonceFloors == nil {
-		e.nonceFloors = map[common.Address]uint64{}
-	}
 	e.nonceFloors[account] = max(e.nonceFloors[account], floor)
-}
-
-// nonceEvidence describes the node's view of account's nonce now, so a
-// refused send shows whether the nonce it used was stale.
-func (e *EVMClient) nonceEvidence(ctx context.Context, account common.Address) string {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-	defer cancel()
-	pending, pendingErr := e.client.PendingNonceAt(ctx, account)
-	latest, latestErr := e.client.NonceAt(ctx, account, nil)
-	head, headErr := e.client.BlockNumber(ctx)
-	if err := errors.Join(pendingErr, latestErr, headErr); err != nil {
-		return fmt.Sprintf("node nonce unknown: %v", err)
-	}
-	return fmt.Sprintf("floor %d; node now: pending nonce %d, latest nonce %d at block %d",
-		e.nonceFloor(account), pending, latest, head)
-}
-
-// fees returns the tip and the latest base fee (nil before EIP-1559), read at
-// most once per feeMaxAge across concurrent senders.
-func (e *EVMClient) fees(ctx context.Context, wait TransactionWait) (tip, baseFee *big.Int, err error) {
-	e.feeMu.Lock()
-	defer e.feeMu.Unlock()
-	if e.feeTip == nil || time.Since(e.feeRead) >= feeMaxAge {
-		tip, err := retry(ctx, wait, e.client.SuggestGasTipCap)
-		if err != nil {
-			return nil, nil, fmt.Errorf("suggest gas tip cap: %w", err)
-		}
-		if tip == nil || tip.Sign() <= 0 {
-			tip = big.NewInt(fallbackTipCapWei)
-		}
-		header, err := retry(ctx, wait, func(ctx context.Context) (*types.Header, error) {
-			return e.client.HeaderByNumber(ctx, nil)
-		})
-		if err != nil {
-			return nil, nil, fmt.Errorf("latest header: %w", err)
-		}
-		e.feeRead, e.feeTip, e.feeBaseFee = time.Now(), tip, header.BaseFee
-	}
-	return new(big.Int).Set(e.feeTip), e.feeBaseFee, nil
 }
 
 func (e *EVMClient) WaitNextPendingTx(ctx context.Context, wait TransactionWait) error {

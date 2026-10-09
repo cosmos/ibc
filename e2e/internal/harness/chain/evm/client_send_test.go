@@ -17,11 +17,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// reply is one scripted answer: a result, a node error, or a dropped
-// connection.
+// reply is one scripted answer: a result, a node error, an HTTP error
+// status, or a dropped connection.
 type reply struct {
 	result  any
 	nodeErr string
+	status  int
 	drop    bool
 }
 
@@ -67,6 +68,9 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			_ = conn.Close()
 		}
+		return
+	case script[min(call, len(script)-1)].status != 0:
+		w.WriteHeader(script[min(call, len(script)-1)].status)
 		return
 	case script[min(call, len(script)-1)].nodeErr != "":
 		response["error"] = map[string]any{"code": -32000, "message": script[min(call, len(script)-1)].nodeErr}
@@ -159,12 +163,40 @@ func TestBroadcastTxRetriesUnansweredRequests(t *testing.T) {
 
 func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
 	node, client := newFakeNode(t, map[string][]reply{
-		"eth_sendRawTransaction": {{drop: true}, {nodeErr: "already known"}},
+		"eth_sendRawTransaction":   {{drop: true}, {nodeErr: "already known"}},
+		"eth_getTransactionByHash": {knownTxReply(t)},
 	})
 
-	require.NoError(t, broadcast(t, client), "the unanswered first send may have arrived")
+	require.NoError(t, broadcast(t, client), "the unanswered first send arrived")
 	assert.Equal(t, 2, node.count("eth_sendRawTransaction"))
 	assert.Positive(t, node.count("eth_getTransactionReceipt"))
+}
+
+func TestBroadcastTxReportsARefusalOfATransactionTheNodeLacks(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_sendRawTransaction":   {{drop: true}, {nodeErr: "insufficient funds"}},
+		"eth_getTransactionByHash": {{result: nil}},
+	})
+
+	require.ErrorContains(t, broadcast(t, client), "insufficient funds")
+	assert.Equal(t, 1, node.count("eth_getTransactionByHash"))
+	assert.Zero(t, node.count("eth_getTransactionReceipt"))
+}
+
+func TestBroadcastTxRetriesOnlyTheHTTPStatusesThatAskTo(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_estimateGas": {
+			{status: http.StatusServiceUnavailable},
+			{status: http.StatusTooManyRequests},
+			{result: "0x5208"},
+		},
+	})
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 3, node.count("eth_estimateGas"))
+
+	node.script("eth_estimateGas", reply{status: http.StatusNotFound})
+	require.ErrorContains(t, broadcast(t, client), "404")
+	assert.Equal(t, 5, node.count("eth_estimateGas"), "one call and Besu's fallback")
 }
 
 func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
@@ -183,15 +215,6 @@ func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
 	assert.Zero(t, node.count("eth_getTransactionReceipt"))
 }
 
-func TestBroadcastTxSharesAFeeReading(t *testing.T) {
-	node, client := newFakeNode(t, nil)
-
-	require.NoError(t, broadcast(t, client))
-	require.NoError(t, broadcast(t, client))
-	assert.Equal(t, 1, node.count("eth_maxPriorityFeePerGas"))
-	assert.Equal(t, 1, node.count("eth_getBlockByNumber"))
-}
-
 // receiptReply answers with a successful receipt.
 func receiptReply(t *testing.T) reply {
 	t.Helper()
@@ -200,6 +223,20 @@ func receiptReply(t *testing.T) reply {
 	})
 	require.NoError(t, err)
 	return reply{result: json.RawMessage(receipt)}
+}
+
+// knownTxReply answers with a signed transaction, as a node that holds it.
+func knownTxReply(t *testing.T) reply {
+	t.Helper()
+	from, err := NewAccount()
+	require.NoError(t, err)
+	tx, err := types.SignNewTx(from.key, types.LatestSignerForChainID(big.NewInt(1)), &types.DynamicFeeTx{
+		ChainID: big.NewInt(1), Gas: 21_000, GasFeeCap: big.NewInt(1), GasTipCap: big.NewInt(1),
+	})
+	require.NoError(t, err)
+	encoded, err := json.Marshal(tx)
+	require.NoError(t, err)
+	return reply{result: json.RawMessage(encoded)}
 }
 
 func TestBroadcastTxNeverReusesAnIncludedNonce(t *testing.T) {
@@ -224,16 +261,14 @@ func TestBroadcastTxNeverReusesAnIncludedNonce(t *testing.T) {
 	assert.Equal(t, []uint64{0, 1, 2, 0}, node.sentNonces, "a reverted transaction spends its nonce too")
 }
 
-func TestBroadcastTxRefusalReportsTheNodesNonce(t *testing.T) {
+func TestBroadcastTxRefusalReportsTheNonce(t *testing.T) {
 	_, client := newFakeNode(t, map[string][]reply{
 		"eth_sendRawTransaction":  {{nodeErr: "Nonce too low"}},
 		"eth_getTransactionCount": {{result: "0x3"}},
-		"eth_blockNumber":         {{result: "0x9"}},
 	})
 
 	err := broadcast(t, client)
 
-	require.ErrorContains(t, err,
-		"send tx with nonce 3 (floor 0; node now: pending nonce 3, latest nonce 3 at block 9)")
+	require.ErrorContains(t, err, "nonce 3 (nonce floor 0)")
 	require.ErrorContains(t, err, "Nonce too low")
 }
