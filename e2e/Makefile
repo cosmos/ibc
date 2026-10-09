@@ -3,8 +3,10 @@
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
 FORGE_BUILD_FLAGS ?=
+# Flags passed to a load-test scenario, e.g. LOADTEST_FLAGS='--packets 8000 --per-block 20 --json'.
+LOADTEST_FLAGS ?=
 
-HARNESS_DIR := ../harness
+HARNESS_DIR := internal/harness
 GEN_SOLIDITY_ABI_DIR := ../gen/go/solidity-abi
 
 help: ## List e2e commands
@@ -28,7 +30,7 @@ lint: ## Lint code
 lint-fix: ## Lint & fix code
 	golangci-lint run --fix
 
-test-internal: ## Run the unit tests for e2e's own helpers (the harness tests run from harness/)
+test-harness: _build-cli ## Run tests for e2e harness itself
 	go test ./internal/... ./cmd/... -count=1
 
 test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, forge, abigen, and jq)
@@ -45,6 +47,15 @@ generate-matrix: ## Regenerate the E2E provider and topology matrix
 
 check-matrix: ## Check that the generated E2E matrix is current
 	go run ./cmd/e2e-matrix -check test-matrix.md
+
+build-loadtest: ## Build the load-test binary into bin/loadtest
+	go build -o bin/loadtest ./cmd/loadtest
+
+run-relayer: build-loadtest _build-cli ## Run the relayer load scenario (LOADTEST_FLAGS=...)
+	./bin/loadtest relayer $(LOADTEST_FLAGS)
+
+run-attestor: build-loadtest _build-cli ## Run the attestor load scenario (LOADTEST_FLAGS=...)
+	./bin/loadtest attestor $(LOADTEST_FLAGS)
 
 clean: ## Kill e2e processes and remove Docker resources
 	./scripts/clean.sh
@@ -69,8 +80,8 @@ run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 	@echo "==== 2. Checking for stale code ===="
 	$(MAKE) check-stale
 
-	@echo "==== 3. Testing e2e helpers ===="
-	$(MAKE) test-internal
+	@echo "==== 3. Testing harness ===="
+	$(MAKE) test-harness
 
 	@echo "==== 4. Running E2E ===="
 	$(MAKE) test
@@ -83,7 +94,8 @@ _build-cli:
 	$(MAKE) -C ../cli build build-test-bin
 
 .PHONY: help doctor doctor-tools lint lint-fix
-.PHONY: test-internal test-apps test
+.PHONY: test-harness test-apps test
 .PHONY: generate-matrix check-matrix
+.PHONY: build-loadtest run-relayer run-attestor
 .PHONY:	clean clean-dry-run check-stale run-all-checks
 .PHONY: _build-cli

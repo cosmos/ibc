@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/harness/environment"
-	"github.com/cosmos/ibc/harness/ibccli"
-	"github.com/cosmos/ibc/harness/traffic"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 // This file adapts the harness traffic calls that own resources to

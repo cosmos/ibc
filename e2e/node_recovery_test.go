@@ -12,7 +12,7 @@ import (
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/harness/traffic"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 func TestRelayerRecoversAfterNodeRestart(t *testing.T) {

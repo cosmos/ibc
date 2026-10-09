@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/harness/environment"
-	"github.com/cosmos/ibc/harness/traffic"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 // qbftMesh declares a fully connected graph of Besu QBFT Clients over chains:

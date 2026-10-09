@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cosmos/ibc/harness/clientkind"
-	"github.com/cosmos/ibc/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
 const (

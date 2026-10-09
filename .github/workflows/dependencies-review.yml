@@ -45,7 +45,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: cli/go.mod
-          cache-dependency-path: "**/go.sum"
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
 
       - name: Go vulnerability check
         id: govuln

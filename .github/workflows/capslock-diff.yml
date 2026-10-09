@@ -20,7 +20,7 @@ permissions:
 
 env:
   CAPSLOCK_VERSION: v0.3.3
-  CAPSLOCK_MODULES: cli e2e harness
+  CAPSLOCK_MODULES: cli e2e
   # How cli is released; cgo also widens what a dependency can do unseen.
   CGO_ENABLED: "0"
 
@@ -41,7 +41,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: cli/go.mod
-          cache-dependency-path: "**/go.sum"
+          cache-dependency-path: |
+            cli/go.sum
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
 
       - name: Find changed dependencies
         id: deps
@@ -55,50 +58,24 @@ jobs:
           list() {
             (cd "$1" && go list -mod=readonly -m -f '{{.Path}}{{"\t"}}{{if .Main}}main{{else}}{{.Version}}{{with .Replace}} => {{.Path}}{{with .Version}} {{.}}{{end}}{{end}}{{end}}' all) | sort
           }
-          # One line per entry of a captured list; none for an empty one, not a blank line.
-          lines() { [ -z "$1" ] || printf '%s\n' "$1"; }
 
           # capslock-out/<module>-modules.tsv: path, status, base, head. A module is changed
           # when added, bumped, or given a new replace or go.work use, local ones included;
-          # a changed vendor/ tree marks them all, since it is what gets built. Not one replaced
-          # by another of $CAPSLOCK_MODULES (=> ../<module>): that is this repository's code,
-          # reviewed in the pull request, its dependencies checked under its own name.
+          # a changed vendor/ tree marks them all, since it is what gets built.
           rm -rf capslock-out && mkdir -p capslock-out
           modules=""
           for m in $CAPSLOCK_MODULES; do
             # Captured first, so that a failing go list fails the step rather than passing it.
+            old="$(list "$RUNNER_TEMP/base/$m")"
             new="$(list "$m")"
-            old=""
-            if [ -e "$RUNNER_TEMP/base/$m/go.mod" ]; then
-              old="$(list "$RUNNER_TEMP/base/$m")"
-            else
-              # A module the base commit lacks is compared with the union of the base build
-              # lists of the modules it has: only a dependency, or a version of one, that no
-              # module of the repository used counts as changed. One line per path, the head
-              # version when any base module has it. The base modules' own paths and their
-              # dependencies this module lacks show as removed.
-              echo "$m is not in the base commit; comparing it with the union of the base modules."
-              union=""
-              for b in $CAPSLOCK_MODULES; do
-                if [ -e "$RUNNER_TEMP/base/$b/go.mod" ]; then
-                  union="$union$(list "$RUNNER_TEMP/base/$b")"$'\n'
-                fi
-              done
-              old="$(awk -F '\t' 'NR == FNR { head[$1] = $2; next }
-                $0 != "" && (!($1 in pick) || $2 == head[$1]) { pick[$1] = $0 }
-                END { for (p in pick) print pick[p] }' <(lines "$new") <(printf '%s' "$union") | sort)"
-            fi
             vendor=0
             if [ -e "$m/vendor" ] || [ -e "$RUNNER_TEMP/base/$m/vendor" ]; then
               diff -rq "$RUNNER_TEMP/base/$m/vendor" "$m/vendor" >/dev/null 2>&1 || vendor=1
             fi
-            join -t $'\t' -a 1 -a 2 -e '' -o 0,1.2,2.2 <(lines "$old") <(lines "$new") \
-              | awk -F '\t' -v OFS='\t' -v vendor="$vendor" -v siblings="$CAPSLOCK_MODULES" '
-                BEGIN { n = split(siblings, sib, " "); for (i = 1; i <= n; i++) sibling[" => ../" sib[i]] = 1 }
-                {
+            join -t $'\t' -a 1 -a 2 -e '' -o 0,1.2,2.2 <(printf '%s\n' "$old") <(printf '%s\n' "$new") \
+              | awk -F '\t' -v OFS='\t' -v vendor="$vendor" '{
                   if ($3 == "") s = "removed"
                   else if ($3 == "main" && ($2 == "main" || $2 == "")) s = "unchanged"
-                  else if (index($3, " => ../") && substr($3, index($3, " => ../")) in sibling) s = "unchanged"
                   else s = (vendor || $2 != $3) ? "changed" : "unchanged"
                   print $1, s, $2, $3
                 }' > "capslock-out/$m-modules.tsv"
