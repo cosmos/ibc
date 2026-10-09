@@ -360,7 +360,6 @@ attestors:
 | `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
 | `tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
-| `tls.minVersion` | `string` | optional | `1.2` (default) or `1.3`. Lower is rejected: gRPC needs HTTP/2, and HTTP/2 needs at least TLS 1.2. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
 <!-- [config.go:L143](cli/internal/config/config.go#L143) -->
@@ -415,7 +414,6 @@ signers:
 | `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
 | `tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
-| `tls.minVersion` | `string` | optional | `1.2` (default) or `1.3`. Lower is rejected: gRPC needs HTTP/2, and HTTP/2 needs at least TLS 1.2. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
 <!-- [config.go:L172](cli/internal/config/config.go#L172) -->
@@ -439,9 +437,9 @@ attestors:
       keyFile: /etc/ibc/tls/client.key
 ```
 
-The block's presence turns TLS on; there is no separate flag. A remote attestor's `grpc`, and a remote prover `url` given as a bare `host:port`, are dialed as `https://` with a `tls` block and `http://` without one. <!-- [cli/internal/config/endpoint.go: endpointURL] --> A remote prover `url` that already has a scheme keeps it, and a `tls` block with an `http://` url is rejected. <!-- [cli/internal/config/relayer.go: RemoteParams.Validate] --> A remote signer's `grpc` target is passed to gRPC as written, with TLS credentials when the block is present. <!-- [cli/internal/service/signer/remote.go: newGRPCClient] --> `tls: {}` means TLS with system roots and no client certificate. An empty `tls:` key is rejected, so a block whose fields are all commented out never silently means plaintext. <!-- [cli/internal/config/file.go: rejectNullTLS] -->
+Whether TLS is used depends on the endpoint's scheme; the block only carries settings. A remote attestor's `grpc`, and a remote prover `url` given as a bare `host:port`, are dialed as `https://` with a `tls` block and `http://` without one. <!-- [cli/internal/config/endpoint.go: endpointURL] --> A remote prover `url` that already has a scheme keeps it: an `https://` url uses TLS with system roots even without a `tls` block, and a `tls` block with an `http://` url is rejected. <!-- [cli/internal/config/relayer.go: RemoteParams.Validate] --> A remote signer's `grpc` target is passed to gRPC as written, with TLS credentials when the block is present. <!-- [cli/internal/service/signer/remote.go: newGRPCClient] --> `tls: {}` means TLS with system roots and no client certificate. An empty `tls:` key is rejected, so a block whose fields are all commented out is never silently ignored. <!-- [cli/internal/config/file.go: rejectNullTLS] -->
 
-Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. An expired client certificate fails validation. <!-- [cli/internal/network/tls.go: BuildClientTLS] -->
+Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. An expired client certificate fails validation. <!-- [cli/internal/config/tls.go: TLSClientConfig.TLSConfig] -->
 
 Remote attestors and provers are called over gRPC, which needs HTTP/2. Over TLS it is negotiated during the handshake. Over plaintext the server must accept HTTP/2 without TLS (h2c), as standard gRPC servers do. The client also offers HTTP/1.1 over TLS, which only servers that serve gRPC over HTTP/1.1, such as connect-go, can use. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
 

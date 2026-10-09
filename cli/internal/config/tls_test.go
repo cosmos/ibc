@@ -3,7 +3,6 @@
 package config
 
 import (
-	"crypto/tls"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ func TestTLSClientConfigValidate(t *testing.T) {
 		errContains string
 	}{
 		{
-			name: "absent block is plaintext and valid",
+			name: "absent block is valid",
 			cfg:  nil,
 		},
 		{
@@ -61,7 +60,6 @@ func TestTLSClientConfigValidate(t *testing.T) {
 				CertFile:   certFile,
 				KeyFile:    keyFile,
 				ServerName: "attestor.example.com",
-				MinVersion: "1.3",
 			},
 		},
 		{
@@ -75,14 +73,9 @@ func TestTLSClientConfigValidate(t *testing.T) {
 			errContains: "certFile: required when keyFile is set",
 		},
 		{
-			name:        "tls 1.1 is rejected",
-			cfg:         &TLSClientConfig{MinVersion: "1.1"},
-			errContains: "minVersion",
-		},
-		{
 			name:        "missing ca file",
 			cfg:         &TLSClientConfig{CAFile: filepath.Join(dir, "absent.crt")},
-			errContains: "caFile",
+			errContains: "caFile: read CA file",
 		},
 		{
 			name: "missing cert file",
@@ -119,25 +112,26 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 
 		got, err := cfg.TLSConfig()
 		require.NoError(t, err)
-		require.Nil(t, got, "an absent block must leave the connection plaintext")
+		require.Nil(t, got, "an absent block must leave the transport's defaults")
 	})
 
 	t.Run("empty block yields a usable config", func(t *testing.T) {
 		got, err := (&TLSClientConfig{}).TLSConfig()
 		require.NoError(t, err)
 		require.NotNil(t, got)
-		require.Equal(t, uint16(tls.VersionTLS12), got.MinVersion)
+		require.Nil(t, got.RootCAs)
 		require.Empty(t, got.Certificates)
+		require.False(t, got.InsecureSkipVerify)
 	})
 
 	t.Run("client certificate is wired for mTLS", func(t *testing.T) {
 		got, err := (&TLSClientConfig{
-			CertFile:   certFile,
-			KeyFile:    keyFile,
-			MinVersion: "1.3",
+			CAFile:   certFile,
+			CertFile: certFile,
+			KeyFile:  keyFile,
 		}).TLSConfig()
 		require.NoError(t, err)
-		require.Equal(t, uint16(tls.VersionTLS13), got.MinVersion)
+		require.NotNil(t, got.RootCAs)
 		require.Len(t, got.Certificates, 1)
 	})
 
@@ -210,7 +204,6 @@ caFile: /tls/ca.crt
 certFile: /tls/client.crt
 keyFile: /tls/client.key
 serverName: attestor.example.com
-minVersion: "1.3"
 insecureSkipVerify: true
 `
 		require.NoError(t, yaml.UnmarshalWithOptions([]byte(raw), &cfg, yaml.DisallowUnknownField()))
@@ -219,7 +212,6 @@ insecureSkipVerify: true
 			CertFile:           "/tls/client.crt",
 			KeyFile:            "/tls/client.key",
 			ServerName:         "attestor.example.com",
-			MinVersion:         "1.3",
 			InsecureSkipVerify: true,
 		}, cfg)
 	})
@@ -382,9 +374,9 @@ func TestRemoteParamsValidate(t *testing.T) {
 			name: "bad tls block on an https url",
 			params: RemoteParams{
 				URL: "https://prover.example.com:9090",
-				TLS: &TLSClientConfig{MinVersion: "1.1"},
+				TLS: &TLSClientConfig{CertFile: certFile},
 			},
-			errContains: "tls.minVersion",
+			errContains: "tls.keyFile",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

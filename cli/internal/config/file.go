@@ -50,7 +50,8 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 
 // rejectNullTLS fails on a `tls:` key with no value. It decodes to the same
 // nil as an absent block, so a block whose fields are all commented out would
-// otherwise silently mean plaintext. It walks the generically decoded document
+// otherwise silently drop its settings, and for a bare host:port or a signer
+// target, TLS itself. It walks the generically decoded document
 // so quoted keys, tags and aliases resolve exactly as they do for the config.
 func rejectNullTLS(bz []byte) error {
 	var doc any
@@ -60,7 +61,7 @@ func rejectNullTLS(bz []byte) error {
 
 	if path := findNullTLS(doc, ""); path != "" {
 		return errors.Errorf(
-			"%s: empty; use `tls: {}` for TLS with default settings, or remove it for plaintext",
+			"%s: empty; use `tls: {}` for default TLS settings, or remove the key",
 			path,
 		)
 	}

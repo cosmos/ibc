@@ -4,21 +4,26 @@ package config
 
 import (
 	"crypto/tls"
-	"errors"
+	"crypto/x509"
+	"fmt"
 	"log/slog"
+	"os"
+	"time"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
 
-// TLSClientConfig configures an outbound TLS connection.
+// TLSClientConfig holds the settings for an outbound TLS connection.
 //
-// Presence of the block is what enables TLS; there is no separate flag. For an
-// endpoint configured as a bare host:port it selects https over http. For one
-// configured as a URL the scheme already decides, and the block only supplies
-// the CA and client certificate.
+// Whether TLS is used is decided by the endpoint's scheme, not by this block.
+// For an endpoint configured as a bare host:port (remote attestors, and remote
+// provers without a scheme) the block's presence selects https over http. A
+// remote prover configured with an https:// URL uses TLS with Go's defaults
+// even without the block. A remote signer's gRPC target uses TLS only when the
+// block is present.
 //
-// An empty block (`tls: {}`) is valid and means TLS with system roots, no
-// client certificate, and the default version floor.
+// An empty block (`tls: {}`) is valid and means system roots and no client
+// certificate.
 type TLSClientConfig struct {
 	// CAFile is a PEM bundle verifying the server. Empty uses system roots.
 	// Read at startup, so a changed bundle needs a restart.
@@ -36,10 +41,6 @@ type TLSClientConfig struct {
 	// Needed when dialing an address that differs from the certificate's name.
 	ServerName string `yaml:"serverName,omitempty"`
 
-	// MinVersion is "1.2" (default) or "1.3". Lower is rejected: gRPC needs
-	// HTTP/2, and HTTP/2 needs at least TLS 1.2.
-	MinVersion string `yaml:"minVersion,omitempty"`
-
 	// InsecureSkipVerify disables server certificate verification and logs a
 	// warning. Development only. Must not be combined with caFile.
 	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty"`
@@ -47,9 +48,9 @@ type TLSClientConfig struct {
 
 // Validate reports whether the block is internally consistent and its files
 // are readable and well-formed, so a bad mount or a mismatched cert/key pair
-// fails at config load rather than at first use. A nil block is valid and
-// means plaintext. It does not warn about InsecureSkipVerify; the caller
-// that goes on to actually build a connection with the result does that.
+// fails at config load rather than at first use. A nil block is valid. It
+// does not warn about InsecureSkipVerify; the caller that goes on to actually
+// build a connection with the result does that.
 func (c *TLSClientConfig) Validate() error {
 	if c == nil {
 		return nil
@@ -65,10 +66,14 @@ func (c *TLSClientConfig) Validate() error {
 }
 
 // TLSConfig resolves the block into a *tls.Config, or nil when the block is
-// absent, meaning the connection stays plaintext. A CA file error is reported
-// against caFile. A client certificate error isn't attributed to a field: a
-// mismatched pair or malformed PEM could be either file's fault, and the
-// error already names the file it failed to read.
+// absent, leaving the transport's defaults in place. The CA bundle and client
+// certificate are read once here, so a rotated certificate takes effect only
+// after a restart. An expired client certificate is rejected here rather than
+// presented for the server to reject with a generic alert.
+//
+// A client certificate error isn't attributed to a field: a mismatched pair
+// or malformed PEM could be either file's fault, and the error already names
+// the file it failed to read.
 func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 	if c == nil {
 		return nil, nil
@@ -83,14 +88,22 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 		return nil, errPathf("certFile", "required when keyFile is set")
 	}
 
-	minVersion, err := network.ParseTLSVersion(c.MinVersion)
-	if err != nil {
-		return nil, errPath("minVersion", err)
+	cfg := &tls.Config{
+		ServerName:         c.ServerName,
+		InsecureSkipVerify: c.InsecureSkipVerify,
 	}
 
-	caFile, err := ExpandHome(c.CAFile)
-	if err != nil {
-		return nil, errPath("caFile", err)
+	if c.CAFile != "" {
+		pool, err := caPool(c.CAFile)
+		if err != nil {
+			return nil, errPath("caFile", err)
+		}
+
+		cfg.RootCAs = pool
+	}
+
+	if c.CertFile == "" {
+		return cfg, nil
 	}
 
 	certFile, err := ExpandHome(c.CertFile)
@@ -103,23 +116,45 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 		return nil, errPath("keyFile", err)
 	}
 
-	cfg, err := network.BuildClientTLS(network.ClientTLS{
-		CAFile:             caFile,
-		CertFile:           certFile,
-		KeyFile:            keyFile,
-		ServerName:         c.ServerName,
-		MinVersion:         minVersion,
-		InsecureSkipVerify: c.InsecureSkipVerify,
-	})
-	if errors.Is(err, network.ErrCAFile) {
-		return nil, errPath("caFile", err)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load client certificate: %w", err)
 	}
 
-	return cfg, err
+	if cert.Leaf != nil && time.Now().After(cert.Leaf.NotAfter) {
+		return nil, fmt.Errorf(
+			"client certificate %s expired %s",
+			certFile, cert.Leaf.NotAfter.Format(time.RFC3339),
+		)
+	}
+
+	cfg.Certificates = []tls.Certificate{cert}
+
+	return cfg, nil
 }
 
-// ResolveEndpoint pairs url with the resolved form of tlsCfg (nil meaning
-// plaintext) and warns through logger when server verification is disabled.
+// caPool loads caFile into a cert pool verifying a TLS server.
+func caPool(caFile string) (*x509.CertPool, error) {
+	path, err := ExpandHome(caFile)
+	if err != nil {
+		return nil, err
+	}
+
+	bz, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read CA file: %w", err)
+	}
+
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(bz) {
+		return nil, fmt.Errorf("CA file %q contains no PEM certificates", path)
+	}
+
+	return pool, nil
+}
+
+// ResolveEndpoint pairs url with the resolved form of tlsCfg, see TLSConfig,
+// and warns through logger when server verification is disabled.
 // logAttrs identify the endpoint in that warning; keep URLs out of them, since
 // a URL can carry credentials in its userinfo.
 func ResolveEndpoint(
