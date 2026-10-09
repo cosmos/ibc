@@ -29,8 +29,8 @@ import (
 
 var testERC20Transactor = mustBinding(testerc20.NewTestERC20Transactor(common.Address{}, nil))
 
-// RelayerStopTimeout bounds how long stopping a relayer may take.
-const RelayerStopTimeout = 15 * time.Second
+// StopTimeout bounds how long stopping a relayer or prover may take.
+const StopTimeout = 15 * time.Second
 
 const weiPerEther int64 = 1_000_000_000_000_000_000
 
@@ -66,21 +66,35 @@ type Route struct {
 	SkipDestinationIFTBridge bool
 }
 
-const (
-	routeAtoB RouteID = "route-a-to-b"
-	routeBtoA RouteID = "route-b-to-a"
-)
+// routeID names the route from source to destination, so routes between
+// different Chain pairs never share an ID.
+func routeID(source, destination environment.ChainID) RouteID {
+	return RouteID(fmt.Sprintf("route-%s-to-%s", source, destination))
+}
+
+// distinctRoutes rejects a route given twice, which would otherwise replace
+// the first one's clients.
+func distinctRoutes(routes []Route) error {
+	seen := make(map[RouteID]bool, len(routes))
+	for _, route := range routes {
+		if seen[route.ID] {
+			return fmt.Errorf("traffic: route %q is given twice", route.ID)
+		}
+		seen[route.ID] = true
+	}
+	return nil
+}
 
 func AtoB(a, b environment.ChainID) Route {
-	return Route{ID: routeAtoB, Source: a, Destination: b}
+	return Route{ID: routeID(a, b), Source: a, Destination: b}
 }
 
 func BtoA(b, a environment.ChainID) Route {
-	return Route{ID: routeBtoA, Source: b, Destination: a}
+	return Route{ID: routeID(b, a), Source: b, Destination: a}
 }
 
 func ManualAtoB(a, b environment.ChainID) Route {
-	return Route{ID: routeAtoB, Source: a, Destination: b, Manual: true}
+	return Route{ID: routeID(a, b), Source: a, Destination: b, Manual: true}
 }
 
 // ChainDeployment holds per-chain application contracts deployed for traffic.
@@ -143,16 +157,19 @@ func Deploy(
 	routes ...Route,
 ) (*ibccli.Driver, *Deployment, error) {
 	switch {
+	case env == nil:
+		return nil, nil, errors.New("traffic: Environment is required")
 	case dir == "":
 		return nil, nil, errors.New("traffic: deployment directory is required")
 	case relayer.key == nil:
 		return nil, nil, errors.New("traffic: relayer signer is required")
 	}
-	deployment, err := DeployApps(ctx, env, deployer, routes...)
-	if err != nil {
+	// Before deploying, so an unfunded relayer costs no deployment.
+	if err := ensureSignerBalances(ctx, env, relayer); err != nil {
 		return nil, nil, err
 	}
-	if err = ensureSignerBalances(ctx, env, relayer); err != nil {
+	deployment, err := DeployApps(ctx, env, deployer, routes...)
+	if err != nil {
 		return nil, nil, err
 	}
 
@@ -213,7 +230,7 @@ func StartRelayer(
 		return nil, fmt.Errorf("traffic: start relayer: %w", err)
 	}
 	if err := verifyRelayerConnected(relayer, env); err != nil {
-		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), RelayerStopTimeout)
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), StopTimeout)
 		defer cancel()
 		return nil, errors.Join(err, relayer.Stop(stopCtx))
 	}
@@ -251,6 +268,9 @@ func DeployApps(
 		return nil, errors.New("traffic: Environment is required")
 	case deployer.key == nil:
 		return nil, errors.New("traffic: deployer signer is required")
+	}
+	if err := distinctRoutes(routes); err != nil {
+		return nil, err
 	}
 	if err := ensureSignerBalances(ctx, env, deployer); err != nil {
 		return nil, err
@@ -412,6 +432,29 @@ func registerIFTBridge(
 	return nil
 }
 
+// baseConfig is what the relayer and prover configurations share: the signer,
+// the database, the finality offset, the Environment's observability, and its
+// Attestors.
+func baseConfig(env *environment.Environment, signerKeyPath, dbPath string) (ibccli.RelayerConfig, error) {
+	config := ibccli.RelayerConfig{
+		DBPath:         dbPath,
+		SignerAlias:    relayerSignerAlias,
+		SignerKeyFile:  signerKeyPath,
+		FinalityOffset: ibccli.HarnessFinalityOffset,
+		Observability:  env.Observability(),
+	}
+	for _, id := range env.Attestors() {
+		attestor, err := env.Attestor(id)
+		if err != nil {
+			return config, fmt.Errorf("traffic: resolve Attestor %q: %w", id, err)
+		}
+		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		})
+	}
+	return config, nil
+}
+
 func buildConfig(
 	env *environment.Environment,
 	driver *ibccli.Driver,
@@ -420,14 +463,11 @@ func buildConfig(
 	signerKeyPath string,
 	dbPath string,
 ) (ibccli.RelayerConfig, ibccli.RelayerOptions, error) {
-	config := ibccli.RelayerConfig{
-		DBPath:         dbPath,
-		SignerAlias:    relayerSignerAlias,
-		SignerKeyFile:  signerKeyPath,
-		FinalityOffset: ibccli.HarnessFinalityOffset,
-		ClearOnStart:   false,
-		ClearInterval:  5 * time.Second,
+	config, err := baseConfig(env, signerKeyPath, dbPath)
+	if err != nil {
+		return config, ibccli.RelayerOptions{}, err
 	}
+	config.ClearInterval = 5 * time.Second
 	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
 		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
@@ -460,16 +500,6 @@ func buildConfig(
 		}
 		config.Chains = append(config.Chains, relayerChain)
 	}
-	for _, id := range env.Attestors() {
-		attestor, err := env.Attestor(id)
-		if err != nil {
-			return config, options, fmt.Errorf("traffic: resolve Attestor %q: %w", id, err)
-		}
-		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
-		})
-	}
-
 	connections := map[[2]string]int{}
 	for _, route := range routes {
 		clients, ok := deployment.RouteClients(route.ID)

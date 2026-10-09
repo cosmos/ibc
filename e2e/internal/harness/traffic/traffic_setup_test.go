@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -52,4 +53,14 @@ func TestMergeRelayerConnection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRoutesBetweenDifferentChainsAreDistinct(t *testing.T) {
+	chainC := environment.ChainID("chain-c")
+	require.NoError(t, distinctRoutes([]Route{
+		AtoB(ChainA, ChainB), AtoB(ChainA, chainC), BtoA(ChainB, ChainA),
+	}))
+	require.ErrorContains(t, distinctRoutes([]Route{
+		AtoB(ChainA, ChainB), ManualAtoB(ChainA, ChainB),
+	}), "given twice")
 }

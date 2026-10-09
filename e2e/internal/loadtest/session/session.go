@@ -100,13 +100,9 @@ func Start(ctx context.Context, opts Options) (*Session, error) {
 	if s.dir, err = os.MkdirTemp("", "ibc-loadtest-"); err != nil {
 		return s, fmt.Errorf("create deployment directory: %w", err)
 	}
-	configure := func(config *ibccli.RelayerConfig) {
-		config.Observability = opts.Observability
-		if opts.ConfigureRelayer != nil {
-			opts.ConfigureRelayer(config)
-		}
-	}
-	driver, deployment, err := traffic.Deploy(ctx, s.Env, s.dir, s.Deployer, relayerSigner, configure, opts.Routes...)
+	driver, deployment, err := traffic.Deploy(
+		ctx, s.Env, s.dir, s.Deployer, relayerSigner, opts.ConfigureRelayer, opts.Routes...,
+	)
 	if err != nil {
 		return s, fmt.Errorf("deploy: %w", err)
 	}
@@ -141,7 +137,7 @@ func (s *Session) Close(ctx context.Context) error {
 	ctx = context.WithoutCancel(ctx)
 	var errs []error
 	if s.Relayer != nil {
-		stopCtx, cancel := context.WithTimeout(ctx, traffic.RelayerStopTimeout)
+		stopCtx, cancel := context.WithTimeout(ctx, traffic.StopTimeout)
 		if err := s.Relayer.Stop(stopCtx); err != nil {
 			errs = append(errs, fmt.Errorf("stop relayer: %w", err))
 		}

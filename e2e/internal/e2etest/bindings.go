@@ -76,7 +76,7 @@ func StartRelayer(t testing.TB, driver *ibccli.Driver, env *environment.Environm
 	}
 
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), traffic.RelayerStopTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), traffic.StopTimeout)
 		defer cancel()
 		assert.NoError(t, relayer.Stop(ctx), "e2etest: stop relayer")
 		dumpRelayer()
@@ -89,6 +89,10 @@ func StartProver(t testing.TB, env *environment.Environment, signer traffic.Sign
 	t.Helper()
 	prover, err := traffic.StartProver(t.Context(), env, signer, t.TempDir())
 	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, prover.Stop(), "e2etest: stop prover service") })
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), traffic.StopTimeout)
+		defer cancel()
+		assert.NoError(t, prover.Stop(ctx), "e2etest: stop prover service")
+	})
 	return prover
 }

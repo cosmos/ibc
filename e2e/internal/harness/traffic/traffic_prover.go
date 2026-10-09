@@ -18,11 +18,9 @@ func buildProverConfig(
 	signerKeyPath string,
 	dbPath string,
 ) (ibccli.RelayerConfig, error) {
-	config := ibccli.RelayerConfig{
-		DBPath:         dbPath,
-		SignerAlias:    relayerSignerAlias,
-		SignerKeyFile:  signerKeyPath,
-		FinalityOffset: ibccli.HarnessFinalityOffset,
+	config, err := baseConfig(env, signerKeyPath, dbPath)
+	if err != nil {
+		return config, err
 	}
 
 	for _, id := range env.Chains() {
@@ -40,17 +38,6 @@ func buildProverConfig(
 			ChainID:     strconv.FormatUint(chain.EVMChainID(), 10),
 			RPC:         chain.RPCURL(),
 			ICS26Router: string(instance.Locator()),
-		})
-	}
-
-	for _, id := range env.Attestors() {
-		attestor, err := env.Attestor(id)
-		if err != nil {
-			return config, fmt.Errorf("traffic: resolve Attestor %q: %w", id, err)
-		}
-
-		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
 		})
 	}
 
