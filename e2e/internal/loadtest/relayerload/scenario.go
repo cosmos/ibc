@@ -191,6 +191,10 @@ func run(ctx context.Context, s *session.Session, cfg Config, report *Report) er
 		wallets[i] = signer
 	}
 	if err := fundWallets(ctx, s, routes, wallets); err != nil {
+		// A relayer that exited explains a funding call it cut short.
+		if cause := context.Cause(ctx); cause != nil && !errors.Is(err, cause) {
+			err = fmt.Errorf("%w: %w", cause, err)
+		}
 		return err
 	}
 

@@ -57,6 +57,7 @@ func generate(
 		claimed.Add(-1)
 		return false
 	}
+	open := func() bool { return claimed.Load() < target }
 	exhausted := func() bool { return sent.Load() >= target }
 
 	var (
@@ -121,7 +122,7 @@ func generate(
 		close(retired)
 	}()
 
-	r.Backpressure = pace(ctx, ticks, retired, tokens, exhausted)
+	r.Backpressure = pace(ctx, ticks, retired, tokens, open, exhausted)
 	close(stop)
 	senders.Wait()
 
@@ -132,29 +133,35 @@ func generate(
 	r.BlocksWithTxs, r.BlockSpan, r.PerBlockMin, r.PerBlockP50, r.PerBlockMax = blockCounts(perBlocks)
 }
 
-// pace fills tokens with cap(tokens) tokens now and on every tick, until
-// exhausted reports that every packet was sent, quit closes, or ctx ends.
-// Tokens still unused when the next tick arrives count as backpressure: no
-// wallet was free to send them within their interval. They are discarded so
-// an interval never offers more than cap(tokens) sends.
+// pace fills tokens with cap(tokens) tokens now and on every tick while open
+// reports unclaimed packet slots, until exhausted reports that every packet
+// was sent, quit closes, or ctx ends. Tokens still unused when the next tick
+// arrives, with slots still open, count as backpressure: no wallet was free
+// to send them within their interval. They are discarded so an interval
+// never offers more than cap(tokens) sends.
 func pace(
 	ctx context.Context,
 	ticks <-chan time.Time,
 	quit <-chan struct{},
 	tokens chan struct{},
-	exhausted func() bool,
+	open, exhausted func() bool,
 ) (backpressure int) {
 	for {
+		unclaimed := open()
 		for drained := false; !drained; {
 			select {
 			case <-tokens:
-				backpressure++
+				if unclaimed {
+					backpressure++
+				}
 			default:
 				drained = true
 			}
 		}
-		for range cap(tokens) {
-			tokens <- struct{}{}
+		if unclaimed {
+			for range cap(tokens) {
+				tokens <- struct{}{}
+			}
 		}
 		select {
 		case <-ctx.Done():

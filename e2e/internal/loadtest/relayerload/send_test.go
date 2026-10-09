@@ -17,9 +17,10 @@ import (
 func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 	tokens := make(chan struct{}, 3)
 	ticks := make(chan time.Time)
-	var exhausted atomic.Bool
+	var claimed, exhausted atomic.Bool
+	open := func() bool { return !claimed.Load() }
 	done := make(chan int)
-	go func() { done <- pace(t.Context(), ticks, nil, tokens, exhausted.Load) }()
+	go func() { done <- pace(t.Context(), ticks, nil, tokens, open, exhausted.Load) }()
 
 	// Interval 1: the first fill happens at once; one token is used.
 	require.Eventually(t, func() bool { return len(tokens) == 3 }, time.Second, time.Millisecond)
@@ -27,7 +28,11 @@ func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 	// Interval 2: the two leftovers are backpressure and the bucket refills to 3.
 	ticks <- time.Now()
 	require.Eventually(t, func() bool { return len(tokens) == 3 }, time.Second, time.Millisecond)
-	// Every packet is sent: the next tick ends pacing without counting leftovers.
+	// Every slot is claimed: leftovers are not backpressure, and none are added.
+	claimed.Store(true)
+	ticks <- time.Now()
+	require.Eventually(t, func() bool { return len(tokens) == 0 }, time.Second, time.Millisecond)
+	// Every packet is sent: the next tick ends pacing.
 	exhausted.Store(true)
 	ticks <- time.Now()
 
@@ -37,7 +42,8 @@ func TestPaceCountsUnusedTokensAsBackpressure(t *testing.T) {
 func TestPaceStopsWhenEverySenderRetired(t *testing.T) {
 	quit := make(chan struct{})
 	close(quit)
-	assert.Zero(t, pace(t.Context(), nil, quit, make(chan struct{}, 2), func() bool { return false }))
+	never := func() bool { return false }
+	assert.Zero(t, pace(t.Context(), nil, quit, make(chan struct{}, 2), never, never))
 }
 
 // fakeTicks ticks every interval until the test ends.

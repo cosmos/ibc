@@ -95,7 +95,7 @@ How a direction runs:
    intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
    stops the direction's senders. Packets sent but not terminal when it ends are
    `unresolved`, so a direction's outcomes add up to its sent packets. If the relayer
-   process exits, every direction stops at once and the run fails with its exit status.
+   process exits, every direction stops at once and the run fails, reporting how it exited.
    Packets time out after 12 hours (the harness default), well past any realistic run.
 6. **Latency.** After the sweep, each succeeded packet's relay is measured from chain data:
    the receipts of its relayer-reported receive and acknowledgement transactions and the
