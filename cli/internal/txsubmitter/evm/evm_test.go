@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -184,4 +185,33 @@ func TestShouldRetry(t *testing.T) {
 
 		require.ErrorContains(t, err, "rpc down")
 	})
+}
+
+func TestSubmitRejectsContractSimulationRevert(t *testing.T) {
+	submitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
+	to := common.HexToAddress(toAddress)
+	data := []byte{0xde, 0xad, 0xbe, 0xef}
+	revert := revertError{
+		code: -32000,
+		data: revertData(
+			t,
+			besuqbft.ContractMetaData,
+			"ConsensusStateExpired",
+			uint64(100),
+			big.NewInt(121),
+			uint64(20),
+		),
+	}
+	eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).
+		Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).Once()
+	eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Once()
+	eth.EXPECT().PendingCodeAt(mock.Anything, common.HexToAddress(toAddress)).Return([]byte{1}, nil).Once()
+	eth.EXPECT().EstimateGas(mock.Anything, ethereum.CallMsg{From: submitter.address, To: &to, Data: data}).
+		Return(0, revert).Once()
+	result, err := submitter.Submit(t.Context(), v2.TxIntent{To: toAddress, Data: data})
+	require.Nil(t, result)
+	require.ErrorIs(t, err, revert)
+	require.EqualError(t, err, "creating tx: estimating gas: ConsensusStateExpired(100, 121, 20): execution reverted")
+	eth.AssertNotCalled(t, "PendingNonceAt", mock.Anything, mock.Anything)
+	eth.AssertNotCalled(t, "SendTransaction", mock.Anything, mock.Anything)
 }

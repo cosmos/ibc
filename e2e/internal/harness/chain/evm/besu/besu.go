@@ -143,6 +143,8 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 				config.User = hostUser
 			},
 			HostConfigModifier: func(config *containertypes.HostConfig) {
+				// The generator only writes files; disable publishing the image's exposed ports.
+				config.NetworkMode = "none"
 				config.Mounts = append(config.Mounts, mount.Mount{
 					Type:   mount.TypeBind,
 					Source: chainDir,
@@ -158,12 +160,8 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		},
 	})
 	defer func() {
-		if generator != nil {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), besuStopTimeout)
-			defer cancel()
-			if cleanupErr := generator.Terminate(cleanupCtx); cleanupErr != nil {
-				err = errors.Join(err, fmt.Errorf("remove besu config generator: %w", cleanupErr))
-			}
+		if cleanupErr := container.Terminate(generator); cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("remove besu config generator: %w", cleanupErr))
 		}
 	}()
 	// Besu may exit non-zero after writing complete artifacts.
@@ -178,10 +176,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("validate generated besu QBFT artifacts: %w", err)
 	}
 	if generator != nil {
-		cleanupCtx, cancel := context.WithTimeout(ctx, besuStopTimeout)
-		cleanupErr := generator.Terminate(cleanupCtx)
-		cancel()
-		if cleanupErr != nil {
+		if cleanupErr := container.Terminate(generator); cleanupErr != nil {
 			return nil, fmt.Errorf("remove besu config generator: %w", cleanupErr)
 		}
 		generator = nil
@@ -237,28 +232,20 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			"--host-allowlist=*",
 		},
 	}
-	bc.container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: request,
-		Started:          true,
-	})
+	bc.container, err = container.Start(ctx, request)
 	if err != nil {
 		return nil, fmt.Errorf("start besu container %s: %w", namePrefix, err)
 	}
-	host, err := bc.container.Host(ctx)
+	rpcURL, err := bc.container.PortEndpoint(ctx, "8545/tcp", "http")
 	if err != nil {
-		return nil, fmt.Errorf("resolve besu host: %w", err)
+		return nil, fmt.Errorf("resolve besu RPC endpoint: %w", err)
 	}
-	port, err := bc.container.MappedPort(ctx, "8545/tcp")
-	if err != nil {
-		return nil, fmt.Errorf("resolve besu RPC port: %w", err)
-	}
-	bc.Identity = evm.NewIdentity(spec.ID, fmt.Sprintf("http://%s:%s", host, port.Port()))
+	bc.Identity = evm.NewIdentity(spec.ID, rpcURL)
 
-	wsPort, err := bc.container.MappedPort(ctx, "8546/tcp")
+	bc.wsURL, err = bc.container.PortEndpoint(ctx, "8546/tcp", "ws")
 	if err != nil {
-		return nil, fmt.Errorf("resolve besu websocket port: %w", err)
+		return nil, fmt.Errorf("resolve besu websocket endpoint: %w", err)
 	}
-	bc.wsURL = fmt.Sprintf("ws://%s:%s", host, wsPort.Port())
 
 	client, err := ethclient.DialContext(ctx, bc.RPCURL())
 	if err != nil {

@@ -304,6 +304,9 @@ func formatSpec(summary e2etest.MatrixSpec) string {
 		count(summary.Connections, "connection"),
 		count(summary.Attestors, "attestor"),
 	)
+	if summary.BesuQBFTClients > 0 {
+		parts = append(parts, count(summary.BesuQBFTClients, "Besu QBFT client"))
+	}
 	return strings.Join(parts, "; ")
 }
 

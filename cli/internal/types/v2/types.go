@@ -6,7 +6,10 @@ package v2
 import (
 	"time"
 
+	"github.com/pkg/errors"
+
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 )
 
 // EventKind the kind of packet event.
@@ -39,6 +42,21 @@ const (
 	ProofKindAcknowledgement
 	ProofKindReceiptAbsence
 )
+
+// CommitmentPath is the raw commitment path a proof of kind covers, keyed by
+// the client the proven chain stores it under.
+func (k ProofKind) CommitmentPath(packet channeltypesv2.Packet) ([]byte, error) {
+	switch k {
+	case ProofKindPacketCommitment:
+		return hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence), nil
+	case ProofKindAcknowledgement:
+		return hostv2.PacketAcknowledgementKey(packet.DestinationClient, packet.Sequence), nil
+	case ProofKindReceiptAbsence:
+		return hostv2.PacketReceiptKey(packet.DestinationClient, packet.Sequence), nil
+	default:
+		return nil, errors.Errorf("unsupported proof kind %d", k)
+	}
+}
 
 // RelayKind the packet operation one PacketRelayItem asks to perform.
 type RelayKind int
@@ -74,11 +92,11 @@ type PacketRelayItem struct {
 	ProofHeight uint64
 }
 
-// ClientUpdate the state proof to update a destination client with before
-// any packet operations in the same tx are processed.
+// ClientUpdate the payloads to update a destination client with, in order,
+// before any packet operations in the same tx are processed.
 type ClientUpdate struct {
-	ClientID   string
-	StateProof []byte
+	ClientID string
+	Payloads [][]byte // Empty when no update is needed.
 }
 
 // RelayTx one transaction ready to submit, targeting To with calldata Data.

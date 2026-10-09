@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
@@ -290,7 +291,7 @@ func prepareConnections(
 		for index, end := range ends {
 			counterpartyEnd := ends[1-index]
 			label := clientLabel(connection.ID, end.label)
-			instanceID := clientIBCInstance(end.declaration)
+			instanceID := end.declaration.clientIBCInstance()
 			switch client := end.declaration.(type) {
 			case ExistingClient:
 				resolved, err := acquireIBCClient(
@@ -317,7 +318,7 @@ func prepareConnections(
 					return dependencies, err
 				}
 				authority, _ := runtime.evmAccount(client.Authority)
-				counterparty := clientIBCInstance(counterpartyEnd.declaration)
+				counterparty := counterpartyEnd.declaration.clientIBCInstance()
 				header, err := evmHeader(ctx, dependencies.instances[counterparty].chain)
 				if err != nil {
 					return dependencies, fmt.Errorf(
@@ -332,7 +333,7 @@ func prepareConnections(
 					account, _ := runtime.evmAccount(declaration.Authority)
 					attestors = append(attestors, account.Address())
 				}
-				prepared, err := setup.PrepareClient(
+				prepared, err := setup.PrepareAttestationClient(
 					ctx,
 					authority,
 					common.HexToAddress(string(instance.locator)),
@@ -343,6 +344,45 @@ func prepareConnections(
 						MinRequiredSignatures: client.MinRequiredSignatures,
 						InitialHeight:         header.Number.Uint64(),
 						InitialTimestamp:      header.Time,
+					},
+				)
+				if err != nil {
+					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", label, err)
+				}
+				dependencies.preparedClients[label] = prepared
+			case NewBesuQBFTClient:
+				instance := dependencies.instances[instanceID]
+				setup, err := solidityIBCSetup(ctx, instance.chain)
+				if err != nil {
+					return dependencies, err
+				}
+				authority, _ := runtime.evmAccount(client.Authority)
+				counterparty := dependencies.instances[counterpartyEnd.declaration.clientIBCInstance()]
+				counterpartyRouter := common.HexToAddress(string(counterparty.locator))
+				trusted, err := besuQBFTTrustedState(ctx, counterparty.chain)
+				if err != nil {
+					return dependencies, fmt.Errorf(
+						"prepare IBC Client %q counterparty trusted state: %w",
+						label,
+						err,
+					)
+				}
+				router := common.HexToAddress(string(instance.locator))
+				prepared, err := setup.PrepareBesuQBFTClient(
+					ctx,
+					authority,
+					router,
+					solidityibc.BesuQBFTClientConfig{
+						ID:                   clientIDs[end.label],
+						CounterpartyClientID: clientIDs[counterpartyEnd.label],
+						CounterpartyRouter:   counterpartyRouter,
+						InitialHeight:        trusted.Height,
+						InitialTimestamp:     trusted.Timestamp,
+						InitialStateRoot:     trusted.StateRoot,
+						InitialValidators:    trusted.Validators,
+						TrustingPeriod:       client.TrustingPeriod,
+						MaxClockDrift:        client.MaxClockDrift,
+						RoleManager:          router,
 					},
 				)
 				if err != nil {
@@ -393,7 +433,7 @@ func acquireIBCClient(
 	dependencies connectionDependencies,
 	runtime Runtime,
 ) (*IBCClient, error) {
-	instance := dependencies.instances[clientIBCInstance(declaration)]
+	instance := dependencies.instances[declaration.clientIBCInstance()]
 	label := clientLabel(connectionID, end)
 	counterpartyID := clientIDs[counterpartyEnd(end)]
 	if resolved := dependencies.existingClients[label]; resolved != nil {
@@ -404,6 +444,7 @@ func acquireIBCClient(
 		resolved solidityibc.Client
 		err      error
 	)
+	kind := declaration.clientKind()
 	switch client := declaration.(type) {
 	case ExistingClient:
 		setup, setupErr := solidityIBCSetup(ctx, instance.chain)
@@ -415,6 +456,7 @@ func acquireIBCClient(
 			common.HexToAddress(string(instance.locator)),
 			client.ID,
 			counterpartyID,
+			kind,
 		)
 		if err != nil {
 			return nil, err
@@ -427,16 +469,12 @@ func acquireIBCClient(
 		); attestorErr != nil {
 			return nil, attestorErr
 		}
-	case NewClient:
-		prepared := dependencies.preparedClients[label]
-		if prepared == nil {
+	case NewClient, NewBesuQBFTClient:
+		prepared, ok := dependencies.preparedClients[label]
+		if !ok {
 			return nil, fmt.Errorf("IBC Client %q was not prepared", label)
 		}
-		authority, err := runtime.evmAccount(client.Authority)
-		if err != nil {
-			return nil, err
-		}
-		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, authority); fundingErr != nil {
+		if fundingErr := ensureProtocolAuthorityFunded(ctx, instance.chain, prepared.Authority()); fundingErr != nil {
 			return nil, fmt.Errorf("fund IBC Client %q authority: %w", label, fundingErr)
 		}
 		resolved, err = prepared.Deploy(ctx)
@@ -455,6 +493,7 @@ func acquireIBCClient(
 		label:                 label,
 		instance:              instance,
 		id:                    resolved.ID,
+		kind:                  kind,
 		lightClient:           EVMAddress(resolved.Address.Hex()),
 		counterpartyID:        resolved.CounterpartyClientID,
 		attestors:             attestors,
@@ -568,6 +607,21 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 		var headerErr error
 		header, headerErr = client.Client().HeaderByNumber(ctx, nil)
 		return headerErr
+	})
+	if !ok {
+		return nil, fmt.Errorf("Chain %q has no EVM client", chain.id)
+	}
+	return header, err
+}
+
+// besuQBFTTrustedState is the sealed head of chain, which a Besu QBFT Client
+// tracking it starts trusting.
+func besuQBFTTrustedState(ctx context.Context, chain *Chain) (*besu.ParsedHeader, error) {
+	var header *besu.ParsedHeader
+	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
+		var readErr error
+		header, readErr = besu.ReadSealedHeader(ctx, client.Client(), nil)
+		return readErr
 	})
 	if !ok {
 		return nil, fmt.Errorf("Chain %q has no EVM client", chain.id)

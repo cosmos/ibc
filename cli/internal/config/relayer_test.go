@@ -253,7 +253,7 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Relayer.Connections[0].ClientA.Type = "tendermint"
 				},
-				errContains: `unknown client type: "tendermint"`,
+				errContains: `.clientA.type: unknown client type: "tendermint"`,
 			},
 			{
 				name: "duplicate client",
@@ -418,17 +418,20 @@ func TestClientEndParams(t *testing.T) {
 	const base = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\n"
 
 	for _, tt := range []struct {
-		name    string
-		doc     string
-		wantURL string
-		wantErr string
+		name       string
+		doc        string
+		wantURL    string
+		wantParams ClientParams
+		wantErr    string
 	}{
 		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
 		{name: "remote without params", doc: "type: remote\n", wantErr: "params.url: required"},
 		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: "params.url: required"},
 		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
-		{name: "attestation", doc: "type: attestation\n"},
+		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
 		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuQBFTParams{}},
+		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -448,7 +451,7 @@ func TestClientEndParams(t *testing.T) {
 			require.NoError(t, err)
 
 			if tt.wantURL == "" {
-				require.IsType(t, &AttestationParams{}, params)
+				require.IsType(t, tt.wantParams, params)
 				return
 			}
 

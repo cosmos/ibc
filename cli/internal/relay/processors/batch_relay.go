@@ -66,7 +66,7 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 	}
 }
 
-// relayPackets generates a state proof and per-packet proofs for events at
+// relayPackets generates a client update payload and per-packet proofs for events at
 // proofHeight, asks txBuilder for the resulting transaction, and submits it
 // via txSubmitter
 func relayPackets(
@@ -89,9 +89,9 @@ func relayPackets(
 	logger = logger.With("kind", relayKind, "clientID", clientID, "proofHeight", proofHeight, "sequences", sequences)
 	logger.Debug("Relaying packets")
 
-	stateProof, err := prover.StateProof(ctx, proofHeight)
+	clientUpdatePayloads, err := prover.ClientUpdatePayloads(ctx, proofHeight)
 	if err != nil {
-		return nil, errors.Wrap(err, "generating state proof")
+		return nil, errors.Wrap(err, "generating client update payloads")
 	}
 
 	packets := make([]channeltypesv2.Packet, len(events))
@@ -116,8 +116,8 @@ func relayPackets(
 	}
 
 	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
-		ClientID:   clientID,
-		StateProof: stateProof,
+		ClientID: clientID,
+		Payloads: clientUpdatePayloads,
 	}, items)
 	if err != nil {
 		return nil, errors.Wrap(err, "building relay tx")

@@ -5,14 +5,22 @@ package config
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
+	ClientTypeBesuQBFT    ClientType = "besu-qbft"
 	ClientTypeRemote      ClientType = "remote"
 )
+
+// DefaultClearOnStart whether a clearing pass runs at startup when clearOnStart is unset.
+const DefaultClearOnStart = true
+
+// clientTypes are the values ClientEnd.Type accepts.
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
@@ -28,11 +36,13 @@ type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
-	DispatchPollInterval *time.Duration         `yaml:"dispatchPollInterval,omitempty"`
-	ClearOnStart         *bool                  `yaml:"clearOnStart,omitempty"`
-	ClearInterval        *time.Duration         `yaml:"clearInterval,omitempty"`
-	ChainOverrides       []RelayerChainOverride `yaml:"chainOverrides"`
-	Connections          []ConnectionConfig     `yaml:"connections"`
+	DispatchPollInterval *time.Duration `yaml:"dispatchPollInterval,omitempty"`
+	// ClearOnStart runs a clearing pass at startup. Unset runs it.
+	ClearOnStart *bool `yaml:"clearOnStart,omitempty"`
+	// ClearInterval is how often a clearing pass runs; a chainOverrides entry wins.
+	ClearInterval  *time.Duration         `yaml:"clearInterval,omitempty"`
+	ChainOverrides []RelayerChainOverride `yaml:"chainOverrides"`
+	Connections    []ConnectionConfig     `yaml:"connections"`
 }
 
 // RelayerChainOverride relay settings for one chain.
@@ -74,7 +84,9 @@ type ClientEnd struct {
 	ClientID string     `yaml:"clientId"`
 	Type     ClientType `yaml:"type"`
 
-	// Params is this client type's settings.
+	// Params is this client type's settings, decoded per Type by ClientParams:
+	// empty for `attestation` and `besu-qbft`, and
+	// `{url: <ProverService endpoint>}` for `remote`, where it is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
@@ -103,6 +115,10 @@ type RemoteParams struct {
 
 // AttestationParams is empty
 type AttestationParams struct{}
+
+// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
+// the two chains and the light client itself.
+type BesuQBFTParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -241,7 +257,7 @@ func (c ClientEnd) Validate() error {
 		return errPathf("clientId", "required")
 	case c.Signer == "":
 		return errPathf("signer", "required")
-	case c.Type != ClientTypeAttestation && c.Type != ClientTypeRemote:
+	case !slices.Contains(clientTypes, c.Type):
 		return errPathf("type", "unknown client type: %q", c.Type)
 	}
 
@@ -262,6 +278,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		return decodeYAML[AttestationParams](c.Params)
+	case ClientTypeBesuQBFT:
+		return decodeYAML[BesuQBFTParams](c.Params)
 	case ClientTypeRemote:
 		return decodeYAML[RemoteParams](c.Params)
 	default:
@@ -278,6 +296,8 @@ func (p RemoteParams) Validate() error {
 }
 
 func (AttestationParams) Validate() error { return nil }
+
+func (BesuQBFTParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -333,6 +353,7 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 
 func (RemoteParams) isClientParams()      {}
 func (AttestationParams) isClientParams() {}
+func (BesuQBFTParams) isClientParams()    {}
 
 func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	var params T
@@ -350,7 +371,10 @@ func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 
 // ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.
 func (c RelayerConfig) ClearOnStartEnabled() bool {
-	return c.ClearOnStart == nil || *c.ClearOnStart
+	if c.ClearOnStart == nil {
+		return DefaultClearOnStart
+	}
+	return *c.ClearOnStart
 }
 
 // ClearIntervalFor resolves the clearing cadence for a chain, preferring its chain override.
