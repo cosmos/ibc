@@ -61,12 +61,12 @@ func TestInstrumentation(t *testing.T) {
 		prover := mocks.NewMockProver(t)
 		prover.EXPECT().
 			ClientUpdatePayloads(ctx, uint64(7)).
-			Return(nil, errors.New("client update payload unavailable")).
+			Return(nil, uint64(0), errors.New("client update payload unavailable")).
 			Once()
 		instrumented := metricsWrapper(prover, "chain-a", "client-0", config.ClientTypeAttestation)
 
 		// ACT
-		payload, err := instrumented.ClientUpdatePayloads(ctx, 7)
+		payload, _, err := instrumented.ClientUpdatePayloads(ctx, 7)
 
 		// ASSERT
 		require.ErrorContains(t, err, "client update payload unavailable")

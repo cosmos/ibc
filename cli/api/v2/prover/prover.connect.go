@@ -52,7 +52,7 @@ type ProverServiceClient interface {
 	// that height's counterparty-chain timestamp.
 	LatestProvableHeight(context.Context, *connect.Request[LatestProvableHeightRequest]) (*connect.Response[LatestProvableHeightResponse], error)
 	// ClientUpdatePayloads returns the encoded light-client updates that bring the
-	// client to a height.
+	// client to a height, and the height to prove the packets at.
 	ClientUpdatePayloads(context.Context, *connect.Request[ClientUpdatePayloadsRequest]) (*connect.Response[ClientUpdatePayloadsResponse], error)
 	// PacketProofs proves each packet's membership or non-membership at a
 	// height, one proof per packet with indices aligned to the request.
@@ -120,7 +120,7 @@ type ProverServiceHandler interface {
 	// that height's counterparty-chain timestamp.
 	LatestProvableHeight(context.Context, *connect.Request[LatestProvableHeightRequest]) (*connect.Response[LatestProvableHeightResponse], error)
 	// ClientUpdatePayloads returns the encoded light-client updates that bring the
-	// client to a height.
+	// client to a height, and the height to prove the packets at.
 	ClientUpdatePayloads(context.Context, *connect.Request[ClientUpdatePayloadsRequest]) (*connect.Response[ClientUpdatePayloadsResponse], error)
 	// PacketProofs proves each packet's membership or non-membership at a
 	// height, one proof per packet with indices aligned to the request.

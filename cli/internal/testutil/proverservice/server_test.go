@@ -24,6 +24,7 @@ type stubProver struct {
 	height               uint64
 	timestamp            time.Time
 	clientUpdatePayloads [][]byte
+	updateProofHeight    uint64
 	proofs               [][]byte
 
 	gotHeight  uint64
@@ -35,9 +36,9 @@ func (s *stubProver) LatestProvableHeight(context.Context) (uint64, time.Time, e
 	return s.height, s.timestamp, nil
 }
 
-func (s *stubProver) ClientUpdatePayloads(_ context.Context, height uint64) ([][]byte, error) {
+func (s *stubProver) ClientUpdatePayloads(_ context.Context, height uint64) ([][]byte, uint64, error) {
 	s.gotHeight = height
-	return s.clientUpdatePayloads, nil
+	return s.clientUpdatePayloads, s.updateProofHeight, nil
 }
 
 func (s *stubProver) PacketProofs(
@@ -69,6 +70,7 @@ func TestProverServiceRoundTrip(t *testing.T) {
 		height:               4321,
 		timestamp:            time.Unix(1700000000, 0).UTC(),
 		clientUpdatePayloads: [][]byte{[]byte("update-a"), []byte("update-b")},
+		updateProofHeight:    120,
 		proofs:               [][]byte{[]byte("proof-a"), []byte("proof-b")},
 	}
 	set := prover.NewSet(map[string]prover.Prover{prover.Key("chain-a", "client-0"): stub})
@@ -82,9 +84,10 @@ func TestProverServiceRoundTrip(t *testing.T) {
 	})
 
 	t.Run("client update payloads", func(t *testing.T) {
-		payloads, err := client.ClientUpdatePayloads(ctx, 99)
+		payloads, proofHeight, err := client.ClientUpdatePayloads(ctx, 99)
 		require.NoError(t, err)
 		require.Equal(t, stub.clientUpdatePayloads, payloads)
+		require.Equal(t, uint64(120), proofHeight)
 		require.Equal(t, uint64(99), stub.gotHeight)
 	})
 

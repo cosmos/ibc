@@ -19,7 +19,7 @@ service ProverService {
   rpc LatestProvableHeight(LatestProvableHeightRequest) returns (LatestProvableHeightResponse) {}
 
   // ClientUpdatePayloads returns the encoded light-client updates that bring the
-  // client to a height.
+  // client to a height, and the height to prove the packets at.
   rpc ClientUpdatePayloads(ClientUpdatePayloadsRequest) returns (ClientUpdatePayloadsResponse) {}
 
   // PacketProofs proves each packet's membership or non-membership at a
@@ -60,6 +60,10 @@ message ClientUpdatePayloadsResponse {
   // in order before the packets. Empty when no update is needed; each entry is
   // a non-empty updateMsg.
   repeated bytes payloads = 1;
+  // The height to prove the packets at: zero or the requested height, or a
+  // later height the client already trusts when it has moved past the
+  // requested one.
+  uint64 proof_height = 2;
 }
 
 message PacketProofsRequest {
