@@ -899,7 +899,7 @@ func (c *Client) PacketWriteAckStatus(
 
 	for _, log := range receipt.Logs {
 		switch {
-		case log == nil, len(log.Topics) == 0:
+		case log == nil, len(log.Topics) == 0, log.Address != c.routerAddress:
 			continue
 		case log.Topics[0] != c.routerABI.Events[writeAckEvent].ID:
 			continue

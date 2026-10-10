@@ -700,6 +700,64 @@ func TestPacketWriteAckStatus(t *testing.T) {
 
 		require.ErrorIs(t, err, v2.ErrTxNotFound)
 	})
+
+	// foreignContractIgnored proves the fix: a foreign contract emitting the
+	// same WriteAcknowledgement event signature must be ignored, and the
+	// router's own event must be the one resolved. The foreign log claims an
+	// error acknowledgement; without the address filter it would be mistaken
+	// for the router's ack and the call would report WriteAckStatusError.
+	t.Run("foreignContractIgnored", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		foreign := common.HexToAddress("0x0000000000000000000000000000000000000bad")
+		receipt := &types.Receipt{
+			BlockNumber: big.NewInt(100),
+			Logs: []*types.Log{
+				// foreign contract claiming an error acknowledgement
+				writeAckLog(t, foreign, packet, [][]byte{errorAcknowledgement[:]}),
+				// the router's own success acknowledgement
+				writeAckLog(t, common.HexToAddress(routerAddress), packet, [][]byte{{0x01}}),
+			},
+		}
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receipt, nil).Once()
+
+		status, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.String(),
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestClient,
+		)
+
+		require.NoError(t, err)
+		assert.Equal(t, v2.WriteAckStatusSuccess, status)
+	})
+
+	// onlyForeignEvent proves that when the only WriteAcknowledgement log in
+	// the receipt comes from a foreign contract, the packet is reported as
+	// not found rather than being resolved from the wrong source.
+	t.Run("onlyForeignEvent", func(t *testing.T) {
+		client, eth := newTestClient(t)
+
+		foreign := common.HexToAddress("0x0000000000000000000000000000000000000bad")
+		receipt := &types.Receipt{
+			BlockNumber: big.NewInt(100),
+			Logs: []*types.Log{
+				writeAckLog(t, foreign, packet, [][]byte{{0x01}}),
+			},
+		}
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(receipt, nil).Once()
+
+		_, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.String(),
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestClient,
+		)
+
+		require.ErrorIs(t, err, v2.ErrWriteAckNotFoundForPacket)
+	})
 }
 
 func TestGetAttestationSet(t *testing.T) {
