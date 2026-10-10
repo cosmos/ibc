@@ -147,15 +147,6 @@ func (m *instrumentation) endTx(chainID string, receipt *types.Receipt) {
 	w.cumulativeGasCostWei.Add(w.cumulativeGasCostWei, cost)
 }
 
-func (m *instrumentation) forgetTx(chainID, txHash string) {
-	txKey := transactionKey{chainID: chainID, txHash: txHash}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.txOwners, txKey)
-}
-
 func (m *instrumentation) observeEVMGasSpent(_ context.Context, observer metric.Observer) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

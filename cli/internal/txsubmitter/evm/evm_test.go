@@ -93,7 +93,7 @@ func (r *testRPC) PendingCodeAt(_ context.Context, address common.Address) ([]by
 	return nil, nil
 }
 
-func (r *testRPC) EstimateGas(context.Context, ethereum.CallMsg) (uint64, error) {
+func (r *testRPC) EstimateGasAtBlock(context.Context, ethereum.CallMsg, *big.Int) (uint64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return 21000, r.estimateErr
@@ -261,9 +261,10 @@ func TestMixedOperationsSurviveRestartAndRepricing(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, pending)
 
-	restarted.opts.RepriceInterval = time.Nanosecond
-	restarted.reconciler.reconcile(t.Context())
-	attempts := pendingAttempts(t, restarted)
+	expireAttempts(t, restarted)
+	require.NoError(t, restarted.submit(t.Context(), intent))
+	attempts, err := db.ListTxAttemptsAtNonce(t.Context(), chainIDEth, c.address.Hex(), 0)
+	require.NoError(t, err)
 	require.Len(t, attempts, 2)
 	want := []store.TxOperation{
 		{
@@ -292,9 +293,9 @@ func saveIntentAtNonce(t *testing.T, c *TxSubmitter, intent v2.TxIntent, nonce u
 	t.Helper()
 	tx, err := c.buildAndSignTransaction(t.Context(), intent.To, intent.Data, nonce)
 	require.NoError(t, err)
-	p := &pendingTx{}
+	var operations []store.TxOperation
 	for _, op := range intent.Operations {
-		p.operations = append(p.operations, store.TxOperation{
+		operations = append(operations, store.TxOperation{
 			PacketKey: store.PacketKey{
 				SourceChainID: op.SourceChainID, SourceClientID: op.SourceClientID, Sequence: op.Sequence,
 			},
@@ -303,8 +304,8 @@ func saveIntentAtNonce(t *testing.T, c *TxSubmitter, intent v2.TxIntent, nonce u
 	}
 	require.NoError(t, saveAttempt(t.Context(), c.db, tx, store.TxAttempt{
 		ChainID: c.chainID, Sender: c.address.Hex(), SubmittedAt: time.Now().UTC(),
-	}, p))
-	return p.latest().tx
+	}, operations))
+	return tx
 }
 
 func TestDatabaseFailureDoesNotBroadcast(t *testing.T) {
@@ -381,10 +382,8 @@ func TestRepriceRetainsIntentWhenOlderAttemptWins(t *testing.T) {
 	intent := packetIntent(t, db, 1)
 	err := c.submit(t.Context(), intent)
 	require.NoError(t, err)
-	// Repricing must not discard already broadcast work on a later revert.
-	rpc.estimateErr = errors.New("execution reverted")
-	c.opts.RepriceInterval = time.Nanosecond
-	c.reconciler.reconcile(t.Context())
+	expireAttempts(t, c)
+	require.NoError(t, c.submit(t.Context(), intent))
 	require.Len(t, rpc.sent, 2)
 	old, newTx := rpc.sent[0], rpc.sent[1]
 	require.Equal(t, old.Nonce(), newTx.Nonce())
@@ -434,78 +433,18 @@ func TestAllocationStartsAtMinedNonce(t *testing.T) {
 	require.Equal(t, uint64(2), rpc.sent[0].Nonce())
 }
 
-func TestRestartPreservesRebroadcastTiming(t *testing.T) {
-	c, rpc, db := newManager(t)
-	rpc.sendErr = context.DeadlineExceeded
-	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
-	tx := rpc.sent[0]
-	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
-	require.NoError(t, err)
-	restarted.ctx = t.Context()
-	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 1, "restart must respect the last broadcast, even when its response was lost")
-
-	rpc.sendErr = nil
-	require.NoError(
-		t,
-		db.SetTxBroadcast(t.Context(), chainIDEth, tx.Hash().Hex(), time.Now().Add(-2*c.opts.PollInterval)),
-	)
-	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 2)
-	require.Equal(t, tx.Hash(), rpc.sent[1].Hash())
-	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 2, "rebroadcast must update the persisted timestamp")
-}
-
-func TestRestartBroadcastsSavedUnsentAttemptBeforeRepricing(t *testing.T) {
-	c, rpc, db := newManager(t)
-	c.db = &uncertainCommitStore{Store: db, uncertain: true}
-	c.reconciler.db = c.db
-	require.ErrorContains(t, c.submit(t.Context(), packetIntent(t, db, 1)), "lost commit response")
-	require.Empty(t, rpc.sent)
-	a := pendingAttempts(t, c)[0]
-	require.Nil(t, a.LastBroadcastAt)
-
-	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
-	require.NoError(t, err)
-	restarted.ctx = t.Context()
-	restarted.opts.RepriceInterval = time.Nanosecond
-	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 1)
-	require.Equal(t, a.Hash, rpc.sent[0].Hash().Hex())
-	require.NotNil(t, pendingAttempts(t, restarted)[0].LastBroadcastAt)
-}
-
-type failedBroadcastStore struct{ store.Store }
-
-func (s failedBroadcastStore) SetTxBroadcast(context.Context, string, string, time.Time) error {
-	return errors.New("lost broadcast record")
-}
-
-func TestRestartRecoversBroadcastWithoutTimestamp(t *testing.T) {
-	c, rpc, db := newManager(t)
-	c.db = failedBroadcastStore{Store: db}
-	c.reconciler.db = c.db
-	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
-	require.Nil(t, pendingAttempts(t, c)[0].LastBroadcastAt)
-	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
-	require.NoError(t, err)
-	restarted.ctx = t.Context()
-	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 2)
-	require.Equal(t, rpc.sent[0].Hash(), rpc.sent[1].Hash())
-	require.NotNil(t, pendingAttempts(t, restarted)[0].LastBroadcastAt)
-}
-
 func TestFeeCapRetainsBlockedWork(t *testing.T) {
 	c, rpc, db := newManager(t)
-	err := c.submit(t.Context(), packetIntent(t, db, 1))
-	require.NoError(t, err)
-	c.opts.MaxFeePerGas = big.NewInt(210)
-	c.opts.RepriceInterval = time.Nanosecond
-	c.reconciler.reconcile(t.Context())
-	require.Len(t, pendingAttempts(t, c), 1)
+	intent := packetIntent(t, db, 1)
+	require.NoError(t, c.submit(t.Context(), intent))
+	expireAttempts(t, c)
+	c.opts.MaxFeePerGas = rpc.sent[0].GasFeeCap()
+	require.ErrorContains(t, c.submit(t.Context(), intent), "exceeds gas or fee cap")
 	require.Len(t, rpc.sent, 1)
+	attempts, err := db.ListTxAttemptsAtNonce(t.Context(), chainIDEth, c.address.Hex(), 0)
+	require.NoError(t, err)
+	require.Len(t, attempts, 1)
+	require.Equal(t, store.TxAbandoned, attempts[0].Status)
 }
 
 func TestConcurrentSubmissionsAllocateDistinctNonces(t *testing.T) {
@@ -568,36 +507,6 @@ func TestExternalTransactionConsumesNonce(t *testing.T) {
 	require.NoError(t, restarted.submit(t.Context(), intent))
 	require.Len(t, rpc.sent, 2)
 	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
-}
-
-func TestUnderpricedAttemptIsRepricedAfterRestart(t *testing.T) {
-	c, rpc, db := newManager(t)
-	rpc.sendErr = errors.New("replacement transaction underpriced")
-	intent := packetIntent(t, db, 1)
-	require.NoError(t, c.submit(t.Context(), intent))
-	first := rpc.sent[0]
-	rpc.sendErr = nil
-	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
-	require.NoError(t, err)
-	restarted.ctx = t.Context()
-	restarted.opts.RepriceInterval = time.Nanosecond
-	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 2)
-	replacement := rpc.sent[1]
-	require.Equal(t, first.Nonce(), replacement.Nonce())
-	require.Equal(t, first.To(), replacement.To())
-	require.Equal(t, first.Data(), replacement.Data())
-	require.Positive(t, replacement.GasFeeCap().Cmp(first.GasFeeCap()))
-	require.Positive(t, replacement.GasTipCap().Cmp(first.GasTipCap()))
-	rpc.mined = 1
-	rpc.receipts[replacement.Hash()] = &types.Receipt{
-		TxHash: replacement.Hash(), BlockHash: rpc.head.Hash(), BlockNumber: rpc.head.Number,
-		Status: types.ReceiptStatusSuccessful,
-	}
-	restarted.reconciler.reconcile(t.Context())
-	status, err := restarted.HasPending(t.Context(), intent.Operations[0])
-	require.NoError(t, err)
-	require.False(t, status)
 }
 
 func TestReceiptAloneDoesNotResolveNonce(t *testing.T) {
@@ -669,8 +578,8 @@ func (r receiptErrorRPC) TransactionReceipt(ctx context.Context, hash common.Has
 func TestReceiptErrorDoesNotHideWinningReplacement(t *testing.T) {
 	c, rpc, db := newManager(t)
 	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
-	c.opts.RepriceInterval = time.Nanosecond
-	c.reconciler.reconcile(t.Context())
+	expireAttempts(t, c)
+	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
 	require.Len(t, rpc.sent, 2)
 	old, winner := rpc.sent[0], rpc.sent[1]
 	c.reconciler.eth = receiptErrorRPC{ETHClient: rpc, hash: old.Hash()}
@@ -735,14 +644,14 @@ func TestSignerDeadlineDoesNotConsumeNonce(t *testing.T) {
 	c, rpc, db := newManager(t)
 	key := c.signer
 	c.signer = stalledSigner{Signer: key}
-	c.reconciler.signer = c.signer
+
 	c.opts.RequestTimeout = 100 * time.Millisecond
 	intent := packetIntent(t, db, 1)
 	err := c.submit(t.Context(), intent)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Empty(t, rpc.sent)
 	c.signer = key
-	c.reconciler.signer = c.signer
+
 	c.opts.RequestTimeout = time.Second
 	err = c.submit(t.Context(), intent)
 	require.NoError(t, err)
@@ -753,7 +662,7 @@ func TestCallerCancellationBeforeJournalDoesNotBroadcast(t *testing.T) {
 	c, rpc, db := newManager(t)
 	key := stalledSigner{Signer: c.signer, started: make(chan struct{}, 2), release: make(chan struct{})}
 	c.signer = key
-	c.reconciler.signer = c.signer
+
 	intent := packetIntent(t, db, 1)
 	require.NoError(t, c.Start())
 	t.Cleanup(func() { require.NoError(t, c.Stop()) })
@@ -787,7 +696,7 @@ func TestCancellationWhileWaitingDoesNotSubmit(t *testing.T) {
 	c, _, db := newManager(t)
 	key := stalledSigner{Signer: c.signer, started: make(chan struct{}, 2), release: make(chan struct{})}
 	c.signer = key
-	c.reconciler.signer = c.signer
+
 	first := packetIntent(t, db, 1)
 	second := packetIntent(t, db, 2)
 	require.NoError(t, c.Start())
@@ -819,7 +728,7 @@ func TestStopCancelsSubmission(t *testing.T) {
 	c, rpc, db := newManager(t)
 	key := stalledSigner{Signer: c.signer, started: make(chan struct{}), release: make(chan struct{})}
 	c.signer = key
-	c.reconciler.signer = c.signer
+
 	intent := packetIntent(t, db, 1)
 	require.NoError(t, c.Start())
 	result := make(chan error, 1)
@@ -854,26 +763,27 @@ func TestCancellationAfterJournalSurvivesRestart(t *testing.T) {
 	caller, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c.db = cancelAfterCommitStore{Store: db, cancel: cancel}
-	c.reconciler.db = c.db
 	intent := packetIntent(t, db, 1)
 	require.NoError(t, c.submit(caller, intent))
 	require.ErrorIs(t, caller.Err(), context.Canceled)
-	require.Zero(t, rpc.sendCount())
+	require.Empty(t, rpc.sent)
 	attempts := pendingAttempts(t, c)
 	require.Len(t, attempts, 1)
-	require.Nil(t, attempts[0].LastBroadcastAt)
 	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
 	require.NoError(t, err)
-	require.NoError(t, restarted.Start())
-	t.Cleanup(func() { require.NoError(t, restarted.Stop()) })
-	require.Eventually(t, func() bool { return rpc.sendCount() == 1 }, time.Second, time.Millisecond)
-	rpc.mu.Lock()
-	hash := rpc.sent[0].Hash().Hex()
-	rpc.mu.Unlock()
-	require.Equal(t, attempts[0].Hash, hash)
-	status, err := restarted.HasPending(t.Context(), intent.Operations[0])
+	restarted.reconciler.reconcile(t.Context())
+	require.Empty(t, rpc.sent)
+	pending, err := restarted.HasPending(t.Context(), intent.Operations[0])
 	require.NoError(t, err)
-	require.True(t, status)
+	require.True(t, pending, "associations survive even if Submit never returns to the pipeline")
+	expireAttempts(t, restarted)
+	pending, err = restarted.HasPending(t.Context(), intent.Operations[0])
+	require.NoError(t, err)
+	require.False(t, pending)
+	require.NoError(t, restarted.submit(t.Context(), intent))
+	require.Len(t, rpc.sent, 1)
+	require.Equal(t, attempts[0].Nonce, rpc.sent[0].Nonce())
+	require.NotEqual(t, attempts[0].Hash, rpc.sent[0].Hash().Hex())
 }
 
 type failedJournalReadStore struct {
@@ -957,7 +867,9 @@ func TestUncertainDatabaseCommitIsRestoredBeforeAllocation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), rpc.sent[0].Nonce())
 	c.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 2)
+	require.Len(t, rpc.sent, 1)
+	expireAttempts(t, c)
+	require.NoError(t, c.submit(t.Context(), first))
 	require.Equal(t, uint64(0), rpc.sent[1].Nonce())
 }
 
@@ -981,11 +893,10 @@ func TestResolutionUsesReportedCanonicalBlockHash(t *testing.T) {
 	require.False(t, status)
 }
 
-func TestReorgBeforeResolutionResumesBroadcast(t *testing.T) {
+func TestReorgBeforeResolutionAllowsRetryAfterExpiry(t *testing.T) {
 	c, rpc, db := newManager(t)
 	intent := packetIntent(t, db, 1)
 	require.NoError(t, c.submit(t.Context(), intent))
-	tx := rpc.sent[0]
 	rpc.mined = 1
 	rpc.receiptErr = errors.New("receipt unavailable")
 	c.reconciler.reconcile(t.Context())
@@ -997,13 +908,11 @@ func TestReorgBeforeResolutionResumesBroadcast(t *testing.T) {
 	rpc.mined = 0
 	rpc.receiptErr = nil
 	rpc.reportedHash = common.HexToHash("0xf00d")
-	require.NoError(
-		t,
-		db.SetTxBroadcast(t.Context(), chainIDEth, tx.Hash().Hex(), time.Now().Add(-2*c.opts.PollInterval)),
-	)
+	expireAttempts(t, c)
 	c.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 2)
-	require.Equal(t, tx.Hash(), rpc.sent[1].Hash())
+	require.Len(t, rpc.sent, 1)
+	require.NoError(t, c.submit(t.Context(), intent))
+	require.Equal(t, rpc.sent[0].Nonce(), rpc.sent[1].Nonce())
 	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 2)))
 	require.Equal(t, uint64(1), rpc.sent[2].Nonce())
 
@@ -1018,11 +927,11 @@ func TestReorgAfterResolutionRestoresAttempts(t *testing.T) {
 	for _, status := range []string{store.TxConfirmed, store.TxFailed, store.TxConsumed} {
 		t.Run(status, func(t *testing.T) {
 			c, rpc, db := newManager(t)
-			c.opts.RepriceInterval = time.Nanosecond
 			intent := packetIntent(t, db, 1)
 			require.NoError(t, c.submit(t.Context(), intent))
 			first := rpc.sent[0]
-			c.reconciler.reconcile(t.Context())
+			expireAttempts(t, c)
+			require.NoError(t, c.submit(t.Context(), intent))
 			require.Len(t, rpc.sent, 2)
 			latest := rpc.sent[1]
 			rpc.mined = 1
@@ -1054,15 +963,15 @@ func TestReorgAfterResolutionRestoresAttempts(t *testing.T) {
 			delete(rpc.receipts, first.Hash())
 			restarted.reconciler.reconcile(t.Context())
 			require.Len(t, pendingAttempts(t, restarted), 2)
-			require.Len(t, rpc.sent, 3)
-			require.Equal(t, latest.Hash(), rpc.sent[2].Hash(), "rebroadcast the latest signed attempt unchanged")
+			require.Len(t, rpc.sent, 2, "reconciliation does not broadcast")
 			pending, err := restarted.HasPending(t.Context(), intent.Operations[0])
 			require.NoError(t, err)
 			require.True(t, pending)
 
-			restarted.reconciler.reconcile(t.Context())
-			require.Len(t, rpc.sent, 4)
-			replacement := rpc.sent[3]
+			expireAttempts(t, restarted)
+			require.NoError(t, restarted.submit(t.Context(), intent))
+			require.Len(t, rpc.sent, 3)
+			replacement := rpc.sent[2]
 			require.Equal(t, latest.Nonce(), replacement.Nonce())
 			require.Equal(t, latest.To(), replacement.To())
 			require.Equal(t, latest.Data(), replacement.Data())
@@ -1089,7 +998,6 @@ func TestLaggingRPCDoesNotReopenResolvedAttempts(t *testing.T) {
 	for _, status := range []string{store.TxConfirmed, store.TxFailed, store.TxConsumed} {
 		t.Run(status, func(t *testing.T) {
 			c, rpc, db := newManager(t)
-			c.opts.RepriceInterval = time.Nanosecond
 			require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
 			first := rpc.sent[0]
 			c.reconciler.reconcile(t.Context())
@@ -1114,7 +1022,7 @@ func TestLaggingRPCDoesNotReopenResolvedAttempts(t *testing.T) {
 			rpc.head.Number = big.NewInt(9)
 			restarted.reconciler.reconcile(t.Context())
 			require.Empty(t, pendingAttempts(t, restarted))
-			require.Len(t, rpc.sent, 2, "no rebroadcast or repricing of resolved attempts")
+			require.Len(t, rpc.sent, 1, "no rebroadcast or repricing of resolved attempts")
 			attempt, err := db.GetTxAttempt(t.Context(), chainIDEth, first.Hash().Hex())
 			require.NoError(t, err)
 			require.Equal(t, status, attempt.Status)
@@ -1151,11 +1059,11 @@ func TestReorgDuringReopeningRecoversOnNextPass(t *testing.T) {
 	}
 	c.reconciler.reconcile(t.Context())
 	require.Len(t, pendingAttempts(t, c), 1)
-	require.Len(t, rpc.sent, 2)
+	require.Len(t, rpc.sent, 1)
 	rpc.afterNonce = nil
 	c.reconciler.reconcile(t.Context())
 	require.Empty(t, pendingAttempts(t, c))
-	require.Len(t, rpc.sent, 2)
+	require.Len(t, rpc.sent, 1)
 }
 
 func TestAllocationPreservesResolvedNonceAfterReorg(t *testing.T) {
@@ -1177,26 +1085,27 @@ func TestAllocationPreservesResolvedNonceAfterReorg(t *testing.T) {
 	)
 	c.reconciler.reconcile(t.Context())
 	require.Len(t, pendingAttempts(t, c), 2)
-	require.Len(t, rpc.sent, 3)
-	require.Equal(t, first.Hash(), rpc.sent[2].Hash())
+	require.Len(t, rpc.sent, 2)
+	attempt, err := db.GetTxAttempt(t.Context(), chainIDEth, first.Hash().Hex())
+	require.NoError(t, err)
+	require.Equal(t, store.TxPending, attempt.Status)
 }
 
 func TestRestartFillsBlockingGapAtCapacity(t *testing.T) {
 	c, rpc, db := newManager(t)
 	c.opts.MaxInFlight = 1
 	intent := packetIntent(t, db, 1)
-	higher := saveIntentAtNonce(t, c, intent, 1)
+	saveIntentAtNonce(t, c, intent, 1)
 	restarted, err := New(chainIDEth, rpc, c.signer, db, c.opts)
 	require.NoError(t, err)
 	restarted.ctx = t.Context()
 	restarted.reconciler.reconcile(t.Context())
-	require.Len(t, rpc.sent, 1)
-	require.Equal(t, higher.Hash(), rpc.sent[0].Hash())
+	require.Empty(t, rpc.sent)
 	require.NoError(t, restarted.submit(t.Context(), packetIntent(t, db, 2)))
-	require.Len(t, rpc.sent, 2)
-	require.Equal(t, uint64(0), rpc.sent[1].Nonce())
-	require.Equal(t, common.HexToAddress(intent.To), *rpc.sent[1].To())
-	require.Equal(t, intent.Data, rpc.sent[1].Data())
+	require.Len(t, rpc.sent, 1)
+	require.Equal(t, uint64(0), rpc.sent[0].Nonce())
+	require.Equal(t, common.HexToAddress(intent.To), *rpc.sent[0].To())
+	require.Equal(t, intent.Data, rpc.sent[0].Data())
 	require.ErrorIs(t, restarted.submit(t.Context(), packetIntent(t, db, 3)), ErrBusy)
 }
 
@@ -1219,8 +1128,8 @@ func TestMinedRevertAllowsPacketReconciliation(t *testing.T) {
 	intent := packetIntent(t, db, 1)
 	err := c.submit(t.Context(), intent)
 	require.NoError(t, err)
-	c.opts.RepriceInterval = time.Nanosecond
-	c.reconciler.reconcile(t.Context())
+	expireAttempts(t, c)
+	require.NoError(t, c.submit(t.Context(), packetIntent(t, db, 1)))
 	require.Len(t, rpc.sent, 2)
 	tx := rpc.sent[1]
 	rpc.mined = 1
@@ -1250,7 +1159,7 @@ func (s malformedSigner) Sign(context.Context, []byte) ([]byte, error) { return 
 func TestMalformedSignerResponseDoesNotPanicOrBroadcast(t *testing.T) {
 	c, rpc, db := newManager(t)
 	c.signer = malformedSigner{Signer: c.signer}
-	c.reconciler.signer = c.signer
+
 	err := c.submit(t.Context(), packetIntent(t, db, 1))
 	require.ErrorContains(t, err, "invalid signature length")
 	require.Empty(t, rpc.sent)

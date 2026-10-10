@@ -29,6 +29,8 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
+const transactionAbandonmentWindow = 5 * time.Second
+
 // acceptThenFail hides the first successful broadcast response from the relayer.
 type acceptThenFail struct {
 	server   *httptest.Server
@@ -121,6 +123,7 @@ func configureTransactionRPC(t *testing.T, chainID uint64, endpoint string) func
 		for i := range cfg.Chains {
 			if cfg.Chains[i].ChainID == strconv.FormatUint(chainID, 10) {
 				cfg.Chains[i].RPC = endpoint
+				cfg.Chains[i].AbandonAfter = transactionAbandonmentWindow
 			}
 		}
 	}
@@ -151,7 +154,7 @@ func TestTransactionRecovery_ReceiveAfterLostResponseAndRestart(t *testing.T) {
 	)
 	app := e2etest.NewTransfer(t, env, deployment, sender, route)
 	relayer := e2etest.StartRelayer(t, driver, env)
-	ctx, cancel := context.WithTimeout(t.Context(), destination.Timing().CompletionBudget)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*destination.Timing().CompletionBudget)
 	defer cancel()
 	transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(123456)})
 	require.NoError(t, err)
@@ -168,24 +171,33 @@ func TestTransactionRecovery_ReceiveAfterLostResponseAndRestart(t *testing.T) {
 	require.NoError(t, client.Client().CallContext(ctx, nil, "anvil_dropAllTransactions"))
 	_, _, err = client.TransactionByHash(ctx, accepted.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
+	require.NoError(t, mining.Resume(ctx))
 	relayer = e2etest.StartRelayer(t, driver, env)
 	deadline, _ := ctx.Deadline()
+	var retry *types.Transaction
 	require.Eventually(t, func() bool {
-		_, pending, lookupErr := client.TransactionByHash(ctx, accepted.Hash())
-		return lookupErr == nil && pending
-	}, time.Until(deadline), destination.Timing().PollInterval, "restart must rebroadcast the dropped transaction")
-	require.NoError(t, mining.Resume(ctx))
+		fault.mu.Lock()
+		defer fault.mu.Unlock()
+		for _, tx := range fault.sends {
+			if tx.Hash() != accepted.Hash() {
+				_, _, lookupErr := client.TransactionByHash(ctx, tx.Hash())
+				if lookupErr == nil {
+					retry = tx
+					return true
+				}
+			}
+		}
+		return false
+	}, time.Until(deadline), destination.Timing().PollInterval, "restart must retry the expired transaction")
+	require.Equal(t, accepted.Nonce(), retry.Nonce())
+	require.Positive(t, retry.GasFeeCap().Cmp(accepted.GasFeeCap()))
+	require.Positive(t, retry.GasTipCap().Cmp(accepted.GasTipCap()))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
-	receipt, err := client.TransactionReceipt(ctx, accepted.Hash())
+	receipt, err := client.TransactionReceipt(ctx, retry.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
-	fault.mu.Lock()
-	defer fault.mu.Unlock()
-	for _, attempt := range fault.sends {
-		require.Equal(t, accepted.Hash(), attempt.Hash(), "restart must preserve signed receive attempt")
-	}
 }
 
 func TestTransactionRecovery_AcknowledgementAfterLostResponse(t *testing.T) {

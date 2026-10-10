@@ -68,7 +68,6 @@ type RelayerTxSubmission struct {
 	ExecutionError      *string
 	Nonce               int64
 	SignedTx            []byte
-	LastBroadcastAt     pgtype.Timestamptz
 	ResolvedBlockNumber *int64
 	ResolvedBlockHash   *string
 }

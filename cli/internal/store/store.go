@@ -30,12 +30,12 @@ type Store interface {
 
 // Repository represents database CRUD operations.
 type Repository interface {
-	SetTxBroadcast(ctx context.Context, chainID, hash string, at time.Time) error
 	InsertTxAttempt(ctx context.Context, attempt TxAttempt) (int64, error)
 	InsertTxOperation(ctx context.Context, attemptID int64, operation TxOperation) error
 	ListTxOperations(ctx context.Context, attemptID int64) ([]TxOperation, error)
 	ListUnresolvedTxAttempts(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxAttempt, error)
-	AbandonTxAttempts(ctx context.Context, chainID, sender string, nonce uint64) error
+	AbandonTxAttemptsBefore(ctx context.Context, chainID, sender string, before time.Time) error
+	ListTxAttemptsAtNonce(ctx context.Context, chainID, sender string, nonce uint64) ([]TxAttempt, error)
 	ListTxNoncesFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]uint64, error)
 	ListTxResolutionsFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxResolution, error)
 	ReopenTxAttempts(ctx context.Context, chainID, sender string, resolution TxResolution) error

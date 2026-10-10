@@ -103,6 +103,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg.ClearInterval = 2 * time.Second
 	cfg.Chains[0].PacketBatchSize = 7
 	cfg.Chains[0].PacketBatchTimeout = 250 * time.Millisecond
+	cfg.Chains[0].AbandonAfter = 5 * time.Second
 	cfg.Attestors = []RelayerAttestor{
 		{Name: "alice", Type: RelayerAttestorLocal, ChainID: "2", KeyFile: "/tmp/alice.key"},
 		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
@@ -115,6 +116,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	require.Equal(t, chainOverrideFileConfig{
 		ChainID: "1", PacketBatchSize: 7,
 		PacketBatchTimeout: 250 * time.Millisecond,
+		EVM:                &relayerEVMFileConfig{AbandonAfter: 5 * time.Second},
 	}, file.Relayer.ChainOverrides[0])
 	require.Equal(t, []signerConfig{
 		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},

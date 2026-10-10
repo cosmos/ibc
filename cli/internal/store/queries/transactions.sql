@@ -5,7 +5,7 @@ INSERT INTO relayer_tx_submissions
 (tx_hash, chain_id, relayer_address, submitted_at, status, nonce, signed_tx)
 VALUES (sqlc.arg(tx_hash), sqlc.arg(chain_id), sqlc.arg(relayer_address), sqlc.arg(submitted_at), 'PENDING', sqlc.arg(nonce), sqlc.arg(signed_tx))
 ON CONFLICT (chain_id, tx_hash) DO UPDATE
-SET status = 'PENDING', submitted_at = excluded.submitted_at, last_broadcast_at = NULL
+SET status = 'PENDING', submitted_at = excluded.submitted_at
 WHERE relayer_tx_submissions.status = 'ABANDONED'
 RETURNING id;
 
@@ -28,10 +28,16 @@ WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_addre
 AND (status = 'PENDING' OR (status = 'ABANDONED' AND nonce < sqlc.arg(mined_nonce)))
 ORDER BY nonce, submitted_at, id;
 
--- name: AbandonTxAttempts :exec
+-- name: AbandonTxAttemptsBefore :exec
 UPDATE relayer_tx_submissions SET status = 'ABANDONED'
 WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
-AND nonce = sqlc.arg(nonce) AND status = 'PENDING';
+AND submitted_at <= sqlc.arg(submitted_before) AND status = 'PENDING';
+
+-- name: ListTxAttemptsAtNonce :many
+SELECT * FROM relayer_tx_submissions
+WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
+AND nonce = sqlc.arg(nonce)
+ORDER BY id;
 
 -- name: ListTxNoncesFrom :many
 SELECT DISTINCT nonce FROM relayer_tx_submissions
@@ -48,14 +54,15 @@ AND status IN ('CONFIRMED', 'FAILED', 'REPLACED', 'CONSUMED')
 AND resolved_block_number IS NOT NULL AND resolved_block_hash IS NOT NULL
 ORDER BY nonce;
 
--- name: ReopenTxAttempts :exec
+-- name: ReopenTxAttempts :many
 UPDATE relayer_tx_submissions
-SET status = 'PENDING', resolved_at = NULL, last_broadcast_at = NULL,
+SET status = 'PENDING', resolved_at = NULL,
 resolved_block_number = NULL, resolved_block_hash = NULL
 WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
 AND nonce = sqlc.arg(nonce) AND status IN ('CONFIRMED', 'FAILED', 'REPLACED', 'CONSUMED')
 AND resolved_block_number = sqlc.arg(resolved_block_number)
-AND resolved_block_hash = sqlc.arg(resolved_block_hash);
+AND resolved_block_hash = sqlc.arg(resolved_block_hash)
+RETURNING id;
 
 -- name: GetTxAttempt :one
 SELECT * FROM relayer_tx_submissions
@@ -81,9 +88,3 @@ END, resolved_at = sqlc.arg(resolved_at),
 resolved_block_number = sqlc.arg(resolved_block_number), resolved_block_hash = sqlc.arg(resolved_block_hash)
 WHERE chain_id = sqlc.arg(chain_id) AND relayer_address = sqlc.arg(relayer_address)
 AND nonce = sqlc.arg(nonce) AND status IN ('PENDING', 'ABANDONED');
-
--- name: SetTxBroadcast :exec
-UPDATE relayer_tx_submissions
-SET last_broadcast_at = sqlc.arg(last_broadcast_at)
-WHERE chain_id = sqlc.arg(chain_id) AND tx_hash = sqlc.arg(tx_hash)
-AND status = 'PENDING';

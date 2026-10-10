@@ -14,7 +14,6 @@ create table if not exists relayer_tx_submissions (
     execution_error       text,
     nonce                 bigint                   NOT NULL,
     signed_tx             bytea                    NOT NULL,
-    last_broadcast_at     timestamp with time zone,
     resolved_block_number bigint,
     resolved_block_hash   text,
 

@@ -32,6 +32,7 @@ relayer:
     - chainId: "1"
       evm:
         gasFeeCapMultiplier: 1.5
+        abandonAfter: 15m
         gasTipCapMultiplier: 1.5
       packetBatchSize: 20
       packetBatchTimeout: 10s

@@ -123,10 +123,16 @@ func (db *SqliteDB) ReopenTxAttempts(ctx context.Context, chainID, sender string
 		return err
 	}
 	number := int64(resolution.BlockNumber)
-	return errNormalize(db.repo.ReopenTxAttempts(ctx, repo.ReopenTxAttemptsParams{
-		ChainID: chainID, RelayerAddress: sender, Nonce: int64(resolution.Nonce),
-		ResolvedBlockNumber: &number, ResolvedBlockHash: &resolution.BlockHash,
-	}))
+	return db.Transact(ctx, func(repository Repository) error {
+		ids, err := repository.(*SqliteDB).repo.ReopenTxAttempts(ctx, repo.ReopenTxAttemptsParams{
+			ChainID: chainID, RelayerAddress: sender, Nonce: int64(resolution.Nonce),
+			ResolvedBlockNumber: &number, ResolvedBlockHash: &resolution.BlockHash,
+		})
+		if err != nil {
+			return errNormalize(err)
+		}
+		return resetReorgedOperations(ctx, repository, ids)
+	})
 }
 
 func (db *SqliteDB) HasPendingOperation(ctx context.Context, operation TxOperation) (bool, error) {
@@ -155,26 +161,37 @@ func (db *SqliteDB) ResolveTxNonce(ctx context.Context, outcome TxOutcome) error
 
 func txAttemptSqliteDB(r repo.RelayerTxSubmission) TxAttempt {
 	return TxAttempt{
-		ID:              r.ID,
-		ChainID:         r.ChainID,
-		Sender:          r.RelayerAddress,
-		Hash:            r.TxHash,
-		Nonce:           uint64(r.Nonce),
-		SignedTx:        r.SignedTx,
-		SubmittedAt:     r.SubmittedAt,
-		LastBroadcastAt: r.LastBroadcastAt,
-		Status:          r.Status,
+		ID:          r.ID,
+		ChainID:     r.ChainID,
+		Sender:      r.RelayerAddress,
+		Hash:        r.TxHash,
+		Nonce:       uint64(r.Nonce),
+		SignedTx:    r.SignedTx,
+		SubmittedAt: r.SubmittedAt,
+		Status:      r.Status,
 	}
 }
 
-func (db *SqliteDB) SetTxBroadcast(ctx context.Context, chainID, hash string, at time.Time) error {
-	return errNormalize(db.repo.SetTxBroadcast(ctx, repo.SetTxBroadcastParams{
-		ChainID: chainID, TxHash: hash, LastBroadcastAt: &at,
+func (db *SqliteDB) AbandonTxAttemptsBefore(ctx context.Context, chainID, sender string, before time.Time) error {
+	return errNormalize(db.repo.AbandonTxAttemptsBefore(ctx, repo.AbandonTxAttemptsBeforeParams{
+		ChainID: chainID, RelayerAddress: sender, SubmittedBefore: before.UTC(),
 	}))
 }
 
-func (db *SqliteDB) AbandonTxAttempts(ctx context.Context, chainID, sender string, nonce uint64) error {
-	return errNormalize(db.repo.AbandonTxAttempts(ctx, repo.AbandonTxAttemptsParams{
+func (db *SqliteDB) ListTxAttemptsAtNonce(
+	ctx context.Context,
+	chainID, sender string,
+	nonce uint64,
+) ([]TxAttempt, error) {
+	rows, err := db.repo.ListTxAttemptsAtNonce(ctx, repo.ListTxAttemptsAtNonceParams{
 		ChainID: chainID, RelayerAddress: sender, Nonce: int64(nonce),
-	}))
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+	attempts := make([]TxAttempt, 0, len(rows))
+	for _, r := range rows {
+		attempts = append(attempts, txAttemptSqliteDB(r))
+	}
+	return attempts, nil
 }

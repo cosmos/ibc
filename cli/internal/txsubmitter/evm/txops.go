@@ -4,7 +4,6 @@ package evm
 
 import (
 	"context"
-	"log/slog"
 	"math/big"
 	"strings"
 	"time"
@@ -18,26 +17,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 	"github.com/cosmos/ibc/cli/internal/store"
 )
-
-type pendingTx struct {
-	attempts   []signedAttempt
-	operations []store.TxOperation
-}
-
-type signedAttempt struct {
-	store.TxAttempt
-	tx *types.Transaction
-}
-
-func (p *pendingTx) latest() *signedAttempt { return &p.attempts[len(p.attempts)-1] }
-
-func (p *pendingTx) hashes() []common.Hash {
-	hashes := make([]common.Hash, len(p.attempts))
-	for i, a := range p.attempts {
-		hashes[i] = a.tx.Hash()
-	}
-	return hashes
-}
 
 func estimateFees(ctx context.Context, eth ETHClient, opts *ChainOptions) (fee, tip *big.Int, err error) {
 	requestCtx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
@@ -117,52 +96,15 @@ func saveAttempt(
 	db store.Store,
 	signed *types.Transaction,
 	a store.TxAttempt,
-	p *pendingTx,
+	operations []store.TxOperation,
 ) error {
 	raw, err := signed.MarshalBinary()
 	if err != nil {
 		return err
 	}
-	a.Hash = signed.Hash().Hex()
-	a.Nonce = signed.Nonce()
-	a.SignedTx = raw
-	a.Status = store.TxPending
-	a.ID, err = store.SaveTxAttempt(ctx, db, a, p.operations)
-	if err != nil {
-		return err
-	}
-	p.attempts = append(p.attempts, signedAttempt{TxAttempt: a, tx: signed})
-	return nil
-}
-
-func broadcastAttempt(
-	ctx, recordCtx context.Context,
-	eth ETHClient,
-	db store.Store,
-	a *signedAttempt,
-	at time.Time,
-	timeout time.Duration,
-) {
-	logger := slog.With("module", "txsubmitter", "chainID", a.ChainID, "wallet", a.Sender)
-	at = at.UTC()
-	if err := broadcast(ctx, eth, a.tx, timeout); err != nil {
-		logger.Warn(
-			"Transaction broadcast failed; retaining signed attempt",
-			"txHash",
-			a.Hash,
-			"nonce",
-			a.Nonce,
-			"error",
-			err,
-		)
-	}
-	recordCtx, cancel := context.WithTimeout(recordCtx, timeout)
-	defer cancel()
-	if err := db.SetTxBroadcast(recordCtx, a.ChainID, a.Hash, at); err != nil {
-		logger.Error("Recording transaction broadcast", "txHash", a.Hash, "error", err)
-		return
-	}
-	a.LastBroadcastAt = &at
+	a.Hash, a.Nonce, a.SignedTx = signed.Hash().Hex(), signed.Nonce(), raw
+	_, err = store.SaveTxAttempt(ctx, db, a, operations)
+	return err
 }
 
 func (c *TxSubmitter) buildAndSignTransaction(
@@ -189,9 +131,25 @@ func (c *TxSubmitter) buildAndSignTransaction(
 		return nil, err
 	}
 	requestCtx, cancel = context.WithTimeout(ctx, c.opts.RequestTimeout)
-	gas, err := c.eth.EstimateGas(
+	attempts, err := c.db.ListTxAttemptsAtNonce(requestCtx, c.chainID, c.address.Hex(), nonce)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range attempts {
+		var previous types.Transaction
+		if err = previous.UnmarshalBinary(a.SignedTx); err != nil {
+			return nil, err
+		}
+		fee = maxBig(fee, bump(previous.GasFeeCap()))
+		tip = maxBig(tip, bump(previous.GasTipCap()))
+	}
+	requestCtx, cancel = context.WithTimeout(ctx, c.opts.RequestTimeout)
+	// Pending state may already include the transaction this submission replaces.
+	gas, err := c.eth.EstimateGasAtBlock(
 		requestCtx,
 		ethereum.CallMsg{From: c.address, To: &to, Data: data, GasFeeCap: fee, GasTipCap: tip},
+		nil,
 	)
 	cancel()
 	if err != nil {
@@ -208,4 +166,19 @@ func (c *TxSubmitter) buildAndSignTransaction(
 			GasTipCap: tip,
 		},
 	), c.signer, c.ethSigner, c.address, &c.opts)
+}
+
+// Round up by 20%, including when the previous tip was zero.
+func bump(v *big.Int) *big.Int {
+	out := new(big.Int).Mul(v, big.NewInt(120))
+	out.Add(out, big.NewInt(99))
+	out.Div(out, big.NewInt(100))
+	return maxBig(out, new(big.Int).Add(v, big.NewInt(1)))
+}
+
+func maxBig(a, b *big.Int) *big.Int {
+	if a.Cmp(b) >= 0 {
+		return a
+	}
+	return b
 }
