@@ -54,6 +54,7 @@ type RelayerChain struct {
 	ICS26Router        string
 	PacketBatchSize    int
 	PacketBatchTimeout time.Duration
+	AbandonAfter       time.Duration
 }
 
 // RelayerClientEnd is a registered client and its endpoint relay policy.
@@ -155,11 +156,15 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				ICS26Router: chain.ICS26Router,
 			},
 		})
-		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
+		override := chainOverrideFileConfig{
 			ChainID:            chain.ChainID,
 			PacketBatchSize:    batchSize,
 			PacketBatchTimeout: chain.PacketBatchTimeout,
-		})
+		}
+		if chain.AbandonAfter != 0 {
+			override.EVM = &relayerEVMFileConfig{AbandonAfter: chain.AbandonAfter}
+		}
+		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, override)
 	}
 
 	for _, attestor := range cfg.Attestors {
@@ -242,9 +247,14 @@ type relayerFileConfig struct {
 }
 
 type chainOverrideFileConfig struct {
-	ChainID            string        `yaml:"chainId"`
-	PacketBatchSize    int           `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
+	ChainID            string                `yaml:"chainId"`
+	PacketBatchSize    int                   `yaml:"packetBatchSize"`
+	PacketBatchTimeout time.Duration         `yaml:"packetBatchTimeout,omitempty"`
+	EVM                *relayerEVMFileConfig `yaml:"evm,omitempty"`
+}
+
+type relayerEVMFileConfig struct {
+	AbandonAfter time.Duration `yaml:"abandonAfter,omitempty"`
 }
 
 type connectionFileConfig struct {

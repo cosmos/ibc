@@ -168,8 +168,15 @@ func awaitTransactionResolution(
 
 func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := attestedMesh(e2etest.EVMChains(
+		t,
+		e2etest.EVMRequirements{
+			Provider:         e2etest.EVMProviderAnvil,
+			ControlledMining: true,
+		},
+		e2etest.ChainA,
+		e2etest.ChainB,
+	))
 	env := e2etest.Start(t, spec, runtime)
 	destination, err := env.Chain(e2etest.ChainB)
 	require.NoError(t, err)
@@ -183,9 +190,10 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner,
 		configureTransactionRPC(t, destination.EVMChainID(), fault.server.URL), route)
 	app := e2etest.NewTransfer(t, env, deployment, sender, route)
+	// Keep the paused chain ahead of the relayer's freshness check until replacement.
+	require.NoError(t, mining.AdvanceTime(t.Context(), 2*destination.Timing().CompletionBudget))
 	relayer := e2etest.StartRelayer(t, driver, env)
-	// Include the production one-minute repricing delay in addition to chain wait budgets.
-	ctx, cancel := context.WithTimeout(t.Context(), time.Minute+2*destination.Timing().CompletionBudget)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*destination.Timing().CompletionBudget)
 	defer cancel()
 	transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(123456)})
 	require.NoError(t, err)
@@ -193,26 +201,30 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 	original := fault.awaitAccepted(ctx, t, nil)
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
 	require.NoError(t, relayer.Crash(ctx))
+	client := recoveryClient(t, destination)
+	_, pending, err := client.TransactionByHash(ctx, original.Hash())
+	require.NoError(t, err)
+	require.True(t, pending, "original transaction must remain in the mempool")
+	_, err = client.TransactionReceipt(ctx, original.Hash())
+	require.ErrorIs(t, err, ethereum.NotFound)
 	relayer = e2etest.StartRelayer(t, driver, env)
 
 	replacement := fault.awaitAccepted(ctx, t, func(tx *types.Transaction) bool { return tx.Hash() != original.Hash() })
 	require.Equal(t, original.Nonce(), replacement.Nonce())
 	require.Equal(t, original.To(), replacement.To())
-	require.Equal(t, original.Data(), replacement.Data())
 	require.Equal(t, original.Value(), replacement.Value())
-	require.Equal(t, original.Gas(), replacement.Gas())
 	require.Positive(t, replacement.GasFeeCap().Cmp(original.GasFeeCap()))
 	require.Positive(t, replacement.GasTipCap().Cmp(original.GasTipCap()))
+	require.NoError(t, mining.Mine(ctx, 1))
+	receipt, err := client.TransactionReceipt(ctx, replacement.Hash())
+	require.NoError(t, err)
+	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
 	require.NoError(t, mining.Resume(ctx))
 	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.Equal(t, replacement.Hash().Hex(), status.GetRecvTx().GetTxHash())
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
-	client := recoveryClient(t, destination)
-	receipt, err := client.TransactionReceipt(ctx, replacement.Hash())
-	require.NoError(t, err)
-	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
 	_, err = client.TransactionReceipt(ctx, original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 }
@@ -261,13 +273,15 @@ func TestTransactionRecovery_CrashBeforeBroadcast(t *testing.T) {
 	require.ErrorIs(t, err, ethereum.NotFound, "the node must never have seen the saved transaction")
 	relayer = e2etest.StartRelayer(t, driver, env)
 	broadcast := fault.awaitAccepted(ctx, t, nil)
-	require.Equal(t, saved.Hash(), broadcast.Hash(), "restart must recover the exact signed transaction")
+	require.Equal(t, saved.Nonce(), broadcast.Nonce())
+	require.Positive(t, broadcast.GasFeeCap().Cmp(saved.GasFeeCap()))
+	require.Positive(t, broadcast.GasTipCap().Cmp(saved.GasTipCap()))
 	for _, packet := range packets {
 		status, statusErr := e2etest.AwaitState(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, statusErr)
 		require.Equal(
 			t,
-			saved.Hash().Hex(),
+			broadcast.Hash().Hex(),
 			status.GetRecvTx().GetTxHash(),
 			"all packets must recover their shared transaction",
 		)
@@ -343,15 +357,17 @@ func TestTransactionRecovery_ReorgAfterResolution(t *testing.T) {
 	for len(fault.accepted) > 0 {
 		<-fault.accepted
 	}
+	require.NoError(t, mining.Resume(ctx))
 	relayer = e2etest.StartRelayer(t, driver, env)
 	rebroadcast := fault.awaitAccepted(ctx, t, nil)
-	require.Equal(t, original.Hash(), rebroadcast.Hash())
-	require.NoError(t, mining.Resume(ctx))
+	require.Equal(t, original.Nonce(), rebroadcast.Nonce())
+	require.Positive(t, rebroadcast.GasFeeCap().Cmp(original.GasFeeCap()))
+	require.Positive(t, rebroadcast.GasTipCap().Cmp(original.GasTipCap()))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
-	canonical, err := client.TransactionReceipt(ctx, original.Hash())
+	canonical, err := client.TransactionReceipt(ctx, rebroadcast.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, canonical.Status)
 	require.NotEqual(t, receipt.BlockHash, canonical.BlockHash)

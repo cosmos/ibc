@@ -24,15 +24,14 @@ const (
 
 // TxAttempt retains the signed bytes of one broadcast or fee replacement.
 type TxAttempt struct {
-	ID              int64
-	ChainID         string
-	Sender          string
-	Hash            string
-	Nonce           uint64
-	SignedTx        []byte
-	SubmittedAt     time.Time
-	LastBroadcastAt *time.Time
-	Status          string
+	ID          int64
+	ChainID     string
+	Sender      string
+	Hash        string
+	Nonce       uint64
+	SignedTx    []byte
+	SubmittedAt time.Time
+	Status      string
 }
 
 // TxOperation associates a packet action with a transaction attempt.
@@ -123,4 +122,31 @@ func SaveTxAttempt(ctx context.Context, db Store, attempt TxAttempt, operations 
 		return nil
 	})
 	return id, err
+}
+
+// Reset packet progress together with reopened attempts so the pipeline can retry after a reorg.
+func resetReorgedOperations(ctx context.Context, repo Repository, attemptIDs []int64) error {
+	for _, id := range attemptIDs {
+		operations, err := repo.ListTxOperations(ctx, id)
+		if err != nil {
+			return err
+		}
+		for _, operation := range operations {
+			switch operation.Type {
+			case OperationTypeRecv:
+				err = repo.ClearPacketRecvTx(ctx, operation.PacketKey)
+			case OperationTypeAck:
+				err = repo.ClearPacketAckTx(ctx, operation.PacketKey)
+			case OperationTypeTimeout:
+				err = repo.ClearPacketTimeoutTx(ctx, operation.PacketKey)
+			}
+			if err != nil {
+				return err
+			}
+			if err = repo.UpdatePacketStatus(ctx, operation.PacketKey, RelayStatusPending); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

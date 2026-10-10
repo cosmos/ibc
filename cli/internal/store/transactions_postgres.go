@@ -129,10 +129,16 @@ func (db *PostgresDB) ReopenTxAttempts(ctx context.Context, chainID, sender stri
 		return err
 	}
 	number := int64(resolution.BlockNumber)
-	return errNormalize(db.repo.ReopenTxAttempts(ctx, repo.ReopenTxAttemptsParams{
-		ChainID: chainID, RelayerAddress: sender, Nonce: int64(resolution.Nonce),
-		ResolvedBlockNumber: &number, ResolvedBlockHash: &resolution.BlockHash,
-	}))
+	return db.Transact(ctx, func(repository Repository) error {
+		ids, err := repository.(*PostgresDB).repo.ReopenTxAttempts(ctx, repo.ReopenTxAttemptsParams{
+			ChainID: chainID, RelayerAddress: sender, Nonce: int64(resolution.Nonce),
+			ResolvedBlockNumber: &number, ResolvedBlockHash: &resolution.BlockHash,
+		})
+		if err != nil {
+			return errNormalize(err)
+		}
+		return resetReorgedOperations(ctx, repository, ids)
+	})
 }
 
 func (db *PostgresDB) HasPendingOperation(ctx context.Context, operation TxOperation) (bool, error) {
@@ -164,31 +170,38 @@ func (db *PostgresDB) ResolveTxNonce(ctx context.Context, outcome TxOutcome) err
 }
 
 func txAttemptPostgresDB(r repo.RelayerTxSubmission) TxAttempt {
-	var lastBroadcast *time.Time
-	if r.LastBroadcastAt.Valid {
-		lastBroadcast = &r.LastBroadcastAt.Time
-	}
 	return TxAttempt{
-		ID:              r.ID,
-		ChainID:         r.ChainID,
-		Sender:          r.RelayerAddress,
-		Hash:            r.TxHash,
-		Nonce:           uint64(r.Nonce),
-		SignedTx:        r.SignedTx,
-		SubmittedAt:     r.SubmittedAt.Time,
-		LastBroadcastAt: lastBroadcast,
-		Status:          r.Status,
+		ID:          r.ID,
+		ChainID:     r.ChainID,
+		Sender:      r.RelayerAddress,
+		Hash:        r.TxHash,
+		Nonce:       uint64(r.Nonce),
+		SignedTx:    r.SignedTx,
+		SubmittedAt: r.SubmittedAt.Time,
+		Status:      r.Status,
 	}
 }
 
-func (db *PostgresDB) SetTxBroadcast(ctx context.Context, chainID, hash string, at time.Time) error {
-	return errNormalize(db.repo.SetTxBroadcast(ctx, repo.SetTxBroadcastParams{
-		ChainID: chainID, TxHash: hash, LastBroadcastAt: pgtype.Timestamptz{Time: at, Valid: true},
+func (db *PostgresDB) AbandonTxAttemptsBefore(ctx context.Context, chainID, sender string, before time.Time) error {
+	return errNormalize(db.repo.AbandonTxAttemptsBefore(ctx, repo.AbandonTxAttemptsBeforeParams{
+		ChainID: chainID, RelayerAddress: sender, SubmittedBefore: pgtype.Timestamptz{Time: before, Valid: true},
 	}))
 }
 
-func (db *PostgresDB) AbandonTxAttempts(ctx context.Context, chainID, sender string, nonce uint64) error {
-	return errNormalize(db.repo.AbandonTxAttempts(ctx, repo.AbandonTxAttemptsParams{
+func (db *PostgresDB) ListTxAttemptsAtNonce(
+	ctx context.Context,
+	chainID, sender string,
+	nonce uint64,
+) ([]TxAttempt, error) {
+	rows, err := db.repo.ListTxAttemptsAtNonce(ctx, repo.ListTxAttemptsAtNonceParams{
 		ChainID: chainID, RelayerAddress: sender, Nonce: int64(nonce),
-	}))
+	})
+	if err != nil {
+		return nil, errNormalize(err)
+	}
+	attempts := make([]TxAttempt, 0, len(rows))
+	for _, r := range rows {
+		attempts = append(attempts, txAttemptPostgresDB(r))
+	}
+	return attempts, nil
 }

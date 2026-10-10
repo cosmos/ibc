@@ -66,6 +66,8 @@ type RelayerChainOverride struct {
 type RelayerEVMConfig struct {
 	// MaxFeePerGas caps each transaction's fee per gas, in wei.
 	MaxFeePerGas *uint64 `yaml:"maxFeePerGas,omitempty"`
+	// AbandonAfter releases unfinished transaction operations for retry after this duration.
+	AbandonAfter *time.Duration `yaml:"abandonAfter,omitempty"`
 
 	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
 	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
@@ -217,6 +219,8 @@ func (c RelayerEVMConfig) Validate() error {
 	switch {
 	case c.MaxFeePerGas != nil && *c.MaxFeePerGas == 0:
 		return errPathf("maxFeePerGas", "must be positive")
+	case c.AbandonAfter != nil && *c.AbandonAfter <= 0:
+		return errPathf("abandonAfter", "must be positive")
 	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
 		return errPathf("gasFeeCapMultiplier", "must be positive")
 	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:

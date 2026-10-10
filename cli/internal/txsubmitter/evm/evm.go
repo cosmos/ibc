@@ -25,13 +25,12 @@ import (
 
 // Default transaction policies.
 const (
-	DefaultPollInterval    = 3 * time.Second
-	DefaultRepriceInterval = time.Minute
-	DefaultAbandonAfter    = 15 * time.Minute
-	DefaultRequestTimeout  = 10 * time.Second
-	DefaultMaxInFlight     = 16
-	DefaultMaxGas          = 10_000_000
-	DefaultMaxFeePerGas    = 500_000_000_000
+	DefaultPollInterval   = 3 * time.Second
+	DefaultAbandonAfter   = 15 * time.Minute
+	DefaultRequestTimeout = 10 * time.Second
+	DefaultMaxInFlight    = 16
+	DefaultMaxGas         = 10_000_000
+	DefaultMaxFeePerGas   = 500_000_000_000
 )
 
 // ChainOptions controls request bounds and recovery.
@@ -39,7 +38,6 @@ type ChainOptions struct {
 	GasFeeCapMultiplier *float64
 	GasTipCapMultiplier *float64
 	PollInterval        time.Duration
-	RepriceInterval     time.Duration
 	AbandonAfter        time.Duration
 	RequestTimeout      time.Duration
 	MaxInFlight         int
@@ -54,7 +52,7 @@ type ETHClient interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error)
-	EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error)
+	EstimateGasAtBlock(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) (uint64, error)
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 	SendTransaction(ctx context.Context, tx *types.Transaction) error
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
@@ -117,9 +115,6 @@ func New(
 	if opts.PollInterval == 0 {
 		opts.PollInterval = DefaultPollInterval
 	}
-	if opts.RepriceInterval == 0 {
-		opts.RepriceInterval = DefaultRepriceInterval
-	}
 	if opts.AbandonAfter == 0 {
 		opts.AbandonAfter = DefaultAbandonAfter
 	}
@@ -135,7 +130,7 @@ func New(
 	if opts.MaxFeePerGas == nil {
 		opts.MaxFeePerGas = big.NewInt(DefaultMaxFeePerGas)
 	}
-	if opts.PollInterval <= 0 || opts.RepriceInterval <= 0 || opts.AbandonAfter <= 0 ||
+	if opts.PollInterval <= 0 || opts.AbandonAfter <= 0 ||
 		opts.RequestTimeout <= 0 ||
 		opts.MaxInFlight <= 0 || opts.MaxGas < 21000 ||
 		opts.MaxFeePerGas.Sign() <= 0 {
@@ -157,8 +152,8 @@ func New(
 		ethSigner: types.LatestSignerForChainID(id), db: db, opts: opts,
 	}
 	c.reconciler = &transactionReconciler{
-		chainID: chainID, eth: eth, signer: chainSigner, address: c.address, ethSigner: c.ethSigner,
-		db: db, opts: &c.opts, now: time.Now,
+		chainID: chainID, eth: eth, address: c.address,
+		db: db, opts: &c.opts,
 		logger: slog.With("module", "txsubmitter", "chainID", chainID, "wallet", c.address.Hex()),
 	}
 	metrics.setWallet(chainID, c.address.Hex(), eth)
@@ -234,17 +229,26 @@ func (c *TxSubmitter) submit(ctx context.Context, intent v2.TxIntent) error {
 			Type: op.Type.String(),
 		}
 	}
-	p := &pendingTx{operations: operations}
 	saveCtx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
 	defer cancel()
 	if err = saveAttempt(saveCtx, c.db, tx, store.TxAttempt{
 		ChainID: c.chainID, Sender: c.address.Hex(),
 		SubmittedAt: time.Now().UTC(),
-	}, p); err != nil {
+	}, operations); err != nil {
 		return err
 	}
 	if ctx.Err() == nil {
-		broadcastAttempt(ctx, c.ctx, c.eth, c.db, p.latest(), time.Now(), c.opts.RequestTimeout)
+		if err := broadcast(ctx, c.eth, tx, c.opts.RequestTimeout); err != nil {
+			slog.With("module", "txsubmitter", "chainID", c.chainID, "wallet", c.address.Hex()).Warn(
+				"Transaction broadcast failed; retaining signed attempt",
+				"txHash",
+				tx.Hash().Hex(),
+				"nonce",
+				nonce,
+				"error",
+				err,
+			)
+		}
 	}
 	return nil
 }

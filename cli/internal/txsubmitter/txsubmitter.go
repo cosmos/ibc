@@ -78,6 +78,9 @@ func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set
 				if e.MaxFeePerGas != nil {
 					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
 				}
+				if e.AbandonAfter != nil {
+					opts.AbandonAfter = *e.AbandonAfter
+				}
 				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
 				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
 			}
