@@ -238,6 +238,28 @@ func TestProvisionIFTAndBridge(t *testing.T) {
 	require.Equal(t, ctor, gotCtor)
 }
 
+func TestIFTRateLimitRoundTrip(t *testing.T) {
+	d, _, owner := newSimDriver(t)
+	ctx := context.Background()
+
+	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+	require.NoError(t, err)
+	gmp, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
+	require.NoError(t, err)
+	token, err := d.ProvisionIFT(ctx, gmp.Address, deploy.IFTSpec{Owner: owner.Hex(), Name: "Foo", Symbol: "FOO"})
+	require.NoError(t, err)
+
+	unset, err := d.IFTRateLimit(ctx, token.Address)
+	require.NoError(t, err)
+	require.Zero(t, unset.Capacity.Sign())
+
+	limit := deploy.IFTRateLimit{Capacity: big.NewInt(1_000_000), Window: 3600}
+	require.NoError(t, d.SetIFTRateLimit(ctx, token.Address, limit))
+	got, err := d.IFTRateLimit(ctx, token.Address)
+	require.NoError(t, err)
+	require.Equal(t, limit, got)
+}
+
 func TestVerifyGMPAndIFT(t *testing.T) {
 	d, _, owner := newSimDriver(t)
 	ctx := context.Background()

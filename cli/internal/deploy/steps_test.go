@@ -5,7 +5,9 @@ package deploy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"math/big"
 	"testing"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
@@ -27,6 +29,9 @@ type fakeTarget struct {
 	gmpProvisions  int
 	iftProvisions  int
 	ctorProvisions int
+	rateLimits     map[string]IFTRateLimit // ift -> limit
+	rateLimitSets  int
+	rateLimitErr   error // returned by SetIFTRateLimit when set
 }
 
 func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error) {
@@ -71,7 +76,25 @@ func newFakeTarget() *fakeTarget {
 		registered: map[string]string{},
 		apps:       map[string]string{},
 		bridges:    map[string]fakeBridge{},
+		rateLimits: map[string]IFTRateLimit{},
 	}
+}
+
+func (f *fakeTarget) IFTRateLimit(_ context.Context, ift string) (IFTRateLimit, error) {
+	limit, ok := f.rateLimits[ift]
+	if !ok {
+		return IFTRateLimit{Capacity: new(big.Int)}, nil
+	}
+	return limit, nil
+}
+
+func (f *fakeTarget) SetIFTRateLimit(_ context.Context, ift string, limit IFTRateLimit) error {
+	f.rateLimitSets++
+	if f.rateLimitErr != nil {
+		return f.rateLimitErr
+	}
+	f.rateLimits[ift] = limit
+	return nil
 }
 
 func (f *fakeTarget) ProvisionGMP(context.Context, string, string) (GMPRef, error) {
@@ -91,7 +114,9 @@ func (f *fakeTarget) AppRegistered(_ context.Context, _, port string) (string, b
 
 func (f *fakeTarget) ProvisionIFT(_ context.Context, _ string, spec IFTSpec) (IFTRef, error) {
 	f.iftProvisions++
-	return IFTRef{Address: "0xift-" + spec.Symbol}, nil
+	addr := "0xift-" + spec.Symbol
+	f.hasCode[addr] = true
+	return IFTRef{Address: addr}, nil
 }
 
 func (f *fakeTarget) ProvisionSendCallConstructor(context.Context) (string, error) {
@@ -375,12 +400,14 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	m.GMP = &manifest.GMP{Address: "0xgmp", Port: GMPPortID}
 	require.NoError(t, m.Save(dir))
 
-	spec := IFTSpec{Owner: "0xowner", Name: "Foo", Symbol: "FOO"}
+	spec := iftSpec("Foo")
 
 	res, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
 	require.NoError(t, err)
 	require.Equal(t, "executed", res[0].Action)
+	require.Equal(t, "executed", res[1].Action)
 	require.Equal(t, 1, target.iftProvisions)
+	require.Equal(t, spec.RateLimit, target.rateLimits["0xift-FOO"])
 
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
@@ -389,15 +416,24 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	require.Equal(t, "0xift-FOO", tok.Address)
 
 	// identical rerun skips
-	target.hasCode["0xift-FOO"] = true
 	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, "skipped", res[1].Action)
 	require.Equal(t, 1, target.iftProvisions)
+	require.Equal(t, 1, target.rateLimitSets)
+
+	// a different rate limit is applied to the existing token
+	changed := spec
+	changed.RateLimit.Window = 60
+	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", changed))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, "executed", res[1].Action)
+	require.Equal(t, changed.RateLimit, target.rateLimits["0xift-FOO"])
 
 	// same symbol, different name is a new token
-	other := IFTSpec{Owner: "0xowner", Name: "Bar", Symbol: "FOO"}
-	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", other))
+	res, err = RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", iftSpec("Bar")))
 	require.NoError(t, err)
 	require.Equal(t, "executed", res[0].Action)
 	require.Equal(t, 2, target.iftProvisions)
@@ -407,6 +443,36 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	require.Len(t, m.Tokens, 2)
 }
 
+func TestIFTStepsRepairFailedRateLimit(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.GMP = &manifest.GMP{Address: "0xgmp", Port: GMPPortID}
+	require.NoError(t, m.Save(dir))
+
+	spec := iftSpec("Foo")
+
+	// the token deploys but setting its rate limit fails
+	target.rateLimitErr = errors.New("setIFTRateLimit reverted")
+	_, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+	require.ErrorIs(t, err, target.rateLimitErr)
+	m, err = manifest.Load(dir, "1")
+	require.NoError(t, err)
+	_, ok := m.TokenByAddress("0xift-FOO")
+	require.True(t, ok)
+
+	// a rerun sets the limit on the recorded token instead of deploying another
+	target.rateLimitErr = nil
+	res, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+	require.NoError(t, err)
+	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, "executed", res[1].Action)
+	require.Equal(t, 1, target.iftProvisions)
+	require.Equal(t, spec.RateLimit, target.rateLimits["0xift-FOO"])
+}
+
 func TestIFTStepsRequiresGMP(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -414,9 +480,15 @@ func TestIFTStepsRequiresGMP(t *testing.T) {
 	m.Core.Router = "0xrouter"
 	require.NoError(t, m.Save(dir))
 
-	_, err := RunSteps(context.Background(), slog.Default(), false,
-		IFTSteps(target, dir, "1", IFTSpec{Owner: "0xowner", Name: "Foo", Symbol: "FOO"}))
+	_, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", iftSpec("Foo")))
 	require.ErrorContains(t, err, "run `ibc deploy gmp` first")
+}
+
+func iftSpec(name string) IFTSpec {
+	return IFTSpec{
+		Owner: "0xowner", Name: name, Symbol: "FOO",
+		RateLimit: IFTRateLimit{Capacity: big.NewInt(1000), Window: 3600},
+	}
 }
 
 func iftBridgeManifest(t *testing.T, dir string) {

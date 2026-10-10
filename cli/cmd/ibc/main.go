@@ -194,9 +194,13 @@ func init() {
 	// IFT commands
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTName, "name", "", "ERC20 token name")
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "ERC20 token symbol (need not be unique)")
-	cmdDeployIFT.Flags().StringVar(&flagDeployIFTOwner, "owner", "", "token owner address (default: deployer)")
+	cmdDeployIFT.Flags().StringVar(&flagDeployIFTRateCap, "rate-limit-capacity", "",
+		"most base units that may flow each way at once; refills over --rate-limit-window")
+	cmdDeployIFT.Flags().DurationVar(&flagDeployIFTRateWindow, "rate-limit-window", 24*time.Hour,
+		"time for a drained rate limit to refill")
 	_ = cmdDeployIFT.MarkFlagRequired("name")
 	_ = cmdDeployIFT.MarkFlagRequired("symbol")
+	_ = cmdDeployIFT.MarkFlagRequired("rate-limit-capacity")
 
 	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeChainA, "chain-a", "", "first chain id")
 	cmdDeployIFTBridge.Flags().StringVar(&flagDeployBridgeIFTA, "ift-a", "", "IFT token address on chain A")
