@@ -5,31 +5,29 @@ name: IBC CLI Build Artifacts
 on:
   workflow_dispatch:
   push:
+    branches: [main]
+    paths:
+      - "cli/**"
+      - "gen/go/solidity-abi/**"
+      - ".github/workflows/ibc-cli-*.yml"
     tags: ["*"]
-  pull_request_target:
-    # PR must contain `build-artifacts` label
-    types: [closed]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.base.ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions: read-all
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
-  BUILD_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+  BUILD_SHA: ${{ github.sha }}
   GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
 
 jobs:
   # Build binaries
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }} binary
-    if: >-
-      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
-      (github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'build-artifacts'))
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -80,10 +78,6 @@ jobs:
   # Prepare Docker metadata
   image-metadata:
     name: Prepare Docker metadata
-    if: >-
-      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
-      (github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'build-artifacts'))
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
@@ -91,13 +85,10 @@ jobs:
       - name: Select image tag
         id: tag
         env:
-          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
         run: |
-          if [[ -n "$BASE_BRANCH" ]]; then
-            tag="$BASE_BRANCH"
-          elif [[ "$REF_TYPE" == "branch" || "$REF_TYPE" == "tag" ]]; then
+          if [[ "$REF_TYPE" == "branch" || "$REF_TYPE" == "tag" ]]; then
             tag="$REF_NAME"
           else
             tag="${BUILD_SHA:0:8}"
@@ -110,7 +101,7 @@ jobs:
   publish-image:
     name: Publish linux-${{ matrix.goarch }} image
     needs: [image-metadata, build]
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -130,6 +121,12 @@ jobs:
           path: image
       - name: Prepare image context
         run: chmod +x image/ibc
+      # The runtime stage has a RUN instruction, so building the arm64 image on an
+      # x86_64 runner needs binfmt emulation registered first.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+        if: matrix.goarch == 'arm64'
+        with:
+          platforms: arm64
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -151,7 +148,7 @@ jobs:
   publish-manifest:
     name: Publish multi-platform image
     needs: [image-metadata, publish-image]
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       packages: write
     timeout-minutes: 10

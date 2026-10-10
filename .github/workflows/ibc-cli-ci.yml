@@ -22,7 +22,7 @@ defaults:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -53,7 +53,7 @@ jobs:
     name: Lint
     needs: changes
     if: needs.changes.outputs.cli == 'true'
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 10
@@ -74,7 +74,7 @@ jobs:
     name: Build
     needs: changes
     if: needs.changes.outputs.cli == 'true'
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 20
@@ -95,7 +95,7 @@ jobs:
     name: Test
     needs: changes
     if: needs.changes.outputs.cli == 'true'
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 30
@@ -117,7 +117,7 @@ jobs:
     name: Codegen Verify
     needs: changes
     if: needs.changes.outputs.sql == 'true' || needs.changes.outputs.proto == 'true'
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 15
@@ -159,7 +159,7 @@ jobs:
     name: Finalize
     if: always()
     needs: [changes, lint, build, test, verify-codegen]
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     permissions: {}
     steps:
       - name: Check required jobs
