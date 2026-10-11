@@ -131,6 +131,13 @@ func TestMeteredClient(t *testing.T) {
 				call: func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, address); return err },
 			},
 			{
+				operation: "eth_getTransactionCount",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().NonceAt(ctx, address, (*big.Int)(nil)).Return(0, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.NonceAt(ctx, address, nil); return err },
+			},
+			{
 				operation: "eth_gasPrice",
 				expect: func(eth *mocks.MockETHClient) {
 					eth.EXPECT().SuggestGasPrice(ctx).Return(nil, assert.AnError).Once()
@@ -150,6 +157,13 @@ func TestMeteredClient(t *testing.T) {
 					eth.EXPECT().EstimateGas(ctx, mock.Anything).Return(0, assert.AnError).Once()
 				},
 				call: func(c ETHClient) error { _, err := c.EstimateGas(ctx, ethereum.CallMsg{}); return err },
+			},
+			{
+				operation: "eth_estimateGas",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().EstimateGasAtBlock(ctx, mock.Anything, (*big.Int)(nil)).Return(0, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.EstimateGasAtBlock(ctx, ethereum.CallMsg{}, nil); return err },
 			},
 			{
 				operation: "eth_sendRawTransaction",

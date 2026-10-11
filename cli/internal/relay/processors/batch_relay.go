@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
+	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -77,11 +78,10 @@ func relayPackets(
 	txBuilder txbuilder.TxBuilder,
 	txSubmitter txsubmitter.TxSubmitter,
 	clientID string,
-	sourceChainID string,
 	operationType v2.OperationType,
 	proofHeight uint64,
 	events []v2.PacketEvent,
-) error {
+) (*v2.Submission, error) {
 	sequences := make([]uint64, len(events))
 	for i, event := range events {
 		sequences[i] = event.Packet.Sequence
@@ -101,7 +101,7 @@ func relayPackets(
 
 	clientUpdatePayloads, err := prover.ClientUpdatePayloads(ctx, proofHeight)
 	if err != nil {
-		return errors.Wrap(err, "generating client update payloads")
+		return nil, errors.Wrap(err, "generating client update payloads")
 	}
 
 	packets := make([]channeltypesv2.Packet, len(events))
@@ -118,7 +118,7 @@ func relayPackets(
 
 	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(operationType), packets, acknowledgements)
 	if err != nil {
-		return errors.Wrap(err, "generating packet proofs")
+		return nil, errors.Wrap(err, "generating packet proofs")
 	}
 
 	items := make([]v2.PacketRelayItem, len(events))
@@ -135,32 +135,73 @@ func relayPackets(
 	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
 	defer cancel()
 	if err = chainClient.WaitForChain(waitCtx); err != nil {
-		return errors.Wrap(err, "waiting for chain")
+		return nil, errors.Wrap(err, "waiting for chain")
 	}
 
 	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{ClientID: clientID, Payloads: clientUpdatePayloads}, items)
 	if err != nil {
-		return errors.Wrap(err, "building relay tx")
+		return nil, errors.Wrap(err, "building relay tx")
 	}
 	if len(relayTxs) != 1 {
-		return errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
+		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
 	}
-	operations := make([]v2.OperationMetadata, len(items))
-	for i, item := range items {
-		operations[i] = v2.OperationMetadata{
-			SourceChainID:  sourceChainID,
-			SourceClientID: item.Packet.SourceClient,
-			Sequence:       item.Packet.Sequence,
-			Type:           operationType,
-		}
-	}
-	err = txSubmitter.Submit(ctx, v2.TxIntent{
-		To:         common.BytesToAddress(relayTxs[0].To).Hex(),
-		Data:       relayTxs[0].Data,
-		Operations: operations,
+	return txSubmitter.Submit(ctx, v2.TxIntent{
+		To:   common.BytesToAddress(relayTxs[0].To).Hex(),
+		Data: relayTxs[0].Data,
 	})
-	if err != nil {
-		return errors.Wrap(err, "submitting relay tx")
+}
+
+// TxStorage atomically records a batch's transaction in its packet records.
+type TxStorage interface {
+	Transact(context.Context, func(store.Repository) error) error
+}
+
+func recordSubmission(
+	ctx context.Context,
+	db TxStorage,
+	transfers []*Transfer,
+	submission *v2.Submission,
+	op v2.OperationType,
+) error {
+	tx := store.PacketTx{
+		Hash:           submission.TxHash,
+		Time:           submission.SubmittedAt,
+		RelayerAddress: submission.RelayerAddress,
+	}
+	if err := db.Transact(ctx, func(repo store.Repository) error {
+		for _, tr := range transfers {
+			if tr.ProcessingError != nil {
+				continue
+			}
+			var err error
+			switch op {
+			case v2.OperationTypeRecv:
+				err = repo.UpdatePacketRecvTx(ctx, tr.Key(), tx)
+			case v2.OperationTypeAck:
+				err = repo.UpdatePacketAckTx(ctx, tr.Key(), tx)
+			case v2.OperationTypeTimeout:
+				err = repo.UpdatePacketTimeoutTx(ctx, tr.Key(), tx)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, tr := range transfers {
+		if tr.ProcessingError != nil {
+			continue
+		}
+		switch op {
+		case v2.OperationTypeRecv:
+			tr.RecvTxHash, tr.RecvTxTime, tr.RecvTxRelayerAddress = &tx.Hash, &tx.Time, &tx.RelayerAddress
+		case v2.OperationTypeAck:
+			tr.AckTxHash, tr.AckTxTime, tr.AckTxRelayerAddress = &tx.Hash, &tx.Time, &tx.RelayerAddress
+		case v2.OperationTypeTimeout:
+			tr.TimeoutTxHash, tr.TimeoutTxTime, tr.TimeoutTxRelayerAddress = &tx.Hash, &tx.Time, &tx.RelayerAddress
+		}
 	}
 	return nil
 }

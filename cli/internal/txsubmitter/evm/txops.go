@@ -6,7 +6,6 @@ import (
 	"context"
 	"math/big"
 	"strings"
-	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,22 +14,17 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/service/signer"
-	"github.com/cosmos/ibc/cli/internal/store"
 )
 
 func estimateFees(ctx context.Context, eth ETHClient, opts *ChainOptions) (fee, tip *big.Int, err error) {
-	requestCtx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
-	head, err := eth.HeaderByNumber(requestCtx, nil)
-	cancel()
+	head, err := eth.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 	if head.BaseFee == nil {
 		return nil, nil, errors.New("chain must support EIP-1559")
 	}
-	requestCtx, cancel = context.WithTimeout(ctx, opts.RequestTimeout)
-	tip, err = eth.SuggestGasTipCap(requestCtx)
-	cancel()
+	tip, err = eth.SuggestGasTipCap(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -50,8 +44,6 @@ func signTransaction(
 		tx.GasTipCap().Cmp(tx.GasFeeCap()) > 0 {
 		return nil, errors.New("transaction exceeds gas or fee cap")
 	}
-	ctx, cancel := context.WithTimeout(ctx, opts.RequestTimeout)
-	defer cancel()
 	sig, err := chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes())
 	if err != nil {
 		return nil, err
@@ -70,9 +62,7 @@ func signTransaction(
 	return signed, nil
 }
 
-func broadcast(ctx context.Context, eth ETHClient, tx *types.Transaction, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+func broadcast(ctx context.Context, eth ETHClient, tx *types.Transaction) error {
 	err := eth.SendTransaction(ctx, tx)
 	if err != nil {
 		message := strings.ToLower(err.Error())
@@ -91,69 +81,32 @@ func applyMultiplier(v *big.Int, m *float64) *big.Int {
 	return out
 }
 
-func saveAttempt(
-	ctx context.Context,
-	db store.Store,
-	signed *types.Transaction,
-	a store.TxAttempt,
-	operations []store.TxOperation,
-) error {
-	raw, err := signed.MarshalBinary()
-	if err != nil {
-		return err
-	}
-	a.Hash, a.Nonce, a.SignedTx = signed.Hash().Hex(), signed.Nonce(), raw
-	_, err = store.SaveTxAttempt(ctx, db, a, operations)
-	return err
-}
-
 func (c *TxSubmitter) buildAndSignTransaction(
 	ctx context.Context,
 	destination string,
 	data []byte,
 	nonce uint64,
+	fee, tip *big.Int,
 ) (*types.Transaction, error) {
 	if !common.IsHexAddress(destination) {
 		return nil, errors.New("invalid transaction destination")
 	}
 	to := common.HexToAddress(destination)
-	requestCtx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
-	code, err := c.eth.PendingCodeAt(requestCtx, to)
-	cancel()
+	code, err := c.eth.PendingCodeAt(ctx, to)
 	if err != nil {
 		return nil, err
 	}
 	if len(code) == 0 {
 		return nil, errors.Errorf("no contract code at %s", to)
 	}
-	fee, tip, err := estimateFees(ctx, c.eth, &c.opts)
-	if err != nil {
-		return nil, err
-	}
-	requestCtx, cancel = context.WithTimeout(ctx, c.opts.RequestTimeout)
-	attempts, err := c.db.ListTxAttemptsAtNonce(requestCtx, c.chainID, c.address.Hex(), nonce)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	for _, a := range attempts {
-		var previous types.Transaction
-		if err = previous.UnmarshalBinary(a.SignedTx); err != nil {
-			return nil, err
-		}
-		fee = maxBig(fee, bump(previous.GasFeeCap()))
-		tip = maxBig(tip, bump(previous.GasTipCap()))
-	}
-	requestCtx, cancel = context.WithTimeout(ctx, c.opts.RequestTimeout)
 	// Pending state may already include the transaction this submission replaces.
 	gas, err := c.eth.EstimateGasAtBlock(
-		requestCtx,
+		ctx,
 		ethereum.CallMsg{From: c.address, To: &to, Data: data, GasFeeCap: fee, GasTipCap: tip},
 		nil,
 	)
-	cancel()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(explainRevert(err), "estimating gas")
 	}
 	return signTransaction(ctx, types.NewTx(
 		&types.DynamicFeeTx{

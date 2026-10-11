@@ -27,6 +27,7 @@ type BatchAckPacket struct {
 	route                  Route
 	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
+	storage                TxStorage
 	txSubmitter            txsubmitter.TxSubmitter
 	logger                 *slog.Logger
 }
@@ -35,6 +36,7 @@ func NewBatchAckPacket(
 	chainClients ChainClients,
 	provers Provers,
 	txBuilders TxBuilders,
+	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 	logger *slog.Logger,
@@ -68,6 +70,7 @@ func NewBatchAckPacket(
 		prover:                 prover,
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
+		storage:                storage,
 		logger:                 logger,
 	}, nil
 }
@@ -122,11 +125,17 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 		return transfers, nil
 	}
 
-	err = relayPackets(
+	submission, err := relayPackets(
 		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, p.route.SourceChainID, v2.OperationTypeAck,
+		p.route.SourceClientID, v2.OperationTypeAck,
 		proofHeight, events,
 	)
+	if submission == nil {
+		return nil, err
+	}
+	if saveErr := recordSubmission(ctx, p.storage, transfers, submission, v2.OperationTypeAck); saveErr != nil {
+		return nil, saveErr
+	}
 	if err != nil {
 		return nil, err
 	}

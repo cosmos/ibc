@@ -29,7 +29,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
-const transactionAbandonmentWindow = 5 * time.Second
+const transactionResubmissionWindow = 5 * time.Second
 
 // acceptThenFail hides the first successful broadcast response from the relayer.
 type acceptThenFail struct {
@@ -123,7 +123,7 @@ func configureTransactionRPC(t *testing.T, chainID uint64, endpoint string) func
 		for i := range cfg.Chains {
 			if cfg.Chains[i].ChainID == strconv.FormatUint(chainID, 10) {
 				cfg.Chains[i].RPC = endpoint
-				cfg.Chains[i].AbandonAfter = transactionAbandonmentWindow
+				cfg.Chains[i].ResubmitAfter = transactionResubmissionWindow
 			}
 		}
 	}
@@ -178,20 +178,16 @@ func TestTransactionRecovery_ReceiveAfterLostResponseAndRestart(t *testing.T) {
 	require.Eventually(t, func() bool {
 		fault.mu.Lock()
 		defer fault.mu.Unlock()
-		for _, tx := range fault.sends {
-			if tx.Hash() != accepted.Hash() {
-				_, _, lookupErr := client.TransactionByHash(ctx, tx.Hash())
-				if lookupErr == nil {
-					retry = tx
-					return true
-				}
+		for _, tx := range fault.sends[1:] {
+			_, _, lookupErr := client.TransactionByHash(ctx, tx.Hash())
+			if lookupErr == nil {
+				retry = tx
+				return true
 			}
 		}
 		return false
 	}, time.Until(deadline), destination.Timing().PollInterval, "restart must retry the expired transaction")
 	require.Equal(t, accepted.Nonce(), retry.Nonce())
-	require.Positive(t, retry.GasFeeCap().Cmp(accepted.GasFeeCap()))
-	require.Positive(t, retry.GasTipCap().Cmp(accepted.GasTipCap()))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

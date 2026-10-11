@@ -27,6 +27,7 @@ type BatchRecvPacket struct {
 	route                  Route
 	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
+	storage                TxStorage
 	txSubmitter            txsubmitter.TxSubmitter
 	logger                 *slog.Logger
 }
@@ -35,6 +36,7 @@ func NewBatchRecvPacket(
 	chainClients ChainClients,
 	provers Provers,
 	txBuilders TxBuilders,
+	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 	logger *slog.Logger,
@@ -70,6 +72,7 @@ func NewBatchRecvPacket(
 		prover:                 prover,
 		txBuilder:              txBuilder,
 		txSubmitter:            txSubmitter,
+		storage:                storage,
 		logger:                 logger,
 	}, nil
 }
@@ -116,11 +119,17 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 		return transfers, nil
 	}
 
-	err = relayPackets(
+	submission, err := relayPackets(
 		ctx, p.logger, p.destinationChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.DestinationClientID, p.route.SourceChainID, v2.OperationTypeRecv,
+		p.route.DestinationClientID, v2.OperationTypeRecv,
 		proofHeight, events,
 	)
+	if submission == nil {
+		return nil, err
+	}
+	if saveErr := recordSubmission(ctx, p.storage, transfers, submission, v2.OperationTypeRecv); saveErr != nil {
+		return nil, saveErr
+	}
 	if err != nil {
 		return nil, err
 	}

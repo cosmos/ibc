@@ -50,24 +50,20 @@ type PacketClearingUnresolved struct {
 	FirstSeenAt          pgtype.Timestamptz
 }
 
-type RelayerTxOperation struct {
+type PacketTxSubmission struct {
 	PacketID     int64
 	SubmissionID int64
-	Type         string
 }
 
 type RelayerTxSubmission struct {
-	ID                  int64
-	TxHash              string
-	ChainID             string
-	RelayerAddress      string
-	SubmittedAt         pgtype.Timestamptz
-	ResolvedAt          pgtype.Timestamptz
-	GasCostAmount       pgtype.Numeric
-	Status              string
-	ExecutionError      *string
-	Nonce               int64
-	SignedTx            []byte
-	ResolvedBlockNumber *int64
-	ResolvedBlockHash   *string
+	ID             int64
+	TxHash         string
+	ChainID        string
+	TxType         string
+	RelayerAddress string
+	SubmittedAt    pgtype.Timestamptz
+	ResolvedAt     pgtype.Timestamptz
+	GasCostAmount  pgtype.Numeric
+	Status         string
+	ExecutionError *string
 }

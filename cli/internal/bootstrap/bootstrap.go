@@ -27,9 +27,8 @@ type Services struct {
 	Logger  *slog.Logger
 	Server  *server.Server
 
-	Store        store.Store
-	Signers      *signer.Set
-	TxSubmitters *txsubmitter.Set
+	Store   store.Store
+	Signers *signer.Set
 
 	RelayerService  *relayer.Service
 	AttestorService *attestor.Service
@@ -99,7 +98,7 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 	}
 
 	// Transaction submitters
-	txSubmitters, err := txsubmitter.NewFromConfig(cfg, signers, db)
+	txSubmitters, err := txsubmitter.NewFromConfig(cfg, signers)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +143,6 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		Server:          srv,
 		Store:           db,
 		Signers:         signers,
-		TxSubmitters:    txSubmitters,
 		RelayerService:  relayerService,
 		AttestorService: attestorService,
 	}, nil

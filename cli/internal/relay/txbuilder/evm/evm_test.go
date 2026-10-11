@@ -146,7 +146,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("several updates in order", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 		update := v2.ClientUpdate{ClientID: clientUpdate.ClientID, Payloads: [][]byte{{0x0a}, {0x0b}}}
 		txs, err := client.BuildRelayTxs(update, items)
@@ -165,7 +165,7 @@ func TestBuildRelayTxs(t *testing.T) {
 
 	t.Run("no update needed", func(t *testing.T) {
 		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
+			{Type: v2.OperationTypeRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
 		}
 		txs, err := client.BuildRelayTxs(v2.ClientUpdate{ClientID: clientUpdate.ClientID}, items)
 		require.NoError(t, err)

@@ -143,6 +143,19 @@ func TestEVMGasSpent(t *testing.T) {
 	}
 }
 
+func TestForgetTx(t *testing.T) {
+	instruments, _ := installTestMetrics(t)
+	mined, pending := common.HexToHash("0x01"), common.HexToHash("0x02")
+	instruments.startTx("1", "wallet", mined.Hex())
+	instruments.startTx("1", "wallet", pending.Hex())
+	instruments.forgetTx("1", mined.Hex())
+	require.Len(t, instruments.txOwners, 1)
+	key := transactionKey{chainID: "1", txHash: pending.Hex()}
+	require.Contains(t, instruments.txOwners, key)
+	instruments.forgetTx("1", pending.Hex())
+	require.Empty(t, instruments.txOwners)
+}
+
 func TestGasBalance(t *testing.T) {
 	t.Run("queriesEachWalletAndReemitsCache", func(t *testing.T) {
 		// ARRANGE
