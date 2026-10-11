@@ -11,7 +11,6 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/relay/processors"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 const (
@@ -29,6 +28,8 @@ type Storage interface {
 	processors.RecvTxStorage
 	processors.AckTimeoutTxStorage
 	processors.WriteAckStorage
+	processors.TxStorage
+	processors.PacketTransactionStorage
 }
 
 // TxSubmitters resolves the tx submitter for a (chain, signer) pair.
@@ -110,6 +111,9 @@ func NewPipeline(
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, processors.NewRetryPacket(srcTxSubmitter, dstTxSubmitter, deps.Storage)), output)
+
 	// wait for the send tx's packet event to be at or before what the
 	// destination client can currently prove
 	checkSendFinality, err := processors.NewCheckSendFinality(deps.Chains, deps.Provers, route)
@@ -130,19 +134,9 @@ func NewPipeline(
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		NewProcessorMW(deps.Storage, checkTimeoutFinality), output)
 
-	output = pipeline.ProcessConcurrently(
-		ctx,
-		stageConcurrency,
-		NewProcessorMW(
-			deps.Storage,
-			processors.NewRetryPacket(srcTxSubmitter, v2.OperationTypeTimeout),
-		),
-		output,
-	)
-
 	// deliver timeouts in batches on the source chain
 	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, srcTxSubmitter, route, logger,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route, logger,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
@@ -158,12 +152,9 @@ func NewPipeline(
 		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
 	)
 
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryPacket(dstTxSubmitter, v2.OperationTypeRecv)), output)
-
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, dstTxSubmitter, route, logger,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, dstTxSubmitter, route, logger,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch recv packet processor")
@@ -197,12 +188,9 @@ func NewPipeline(
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryPacket(srcTxSubmitter, v2.OperationTypeAck)), output)
-
 	// deliver acks in batches on the source chain
 	batchAckPacket, err := processors.NewBatchAckPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, srcTxSubmitter, route, logger,
+		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route, logger,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "constructing batch ack packet processor")
@@ -217,6 +205,13 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(deps.Storage, batchAckPacket),
 	)
+
+	checkSettlementFinality, err := processors.NewCheckSettlementFinality(deps.Chains, deps.Provers, route)
+	if err != nil {
+		return nil, errors.Wrap(err, "constructing settlement finality processor")
+	}
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, checkSettlementFinality), output)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,

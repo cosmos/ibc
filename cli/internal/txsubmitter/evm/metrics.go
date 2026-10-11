@@ -117,6 +117,10 @@ func (m *instrumentation) startTx(chainID, wallet, txHash string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Bound telemetry memory when a packet loses its transaction reference.
+	if len(m.txOwners) >= 1024 {
+		return
+	}
 	m.txOwners[txKey] = walletKey
 }
 
@@ -228,4 +232,10 @@ func (w *walletMetrics) getBalance(ctx context.Context, now time.Time) (*big.Int
 	w.lastBalanceAt = now
 
 	return balance, err
+}
+
+func (m *instrumentation) forgetTx(chainID, txHash string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.txOwners, transactionKey{chainID: chainID, txHash: txHash})
 }

@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# ADR 0001: Durable EVM transaction submission
+# ADR 0001: EVM submission with packet-driven recovery
 
 - Status: Accepted
 - Date: 2026-09-23
@@ -64,76 +64,64 @@ These are compatibility checks, not a restart, reorg, throughput, or IBC packet 
 
 ## Decision
 
-Keep `internal/txsubmitter` as a durable broadcaster. The pipeline determines packet outcomes from chain state; the submitter tracks pending work and records mined transaction outcomes. Use upstream geth, the existing signers, and the existing SQLite/PostgreSQL Store.
+Use a synchronous, in-memory transaction submitter. The pipeline owns recovery by checking packet state and retrying unfinished operations. Remove the transaction journal, operation associations, `HasPending`, and the transaction reconciliation service.
 
-### Implementation boundaries
+### Responsibilities
 
-`TxSubmitter` owns synchronous submission, nonce allocation, and service startup/shutdown. A private `transactionReconciler` owns the polling loop, outcome reconciliation, and reorg recovery. Each pass receives a context; the RPC client and Store are injected so it can be tested without starting the submitter. It neither signs nor broadcasts transactions.
+- `TxSubmitter.Submit(ctx, intent)` selects a nonce, estimates fees and gas, signs, and attempts broadcast. An account mutex serializes submissions. It returns the attempted transaction's hash, submission time, and relayer address, including when broadcast returns an error.
+- The pipeline saves that reference in the packet record and calls `ShouldRetry` on subsequent dispatches. A successful receipt permits progress, a failed receipt permits retry immediately, and a missing receipt permits retry after `resubmitAfter`. RPC errors leave the reference intact.
+- The pipeline clears recorded transactions that disappear before finality. Clearing a receive also clears its synchronous write acknowledgement. Source send, destination write acknowledgement, and source settlement checks use the route's provable height before progressing or completing the packet.
 
-`evm.go` contains submission and nonce allocation; `reconciler.go` contains chain observations and recovery. Both components use `ETHClient`; only the submitter uses `signer.Signer`. `txops.go` contains transaction construction, fee estimation, signing, attempt persistence, and broadcasting. Submission and reconciliation use the Store directly. The reconciler loads pending attempts grouped by nonce. Attempts and operation associations are saved atomically before broadcasting. Transaction lifecycle metrics are deferred; existing gas metrics remain.
+Use one active relayer per chain/signer account, with distinct signer addresses. Signers must be dedicated to relaying: stalled-nonce recovery can replace external submissions made with the same key.
 
-### Ownership and API
+### Nonce selection
 
-One relayer instance owns each chain/signer account. Configured signers have unique addresses. Concurrent routes share that account's submitter and lock.
+Keep the next allocated nonce, the lowest unmined nonce, when that nonce was first observed, and its latest attempted fee caps in memory.
 
-- `Submit(ctx, intent) error` synchronously selects a nonce, estimates fees and gas, signs, journals, and attempts broadcast. It returns no transaction hash or submission ID.
-- `HasPending(ctx, operation) (bool, error)` queries pending journal entries for the packet and operation type. Unsigned work is not reported. Repeated and overlapping submissions are accepted at distinct nonces.
-- The pipeline checks chain state before retrying. Pending work waits; otherwise the pipeline rebuilds a transaction if the packet still needs work. Neither broadcast acceptance nor nonce consumption establishes packet completion.
+For each submission, under the account mutex:
 
-There is no internal submission queue, operation deduplication, unsigned reservation table, or second in-memory transaction cache. An account mutex serializes submissions; polling runs independently. Cancellation is checked after acquiring the mutex, so a canceled caller can wait for another submission to finish before returning. Caller cancellation can abort preparation, but cannot revoke a journaled transaction. `Start()` creates a service context independent of callers; `Stop()` cancels it and waits for polling to stop.
+1. Read both mined and pending nonces. Failed reads prevent submission.
+2. Advance the local allocation counter to at least both RPC values. When the mined nonce changes, reset the stalled-nonce timer and fee history.
+3. If the lowest nonce has remained unmined for `resubmitAfter`, reuse it. Otherwise allocate from the local counter, within a window of 16 nonces starting at the mined nonce.
+4. Advance the counter immediately before broadcast. An error or lost response can still mean the node accepted the transaction.
 
-### Journal
+A retry can carry different packet work from the original transaction. Reusing a nonce only happens when new or retried work reaches `Submit`; there is no background rebroadcasting, cancellation transaction, or empty self-transfer. A nonce gap with no retryable work needs operator intervention.
 
-Save each signed attempt and its operation associations atomically before broadcast. Retain signed bytes, hash, nonce, submission time and state. Attempts begin `PENDING`. A canonical mined receipt identifies a `CONFIRMED` or `FAILED` attempt; the other attempts at that nonce become `REPLACED` in the same update. `CONFIRMED` means successful mined execution, not finality. If the mined nonce has advanced but all known receipts are missing, mark the attempts `CONSUMED` with an unknown execution outcome. Persist the number and hash of the block used to observe nonce consumption with every resolved outcome, including `CONSUMED`. Older signed attempts remain available for diagnosis; no separate winning hash or provisional receipt is persisted.
+### Fees and request bounds
 
-`relayer_tx_operations` stores each attempt's packet references and operation types. A transaction may contain multiple types. A pipeline retry carries the operations included in its rebuilt batch. Pending checks match the packet and type against pending attempts.
+Estimate gas against mined state. Pending state may already include the operation being replaced and make an idempotent relay look cheaper than its actual execution.
 
-A failed journal write prevents broadcast. An uncertain commit is recovered by querying the journal before the next allocation. Broadcast errors retain signed work and its associations. The pipeline retries it after expiry if chain state still requires the operation.
+Use current fee estimates. When reusing the lowest nonce with known fees, increase both fee caps by at least 20% and one wei, taking the current estimate if higher. A node's underpriced response also causes an immediate increase and another attempt at the same nonce. Limit a submission to eight broadcast attempts and a ten-second context covering RPC, signing, and broadcast after acquiring the mutex. Enforce gas and fee caps before signing.
 
-### Submission and nonce allocation
+Retain attempted fees for the lowest nonce across calls so repeated underpriced responses can make progress. Also increase fees after a stall even if the node accepted the previous broadcast: acceptance does not guarantee inclusion. An accepted replacement restarts the stalled-nonce timer.
 
-Under the account lock:
+### Packet retries and restart
 
-1. Query the mined account nonce and distinct journaled nonces at or above it, excluding abandoned attempts. Resolved attempts retain ownership until polling can reopen them after a reorg.
-2. Select the first unowned nonce at or above the mined nonce. Both reads must succeed. Do not use the node's pending nonce or depend on a previous polling pass.
-3. Bound the selected nonce to a window of 16 nonces starting at the mined nonce. This permits filling holes below later journal entries without an extra capacity exception. Mined entries awaiting receipt reconciliation do not occupy the allocation window.
-4. Estimate fees. If this nonce has prior attempts, raise both fee caps above their highest values by at least 20% and one wei, using current estimates if higher. Estimate gas against mined state for the rebuilt call, sign, and commit the attempt and operations.
-5. Attempt broadcast and return. After a successful journal commit, cancellation or a broadcast error leaves the attempt pending until mining is observed or expiry permits a pipeline retry.
+Save the attempted hash, submission time, and relayer address in the batch's packet records atomically after submission. Preparation failures return no reference and can retry on the next dispatch. A crash before saving leaves packet work retryable; chain checks recover any completed operation, and nonce recovery handles a broadcast transaction that remains stuck. The submitter does not persist signed bytes or packet associations.
 
-The window limits how far new submissions run ahead of mining. Receipt lookup failures can leave additional mined entries pending. Reorgs can leave unresolved entries outside the window; retain those entries and continue recovery.
+An error from `Submit` does not establish whether broadcast succeeded. The next dispatch checks chain state before retrying. Concurrent checks can still produce redundant relays; router packet semantics provide idempotency.
 
-### Recovery
+After restart, packet records and saved submission references remain, but nonce allocation, observed age, signed bytes, and fee history do not. Initialize allocation from the node and begin a new grace period for pending work. Once packet retry is allowed, a rebuilt submission can reuse a nonce immediately if the node has forgotten its transaction. Underpriced responses recover unknown replacement fees through bounded increases.
 
-Each polling pass first abandons attempts older than `abandonAfter` (15 minutes by default), then selects a mined block and reads the account nonce at its hash with `requireCanonical: true`. It checks resolved attempts at or above that nonce for reorgs, then loads pending attempts and abandoned attempts whose nonces have been consumed. Receipt checks use RPC-reported block hashes because geth's computed header hash differs from Besu QBFT hashes. Receipts newer than the selected block cannot resolve an outcome in that pass.
+### Configuration and tradeoffs
 
-- **Nonce below the mined nonce:** check known attempts for a canonical mined receipt and record the outcome. RPC errors or invalid receipts leave work pending for retry unless another attempt has a valid winning receipt. If all attempts return receipt-not-found, resolve to `CONSUMED`. Each resolved outcome permits the pipeline to recheck packet state.
-- **Unmined nonce:** leave the attempt pending. Polling neither rebroadcasts nor reprices it.
+Expose `resubmitAfter` (15 minutes) and `maxFeePerGas` (500 gwei) under each chain's EVM override. The same interval controls packet resubmission and lowest-nonce reuse; their timers start at different observations, so recovery can take more than one interval. Existing fee multipliers remain supported. Maximum gas is 10 million and the in-flight nonce window is 16.
 
-Expiry runs before chain queries so RPC failures cannot prevent abandonment. `HasPending` and nonce allocation only read the resulting journal state. Expiry releases nonce and operation ownership so the pipeline can recheck packet state and rebuild unfinished work. Restart does not reset an attempt's deadline. Retain signed bytes and associations: abandoned attempts can still mine, and are included in receipt reconciliation when the nonce is consumed. A retry starts a new window and can change the payload, batch composition, and gas limit. It must still exceed prior fees when reusing a nonce. Saved but unbroadcast work follows the same expiry policy.
+This design accepts:
 
-Reopen a resolved transaction when its nonce is at or above the observed mined nonce and the selected block is at least as high as the saved resolution block. Nonces cannot decrease along the same chain, so these observations establish a reorg without querying the old block's hash. Older block observations leave the outcome resolved. Recheck the selected block before resolving an outcome; if it has changed, retry on a later pass. Reopening can temporarily mark an already mined transaction pending if the chain changes during the pass; the next pass resolves it again.
+- No durable transaction outcome history or exact recovery of original signed bytes.
+- Restart resets nonce age and fee progress; frequent restarts can postpone recovery.
+- Duplicate transactions and additional gas costs. A later retry can displace a different relay operation; that packet remains retryable.
+- A fee cap, depleted balance, repeated RPC error, or permanently invalid rebuilt payload can require operator intervention. Expiry does not fix those causes.
+- Trust in the configured RPC view. Pending state is node-local; lagging or inconsistent endpoints can cause unnecessary retries.
+- No recovery from a violation of the route's finality assumption after terminal packet completion.
 
-Reopening atomically clears the saved resolution block and resolution timestamp while preserving signed bytes and packet associations. In the same transaction, clear the affected packet operation’s recorded transaction and return its packet to `PENDING`; clearing a receive also clears its synchronous write acknowledgement. This allows retries even for packets previously marked complete. The update matches the previously read resolution block so it cannot overwrite a newer resolution. The pipeline waits for expiry before rebuilding and retrying reopened work. It works across restarts even when no attempts were pending.
-
-A shorter replacement chain must reach the saved resolution height before recovery resumes. The submitter trusts its RPC's canonical chain view; it does not establish agreement between endpoints on competing forks. It does not revise resolved outcomes if another transaction has already consumed the same nonce on the new chain. Packet reconciliation and proof finality remain with the relay and attestation layers.
-
-Polling can miss newly inserted attempts until the next pass. Reserving non-abandoned journaled nonces keeps allocation independent of concurrent resolution and reopening. No additional lock or persisted state is needed.
-
-Receipt lookups and outcome persistence share a bounded request context per nonce. A failed receipt lookup does not prevent processing later nonce groups. Gas telemetry uses the winning receipt after the outcome is saved. Gas accounting can undercount when receipts are unavailable or the process exits between persistence and telemetry; reorg recovery can count gas again after re-inclusion. These metrics are not a billing ledger.
-
-### Policies and accepted tradeoffs
-
-- Bound RPC and signer calls to 10 seconds. Poll every 3 seconds. Default `abandonAfter` to 15 minutes; recovery E2Es override it to exercise expiry without long waits.
-- Increase both fee caps by at least 20% and one wei, using current estimates if higher. Enforce the maximum fee and gas limits. Historical fees remain a lower bound after abandonment. Cap exhaustion or insufficient funds can therefore block new submissions at that nonce until an operator addresses it; falling network estimates alone do not reset that bound.
-- Expose only `maxFeePerGas` and `abandonAfter` as new YAML settings. Resolve transaction outcomes from mined state without waiting for finality or additional blocks.
-- Accept occasional redundant relays and their gas cost when concurrent checks race. Router packet semantics provide idempotency; the submitter does not promise exactly-once execution.
-- New relay work may replace an external transaction at an unowned nonce. Dedicated keys avoid this conflict. Do not generate cancellation transactions or self-transfers. Abandonment releases higher pending operations for the pipeline to rebuild at an unowned gap. A gap without retryable packet work still requires operator recovery. Abandonment alone cannot fix a rebuilt payload that hits the same permanent rejection.
-- Use the journal for restart recovery and packet records to rebuild unsigned work. Do not support legacy transaction records, multiple active processes sharing a signer, or recovery from lost journal data without operator reconciliation.
+Existing wallet and gas metrics remain best-effort telemetry. `ShouldRetry` accounts for gas when it finds a receipt and forgets missing transactions when their retry interval expires. In-memory tracking is bounded and is not an accounting ledger.
 
 ## Validation
 
-Tests must cover atomic persistence, uncertain commits and broadcasts, concurrent nonce allocation, nonce gaps/window limits, restart, same-nonce repricing, fee-cap exhaustion, older attempts winning, reverts, missing or noncanonical receipts, and reorgs before and after resolution, including recovery after restart and allocation before reopening. Block observations older than the saved resolution height must not reopen resolved outcomes. If the chain changes during reopening, a later pass must recover the correct state. Pending checks must survive restart and distinguish operation types. Abandonment must expire attempts during polling even if chain queries fail, survive restart, release operation ownership, preserve fee history across retries, and still recognize an abandoned attempt that mines later. Reconciliation must never broadcast. Outcome resolution must never write packet transaction hashes.
+Cover concurrent allocation, stalled nonces at capacity, unknown gaps after restart, lost broadcast responses, accepted-but-unmined transactions, underpriced replacement retries, fee caps, signer deadlines, mined failures, and reorgs before finality. Packet submission references must persist in SQLite and PostgreSQL and clear when their transactions fail or expire.
 
-Run journal tests against SQLite and PostgreSQL, race tests over submission and polling, and the real receive/acknowledgement/timeout recovery E2Es. Load/soak qualification and independent security review remain release readiness work.
+Run real receive, acknowledgement, timeout, restart, crash-before-broadcast, and reorg recovery E2Es with a short retry interval. Keep load/soak qualification and independent security review as release readiness work. Simulation-failure classification and individual-packet fallback remain deferred.
 
-Simulation-failure classification, individual-packet fallback, a general pipeline redesign, and deployment-tool reuse are deferred. See the [recovery runbook](../transaction-submission.md) for operator procedures and metrics.
+See the [recovery runbook](../transaction-submission.md) for operator procedures.

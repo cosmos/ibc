@@ -25,6 +25,7 @@ type BatchTimeoutPacket struct {
 	route             Route
 	prover            prover.Prover
 	txBuilder         txbuilder.TxBuilder
+	storage           TxStorage
 	txSubmitter       txsubmitter.TxSubmitter
 	logger            *slog.Logger
 }
@@ -33,6 +34,7 @@ func NewBatchTimeoutPacket(
 	chainClients ChainClients,
 	provers Provers,
 	txBuilders TxBuilders,
+	storage TxStorage,
 	txSubmitter txsubmitter.TxSubmitter,
 	route Route,
 	logger *slog.Logger,
@@ -60,6 +62,7 @@ func NewBatchTimeoutPacket(
 		prover:            prover,
 		txBuilder:         txBuilder,
 		txSubmitter:       txSubmitter,
+		storage:           storage,
 		logger:            logger,
 	}, nil
 }
@@ -111,11 +114,17 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 		return transfers, nil
 	}
 
-	err = relayPackets(
+	submission, err := relayPackets(
 		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, p.route.SourceChainID, v2.OperationTypeTimeout,
+		p.route.SourceClientID, v2.OperationTypeTimeout,
 		proofHeight, events,
 	)
+	if submission == nil {
+		return nil, err
+	}
+	if saveErr := recordSubmission(ctx, p.storage, transfers, submission, v2.OperationTypeTimeout); saveErr != nil {
+		return nil, saveErr
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ package processors
 
 import (
 	"context"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -12,63 +13,79 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// ErrSubmissionPending leaves the packet dispatchable while its submission is reconciled.
-var ErrSubmissionPending = errors.New("waiting for packet submission or chain reconciliation")
-
-// RetryPacket checks submission ownership before the packet enters a batch.
-type RetryPacket struct {
-	submitter     txsubmitter.TxSubmitter
-	operationType v2.OperationType
+// PacketTransactionStorage clears failed or expired relay transactions.
+type PacketTransactionStorage interface {
+	ClearPacketRecvTx(context.Context, store.PacketKey) error
+	ClearPacketAckTx(context.Context, store.PacketKey) error
+	ClearPacketTimeoutTx(context.Context, store.PacketKey) error
 }
 
-func NewRetryPacket(s txsubmitter.TxSubmitter, operationType v2.OperationType) RetryPacket {
-	return RetryPacket{submitter: s, operationType: operationType}
+// ErrSubmissionPending leaves the packet dispatchable while waiting for a transaction.
+var ErrSubmissionPending = errors.New("waiting for packet submission or chain reconciliation")
+
+// RetryPacket clears failed or expired transactions before another relay attempt.
+type RetryPacket struct {
+	source, destination txsubmitter.TxSubmitter
+	storage             PacketTransactionStorage
+}
+
+func NewRetryPacket(source, destination txsubmitter.TxSubmitter, storage PacketTransactionStorage) RetryPacket {
+	return RetryPacket{source: source, destination: destination, storage: storage}
 }
 
 func (p RetryPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	op := v2.OperationMetadata{
-		SourceChainID:  tr.SourceChainID,
-		SourceClientID: tr.PacketSourceClientID,
-		Sequence:       tr.PacketSequenceNumber,
-		Type:           p.operationType,
+	observations := []struct {
+		hash      *string
+		sentAt    *time.Time
+		submitter txsubmitter.TxSubmitter
+		clear     func(context.Context, store.PacketKey) error
+		reset     func()
+	}{
+		{tr.RecvTxHash, tr.RecvTxTime, p.destination, p.storage.ClearPacketRecvTx, func() {
+			tr.RecvTxHash, tr.RecvTxTime, tr.RecvTxRelayerAddress = nil, nil, nil
+			tr.WriteAckTxHash, tr.WriteAckTxTime, tr.WriteAckStatus = nil, nil, nil
+			tr.WriteAckTxFinalizedTime = nil
+		}},
+		{tr.AckTxHash, tr.AckTxTime, p.source, p.storage.ClearPacketAckTx, func() {
+			tr.AckTxHash, tr.AckTxTime, tr.AckTxRelayerAddress = nil, nil, nil
+		}},
+		{tr.TimeoutTxHash, tr.TimeoutTxTime, p.source, p.storage.ClearPacketTimeoutTx, func() {
+			tr.TimeoutTxHash, tr.TimeoutTxTime, tr.TimeoutTxRelayerAddress = nil, nil, nil
+		}},
 	}
-	pending, err := p.submitter.HasPending(ctx, op)
-	if err != nil {
-		return nil, errors.Wrap(err, "checking packet submission")
-	}
-	if pending {
-		return nil, ErrSubmissionPending
+	for _, observation := range observations {
+		if observation.hash == nil {
+			continue
+		}
+		if observation.sentAt == nil {
+			return nil, errors.New("recorded transaction has no submission time")
+		}
+		retry, err := observation.submitter.ShouldRetry(ctx, *observation.hash, *observation.sentAt)
+		if errors.Is(err, v2.ErrTxNotFound) {
+			return nil, ErrSubmissionPending
+		}
+		if err != nil {
+			return nil, err
+		}
+		if retry {
+			if err = observation.clear(ctx, tr.Key()); err != nil {
+				return nil, err
+			}
+			observation.reset()
+			return nil, ErrSubmissionPending
+		}
 	}
 	return tr, nil
 }
 
 func (p RetryPacket) ShouldProcess(tr *Transfer) bool {
-	switch p.operationType {
-	case v2.OperationTypeRecv:
-		return tr.WriteAckTxHash == nil && tr.AckTxHash == nil && tr.TimeoutTxHash == nil &&
-			(!tr.IsTimedOut() || tr.RecvTxHash != nil)
-	case v2.OperationTypeAck:
-		return tr.WriteAckTxHash != nil && tr.TimeoutTxHash == nil
-	default:
-		return tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
-	}
+	return tr.RecvTxHash != nil || tr.AckTxHash != nil || tr.TimeoutTxHash != nil
 }
+
+func (p RetryPacket) Status() store.RelayStatus { return store.RelayStatusPending }
 
 func (p RetryPacket) Cancel(tr *Transfer, err error) {
-	if errors.Is(err, ErrSubmissionPending) {
-		tr.GetLogger().Debug("Waiting for packet submission", "kind", p.operationType)
-		return
-	}
-	tr.GetLogger().Error("Checking packet submission", "kind", p.operationType, "err", err)
-}
-
-func (p RetryPacket) Status() store.RelayStatus {
-	switch p.operationType {
-	case v2.OperationTypeRecv:
-		return store.RelayStatusDeliverRecvPacket
-	case v2.OperationTypeAck:
-		return store.RelayStatusDeliverAckPacket
-	default:
-		return store.RelayStatusDeliverTimeoutPacket
+	if !errors.Is(err, ErrSubmissionPending) {
+		tr.GetLogger().Error("Checking packet transaction retries", "err", err)
 	}
 }

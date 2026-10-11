@@ -30,19 +30,6 @@ type Store interface {
 
 // Repository represents database CRUD operations.
 type Repository interface {
-	InsertTxAttempt(ctx context.Context, attempt TxAttempt) (int64, error)
-	InsertTxOperation(ctx context.Context, attemptID int64, operation TxOperation) error
-	ListTxOperations(ctx context.Context, attemptID int64) ([]TxOperation, error)
-	ListUnresolvedTxAttempts(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxAttempt, error)
-	AbandonTxAttemptsBefore(ctx context.Context, chainID, sender string, before time.Time) error
-	ListTxAttemptsAtNonce(ctx context.Context, chainID, sender string, nonce uint64) ([]TxAttempt, error)
-	ListTxNoncesFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]uint64, error)
-	ListTxResolutionsFrom(ctx context.Context, chainID, sender string, minedNonce uint64) ([]TxResolution, error)
-	ReopenTxAttempts(ctx context.Context, chainID, sender string, resolution TxResolution) error
-	GetTxAttempt(ctx context.Context, chainID, hash string) (TxAttempt, error)
-	HasPendingOperation(ctx context.Context, operation TxOperation) (bool, error)
-	ResolveTxNonce(ctx context.Context, outcome TxOutcome) error
-
 	// UpsertPacket records a packet. A new packet is inserted; an existing
 	// NOT_SELECTED packet is refreshed with the input's metadata and status,
 	// but only when the input status is NOT_SELECTED or PENDING, the latter

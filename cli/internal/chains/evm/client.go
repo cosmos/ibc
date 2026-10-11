@@ -47,6 +47,8 @@ type ETHClient interface {
 	bind.ContractBackend
 
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
+	EstimateGasAtBlock(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) (uint64, error)
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
@@ -74,7 +76,12 @@ type Client struct {
 
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	rpcClient, err := rpc.Dial(rpcURL)
+	return DialContext(context.Background(), chainID, rpcURL)
+}
+
+// DialContext connects to a metered RPC endpoint within ctx's deadline.
+func DialContext(ctx context.Context, chainID, rpcURL string) (ETHClient, error) {
+	rpcClient, err := rpc.DialContext(ctx, rpcURL)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
@@ -231,6 +238,9 @@ func (c *Client) TxHeight(ctx context.Context, rawTxHash []byte) (uint64, error)
 	txHash := common.BytesToHash(rawTxHash)
 
 	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
+	if errors.Is(err, ethereum.NotFound) {
+		return 0, v2.ErrTxNotFound
+	}
 	if err != nil {
 		return 0, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
 	}

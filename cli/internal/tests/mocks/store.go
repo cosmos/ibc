@@ -8,7 +8,6 @@ import (
 	"context"
 	"github.com/cosmos/ibc/cli/internal/store"
 	mock "github.com/stretchr/testify/mock"
-	"time"
 )
 
 // NewMockRepository creates a new instance of MockRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -36,75 +35,6 @@ type MockRepository_Expecter struct {
 
 func (_m *MockRepository) EXPECT() *MockRepository_Expecter {
 	return &MockRepository_Expecter{mock: &_m.Mock}
-}
-
-// AbandonTxAttemptsBefore provides a mock function for the type MockRepository
-func (_mock *MockRepository) AbandonTxAttemptsBefore(ctx context.Context, chainID string, sender string, before time.Time) error {
-	ret := _mock.Called(ctx, chainID, sender, before)
-
-	if len(ret) == 0 {
-		panic("no return value specified for AbandonTxAttemptsBefore")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Time) error); ok {
-		r0 = returnFunc(ctx, chainID, sender, before)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockRepository_AbandonTxAttemptsBefore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AbandonTxAttemptsBefore'
-type MockRepository_AbandonTxAttemptsBefore_Call struct {
-	*mock.Call
-}
-
-// AbandonTxAttemptsBefore is a helper method to define mock.On call
-//   - ctx context.Context
-//   - chainID string
-//   - sender string
-//   - before time.Time
-func (_e *MockRepository_Expecter) AbandonTxAttemptsBefore(ctx any, chainID any, sender any, before any) *MockRepository_AbandonTxAttemptsBefore_Call {
-	return &MockRepository_AbandonTxAttemptsBefore_Call{Call: _e.mock.On("AbandonTxAttemptsBefore", ctx, chainID, sender, before)}
-}
-
-func (_c *MockRepository_AbandonTxAttemptsBefore_Call) Run(run func(ctx context.Context, chainID string, sender string, before time.Time)) *MockRepository_AbandonTxAttemptsBefore_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 time.Time
-		if args[3] != nil {
-			arg3 = args[3].(time.Time)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_AbandonTxAttemptsBefore_Call) Return(err error) *MockRepository_AbandonTxAttemptsBefore_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockRepository_AbandonTxAttemptsBefore_Call) RunAndReturn(run func(ctx context.Context, chainID string, sender string, before time.Time) error) *MockRepository_AbandonTxAttemptsBefore_Call {
-	_c.Call.Return(run)
-	return _c
 }
 
 // ClearPacketAckTx provides a mock function for the type MockRepository
@@ -278,46 +208,46 @@ func (_c *MockRepository_ClearPacketTimeoutTx_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
-// GetTxAttempt provides a mock function for the type MockRepository
-func (_mock *MockRepository) GetTxAttempt(ctx context.Context, chainID string, hash string) (store.TxAttempt, error) {
-	ret := _mock.Called(ctx, chainID, hash)
+// GetClearingState provides a mock function for the type MockRepository
+func (_mock *MockRepository) GetClearingState(ctx context.Context, chainID string, clientID string) (store.ClearingState, error) {
+	ret := _mock.Called(ctx, chainID, clientID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetTxAttempt")
+		panic("no return value specified for GetClearingState")
 	}
 
-	var r0 store.TxAttempt
+	var r0 store.ClearingState
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (store.TxAttempt, error)); ok {
-		return returnFunc(ctx, chainID, hash)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (store.ClearingState, error)); ok {
+		return returnFunc(ctx, chainID, clientID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) store.TxAttempt); ok {
-		r0 = returnFunc(ctx, chainID, hash)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) store.ClearingState); ok {
+		r0 = returnFunc(ctx, chainID, clientID)
 	} else {
-		r0 = ret.Get(0).(store.TxAttempt)
+		r0 = ret.Get(0).(store.ClearingState)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, chainID, hash)
+		r1 = returnFunc(ctx, chainID, clientID)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockRepository_GetTxAttempt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTxAttempt'
-type MockRepository_GetTxAttempt_Call struct {
+// MockRepository_GetClearingState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetClearingState'
+type MockRepository_GetClearingState_Call struct {
 	*mock.Call
 }
 
-// GetTxAttempt is a helper method to define mock.On call
+// GetClearingState is a helper method to define mock.On call
 //   - ctx context.Context
 //   - chainID string
-//   - hash string
-func (_e *MockRepository_Expecter) GetTxAttempt(ctx any, chainID any, hash any) *MockRepository_GetTxAttempt_Call {
-	return &MockRepository_GetTxAttempt_Call{Call: _e.mock.On("GetTxAttempt", ctx, chainID, hash)}
+//   - clientID string
+func (_e *MockRepository_Expecter) GetClearingState(ctx any, chainID any, clientID any) *MockRepository_GetClearingState_Call {
+	return &MockRepository_GetClearingState_Call{Call: _e.mock.On("GetClearingState", ctx, chainID, clientID)}
 }
 
-func (_c *MockRepository_GetTxAttempt_Call) Run(run func(ctx context.Context, chainID string, hash string)) *MockRepository_GetTxAttempt_Call {
+func (_c *MockRepository_GetClearingState_Call) Run(run func(ctx context.Context, chainID string, clientID string)) *MockRepository_GetClearingState_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -340,207 +270,12 @@ func (_c *MockRepository_GetTxAttempt_Call) Run(run func(ctx context.Context, ch
 	return _c
 }
 
-func (_c *MockRepository_GetTxAttempt_Call) Return(txAttempt store.TxAttempt, err error) *MockRepository_GetTxAttempt_Call {
-	_c.Call.Return(txAttempt, err)
+func (_c *MockRepository_GetClearingState_Call) Return(clearingState store.ClearingState, err error) *MockRepository_GetClearingState_Call {
+	_c.Call.Return(clearingState, err)
 	return _c
 }
 
-func (_c *MockRepository_GetTxAttempt_Call) RunAndReturn(run func(ctx context.Context, chainID string, hash string) (store.TxAttempt, error)) *MockRepository_GetTxAttempt_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// HasPendingOperation provides a mock function for the type MockRepository
-func (_mock *MockRepository) HasPendingOperation(ctx context.Context, operation store.TxOperation) (bool, error) {
-	ret := _mock.Called(ctx, operation)
-
-	if len(ret) == 0 {
-		panic("no return value specified for HasPendingOperation")
-	}
-
-	var r0 bool
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.TxOperation) (bool, error)); ok {
-		return returnFunc(ctx, operation)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.TxOperation) bool); ok {
-		r0 = returnFunc(ctx, operation)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, store.TxOperation) error); ok {
-		r1 = returnFunc(ctx, operation)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_HasPendingOperation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HasPendingOperation'
-type MockRepository_HasPendingOperation_Call struct {
-	*mock.Call
-}
-
-// HasPendingOperation is a helper method to define mock.On call
-//   - ctx context.Context
-//   - operation store.TxOperation
-func (_e *MockRepository_Expecter) HasPendingOperation(ctx any, operation any) *MockRepository_HasPendingOperation_Call {
-	return &MockRepository_HasPendingOperation_Call{Call: _e.mock.On("HasPendingOperation", ctx, operation)}
-}
-
-func (_c *MockRepository_HasPendingOperation_Call) Run(run func(ctx context.Context, operation store.TxOperation)) *MockRepository_HasPendingOperation_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 store.TxOperation
-		if args[1] != nil {
-			arg1 = args[1].(store.TxOperation)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_HasPendingOperation_Call) Return(b bool, err error) *MockRepository_HasPendingOperation_Call {
-	_c.Call.Return(b, err)
-	return _c
-}
-
-func (_c *MockRepository_HasPendingOperation_Call) RunAndReturn(run func(ctx context.Context, operation store.TxOperation) (bool, error)) *MockRepository_HasPendingOperation_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// InsertTxAttempt provides a mock function for the type MockRepository
-func (_mock *MockRepository) InsertTxAttempt(ctx context.Context, attempt store.TxAttempt) (int64, error) {
-	ret := _mock.Called(ctx, attempt)
-
-	if len(ret) == 0 {
-		panic("no return value specified for InsertTxAttempt")
-	}
-
-	var r0 int64
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.TxAttempt) (int64, error)); ok {
-		return returnFunc(ctx, attempt)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.TxAttempt) int64); ok {
-		r0 = returnFunc(ctx, attempt)
-	} else {
-		r0 = ret.Get(0).(int64)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, store.TxAttempt) error); ok {
-		r1 = returnFunc(ctx, attempt)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_InsertTxAttempt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertTxAttempt'
-type MockRepository_InsertTxAttempt_Call struct {
-	*mock.Call
-}
-
-// InsertTxAttempt is a helper method to define mock.On call
-//   - ctx context.Context
-//   - attempt store.TxAttempt
-func (_e *MockRepository_Expecter) InsertTxAttempt(ctx any, attempt any) *MockRepository_InsertTxAttempt_Call {
-	return &MockRepository_InsertTxAttempt_Call{Call: _e.mock.On("InsertTxAttempt", ctx, attempt)}
-}
-
-func (_c *MockRepository_InsertTxAttempt_Call) Run(run func(ctx context.Context, attempt store.TxAttempt)) *MockRepository_InsertTxAttempt_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 store.TxAttempt
-		if args[1] != nil {
-			arg1 = args[1].(store.TxAttempt)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_InsertTxAttempt_Call) Return(n int64, err error) *MockRepository_InsertTxAttempt_Call {
-	_c.Call.Return(n, err)
-	return _c
-}
-
-func (_c *MockRepository_InsertTxAttempt_Call) RunAndReturn(run func(ctx context.Context, attempt store.TxAttempt) (int64, error)) *MockRepository_InsertTxAttempt_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// InsertTxOperation provides a mock function for the type MockRepository
-func (_mock *MockRepository) InsertTxOperation(ctx context.Context, attemptID int64, operation store.TxOperation) error {
-	ret := _mock.Called(ctx, attemptID, operation)
-
-	if len(ret) == 0 {
-		panic("no return value specified for InsertTxOperation")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int64, store.TxOperation) error); ok {
-		r0 = returnFunc(ctx, attemptID, operation)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockRepository_InsertTxOperation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertTxOperation'
-type MockRepository_InsertTxOperation_Call struct {
-	*mock.Call
-}
-
-// InsertTxOperation is a helper method to define mock.On call
-//   - ctx context.Context
-//   - attemptID int64
-//   - operation store.TxOperation
-func (_e *MockRepository_Expecter) InsertTxOperation(ctx any, attemptID any, operation any) *MockRepository_InsertTxOperation_Call {
-	return &MockRepository_InsertTxOperation_Call{Call: _e.mock.On("InsertTxOperation", ctx, attemptID, operation)}
-}
-
-func (_c *MockRepository_InsertTxOperation_Call) Run(run func(ctx context.Context, attemptID int64, operation store.TxOperation)) *MockRepository_InsertTxOperation_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 int64
-		if args[1] != nil {
-			arg1 = args[1].(int64)
-		}
-		var arg2 store.TxOperation
-		if args[2] != nil {
-			arg2 = args[2].(store.TxOperation)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_InsertTxOperation_Call) Return(err error) *MockRepository_InsertTxOperation_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockRepository_InsertTxOperation_Call) RunAndReturn(run func(ctx context.Context, attemptID int64, operation store.TxOperation) error) *MockRepository_InsertTxOperation_Call {
+func (_c *MockRepository_GetClearingState_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string) (store.ClearingState, error)) *MockRepository_GetClearingState_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -603,6 +338,86 @@ func (_c *MockRepository_ListDispatchablePackets_Call) Return(packets []store.Pa
 }
 
 func (_c *MockRepository_ListDispatchablePackets_Call) RunAndReturn(run func(ctx context.Context) ([]store.Packet, error)) *MockRepository_ListDispatchablePackets_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListPacketSequencesFrom provides a mock function for the type MockRepository
+func (_mock *MockRepository) ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error) {
+	ret := _mock.Called(ctx, chainID, clientID, fromSequence)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPacketSequencesFrom")
+	}
+
+	var r0 []uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) ([]uint64, error)); ok {
+		return returnFunc(ctx, chainID, clientID, fromSequence)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) []uint64); ok {
+		r0 = returnFunc(ctx, chainID, clientID, fromSequence)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]uint64)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
+		r1 = returnFunc(ctx, chainID, clientID, fromSequence)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepository_ListPacketSequencesFrom_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPacketSequencesFrom'
+type MockRepository_ListPacketSequencesFrom_Call struct {
+	*mock.Call
+}
+
+// ListPacketSequencesFrom is a helper method to define mock.On call
+//   - ctx context.Context
+//   - chainID string
+//   - clientID string
+//   - fromSequence uint64
+func (_e *MockRepository_Expecter) ListPacketSequencesFrom(ctx any, chainID any, clientID any, fromSequence any) *MockRepository_ListPacketSequencesFrom_Call {
+	return &MockRepository_ListPacketSequencesFrom_Call{Call: _e.mock.On("ListPacketSequencesFrom", ctx, chainID, clientID, fromSequence)}
+}
+
+func (_c *MockRepository_ListPacketSequencesFrom_Call) Run(run func(ctx context.Context, chainID string, clientID string, fromSequence uint64)) *MockRepository_ListPacketSequencesFrom_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_ListPacketSequencesFrom_Call) Return(uint64s []uint64, err error) *MockRepository_ListPacketSequencesFrom_Call {
+	_c.Call.Return(uint64s, err)
+	return _c
+}
+
+func (_c *MockRepository_ListPacketSequencesFrom_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)) *MockRepository_ListPacketSequencesFrom_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -755,426 +570,39 @@ func (_c *MockRepository_ListPacketsBySourceTx_Call) RunAndReturn(run func(ctx c
 	return _c
 }
 
-// ListTxAttemptsAtNonce provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListTxAttemptsAtNonce(ctx context.Context, chainID string, sender string, nonce uint64) ([]store.TxAttempt, error) {
-	ret := _mock.Called(ctx, chainID, sender, nonce)
+// SetClearingState provides a mock function for the type MockRepository
+func (_mock *MockRepository) SetClearingState(ctx context.Context, chainID string, clientID string, lastProbed uint64, delta store.UnresolvedDelta) error {
+	ret := _mock.Called(ctx, chainID, clientID, lastProbed, delta)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListTxAttemptsAtNonce")
-	}
-
-	var r0 []store.TxAttempt
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) ([]store.TxAttempt, error)); ok {
-		return returnFunc(ctx, chainID, sender, nonce)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) []store.TxAttempt); ok {
-		r0 = returnFunc(ctx, chainID, sender, nonce)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]store.TxAttempt)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
-		r1 = returnFunc(ctx, chainID, sender, nonce)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_ListTxAttemptsAtNonce_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTxAttemptsAtNonce'
-type MockRepository_ListTxAttemptsAtNonce_Call struct {
-	*mock.Call
-}
-
-// ListTxAttemptsAtNonce is a helper method to define mock.On call
-//   - ctx context.Context
-//   - chainID string
-//   - sender string
-//   - nonce uint64
-func (_e *MockRepository_Expecter) ListTxAttemptsAtNonce(ctx any, chainID any, sender any, nonce any) *MockRepository_ListTxAttemptsAtNonce_Call {
-	return &MockRepository_ListTxAttemptsAtNonce_Call{Call: _e.mock.On("ListTxAttemptsAtNonce", ctx, chainID, sender, nonce)}
-}
-
-func (_c *MockRepository_ListTxAttemptsAtNonce_Call) Run(run func(ctx context.Context, chainID string, sender string, nonce uint64)) *MockRepository_ListTxAttemptsAtNonce_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 uint64
-		if args[3] != nil {
-			arg3 = args[3].(uint64)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ListTxAttemptsAtNonce_Call) Return(txAttempts []store.TxAttempt, err error) *MockRepository_ListTxAttemptsAtNonce_Call {
-	_c.Call.Return(txAttempts, err)
-	return _c
-}
-
-func (_c *MockRepository_ListTxAttemptsAtNonce_Call) RunAndReturn(run func(ctx context.Context, chainID string, sender string, nonce uint64) ([]store.TxAttempt, error)) *MockRepository_ListTxAttemptsAtNonce_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListTxNoncesFrom provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListTxNoncesFrom(ctx context.Context, chainID string, sender string, minedNonce uint64) ([]uint64, error) {
-	ret := _mock.Called(ctx, chainID, sender, minedNonce)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListTxNoncesFrom")
-	}
-
-	var r0 []uint64
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) ([]uint64, error)); ok {
-		return returnFunc(ctx, chainID, sender, minedNonce)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) []uint64); ok {
-		r0 = returnFunc(ctx, chainID, sender, minedNonce)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]uint64)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
-		r1 = returnFunc(ctx, chainID, sender, minedNonce)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_ListTxNoncesFrom_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTxNoncesFrom'
-type MockRepository_ListTxNoncesFrom_Call struct {
-	*mock.Call
-}
-
-// ListTxNoncesFrom is a helper method to define mock.On call
-//   - ctx context.Context
-//   - chainID string
-//   - sender string
-//   - minedNonce uint64
-func (_e *MockRepository_Expecter) ListTxNoncesFrom(ctx any, chainID any, sender any, minedNonce any) *MockRepository_ListTxNoncesFrom_Call {
-	return &MockRepository_ListTxNoncesFrom_Call{Call: _e.mock.On("ListTxNoncesFrom", ctx, chainID, sender, minedNonce)}
-}
-
-func (_c *MockRepository_ListTxNoncesFrom_Call) Run(run func(ctx context.Context, chainID string, sender string, minedNonce uint64)) *MockRepository_ListTxNoncesFrom_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 uint64
-		if args[3] != nil {
-			arg3 = args[3].(uint64)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ListTxNoncesFrom_Call) Return(uint64s []uint64, err error) *MockRepository_ListTxNoncesFrom_Call {
-	_c.Call.Return(uint64s, err)
-	return _c
-}
-
-func (_c *MockRepository_ListTxNoncesFrom_Call) RunAndReturn(run func(ctx context.Context, chainID string, sender string, minedNonce uint64) ([]uint64, error)) *MockRepository_ListTxNoncesFrom_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListTxOperations provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListTxOperations(ctx context.Context, attemptID int64) ([]store.TxOperation, error) {
-	ret := _mock.Called(ctx, attemptID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListTxOperations")
-	}
-
-	var r0 []store.TxOperation
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int64) ([]store.TxOperation, error)); ok {
-		return returnFunc(ctx, attemptID)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int64) []store.TxOperation); ok {
-		r0 = returnFunc(ctx, attemptID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]store.TxOperation)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, int64) error); ok {
-		r1 = returnFunc(ctx, attemptID)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_ListTxOperations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTxOperations'
-type MockRepository_ListTxOperations_Call struct {
-	*mock.Call
-}
-
-// ListTxOperations is a helper method to define mock.On call
-//   - ctx context.Context
-//   - attemptID int64
-func (_e *MockRepository_Expecter) ListTxOperations(ctx any, attemptID any) *MockRepository_ListTxOperations_Call {
-	return &MockRepository_ListTxOperations_Call{Call: _e.mock.On("ListTxOperations", ctx, attemptID)}
-}
-
-func (_c *MockRepository_ListTxOperations_Call) Run(run func(ctx context.Context, attemptID int64)) *MockRepository_ListTxOperations_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 int64
-		if args[1] != nil {
-			arg1 = args[1].(int64)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ListTxOperations_Call) Return(txOperations []store.TxOperation, err error) *MockRepository_ListTxOperations_Call {
-	_c.Call.Return(txOperations, err)
-	return _c
-}
-
-func (_c *MockRepository_ListTxOperations_Call) RunAndReturn(run func(ctx context.Context, attemptID int64) ([]store.TxOperation, error)) *MockRepository_ListTxOperations_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListTxResolutionsFrom provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListTxResolutionsFrom(ctx context.Context, chainID string, sender string, minedNonce uint64) ([]store.TxResolution, error) {
-	ret := _mock.Called(ctx, chainID, sender, minedNonce)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListTxResolutionsFrom")
-	}
-
-	var r0 []store.TxResolution
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) ([]store.TxResolution, error)); ok {
-		return returnFunc(ctx, chainID, sender, minedNonce)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) []store.TxResolution); ok {
-		r0 = returnFunc(ctx, chainID, sender, minedNonce)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]store.TxResolution)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
-		r1 = returnFunc(ctx, chainID, sender, minedNonce)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_ListTxResolutionsFrom_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTxResolutionsFrom'
-type MockRepository_ListTxResolutionsFrom_Call struct {
-	*mock.Call
-}
-
-// ListTxResolutionsFrom is a helper method to define mock.On call
-//   - ctx context.Context
-//   - chainID string
-//   - sender string
-//   - minedNonce uint64
-func (_e *MockRepository_Expecter) ListTxResolutionsFrom(ctx any, chainID any, sender any, minedNonce any) *MockRepository_ListTxResolutionsFrom_Call {
-	return &MockRepository_ListTxResolutionsFrom_Call{Call: _e.mock.On("ListTxResolutionsFrom", ctx, chainID, sender, minedNonce)}
-}
-
-func (_c *MockRepository_ListTxResolutionsFrom_Call) Run(run func(ctx context.Context, chainID string, sender string, minedNonce uint64)) *MockRepository_ListTxResolutionsFrom_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 uint64
-		if args[3] != nil {
-			arg3 = args[3].(uint64)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ListTxResolutionsFrom_Call) Return(txResolutions []store.TxResolution, err error) *MockRepository_ListTxResolutionsFrom_Call {
-	_c.Call.Return(txResolutions, err)
-	return _c
-}
-
-func (_c *MockRepository_ListTxResolutionsFrom_Call) RunAndReturn(run func(ctx context.Context, chainID string, sender string, minedNonce uint64) ([]store.TxResolution, error)) *MockRepository_ListTxResolutionsFrom_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListUnresolvedTxAttempts provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListUnresolvedTxAttempts(ctx context.Context, chainID string, sender string, minedNonce uint64) ([]store.TxAttempt, error) {
-	ret := _mock.Called(ctx, chainID, sender, minedNonce)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListUnresolvedTxAttempts")
-	}
-
-	var r0 []store.TxAttempt
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) ([]store.TxAttempt, error)); ok {
-		return returnFunc(ctx, chainID, sender, minedNonce)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) []store.TxAttempt); ok {
-		r0 = returnFunc(ctx, chainID, sender, minedNonce)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]store.TxAttempt)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
-		r1 = returnFunc(ctx, chainID, sender, minedNonce)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRepository_ListUnresolvedTxAttempts_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUnresolvedTxAttempts'
-type MockRepository_ListUnresolvedTxAttempts_Call struct {
-	*mock.Call
-}
-
-// ListUnresolvedTxAttempts is a helper method to define mock.On call
-//   - ctx context.Context
-//   - chainID string
-//   - sender string
-//   - minedNonce uint64
-func (_e *MockRepository_Expecter) ListUnresolvedTxAttempts(ctx any, chainID any, sender any, minedNonce any) *MockRepository_ListUnresolvedTxAttempts_Call {
-	return &MockRepository_ListUnresolvedTxAttempts_Call{Call: _e.mock.On("ListUnresolvedTxAttempts", ctx, chainID, sender, minedNonce)}
-}
-
-func (_c *MockRepository_ListUnresolvedTxAttempts_Call) Run(run func(ctx context.Context, chainID string, sender string, minedNonce uint64)) *MockRepository_ListUnresolvedTxAttempts_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 uint64
-		if args[3] != nil {
-			arg3 = args[3].(uint64)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ListUnresolvedTxAttempts_Call) Return(txAttempts []store.TxAttempt, err error) *MockRepository_ListUnresolvedTxAttempts_Call {
-	_c.Call.Return(txAttempts, err)
-	return _c
-}
-
-func (_c *MockRepository_ListUnresolvedTxAttempts_Call) RunAndReturn(run func(ctx context.Context, chainID string, sender string, minedNonce uint64) ([]store.TxAttempt, error)) *MockRepository_ListUnresolvedTxAttempts_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ReopenTxAttempts provides a mock function for the type MockRepository
-func (_mock *MockRepository) ReopenTxAttempts(ctx context.Context, chainID string, sender string, resolution store.TxResolution) error {
-	ret := _mock.Called(ctx, chainID, sender, resolution)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ReopenTxAttempts")
+		panic("no return value specified for SetClearingState")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, store.TxResolution) error); ok {
-		r0 = returnFunc(ctx, chainID, sender, resolution)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64, store.UnresolvedDelta) error); ok {
+		r0 = returnFunc(ctx, chainID, clientID, lastProbed, delta)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// MockRepository_ReopenTxAttempts_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReopenTxAttempts'
-type MockRepository_ReopenTxAttempts_Call struct {
+// MockRepository_SetClearingState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetClearingState'
+type MockRepository_SetClearingState_Call struct {
 	*mock.Call
 }
 
-// ReopenTxAttempts is a helper method to define mock.On call
+// SetClearingState is a helper method to define mock.On call
 //   - ctx context.Context
 //   - chainID string
-//   - sender string
-//   - resolution store.TxResolution
-func (_e *MockRepository_Expecter) ReopenTxAttempts(ctx any, chainID any, sender any, resolution any) *MockRepository_ReopenTxAttempts_Call {
-	return &MockRepository_ReopenTxAttempts_Call{Call: _e.mock.On("ReopenTxAttempts", ctx, chainID, sender, resolution)}
+//   - clientID string
+//   - lastProbed uint64
+//   - delta store.UnresolvedDelta
+func (_e *MockRepository_Expecter) SetClearingState(ctx any, chainID any, clientID any, lastProbed any, delta any) *MockRepository_SetClearingState_Call {
+	return &MockRepository_SetClearingState_Call{Call: _e.mock.On("SetClearingState", ctx, chainID, clientID, lastProbed, delta)}
 }
 
-func (_c *MockRepository_ReopenTxAttempts_Call) Run(run func(ctx context.Context, chainID string, sender string, resolution store.TxResolution)) *MockRepository_ReopenTxAttempts_Call {
+func (_c *MockRepository_SetClearingState_Call) Run(run func(ctx context.Context, chainID string, clientID string, lastProbed uint64, delta store.UnresolvedDelta)) *MockRepository_SetClearingState_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -1188,83 +616,31 @@ func (_c *MockRepository_ReopenTxAttempts_Call) Run(run func(ctx context.Context
 		if args[2] != nil {
 			arg2 = args[2].(string)
 		}
-		var arg3 store.TxResolution
+		var arg3 uint64
 		if args[3] != nil {
-			arg3 = args[3].(store.TxResolution)
+			arg3 = args[3].(uint64)
+		}
+		var arg4 store.UnresolvedDelta
+		if args[4] != nil {
+			arg4 = args[4].(store.UnresolvedDelta)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
+			arg4,
 		)
 	})
 	return _c
 }
 
-func (_c *MockRepository_ReopenTxAttempts_Call) Return(err error) *MockRepository_ReopenTxAttempts_Call {
+func (_c *MockRepository_SetClearingState_Call) Return(err error) *MockRepository_SetClearingState_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockRepository_ReopenTxAttempts_Call) RunAndReturn(run func(ctx context.Context, chainID string, sender string, resolution store.TxResolution) error) *MockRepository_ReopenTxAttempts_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ResolveTxNonce provides a mock function for the type MockRepository
-func (_mock *MockRepository) ResolveTxNonce(ctx context.Context, outcome store.TxOutcome) error {
-	ret := _mock.Called(ctx, outcome)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ResolveTxNonce")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, store.TxOutcome) error); ok {
-		r0 = returnFunc(ctx, outcome)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockRepository_ResolveTxNonce_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ResolveTxNonce'
-type MockRepository_ResolveTxNonce_Call struct {
-	*mock.Call
-}
-
-// ResolveTxNonce is a helper method to define mock.On call
-//   - ctx context.Context
-//   - outcome store.TxOutcome
-func (_e *MockRepository_Expecter) ResolveTxNonce(ctx any, outcome any) *MockRepository_ResolveTxNonce_Call {
-	return &MockRepository_ResolveTxNonce_Call{Call: _e.mock.On("ResolveTxNonce", ctx, outcome)}
-}
-
-func (_c *MockRepository_ResolveTxNonce_Call) Run(run func(ctx context.Context, outcome store.TxOutcome)) *MockRepository_ResolveTxNonce_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 store.TxOutcome
-		if args[1] != nil {
-			arg1 = args[1].(store.TxOutcome)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockRepository_ResolveTxNonce_Call) Return(err error) *MockRepository_ResolveTxNonce_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockRepository_ResolveTxNonce_Call) RunAndReturn(run func(ctx context.Context, outcome store.TxOutcome) error) *MockRepository_ResolveTxNonce_Call {
+func (_c *MockRepository_SetClearingState_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string, lastProbed uint64, delta store.UnresolvedDelta) error) *MockRepository_SetClearingState_Call {
 	_c.Call.Return(run)
 	return _c
 }

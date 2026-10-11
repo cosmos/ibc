@@ -53,7 +53,7 @@ type RelayerChain struct {
 	ICS26Router        string
 	PacketBatchSize    int
 	PacketBatchTimeout time.Duration
-	AbandonAfter       time.Duration
+	ResubmitAfter      time.Duration
 }
 
 // RelayerClientEnd is a registered client and its endpoint relay policy.
@@ -159,8 +159,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 			PacketBatchSize:    batchSize,
 			PacketBatchTimeout: chain.PacketBatchTimeout,
 		}
-		if chain.AbandonAfter != 0 {
-			override.EVM = &relayerEVMFileConfig{AbandonAfter: chain.AbandonAfter}
+		if chain.ResubmitAfter != 0 {
+			override.EVM = &relayerEVMFileConfig{ResubmitAfter: chain.ResubmitAfter}
 		}
 		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, override)
 	}
@@ -252,7 +252,7 @@ type chainOverrideFileConfig struct {
 }
 
 type relayerEVMFileConfig struct {
-	AbandonAfter time.Duration `yaml:"abandonAfter,omitempty"`
+	ResubmitAfter time.Duration `yaml:"resubmitAfter,omitempty"`
 }
 
 type connectionFileConfig struct {

@@ -6,12 +6,12 @@ package txsubmitter
 import (
 	"context"
 	"math/big"
+	"time"
 
 	"github.com/cockroachdb/errors"
 
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
-	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter/evm"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -19,14 +19,11 @@ import (
 // TxSubmitter signs and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
-	Start() error
-	Stop() error
-
-	// Submit prepares and journals synchronously. Cancellation cannot revoke journaled work.
-	Submit(ctx context.Context, intent v2.TxIntent) error
-
-	// HasPending reports unresolved journaled work, not packet completion.
-	HasPending(ctx context.Context, operation v2.OperationMetadata) (bool, error)
+	// Submit returns the last attempted transaction even if broadcast fails.
+	// A nil submission means no broadcast was attempted.
+	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
+	// ShouldRetry reports failure or expiry; an unmined transaction returns ErrTxNotFound.
+	ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error)
 }
 
 var _ TxSubmitter = (*evm.TxSubmitter)(nil)
@@ -55,7 +52,7 @@ func (s *Set) Get(chainID, signerAlias string) (TxSubmitter, bool) {
 // the configured routes. Routes naming the same pair share a tx submitter; a
 // chain carries several when different clients on it are relayed with
 // different signers.
-func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set, error) {
+func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 	pairs := config.RelayerChainSignerPairs(cfg)
 
 	txSubmitters := make(map[config.ChainSignerPair]TxSubmitter, len(pairs))
@@ -78,15 +75,15 @@ func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set
 				if e.MaxFeePerGas != nil {
 					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
 				}
-				if e.AbandonAfter != nil {
-					opts.AbandonAfter = *e.AbandonAfter
+				if e.ResubmitAfter != nil {
+					opts.ResubmitAfter = *e.ResubmitAfter
 				}
 				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
 				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
 			}
 		}
 
-		txSubmitter, err := evm.NewFromRPC(pair.ChainID, chain.EVM.RPC, chainSigner, db, opts)
+		txSubmitter, err := evm.NewFromRPC(pair.ChainID, chain.EVM.RPC, chainSigner, opts)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating tx submitter for chain %q", pair.ChainID)
 		}
@@ -95,24 +92,4 @@ func NewFromConfig(cfg config.Config, signers *signer.Set, db store.Store) (*Set
 	}
 
 	return NewSet(txSubmitters), nil
-}
-
-// Start launches transaction recovery for each submitter.
-func (s *Set) Start() error {
-	for _, submitter := range s.txSubmitters {
-		if err := submitter.Start(); err != nil {
-			_ = s.Stop()
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Set) Stop() error {
-	for _, submitter := range s.txSubmitters {
-		if err := submitter.Stop(); err != nil {
-			return err
-		}
-	}
-	return nil
 }

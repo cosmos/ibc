@@ -2,59 +2,38 @@
 
 # EVM transaction recovery
 
-The relayer saves each signed transaction and its packet associations before attempting broadcast. `Submit` runs synchronously under an account mutex that serializes submissions. A transaction reconciler independently polls chain state and records mined outcomes and reorgs. The pipeline rebuilds and resubmits unfinished work after abandonment. A canceled caller waits to acquire the mutex before returning. Cancellation can stop preparation; once the journal commit succeeds, the attempt and its operation associations survive cancellation or a lost broadcast response.
+The submitter signs and broadcasts synchronously under an account mutex. It keeps nonce allocation and fee progress in memory, without a transaction journal or background recovery loop. The pipeline saves the attempted hash and submission time in each packet record and uses `ShouldRetry` to check its receipt. A broadcast error may still mean the node accepted the transaction.
 
-`HasPending` reports pending journaled work for a packet operation. The pipeline determines packet completion from chain state. It may retry after the journal entry is resolved or abandoned if the packet still needs work. Concurrent observations can cause redundant relays; the submitter does not deduplicate operations.
-
-Use distinct signer addresses and run one relayer instance per signer on each chain. Every submission reads the mined nonce and journal, then uses the first unowned nonce. New work can replace external pending transactions; use dedicated relayer keys.
-
-## Recovery behavior
-
-Attempts remain `PENDING` until their nonce is consumed in the latest mined state or the abandonment window expires. Reconciliation records these states:
-
-- `CONFIRMED`: a canonical mined receipt reports successful execution; this does not imply finality.
-- `FAILED`: a canonical receipt reports failed execution.
-- `REPLACED`: another journaled attempt at the same nonce has a canonical mined receipt.
-- `CONSUMED`: the mined nonce has advanced, but all known hashes return receipt-not-found. The execution outcome is unknown.
-- `ABANDONED`: unmined attempts exceeded the abandonment window. They stop reserving their nonce and packet operations.
-
-Receipt RPC errors, invalid receipts, and noncanonical receipts leave work pending for retry. Historical signed bytes and resolved statuses are retained, together with the block number and hash where nonce consumption was observed. The mined attempt is identifiable by its status; no separate winning hash or provisional receipt is stored.
-
-The reconciler does not broadcast or reprice. A retry builds a fresh transaction from current packet state, estimates gas against mined state, and increases both fee caps above prior attempts at the selected nonce. Its payload and batch composition can differ from the original.
-
-Each pending attempt expires after `abandonAfter` (15 minutes by default), measured from when it was saved. The reconciler applies expiry before querying chain state; restarts do not reset the deadline. The pipeline rechecks packet state and rebuilds unfinished work, which can fill an earlier nonce gap. Abandonment does not cancel a transaction: retained attempts may still mine and are reconciled when the mined nonce advances. Each retry is saved with its own operation associations and abandonment window. Saved but unbroadcast attempts also wait for expiry before the pipeline retries.
-
-Polling reads the account nonce at a specific canonical block hash. A resolved attempt at or above that nonce is reopened when the selected block reaches or exceeds the saved resolution height. A lower nonce at that height establishes a reorg; an older block observation leaves the attempt resolved. Reopening atomically clears the associated packet operation’s recorded transaction and makes the packet dispatchable again. Clearing a receive also clears its synchronous write acknowledgement. Recovery also runs after restart when no attempts are pending. Allocation reserves all non-abandoned journaled nonces at or above the mined nonce, including resolved attempts that polling has not yet reopened.
-
-Polling may miss a new submission until the next pass.
+Run one relayer instance per chain/signer account and use dedicated signer keys. Multiple instances sharing a key are unsupported. Recovery can replace external transactions submitted with that key.
 
 ## Configuration
 
 | Setting under `relayer.chainOverrides[].evm` | Default | Purpose |
 | --- | --- | --- |
 | `maxFeePerGas` | `500000000000` | Maximum fee per gas, in wei (500 gwei). |
-| `abandonAfter` | `15m` | How long an unfinished attempt reserves its nonce and operations before allowing a retry. |
+| `resubmitAfter` | `15m` | Missing-transaction retry interval and delay before reusing the lowest stalled nonce. |
 
-Internal defaults are 10-second request deadlines, 3-second polling, a 16-nonce allocation window, and 10 million gas per transaction. The window starts at the mined nonce. It bounds new unmined submissions while allowing gaps to be filled. Mined entries awaiting receipt reconciliation may exceed this count. Reduce `packetBatchSize` if a batch exceeds the gas limit.
+Submissions have a ten-second timeout after acquiring the account mutex, at most eight broadcast attempts, a 16-nonce window, and a 10-million gas limit. Reduce `packetBatchSize` if a batch exceeds the gas limit.
 
-Retries at a previously used nonce increase both fee caps by at least 20% and one wei, using current estimates if higher. This includes attempts whose broadcast failed. If the required increase exceeds the configured cap, submission fails before signing; abandonment does not reset the fee history. Such a nonce can remain blocked even if network fees fall.
+## Recovery behavior
 
-Reorg recovery detects nonces that become unmined again after their resolution block is replaced. A shorter replacement chain must reach the saved resolution height before recovery can resume. It does not revise resolved outcomes when another transaction has already consumed the same nonce on the new chain. Packet reconciliation and proof finality remain the responsibility of the relay and attestation layers.
+New work normally uses the highest of the local next nonce and the node's mined and pending nonces. If the lowest unmined nonce remains unchanged for `resubmitAfter`, the next submission reuses it, even when the in-flight window is full. An accepted replacement restarts that timer. There is no cancellation or self-transfer when no packet work is available.
+
+At a reused nonce, raise both fee caps above the remembered attempt, using current estimates if higher. An underpriced RPC response also triggers a bounded fee increase and retry. This covers both rejected replacements and transactions that the node accepts but does not mine. Fee increases cannot exceed the configured cap.
+
+Packet retries use current packet state and can change payload or batch composition. A successful receipt allows the pipeline to proceed; a failed receipt makes the packet retryable immediately. A missing receipt allows retry after `resubmitAfter` from submission. RPC errors retain the reference for a later check. Preparation failures leave no transaction reference and can retry on the next dispatch. The packet retry timer and nonce timer start separately; recovering an unknown gap can take more than one interval.
+
+The pipeline waits for the route's provable height before relaying a send or write acknowledgement and before completing the final acknowledgement or timeout. Recorded receive/settlement transactions that disappear before finality are cleared so work can be rebuilt. Clearing a receive also clears its write acknowledgement. Violations of the configured finality assumption after completion are outside this recovery model.
 
 ## Operator procedures
 
-- **Restart:** retain the database and signer keys. Recovery starts in the background immediately; journal read errors are logged and retried. Unfinished packet records supply work that was never signed. There is no automatic journal pruning.
-- **Signer changes:** drain journaled work before removing a signer. Keep the old key available until its work is resolved.
-- **Fee cap or insufficient funds:** restore funding or adjust the configured cap and restart. Pending work keeps its nonce until abandonment. Do not clear packet hashes or journal rows to force retry.
-- **Nonce gaps:** new relay work fills unowned nonces starting at the mined nonce. Underpriced attempts wait for abandonment and a pipeline retry with higher fees. Abandonment releases work blocked at higher nonces so the pipeline can rebuild it at the gap. Without retryable packet work, an unowned gap requires manual recovery. The submitter never creates cancellation transactions.
-- **Repeated broadcast rejection:** abandonment permits rebuilding the transaction, but does not fix an unchanged payload that violates gas limits or provider policy. Address that cause if retries keep failing.
-- **RPC or database outage:** retain unresolved work and retry after service recovery. Failed reads prevent new allocation. Receipt lookup errors delay outcome resolution but do not block new submissions. Receipt-not-found responses after mined nonce consumption resolve to `CONSUMED`.
-- **Database backup/restore:** back up the entire database consistently, including transaction and association tables. Account for SQLite WAL files. An old snapshot or lost journal requires reconciling account nonces and packet state before resuming.
-
-Legacy transaction records without signed bytes are not supported.
+- **Restart:** preserve the packet database and signer keys. Saved transaction hashes and submission times survive; nonce age and fee history reset. The nonce timer gets a fresh grace period. Frequent restarts can delay recovery. A crash before saving a hash leaves the packet available for reconstruction from chain state.
+- **Signer changes:** let outstanding packets settle before switching keys. Keep the old key available to resolve any remaining transactions.
+- **Fee cap or insufficient funds:** restore funding or review the configured cap. Higher fees cannot fix every broadcast rejection. Investigate gas limits, RPC policy, and failing calls if retries keep failing.
+- **Nonce gaps:** leave retryable work running long enough for the lowest nonce to expire. Without unfinished packet work, unblock the account manually. The relayer will not generate an empty transaction.
+- **RPC outage:** restore a consistent RPC endpoint. Failed nonce queries prevent submission; ambiguous broadcast responses are handled by checking packet state before a later retry.
+- **Database backup/restore:** back up packet records consistently, including SQLite WAL files. Restoring an older snapshot can cause redundant relay attempts. Lost packet records require packet recovery or re-ingestion; the submitter has no journal from which to reconstruct them.
 
 ## Monitoring
 
-Transaction lifecycle metrics are deferred. Use logs and the journal to inspect pending attempts, outcomes, broadcast errors, and blocked replacements. Existing gas-spent and wallet-balance metrics use `chain_id` and `wallet`; packet completion and relay-duration metrics remain in the pipeline.
-
-Gas-spent metrics use the receipt obtained during outcome resolution. Missing receipts or a restart between saving the outcome and emitting telemetry can undercount gas. Reorg recovery can count gas again when an attempt is mined again. These metrics are not an authoritative accounting ledger.
+Use packet backlog, completion and relay-duration metrics, wallet balances, and broadcast errors to identify stalled work. Existing gas-spent metrics use receipts checked by `ShouldRetry` and forget missing transactions when their retry interval expires. Tracking has bounded memory. Restarts, lost transaction references, unavailable receipts, and reorgs can cause missing or inaccurate gas accounting. These metrics are not a billing ledger.

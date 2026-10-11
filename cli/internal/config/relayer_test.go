@@ -40,7 +40,7 @@ func TestRelayerConfig(t *testing.T) {
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
 		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
 		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
-		assert.Equal(t, 15*time.Minute, *chain.EVM.AbandonAfter)
+		assert.Equal(t, 15*time.Minute, *chain.EVM.ResubmitAfter)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
 
@@ -230,17 +230,17 @@ func TestRelayerConfig(t *testing.T) {
 				name: "zero abandonment timeout",
 				patch: func(c *Config) {
 					zero := time.Duration(0)
-					c.Relayer.ChainOverrides[0].EVM.AbandonAfter = &zero
+					c.Relayer.ChainOverrides[0].EVM.ResubmitAfter = &zero
 				},
-				errContains: ".abandonAfter: must be positive",
+				errContains: ".resubmitAfter: must be positive",
 			},
 			{
 				name: "negative abandonment timeout",
 				patch: func(c *Config) {
 					negative := -time.Second
-					c.Relayer.ChainOverrides[0].EVM.AbandonAfter = &negative
+					c.Relayer.ChainOverrides[0].EVM.ResubmitAfter = &negative
 				},
-				errContains: ".abandonAfter: must be positive",
+				errContains: ".resubmitAfter: must be positive",
 			},
 			{
 				name: "client missing clientId",

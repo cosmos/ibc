@@ -8,6 +8,7 @@ import (
 	"context"
 	"github.com/cosmos/ibc/cli/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
+	"time"
 )
 
 // NewMockTxSubmitter creates a new instance of MockTxSubmitter. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -37,175 +38,104 @@ func (_m *MockTxSubmitter) EXPECT() *MockTxSubmitter_Expecter {
 	return &MockTxSubmitter_Expecter{mock: &_m.Mock}
 }
 
-// HasPending provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) HasPending(ctx context.Context, operation v2.OperationMetadata) (bool, error) {
-	ret := _mock.Called(ctx, operation)
+// ShouldRetry provides a mock function for the type MockTxSubmitter
+func (_mock *MockTxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
+	ret := _mock.Called(ctx, txHash, sentAt)
 
 	if len(ret) == 0 {
-		panic("no return value specified for HasPending")
+		panic("no return value specified for ShouldRetry")
 	}
 
 	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.OperationMetadata) (bool, error)); ok {
-		return returnFunc(ctx, operation)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) (bool, error)); ok {
+		return returnFunc(ctx, txHash, sentAt)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.OperationMetadata) bool); ok {
-		r0 = returnFunc(ctx, operation)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) bool); ok {
+		r0 = returnFunc(ctx, txHash, sentAt)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, v2.OperationMetadata) error); ok {
-		r1 = returnFunc(ctx, operation)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Time) error); ok {
+		r1 = returnFunc(ctx, txHash, sentAt)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockTxSubmitter_HasPending_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HasPending'
-type MockTxSubmitter_HasPending_Call struct {
+// MockTxSubmitter_ShouldRetry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ShouldRetry'
+type MockTxSubmitter_ShouldRetry_Call struct {
 	*mock.Call
 }
 
-// HasPending is a helper method to define mock.On call
+// ShouldRetry is a helper method to define mock.On call
 //   - ctx context.Context
-//   - operation v2.OperationMetadata
-func (_e *MockTxSubmitter_Expecter) HasPending(ctx any, operation any) *MockTxSubmitter_HasPending_Call {
-	return &MockTxSubmitter_HasPending_Call{Call: _e.mock.On("HasPending", ctx, operation)}
+//   - txHash string
+//   - sentAt time.Time
+func (_e *MockTxSubmitter_Expecter) ShouldRetry(ctx any, txHash any, sentAt any) *MockTxSubmitter_ShouldRetry_Call {
+	return &MockTxSubmitter_ShouldRetry_Call{Call: _e.mock.On("ShouldRetry", ctx, txHash, sentAt)}
 }
 
-func (_c *MockTxSubmitter_HasPending_Call) Run(run func(ctx context.Context, operation v2.OperationMetadata)) *MockTxSubmitter_HasPending_Call {
+func (_c *MockTxSubmitter_ShouldRetry_Call) Run(run func(ctx context.Context, txHash string, sentAt time.Time)) *MockTxSubmitter_ShouldRetry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 v2.OperationMetadata
+		var arg1 string
 		if args[1] != nil {
-			arg1 = args[1].(v2.OperationMetadata)
+			arg1 = args[1].(string)
+		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *MockTxSubmitter_HasPending_Call) Return(b bool, err error) *MockTxSubmitter_HasPending_Call {
+func (_c *MockTxSubmitter_ShouldRetry_Call) Return(b bool, err error) *MockTxSubmitter_ShouldRetry_Call {
 	_c.Call.Return(b, err)
 	return _c
 }
 
-func (_c *MockTxSubmitter_HasPending_Call) RunAndReturn(run func(ctx context.Context, operation v2.OperationMetadata) (bool, error)) *MockTxSubmitter_HasPending_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// Start provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) Start() error {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Start")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockTxSubmitter_Start_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Start'
-type MockTxSubmitter_Start_Call struct {
-	*mock.Call
-}
-
-// Start is a helper method to define mock.On call
-func (_e *MockTxSubmitter_Expecter) Start() *MockTxSubmitter_Start_Call {
-	return &MockTxSubmitter_Start_Call{Call: _e.mock.On("Start")}
-}
-
-func (_c *MockTxSubmitter_Start_Call) Run(run func()) *MockTxSubmitter_Start_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockTxSubmitter_Start_Call) Return(err error) *MockTxSubmitter_Start_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockTxSubmitter_Start_Call) RunAndReturn(run func() error) *MockTxSubmitter_Start_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// Stop provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) Stop() error {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Stop")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockTxSubmitter_Stop_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Stop'
-type MockTxSubmitter_Stop_Call struct {
-	*mock.Call
-}
-
-// Stop is a helper method to define mock.On call
-func (_e *MockTxSubmitter_Expecter) Stop() *MockTxSubmitter_Stop_Call {
-	return &MockTxSubmitter_Stop_Call{Call: _e.mock.On("Stop")}
-}
-
-func (_c *MockTxSubmitter_Stop_Call) Run(run func()) *MockTxSubmitter_Stop_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockTxSubmitter_Stop_Call) Return(err error) *MockTxSubmitter_Stop_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockTxSubmitter_Stop_Call) RunAndReturn(run func() error) *MockTxSubmitter_Stop_Call {
+func (_c *MockTxSubmitter_ShouldRetry_Call) RunAndReturn(run func(ctx context.Context, txHash string, sentAt time.Time) (bool, error)) *MockTxSubmitter_ShouldRetry_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Submit provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) error {
+func (_mock *MockTxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
 	ret := _mock.Called(ctx, intent)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Submit")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent) error); ok {
+	var r0 *v2.Submission
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent) (*v2.Submission, error)); ok {
+		return returnFunc(ctx, intent)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.TxIntent) *v2.Submission); ok {
 		r0 = returnFunc(ctx, intent)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v2.Submission)
+		}
 	}
-	return r0
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v2.TxIntent) error); ok {
+		r1 = returnFunc(ctx, intent)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // MockTxSubmitter_Submit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Submit'
@@ -238,12 +168,12 @@ func (_c *MockTxSubmitter_Submit_Call) Run(run func(ctx context.Context, intent 
 	return _c
 }
 
-func (_c *MockTxSubmitter_Submit_Call) Return(err error) *MockTxSubmitter_Submit_Call {
-	_c.Call.Return(err)
+func (_c *MockTxSubmitter_Submit_Call) Return(submission *v2.Submission, err error) *MockTxSubmitter_Submit_Call {
+	_c.Call.Return(submission, err)
 	return _c
 }
 
-func (_c *MockTxSubmitter_Submit_Call) RunAndReturn(run func(ctx context.Context, intent v2.TxIntent) error) *MockTxSubmitter_Submit_Call {
+func (_c *MockTxSubmitter_Submit_Call) RunAndReturn(run func(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)) *MockTxSubmitter_Submit_Call {
 	_c.Call.Return(run)
 	return _c
 }

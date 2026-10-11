@@ -12,9 +12,6 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -135,37 +132,6 @@ func recoveryClient(t *testing.T, chain *environment.Chain) *ethclient.Client {
 	return client
 }
 
-func awaitTransactionResolution(
-	ctx context.Context,
-	t *testing.T,
-	chain *environment.Chain,
-	logPath string,
-	tx *types.Transaction,
-	status string,
-) {
-	t.Helper()
-	deadline, ok := ctx.Deadline()
-	require.True(t, ok)
-	require.Eventually(t, func() bool {
-		data, err := os.ReadFile(logPath)
-		if err != nil {
-			return false
-		}
-		for line := range strings.SplitSeq(string(data), "\n") {
-			var entry struct {
-				Message string `json:"msg"`
-				Hash    string `json:"hash"`
-				Status  string `json:"status"`
-			}
-			if json.Unmarshal([]byte(line), &entry) == nil && entry.Message == "Transaction nonce resolved" &&
-				entry.Hash == tx.Hash().Hex() && entry.Status == status {
-				return true
-			}
-		}
-		return false
-	}, time.Until(deadline), chain.Timing().PollInterval, "transaction must be resolved before injecting the next fault")
-}
-
 func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 	t.Parallel()
 	spec, runtime := attestedMesh(e2etest.EVMChains(
@@ -209,7 +175,9 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 	require.ErrorIs(t, err, ethereum.NotFound)
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	replacement := fault.awaitAccepted(ctx, t, func(tx *types.Transaction) bool { return tx.Hash() != original.Hash() })
+	replacement := fault.awaitAccepted(ctx, t, func(tx *types.Transaction) bool {
+		return tx.Nonce() == original.Nonce() && tx.Hash() != original.Hash()
+	})
 	require.Equal(t, original.Nonce(), replacement.Nonce())
 	require.Equal(t, original.To(), replacement.To())
 	require.Equal(t, original.Value(), replacement.Value())
@@ -261,21 +229,19 @@ func TestTransactionRecovery_CrashBeforeBroadcast(t *testing.T) {
 	packets := batch.PacketTxs()
 	require.Len(t, packets, 3)
 	require.NoError(t, e2etest.RelayAll(ctx, relayer, packets[0]))
-	var saved *types.Transaction
+	var signed *types.Transaction
 	select {
-	case saved = <-intercepted:
+	case signed = <-intercepted:
 	case <-ctx.Done():
 		t.Fatal("no signed transaction reached the broadcast barrier")
 	}
 	require.NoError(t, relayer.Crash(ctx))
 	client := recoveryClient(t, destination)
-	_, _, err = client.TransactionByHash(ctx, saved.Hash())
-	require.ErrorIs(t, err, ethereum.NotFound, "the node must never have seen the saved transaction")
+	_, _, err = client.TransactionByHash(ctx, signed.Hash())
+	require.ErrorIs(t, err, ethereum.NotFound, "the node must never have seen the signed transaction")
 	relayer = e2etest.StartRelayer(t, driver, env)
 	broadcast := fault.awaitAccepted(ctx, t, nil)
-	require.Equal(t, saved.Nonce(), broadcast.Nonce())
-	require.Positive(t, broadcast.GasFeeCap().Cmp(saved.GasFeeCap()))
-	require.Positive(t, broadcast.GasTipCap().Cmp(saved.GasTipCap()))
+	require.Equal(t, signed.Nonce(), broadcast.Nonce())
 	for _, packet := range packets {
 		status, statusErr := e2etest.AwaitState(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, statusErr)
@@ -290,7 +256,7 @@ func TestTransactionRecovery_CrashBeforeBroadcast(t *testing.T) {
 	require.NoError(t, batch.VerifyBurned(ctx), "successful acknowledgements must not refund")
 }
 
-func TestTransactionRecovery_ReorgAfterResolution(t *testing.T) {
+func TestTransactionRecovery_ReorgBeforeFinality(t *testing.T) {
 	t.Parallel()
 	spec, runtime := attestedMesh(e2etest.EVMChains(
 		t,
@@ -316,16 +282,12 @@ func TestTransactionRecovery_ReorgAfterResolution(t *testing.T) {
 	})
 	sender, relayerSigner := e2etest.NewSigner(t), e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
-	var logPath string
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t,
 		env,
 		sender,
 		relayerSigner,
-		func(cfg *ibccli.RelayerConfig) {
-			configureTransactionRPC(t, destination.EVMChainID(), fault.server.URL)(cfg)
-			logPath = filepath.Join(filepath.Dir(cfg.DBPath), "relayer.log")
-		},
+		configureTransactionRPC(t, destination.EVMChainID(), fault.server.URL),
 		route,
 	)
 	app := e2etest.NewTransfer(t, env, deployment, sender, route)
@@ -340,7 +302,14 @@ func TestTransactionRecovery_ReorgAfterResolution(t *testing.T) {
 	receipt, err := client.TransactionReceipt(ctx, original.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
-	awaitTransactionResolution(ctx, t, destination, logPath, original, "CONFIRMED")
+	packet := transfer.PacketTx()
+	deadline, _ := ctx.Deadline()
+	require.Eventually(t, func() bool {
+		statuses, statusErr := relayer.PacketStatuses(ctx, string(packet.Source), packet.SourceTxHash)
+		return statusErr == nil && len(statuses) == 1 &&
+			statuses[0].GetRecvTx().GetTxHash() == original.Hash().Hex() &&
+			statuses[0].GetState() == relayerv2.PacketState_PACKET_STATE_PENDING
+	}, time.Until(deadline), destination.Timing().PollInterval, "receive must be recorded before the reorg")
 	require.NoError(t, transfer.VerifyCommitmentPresent(ctx))
 	require.NoError(t, relayer.Crash(ctx))
 
@@ -361,8 +330,6 @@ func TestTransactionRecovery_ReorgAfterResolution(t *testing.T) {
 	relayer = e2etest.StartRelayer(t, driver, env)
 	rebroadcast := fault.awaitAccepted(ctx, t, nil)
 	require.Equal(t, original.Nonce(), rebroadcast.Nonce())
-	require.Positive(t, rebroadcast.GasFeeCap().Cmp(original.GasFeeCap()))
-	require.Positive(t, rebroadcast.GasTipCap().Cmp(original.GasTipCap()))
 	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -403,16 +370,12 @@ func TestTransactionRecovery_RetriesMinedFailure(t *testing.T) {
 	})
 	sender, relayerSigner := e2etest.NewSigner(t), e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
-	var logPath string
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t,
 		env,
 		sender,
 		relayerSigner,
-		func(cfg *ibccli.RelayerConfig) {
-			configureTransactionRPC(t, destination.EVMChainID(), fault.server.URL)(cfg)
-			logPath = filepath.Join(filepath.Dir(cfg.DBPath), "relayer.log")
-		},
+		configureTransactionRPC(t, destination.EVMChainID(), fault.server.URL),
 		route,
 	)
 	app := e2etest.NewTransfer(t, env, deployment, sender, route)
@@ -428,7 +391,6 @@ func TestTransactionRecovery_RetriesMinedFailure(t *testing.T) {
 	require.Equal(t, types.ReceiptStatusFailed, receipt.Status)
 	require.NoError(t, transfer.VerifyReceiptAbsent(ctx))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
-	awaitTransactionResolution(ctx, t, destination, logPath, failed, "FAILED")
 	require.NoError(t, setClosed(ctx, false))
 
 	retry := fault.awaitAccepted(ctx, t, func(tx *types.Transaction) bool { return tx.Nonce() > failed.Nonce() })

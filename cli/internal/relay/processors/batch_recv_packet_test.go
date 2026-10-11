@@ -113,12 +113,16 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(nil).Once()
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		SubmittedAt: time.Now(), RelayerAddress: "0xrelayer",
+	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
 		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
+		db,
 		txSubmitter,
 		route,
 		slog.Default(),
@@ -132,7 +136,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	require.Error(t, invalid.ProcessingError)
 	require.ErrorIs(t, valid.ProcessingError, ErrSubmissionPending)
-	require.Nil(t, valid.RecvTxHash)
+	require.NotNil(t, valid.RecvTxHash)
 }
 
 // TestBatchRecvPacketToleratesPartialEventFetchFailure guards against a
@@ -207,12 +211,16 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(nil).Once()
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		SubmittedAt: time.Now(), RelayerAddress: "0xrelayer",
+	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
 		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
+		db,
 		txSubmitter,
 		route,
 		slog.Default(),
@@ -228,7 +236,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		"the transfer whose tx failed to fetch must be excluded and retried later",
 	)
 	require.ErrorIs(t, healthy.ProcessingError, ErrSubmissionPending)
-	require.Nil(t, healthy.RecvTxHash)
+	require.NotNil(t, healthy.RecvTxHash)
 }
 
 // TestBatchRecvPacketExcludesNotYetProvablePackets guards against a
@@ -309,12 +317,16 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(nil).Once()
+	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		TxHash:      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		SubmittedAt: time.Now(), RelayerAddress: "0xrelayer",
+	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
 		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
 		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
 		staticTxBuilders{route.DestinationChainID: txBuilder},
+		db,
 		txSubmitter,
 		route,
 		slog.Default(),
@@ -325,7 +337,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	require.NoError(t, err, "the batch as a whole must not fail just because one packet isn't provable yet")
 
 	require.ErrorIs(t, provable.ProcessingError, ErrSubmissionPending)
-	require.Nil(t, provable.RecvTxHash)
+	require.NotNil(t, provable.RecvTxHash)
 
 	require.Error(
 		t,
