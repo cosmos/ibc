@@ -48,9 +48,10 @@ type Config struct {
 	MaxErrorRate float64
 }
 
-// Validate rejects a Config that names an unknown phase, has a phase that
-// would send no calls, or has an error rate outside 0 to 1. A phase that
-// does not run is not checked.
+// Validate rejects a Config that names an unknown phase, has a phase whose
+// spec is not a positive duration at a positive rate sending at least one
+// call, or has an error rate outside 0 to 1. A phase that does not run is not
+// checked.
 func (c Config) Validate() error {
 	if len(c.Phases) == 0 {
 		return errors.New("no phases to run")
@@ -60,9 +61,8 @@ func (c Config) Validate() error {
 		if !ok {
 			return fmt.Errorf("unknown phase %q: want %s or %s", phase, PhasePackets, PhaseState)
 		}
-		if spec.Calls() < 1 {
-			return fmt.Errorf("the %s phase would send no calls: %d per second for %s",
-				phase, spec.RatePerSecond, spec.Duration)
+		if err := spec.Validate(); err != nil {
+			return fmt.Errorf("the %s phase: %w", phase, err)
 		}
 	}
 	// Written to reject NaN, which fails every comparison.
@@ -190,18 +190,17 @@ func runPhase(
 	name, phase string,
 	cfg Config,
 ) (*simpleload.Result, error) {
-	spec, ok := cfg.spec(phase)
-	if !ok {
-		return nil, fmt.Errorf("unknown phase %q", phase)
-	}
-	var call simpleload.Call
+	var (
+		spec simpleload.Spec
+		call simpleload.Call
+	)
 	switch phase {
 	case PhasePackets:
 		packets, err := seed(ctx, s, attestor)
 		if err != nil {
 			return nil, err
 		}
-		call = packetCall(rpc, name, packets)
+		spec, call = cfg.Packets, packetCall(rpc, name, packets)
 	case PhaseState:
 		latest, err := attestor.LatestHeight(ctx)
 		if err != nil {
@@ -210,7 +209,9 @@ func runPhase(
 		if latest == 0 {
 			return nil, errors.New("attestor reports no attestable height")
 		}
-		call = stateCall(rpc, name, latest)
+		spec, call = cfg.State, stateCall(rpc, name, latest)
+	default:
+		return nil, fmt.Errorf("unknown phase %q", phase)
 	}
 	slog.InfoContext(ctx, "attestor load phase", "phase", phase, "duration", spec.Duration,
 		"rps", spec.RatePerSecond)
@@ -329,8 +330,8 @@ func packetCall(
 		switch {
 		case err != nil:
 			return err
-		case res == nil || res.Msg.Attestation == nil:
-			return errors.New("packet attestation: got nil response")
+		case res.Msg.Attestation == nil:
+			return errors.New("packet attestation: got no attestation")
 		case res.Msg.Attestation.Height != packet.height:
 			return fmt.Errorf("packet attestation: expected height %d, got %d",
 				packet.height, res.Msg.Attestation.Height)
@@ -351,8 +352,8 @@ func stateCall(rpc attestorv2.AttestationServiceClient, attestor string, latest 
 		switch {
 		case err != nil:
 			return err
-		case res == nil || res.Msg.Attestation == nil:
-			return errors.New("state attestation: got nil response")
+		case res.Msg.Attestation == nil:
+			return errors.New("state attestation: got no attestation")
 		case res.Msg.Attestation.Height != height:
 			return fmt.Errorf("state attestation: expected height %d, got %d", height, res.Msg.Attestation.Height)
 		default:

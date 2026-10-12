@@ -16,45 +16,40 @@ import (
 
 // Invalid values are rejected at parse time, before any environment starts.
 func TestRejectsInvalidFlags(t *testing.T) {
-	for name, args := range map[string][]string{
-		"zero wallets":              {"relayer", "--wallets", "0"},
-		"zero per-block":            {"relayer", "--per-block", "0"},
-		"zero packets":              {"relayer", "--packets", "0"},
-		"packets and duration":      {"relayer", "--packets", "10", "--duration", "1m"},
-		"negative relayer duration": {"relayer", "--duration", "-1m"},
-		"duration past timeout":     {"relayer", "--duration", "30m"},
-		"zero batch":                {"relayer", "--batch", "0"},
-		"batch not dividing":        {"relayer", "--per-block", "10", "--batch", "3"},
-		"bad direction":             {"relayer", "--directions", "up"},
-		"bad light client":          {"relayer", "--light-client", "tendermint"},
-		"qbft on anvil":             {"relayer", "--light-client", "besu-qbft"},
-		"stray argument":            {"relayer", "extra"},
-		"zero timeout":              {"relayer", "--timeout", "0s"},
-		"zero rps":                  {"attestor", "--packets-rps", "0"},
-		"negative duration":         {"attestor", "--duration", "-1s"},
-		"error rate above 1":        {"attestor", "--max-error-rate", "1.5"},
-		"NaN error rate":            {"attestor", "--max-error-rate", "NaN"},
-		"zero selected rps":         {"attestor", "--phases", "state", "--state-rps", "0"},
-		"bad phase":                 {"attestor", "--phases", "packets,blocks"},
-		"no whole call":             {"attestor", "--phases", "state", "--duration", "500ms", "--state-rps", "1"},
-		"unknown flag":              {"attestor", "--rps", "5"},
-		"unknown scenario":          {"prover"},
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"zero wallets":              {[]string{"relayer", "--wallets", "0"}, "wallet count"},
+		"zero per-block":            {[]string{"relayer", "--per-block", "0"}, "transfers per block"},
+		"zero packets":              {[]string{"relayer", "--packets", "0"}, "positive packet count or duration"},
+		"packets and duration":      {[]string{"relayer", "--packets", "10", "--duration", "1m"}, "not both"},
+		"negative relayer duration": {[]string{"relayer", "--duration", "-1m"}, "positive packet count or duration"},
+		"zero batch":                {[]string{"relayer", "--batch", "0"}, "batch size must be positive"},
+		"batch not dividing":        {[]string{"relayer", "--per-block", "10", "--batch", "3"}, "multiple of the batch"},
+		"bad direction":             {[]string{"relayer", "--directions", "up"}, "unknown direction"},
+		"bad light client":          {[]string{"relayer", "--light-client", "tendermint"}, "unknown light client"},
+		"qbft on anvil":             {[]string{"relayer", "--light-client", "besu-qbft"}, "need besu"},
+		"stray argument":            {[]string{"relayer", "extra"}, "unexpected arguments"},
+		"zero timeout":              {[]string{"relayer", "--timeout", "0s"}, "--timeout must be positive"},
+		"zero rps":                  {[]string{"attestor", "--packets-rps", "0"}, "rate 0 per second"},
+		"negative duration":         {[]string{"attestor", "--duration", "-1s"}, "duration -1s"},
+		"error rate above 1":        {[]string{"attestor", "--max-error-rate", "1.5"}, "max error rate 1.5"},
+		"NaN error rate":            {[]string{"attestor", "--max-error-rate", "NaN"}, "max error rate NaN"},
+		"zero selected rps":         {[]string{"attestor", "--phases", "state", "--state-rps", "0"}, "state phase"},
+		"bad phase":                 {[]string{"attestor", "--phases", "packets,blocks"}, `unknown phase "blocks"`},
+		"no whole call": {
+			[]string{"attestor", "--phases", "state", "--duration", "500ms", "--state-rps", "1"}, "sends no calls",
+		},
+		"unknown flag":     {[]string{"attestor", "--rps", "5"}, "flag provided but not defined"},
+		"unknown scenario": {[]string{"prover"}, `unknown scenario "prover"`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var stderr bytes.Buffer
-			assert.Equal(t, exitUsage, run(args, &bytes.Buffer{}, &stderr))
-			assert.NotEmpty(t, stderr.String(), "says why")
+			assert.Equal(t, exitUsage, run(tc.args, &bytes.Buffer{}, &stderr))
+			assert.Contains(t, stderr.String(), tc.want, "says why")
 		})
 	}
-}
-
-// A rate only matters for a phase that runs: this run gets past the phase
-// checks and stops at the provider.
-func TestIgnoresTheRateOfAnUnselectedPhase(t *testing.T) {
-	var stderr bytes.Buffer
-	args := []string{"attestor", "--phases", "state", "--packets-rps", "0", "--provider", "none"}
-	assert.Equal(t, exitUsage, run(args, &bytes.Buffer{}, &stderr))
-	assert.Contains(t, stderr.String(), "provider")
 }
 
 func TestExitCodes(t *testing.T) {

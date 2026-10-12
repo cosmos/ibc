@@ -7,6 +7,7 @@ package simpleload
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -28,10 +29,25 @@ type Spec struct {
 // Calls is how many calls a full run sends.
 func (s Spec) Calls() int64 { return s.callsBy(s.Duration) }
 
+// Validate rejects a Spec that is not a positive duration at a positive
+// rate, or that would send no calls.
+func (s Spec) Validate() error {
+	switch {
+	case s.Duration <= 0:
+		return fmt.Errorf("duration %s is not positive", s.Duration)
+	case s.RatePerSecond <= 0:
+		return fmt.Errorf("rate %d per second is not positive", s.RatePerSecond)
+	case s.Calls() < 1:
+		return fmt.Errorf("%d per second for %s sends no calls", s.RatePerSecond, s.Duration)
+	}
+	return nil
+}
+
 // callsBy is how many calls are due elapsed into a run: RatePerSecond per
-// second, rounded down.
+// second, rounded down. Counting whole milliseconds keeps the product far
+// from overflow.
 func (s Spec) callsBy(elapsed time.Duration) int64 {
-	return int64(elapsed * time.Duration(s.RatePerSecond) / time.Second)
+	return int64(elapsed/time.Millisecond) * int64(s.RatePerSecond) / 1000
 }
 
 // Call is one request. Its context carries the per-call Timeout.

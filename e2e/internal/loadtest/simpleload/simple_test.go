@@ -110,3 +110,21 @@ func TestSimpleLoad(t *testing.T) {
 		assert.Contains(t, decoded, "latency")
 	})
 }
+
+func TestSpecValidate(t *testing.T) {
+	require.NoError(t, Spec{Duration: time.Second, RatePerSecond: 1}.Validate())
+	for name, spec := range map[string]Spec{
+		"zero duration":            {RatePerSecond: 10},
+		"zero rate":                {Duration: time.Second},
+		"negative duration":        {Duration: -time.Second, RatePerSecond: 10},
+		"negative duration × rate": {Duration: -time.Second, RatePerSecond: -100},
+		"no whole call":            {Duration: 500 * time.Millisecond, RatePerSecond: 1},
+	} {
+		assert.Error(t, spec.Validate(), name)
+	}
+}
+
+func TestCallsDoesNotOverflow(t *testing.T) {
+	spec := Spec{Duration: 24 * time.Hour, RatePerSecond: 1_000_000}
+	assert.Equal(t, int64(86_400_000_000), spec.Calls())
+}
