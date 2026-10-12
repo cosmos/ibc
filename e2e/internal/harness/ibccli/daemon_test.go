@@ -94,7 +94,7 @@ type fakeRelayerAPI struct {
 	// pageSize serves results a page at a time; zero returns them all at once.
 	pageSize     int
 	pageRequests int
-	limits       []uint32
+	minSequences []uint64
 }
 
 func (f *fakeRelayerAPI) Relay(
@@ -116,7 +116,7 @@ func (f *fakeRelayerAPI) Packets(
 		key = "client:" + filter.GetSourceClientId()
 	}
 	packets := f.statuses[filter.GetSourceChainId()+"/"+key]
-	f.limits = append(f.limits, req.Msg.GetLimit())
+	f.minSequences = append(f.minSequences, filter.GetMinSequenceNumber())
 
 	f.pageRequests++
 
@@ -322,12 +322,12 @@ func TestClientPacketsFollowsEveryPage(t *testing.T) {
 	}
 	relayer := testRelayer(t, api)
 
-	got, err := relayer.ClientPackets(context.Background(), "chain-b", "client-a")
+	got, err := relayer.ClientPackets(context.Background(), "chain-b", "client-a", 7)
 	require.NoError(t, err)
 	require.Len(t, got, 5, "every page must be collected")
 	require.Equal(t, 3, api.pageRequests)
-	require.Equal(t, []uint32{1000, 1000, 1000}, api.limits, "pages ask for the RPC's maximum")
+	require.Equal(t, []uint64{7, 7, 7}, api.minSequences, "every page asks from the same sequence")
 
-	_, err = relayer.ClientPackets(context.Background(), "chain-x", "client-a")
+	_, err = relayer.ClientPackets(context.Background(), "chain-x", "client-a", 0)
 	require.ErrorContains(t, err, "no configured chain id")
 }

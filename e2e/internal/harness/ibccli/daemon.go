@@ -33,8 +33,6 @@ const (
 	// Backstop: an RPC endpoint that accepts but never responds would hang an unbounded ctx forever.
 	statusHTTPTimeout = 30 * time.Second
 	killTimeout       = 5 * time.Second
-	// maxPacketsPage is the largest page the Packets RPC serves.
-	maxPacketsPage = 1000
 
 	zeroTxHash = "0x0000000000000000000000000000000000000000000000000000000000000000"
 )
@@ -52,6 +50,9 @@ type RelayerOptions struct {
 	ChainIDs map[string]string
 	// WaitPolicies maps route identifiers to their end-to-end packet wait policy.
 	WaitPolicies map[string]WaitPolicy
+	// RunID leads the relayer's OTel instance name, so the telemetry of runs
+	// that overlap stays apart.
+	RunID string
 }
 
 type Relayer struct {
@@ -87,7 +88,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.Env = processEnv
-	otelEnvApply(cmd, "relayer")
+	otelEnvApply(cmd, opts.RunID, "relayer")
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -294,24 +295,30 @@ func (d *Relayer) PacketStatuses(
 }
 
 // ClientPackets returns the relayer's status for every packet it knows sent
-// from sourceClientID on sourceChainID, most recent first.
+// from sourceClientID on sourceChainID with at least fromSequence, most recent
+// first.
 func (d *Relayer) ClientPackets(
 	ctx context.Context,
 	sourceChainID string,
 	sourceClientID string,
+	fromSequence uint64,
 ) ([]*relayerv2.PacketStatus, error) {
 	chainID, err := d.wireChainID(sourceChainID)
 	if err != nil {
 		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	return d.listPackets(ctx, &relayerv2.PacketFilter{SourceChainId: &chainID, SourceClientId: &sourceClientID})
+	return d.listPackets(ctx, &relayerv2.PacketFilter{
+		SourceChainId:     &chainID,
+		SourceClientId:    &sourceClientID,
+		MinSequenceNumber: &fromSequence,
+	})
 }
 
 // listPackets follows every page of the Packets RPC for filter. Stopping at
 // the first page would report the rest as absent, which callers read as "not
 // indexed yet" and poll on until their budget expires.
 func (d *Relayer) listPackets(ctx context.Context, filter *relayerv2.PacketFilter) ([]*relayerv2.PacketStatus, error) {
-	request := &relayerv2.PacketsRequest{Filter: filter, Limit: maxPacketsPage}
+	request := &relayerv2.PacketsRequest{Filter: filter}
 	var statuses []*relayerv2.PacketStatus
 	for {
 		response, err := d.client.Packets(ctx, connect.NewRequest(request))

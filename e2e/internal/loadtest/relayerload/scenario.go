@@ -411,7 +411,7 @@ func runDirection(
 		return packets, nil
 	}
 	list := func(ctx context.Context) ([]*relayerv2.PacketStatus, error) {
-		return s.Relayer.ClientPackets(ctx, string(route.Source), clients.SourceClientID)
+		return s.Relayer.ClientPackets(ctx, string(route.Source), clients.SourceClientID, 0)
 	}
 
 	interval := source.Timing().BlockInterval
