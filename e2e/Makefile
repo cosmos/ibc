@@ -37,8 +37,7 @@ test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, fo
 	forge build $(FORGE_BUILD_FLAGS) --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	../scripts/generate-contract-bindings.sh
 
-## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=...)
-test: _build-cli _ensure-observability-stack
+test: _build-cli _ensure-observability-stack ## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=...)
 	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
 	E2E_MODE=$(E2E_MODE) E2E_LOAD=$(E2E_LOAD) go test . -timeout 60m -parallel 4 $(E2E_FLAGS)
 
