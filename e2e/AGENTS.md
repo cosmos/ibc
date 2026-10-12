@@ -30,3 +30,9 @@ managed attestors.
 - Run `make -C e2e generate-matrix` after changing requirements or topology, and
   `make -C e2e check-matrix` to check the committed matrix. Both require Docker.
 - After a hard crash: `make -C e2e clean-dry-run`, then `make -C e2e clean` from the repository root.
+- `cmd/loadtest` is a load-test binary over the same harness (`make -C e2e run-relayer` /
+  `run-attestor`); its [README](cmd/loadtest/README.md) covers usage and design. It is not a
+  `go test` suite: unit tests cover its logic, and a change is verified by a small run
+  (`run-relayer LOADTEST_FLAGS='--packets 40 --wallets 10 --per-block 5'`, `run-attestor
+  LOADTEST_FLAGS='--duration 5s'`) followed by `docker ps --filter label=ibc-cli-e2e=true`
+  showing nothing left behind.

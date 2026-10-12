@@ -2,7 +2,8 @@
 
 # Harness Development Guide for AI Agents
 
-This internal package tree of the e2e module is the black-box harness. Its IBC CLI adapter observes the `ibc` binary only through
+This internal package tree of the e2e module is the black-box harness, used by the e2e tests and
+the load-test binary (`e2e/cmd/loadtest`). Its IBC CLI adapter observes the `ibc` binary only through
 its public wire surface — CLI commands with JSON output, config YAML, and the status API — and
 corroborates outcomes by reading chain state with its own clients.
 
@@ -14,7 +15,8 @@ corroborates outcomes by reading chain state with its own clients.
   ICS20, GMP, and IFT packets. Like all harness non-test code, it never imports `testing`: functions
   that do I/O take a `context.Context`, failures are returned as errors, files go under a
   caller-supplied directory, and started processes are returned to the caller, who stops them
-  before removing that directory and closing the Environment. E2e tests call it directly (`e2e/README.md` describes the few `testing.TB` wrappers in
+  before removing that directory and closing the Environment. E2e tests and the load-test binary
+  call it directly (`e2e/README.md` describes the few `testing.TB` wrappers in
   `e2e/internal/e2etest`).
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and

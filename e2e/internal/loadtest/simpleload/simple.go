@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Package simpleload sends calls at a fixed rate, open loop, and records
+// their outcomes and latencies.
+package simpleload
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/cosmos/ibc/e2e/internal/loadtest/stats"
+)
+
+// Timeout bounds a single call.
+const Timeout = 3 * time.Second
+
+// tick spaces the checks for calls that are due.
+const tick = 10 * time.Millisecond
+
+// Spec shapes one load run.
+type Spec struct {
+	Duration      time.Duration `json:"-"`
+	RatePerSecond int           `json:"rate_per_second"`
+}
+
+// Calls is how many calls a full run sends.
+func (s Spec) Calls() int64 { return s.callsBy(s.Duration) }
+
+// Validate rejects a Spec that is not a positive duration at a positive
+// rate, or that would send no calls.
+func (s Spec) Validate() error {
+	switch {
+	case s.Duration <= 0:
+		return fmt.Errorf("duration %s is not positive", s.Duration)
+	case s.RatePerSecond <= 0:
+		return fmt.Errorf("rate %d per second is not positive", s.RatePerSecond)
+	case s.Calls() < 1:
+		return fmt.Errorf("%d per second for %s sends no calls", s.RatePerSecond, s.Duration)
+	}
+	return nil
+}
+
+// callsBy is how many calls are due elapsed into a run: RatePerSecond per
+// second, rounded down. Counting whole milliseconds keeps the product far
+// from overflow.
+func (s Spec) callsBy(elapsed time.Duration) int64 {
+	return int64(elapsed/time.Millisecond) * int64(s.RatePerSecond) / 1000
+}
+
+// Call is one request. Its context carries the per-call Timeout.
+type Call func(ctx context.Context) error
+
+// Result counts the calls a run sent and how they ended.
+type Result struct {
+	Spec
+	// DurationMS is how long the run sent calls: Duration, or less if ctx
+	// ended first.
+	DurationMS int64 `json:"duration_ms"`
+	Sent       int64 `json:"sent"`
+	// AchievedRPS is the calls sent per second of DurationMS.
+	AchievedRPS float64 `json:"achieved_rps"`
+	Succeeded   int64   `json:"succeeded"`
+	Failed      int64   `json:"failed"`
+	TimedOut    int64   `json:"timed_out"`
+	// Latency summarizes the succeeded calls.
+	Latency    stats.Summary `json:"latency"`
+	FirstError string        `json:"first_error,omitempty"`
+}
+
+// SimpleLoad sends spec.RatePerSecond calls per second for spec.Duration,
+// each on its own goroutine however many are in flight, so a slow service
+// shows as latency and timeouts rather than as fewer calls. Every tick it
+// starts the calls due by then, so a late tick sends a burst rather than
+// fewer calls, and a full run sends exactly RatePerSecond per second. It
+// stops sending early when ctx ends. A call's Timeout context is detached
+// from ctx's cancellation: calls in flight when sending stops run to
+// completion, and SimpleLoad waits for them.
+func SimpleLoad(ctx context.Context, spec Spec, call Call) Result {
+	ticker := time.NewTicker(tick)
+	defer ticker.Stop()
+	phase := time.NewTimer(spec.Duration)
+	defer phase.Stop()
+	detached := context.WithoutCancel(ctx)
+
+	result := Result{Spec: spec}
+	var (
+		mu        sync.Mutex
+		latencies []time.Duration
+		wg        sync.WaitGroup
+	)
+	send := func() {
+		callCtx, cancel := context.WithTimeout(detached, Timeout)
+		defer cancel()
+		started := time.Now()
+		err := call(callCtx)
+		latency := time.Since(started)
+
+		mu.Lock()
+		defer mu.Unlock()
+		if err != nil && result.FirstError == "" {
+			result.FirstError = err.Error()
+		}
+		switch {
+		case err == nil:
+			result.Succeeded++
+			latencies = append(latencies, latency)
+		case errors.Is(err, context.DeadlineExceeded) || errors.Is(callCtx.Err(), context.DeadlineExceeded):
+			result.TimedOut++
+		default:
+			result.Failed++
+		}
+	}
+
+	started := time.Now()
+	total := spec.Calls()
+	sendUpTo := func(due int64) {
+		for ; result.Sent < due; result.Sent++ {
+			wg.Go(send)
+		}
+	}
+	for sending := true; sending; {
+		select {
+		case <-ctx.Done():
+			sending = false
+		case <-phase.C:
+			sendUpTo(total)
+			sending = false
+		case <-ticker.C:
+			sendUpTo(min(total, spec.callsBy(time.Since(started))))
+		}
+	}
+	elapsed := time.Since(started)
+	wg.Wait()
+	result.DurationMS = elapsed.Milliseconds()
+	result.AchievedRPS = float64(result.Sent) / elapsed.Seconds()
+	result.Latency = stats.Summarize(latencies)
+	return result
+}
