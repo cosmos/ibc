@@ -13,6 +13,12 @@ import (
 type Runtime struct {
 	Endpoints   map[EndpointBindingID]EndpointBinding
 	Authorities map[AuthorityID]EVMAuthority
+	// Observability enables OTel metrics export from the Environment's
+	// attestors and the relayers configured for it
+	// (Environment.Observability). They push to the local
+	// LGTM stack configured by cli/scripts/otel/ibc-otel.yaml; start it with
+	// `make -C cli/scripts/otel up`.
+	Observability bool
 }
 
 type EndpointBinding struct {
@@ -49,7 +55,8 @@ func (r Runtime) evmAccount(id AuthorityID) (evm.Account, error) {
 
 func (r Runtime) snapshot() Runtime {
 	return Runtime{
-		Endpoints:   maps.Clone(r.Endpoints),
-		Authorities: maps.Clone(r.Authorities),
+		Endpoints:     maps.Clone(r.Endpoints),
+		Authorities:   maps.Clone(r.Authorities),
+		Observability: r.Observability,
 	}
 }

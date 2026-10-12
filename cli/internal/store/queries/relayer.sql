@@ -139,6 +139,7 @@ AND (packet_source_client_id = sqlc.arg(source_client_id) OR sqlc.arg(source_cli
 AND (packet_destination_client_id = sqlc.arg(destination_client_id) OR sqlc.arg(destination_client_id) = '')
 AND (source_tx_hash = sqlc.arg(source_tx_hash) OR sqlc.arg(source_tx_hash) = '')
 AND (packet_sequence_number = sqlc.arg(sequence_number) OR sqlc.arg(sequence_number) = 0)
+AND packet_sequence_number >= sqlc.arg(min_sequence_number)
 AND id < sqlc.arg(before)
 ORDER BY id DESC
 LIMIT sqlc.arg(row_limit);

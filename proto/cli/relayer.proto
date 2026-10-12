@@ -83,6 +83,9 @@ message PacketFilter {
   optional PacketState state = 5;
   optional string source_tx_hash = 6;
   optional uint64 sequence_number = 7;
+  // Only packets with at least this sequence. Sequences count per source
+  // client, so pair it with source_client_id.
+  optional uint64 min_sequence_number = 8;
 }
 
 message PacketsResponse {
