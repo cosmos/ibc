@@ -60,9 +60,10 @@ directions), `--wallets 200`, and `--per-block 150`. `--duration 20m --per-block
 long, moderate run: with `--duration`, every direction sends until the duration passes,
 however many packets that takes, instead of a packet count (the two do not combine, and
 `--timeout` comes on top of the duration). `--batch N` sends N transfers per transaction through
-the IFT batch shim, so each transaction emits N packets; it must divide `--per-block`, which
-stays a count of transfers. The default `--batch 1` sends a plain `iftTransfer` from the
-wallet, without the shim. Only the selected directions' routes are deployed and relayed.
+the IFT batch shim, so each transaction emits N packets (every transaction of a batched run
+goes through the shim, including a count run's shorter last one); it must divide
+`--per-block`, which stays a count of transfers. The default `--batch 1` sends a plain
+`iftTransfer` from the wallet, without the shim. Only the selected directions' routes are deployed and relayed.
 `--light-client besu-qbft` (with `--provider besu`) joins the Chains with Besu QBFT light
 clients, which verify each other's sealed headers, instead of attested ones.
 
@@ -77,8 +78,9 @@ How a direction runs:
 2. **Pacing.** A ticker at the source Chain's block interval puts `--per-block`/`--batch`
    tokens, one per transaction, into a bucket of that size, so the offered rate is
    `--per-block` transfers per block interval, not per mined block. Tokens still unused when
-   the next tick arrives are counted, in transfers, as `backpressure` (no wallet was free to
-   send them) and discarded. With `--duration`, no token is offered once it passes, and
+   the next tick arrives are counted, in transfers and at most the packets left to claim, as
+   `backpressure` (no wallet was free to send them) and discarded. With `--duration`, no
+   transaction starts once it passes (a sender checks after taking a token), and
    transactions in flight then complete and count.
 3. **Senders.** One goroutine per wallet takes a token, claims up to `--batch` of the
    direction's packet slots (the last transaction of a count run may carry fewer), and
@@ -96,14 +98,16 @@ How a direction runs:
    least one send, the span from the first to the last of them, and the min/p50/max sends
    per such block. Managed Anvil also mines on transaction arrival, so there sends spread
    over many small blocks.
-5. **Relay sweep.** While sending runs, one loop per direction lists every packet of the
+5. **Relay sweep.** While sending runs, one loop per direction lists the packets of the
    direction's source client from the relayer's `Packets` RPC (following cursors) once per
-   poll interval (the slower Chain's block interval) and records each sent
-   packet's state. It ends when sending finished and every sent packet is terminal
+   poll interval (the slower Chain's block interval), from the oldest sent packet not yet
+   terminal (`min_sequence_number`), so a settled packet is not listed again, and records
+   each sent packet's state. It ends when sending finished and every sent packet is terminal
    (`SUCCEEDED`, `TIMED_OUT`, `REJECTED`, `RELAY_FAILED`). It gives up when relaying stalls:
-   no packet sent and none newly terminal for the route's completion budget (20 block
+   packets outstanding but none newly terminal for the route's completion budget (20 block
    intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
-   stops the direction's senders. Packets sent but not terminal when it ends are
+   stops the direction's senders. Sending is not progress, and a pause with nothing
+   outstanding is not a stall. Packets sent but not terminal when it ends are
    `unresolved`, so a direction's outcomes add up to its sent packets. If the relayer
    process exits, every direction stops at once and the run fails, reporting how it exited.
    Packets time out after 12 hours (the harness default), well past any realistic run.

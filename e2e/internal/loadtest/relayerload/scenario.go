@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/big"
 	"slices"
 	"sync"
@@ -87,9 +88,8 @@ type Config struct {
 
 // Validate rejects a Config that Run cannot run on Chains of provider: an
 // unknown direction or light client, Besu QBFT clients between other Chains,
-// both or neither of Packets and Duration, fewer packets than directions, no
-// wallets, or transfers per block that are not a positive multiple of the
-// batch.
+// both or neither of Packets and Duration, no wallets, or transfers per block
+// that are not a positive multiple of the batch.
 func (c Config) Validate(provider environment.EVMProvider) error {
 	if len(c.Directions) == 0 {
 		return errors.New("no directions")
@@ -99,8 +99,6 @@ func (c Config) Validate(provider environment.EVMProvider) error {
 		return errors.New("give a packet count or a duration, not both")
 	case c.Packets <= 0 && c.Duration <= 0:
 		return errors.New("give a positive packet count or duration")
-	case c.Packets > 0 && c.Packets < len(c.Directions):
-		return fmt.Errorf("%d packets is fewer than the %d directions", c.Packets, len(c.Directions))
 	case c.Batch <= 0:
 		return errors.New("the batch size must be positive")
 	case c.PerBlock <= 0 || c.PerBlock%c.Batch != 0:
@@ -382,36 +380,18 @@ func runDirection(
 		return err
 	}
 	amount := big.NewInt(transferAmount)
-	// A single transfer is a plain iftTransfer from the wallet's own IFT; a
-	// batch goes through the batch shim, out of the shim's.
-	send := func(ctx context.Context, wallet, n int) ([]sentPacket, error) {
-		receiver := wallets[(wallet+1)%len(wallets)].Address()
-		var results []traffic.SendResult
-		if n == 1 {
-			result, err := apps[wallet].Transfer(ctx, receiver, amount, timeout)
-			if err != nil {
-				return nil, err
-			}
-			results = []traffic.SendResult{result}
-		} else {
-			var err error
-			if results, err = apps[wallet].TransferBatch(ctx, slices.Repeat([]common.Address{receiver}, n), amount,
-				timeout); err != nil {
-				return nil, err
-			}
-		}
-		packets := make([]sentPacket, len(results))
-		for k, result := range results {
-			packet := result.PacketTx()
-			packets[k] = sentPacket{
-				key:   packetKey{clientID: packet.SourceClientID, sequence: packet.Sequence},
-				block: packet.SourceBlockNumber,
-			}
-		}
-		return packets, nil
-	}
-	list := func(ctx context.Context) ([]*relayerv2.PacketStatus, error) {
-		return s.Relayer.ClientPackets(ctx, string(route.Source), clients.SourceClientID, 0)
+	receiver := func(wallet int) common.Address { return wallets[(wallet+1)%len(wallets)].Address() }
+	send := newSend(cfg.Batch,
+		func(ctx context.Context, wallet int) (traffic.SendResult, error) {
+			return apps[wallet].Transfer(ctx, receiver(wallet), amount, timeout)
+		},
+		func(ctx context.Context, wallet, n int) ([]traffic.SendResult, error) {
+			return apps[wallet].TransferBatch(ctx, slices.Repeat([]common.Address{receiver(wallet)}, n), amount,
+				timeout)
+		},
+	)
+	list := func(ctx context.Context, fromSequence uint64) ([]*relayerv2.PacketStatus, error) {
+		return s.Relayer.ClientPackets(ctx, string(route.Source), clients.SourceClientID, fromSequence)
 	}
 
 	interval := source.Timing().BlockInterval
@@ -420,18 +400,12 @@ func runDirection(
 		"per_block", cfg.PerBlock, "batch", cfg.Batch, "wallets", len(wallets), "interval", interval, "poll", poll,
 		"stall", policy.CompletionBudget)
 
-	p := pacing{perBlock: cfg.PerBlock, batch: cfg.Batch, wallets: len(wallets)}
-	// sent holds every packet a run can send, so a slow sweep never holds
-	// up a sender: the target, or one full interval per tick of the window
-	// and the first.
-	capacity := d.Target
+	p := pacing{perBlock: cfg.PerBlock, batch: cfg.Batch, wallets: len(wallets), limit: int64(d.Target)}
 	if cfg.Duration > 0 {
-		window := time.NewTimer(cfg.Duration)
-		defer window.Stop()
-		p.window = window.C
-		capacity = cfg.PerBlock * (int(cfg.Duration/interval) + 2)
+		p.limit = math.MaxInt64
+		p.deadline = time.Now().Add(cfg.Duration)
 	}
-	sent := make(chan sentPacket, capacity)
+	sent := &inbox{}
 	var packets []*trackedPacket
 	var sweepErr error
 	var sweeping sync.WaitGroup
@@ -490,4 +464,38 @@ func runDirection(
 			stats.Summarize(sendToAck)
 	}
 	return errors.Join(problems...)
+}
+
+// newSend sends a wallet's n transfers: without batches as a plain
+// iftTransfer from the wallet's own IFT, and as a batch, even a short last
+// one, through the batch shim, out of the shim's IFT.
+func newSend(
+	batch int,
+	transfer func(ctx context.Context, wallet int) (traffic.SendResult, error),
+	transferBatch func(ctx context.Context, wallet, n int) ([]traffic.SendResult, error),
+) sendFunc {
+	return func(ctx context.Context, wallet, n int) ([]sentPacket, error) {
+		var results []traffic.SendResult
+		if batch == 1 {
+			result, err := transfer(ctx, wallet)
+			if err != nil {
+				return nil, err
+			}
+			results = []traffic.SendResult{result}
+		} else {
+			var err error
+			if results, err = transferBatch(ctx, wallet, n); err != nil {
+				return nil, err
+			}
+		}
+		packets := make([]sentPacket, len(results))
+		for k, result := range results {
+			packet := result.PacketTx()
+			packets[k] = sentPacket{
+				key:   packetKey{clientID: packet.SourceClientID, sequence: packet.Sequence},
+				block: packet.SourceBlockNumber,
+			}
+		}
+		return packets, nil
+	}
 }

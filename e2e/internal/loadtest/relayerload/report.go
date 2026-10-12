@@ -111,11 +111,10 @@ func (r *Report) WriteText(w io.Writer) error {
 	if r.DurationMS > 0 {
 		load = "sending for " + ms(r.DurationMS).String()
 	}
-	wall := time.Duration(r.WallTimeMS) * time.Millisecond
 	fmt.Fprintf(&out,
 		"\nRelayer load: %s (%s, %s clients, %s, %d wallets, %d per block interval in batches of %d): "+
 			"%d of %d sent packets succeeded in %s, %.1f packets/s\n",
-		verdict, r.Provider, r.LightClient, load, r.Wallets, r.PerBlock, r.Batch, succeeded, sent, wall,
+		verdict, r.Provider, r.LightClient, load, r.Wallets, r.PerBlock, r.Batch, succeeded, sent, ms(r.WallTimeMS),
 		r.Throughput)
 	for _, d := range r.Directions {
 		fmt.Fprintf(&out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)

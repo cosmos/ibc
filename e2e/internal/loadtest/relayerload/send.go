@@ -31,47 +31,75 @@ type sentPacket struct {
 // its receipt, and returns the packets it emitted.
 type sendFunc func(ctx context.Context, wallet, n int) ([]sentPacket, error)
 
+// inbox carries sent packets from the senders to the sweep without ever
+// holding up a sender.
+type inbox struct {
+	mu      sync.Mutex
+	packets []sentPacket
+	closed  bool
+}
+
+func (b *inbox) put(packets []sentPacket) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.packets = append(b.packets, packets...)
+}
+
+func (b *inbox) close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+}
+
+// take returns the packets put since the last take, and whether the inbox
+// was closed, so that no packet follows them.
+func (b *inbox) take() ([]sentPacket, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	packets := b.packets
+	b.packets = nil
+	return packets, b.closed
+}
+
 // pacing shapes how one direction sends.
 type pacing struct {
 	// perBlock is the transfers offered per interval, in transactions of
 	// batch transfers; batch divides it.
 	perBlock, batch int
 	wallets         int
-	// window, when not nil, ends sending when it fires.
-	window <-chan time.Time
+	// limit is the most packets to send: the target of a count run, or
+	// math.MaxInt64 to send until the deadline.
+	limit int64
+	// deadline, when not zero, ends sending: no send starts after it.
+	deadline time.Time
 }
 
-// generate sends from one sender goroutine per wallet until r.Target packets
-// are sent or, with no target, until p.window fires. Each tick of ticks opens
-// a pacing interval of p.perBlock/p.batch tokens; a sender takes a token,
-// claims up to p.batch packet slots, and sends them in one transaction, so
-// every wallet has at most one transaction in flight. A sender whose
-// transaction fails is retired and hands its slots back for another wallet
-// to send, so the target falls short only if every wallet retires. Sends in
-// flight when the window ends complete. Every sent packet goes to out, which
-// generate closes when it returns; out must have room for every packet sent
-// or be drained concurrently.
+// generate sends from one sender goroutine per wallet until p.limit packets
+// are sent or p.deadline passes. Each tick of ticks opens a pacing interval
+// of p.perBlock/p.batch tokens; a sender takes a token, claims up to p.batch
+// packet slots, and sends them in one transaction, so every wallet has at
+// most one transaction in flight. A sender whose transaction fails is
+// retired and hands its slots back for another wallet to send, so the limit
+// falls short only if every wallet retires. Sends in flight at the deadline
+// complete. Every sent packet goes to out, which generate closes when it
+// returns.
 func generate(
 	ctx context.Context,
 	ticks <-chan time.Time,
 	p pacing,
 	send sendFunc,
-	out chan<- sentPacket,
+	out *inbox,
 	r *DirectionReport,
 ) {
-	defer close(out)
+	defer out.close()
 	tokens := make(chan struct{}, p.perBlock/p.batch)
-	var claimed, sent atomic.Int64
-	target := int64(r.Target)
+	var claimed atomic.Int64
 	batch := int64(p.batch)
 	// claim takes up to a batch of the unclaimed packet slots.
 	claim := func() int64 {
 		for {
 			c := claimed.Load()
-			n := batch
-			if target > 0 {
-				n = min(batch, target-c)
-			}
+			n := min(batch, p.limit-c)
 			if n <= 0 {
 				return 0
 			}
@@ -80,8 +108,8 @@ func generate(
 			}
 		}
 	}
-	open := func() bool { return target == 0 || claimed.Load() < target }
-	exhausted := func() bool { return target > 0 && sent.Load() >= target }
+	remaining := func() int64 { return p.limit - claimed.Load() }
+	expired := func() bool { return !p.deadline.IsZero() && !time.Now().Before(p.deadline) }
 
 	var (
 		mu        sync.Mutex
@@ -89,6 +117,11 @@ func generate(
 		perBlocks = map[uint64]int{}
 		started   = time.Now()
 	)
+	exhausted := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return int64(r.Sent) >= p.limit
+	}
 	record := func(packets []sentPacket, submitted time.Time, err error) {
 		now := time.Now()
 		mu.Lock()
@@ -106,13 +139,12 @@ func generate(
 			return
 		}
 		r.Sent += len(packets)
-		sent.Add(int64(len(packets)))
 		samples = append(samples, now.Sub(submitted))
 		r.lastSend = now
 		for _, packet := range packets {
 			perBlocks[packet.block]++
-			out <- packet
 		}
+		out.put(packets)
 	}
 
 	stop := make(chan struct{})
@@ -126,6 +158,9 @@ func generate(
 				case <-stop:
 					return
 				case <-tokens:
+				}
+				if expired() {
+					return
 				}
 				n := claim()
 				if n == 0 {
@@ -148,7 +183,13 @@ func generate(
 		close(retired)
 	}()
 
-	r.Backpressure = p.batch * pace(ctx, ticks, retired, p.window, tokens, open, exhausted)
+	var deadline <-chan time.Time
+	if !p.deadline.IsZero() {
+		timer := time.NewTimer(time.Until(p.deadline))
+		defer timer.Stop()
+		deadline = timer.C
+	}
+	r.Backpressure = pace(ctx, ticks, retired, deadline, tokens, batch, remaining, exhausted)
 	close(stop)
 	senders.Wait()
 
@@ -159,33 +200,36 @@ func generate(
 	r.BlocksWithTxs, r.BlockSpan, r.PerBlockMin, r.PerBlockP50, r.PerBlockMax = blockCounts(perBlocks)
 }
 
-// pace fills tokens with cap(tokens) tokens now and on every tick while open
-// reports unclaimed packet slots, until exhausted reports that every packet
-// was sent, quit closes, window fires, or ctx ends. Tokens still unused when
-// the next tick arrives, with slots still open, count as backpressure: no
-// wallet was free to send them within their interval. They are discarded so
-// an interval never offers more than cap(tokens) sends.
+// pace fills tokens with cap(tokens) tokens now and on every tick while
+// remaining reports unclaimed packet slots, until exhausted reports that
+// every packet was sent, quit closes, deadline fires, or ctx ends. Tokens
+// still unused when the next tick arrives count as backpressure, in
+// transfers of batch each and at most the slots still unclaimed: no wallet
+// was free to send them within their interval. They are discarded so an
+// interval never offers more than cap(tokens) sends.
 func pace(
 	ctx context.Context,
 	ticks <-chan time.Time,
 	quit <-chan struct{},
-	window <-chan time.Time,
+	deadline <-chan time.Time,
 	tokens chan struct{},
-	open, exhausted func() bool,
+	batch int64,
+	remaining func() int64,
+	exhausted func() bool,
 ) (backpressure int) {
-	for {
-		unclaimed := open()
+	for !exhausted() {
+		var unused int64
 		for drained := false; !drained; {
 			select {
 			case <-tokens:
-				if unclaimed {
-					backpressure++
-				}
+				unused++
 			default:
 				drained = true
 			}
 		}
-		if unclaimed {
+		left := remaining()
+		backpressure += int(min(unused*batch, left))
+		if left > 0 {
 			for range cap(tokens) {
 				tokens <- struct{}{}
 			}
@@ -195,22 +239,14 @@ func pace(
 			return backpressure
 		case <-quit:
 			return backpressure
-		case <-window:
-			// No send starts after the window: its unused tokens go.
-			for drained := false; !drained; {
-				select {
-				case <-tokens:
-				default:
-					drained = true
-				}
-			}
+		case <-deadline:
+			// Senders check the deadline after taking a token, so the
+			// tokens left behind start no send.
 			return backpressure
 		case <-ticks:
 		}
-		if exhausted() {
-			return backpressure
-		}
 	}
+	return backpressure
 }
 
 // blockCounts summarizes how many sends each including block held: the

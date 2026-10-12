@@ -22,32 +22,28 @@ import (
 // latencyFetchers bounds concurrent receipt and header requests per Chain.
 const latencyFetchers = 16
 
-// chainReader reads the chain data relay latency comes from.
+// chainReader reads the chain data relay latency comes from, as
+// environment.EVM does: its receipt read already waits within the Chain's
+// completion budget.
 type chainReader interface {
-	TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
+	AwaitTransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 }
 
-// retryingReader repeats a read the node did not answer, as a send does,
-// within the Chain's completion budget.
-type retryingReader struct {
-	chain chainReader
-	wait  evm.TransactionWait
+// retryingHeaders repeats a header read the node did not answer, as a send
+// does, within the Chain's completion budget.
+type retryingHeaders struct {
+	chainReader
+	wait evm.TransactionWait
 }
 
 func retrying(chain chainReader, timing environment.Timing) chainReader {
-	return retryingReader{chain: chain, wait: timing.TransactionWait()}
+	return retryingHeaders{chainReader: chain, wait: timing.TransactionWait()}
 }
 
-func (r retryingReader) TransactionReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	return evm.Retry(ctx, r.wait, func(ctx context.Context) (*types.Receipt, error) {
-		return r.chain.TransactionReceipt(ctx, hash)
-	})
-}
-
-func (r retryingReader) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
+func (r retryingHeaders) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	return evm.Retry(ctx, r.wait, func(ctx context.Context) (*types.Header, error) {
-		return r.chain.HeaderByNumber(ctx, number)
+		return r.chainReader.HeaderByNumber(ctx, number)
 	})
 }
 
@@ -79,7 +75,7 @@ func relayLatencies(
 
 	inclusionBlock := func(chain chainReader) func(context.Context, string) (uint64, error) {
 		return func(ctx context.Context, hash string) (uint64, error) {
-			receipt, receiptErr := chain.TransactionReceipt(ctx, common.HexToHash(hash))
+			receipt, receiptErr := chain.AwaitTransactionReceipt(ctx, common.HexToHash(hash))
 			if receiptErr != nil {
 				return 0, fmt.Errorf("receipt %s: %w", hash, receiptErr)
 			}
@@ -91,7 +87,7 @@ func relayLatencies(
 
 	sourceBlocks, destinationBlocks := map[uint64]struct{}{}, map[uint64]struct{}{}
 	for _, p := range succeeded {
-		sourceBlocks[p.sendBlock] = struct{}{}
+		sourceBlocks[p.block] = struct{}{}
 		if block, ok := ackBlocks[p.status.GetAckTx().GetTxHash()]; ok {
 			sourceBlocks[block] = struct{}{}
 		}
@@ -112,7 +108,7 @@ func relayLatencies(
 	destinationTimes, destinationErr := fetchAll(ctx, destinationBlocks, blockTime(destination))
 
 	for _, p := range succeeded {
-		sent, sentOK := sourceTimes[p.sendBlock]
+		sent, sentOK := sourceTimes[p.block]
 		received, receivedOK := timeOf(destinationTimes, recvBlocks, p.status.GetRecvTx().GetTxHash())
 		acked, ackedOK := timeOf(sourceTimes, ackBlocks, p.status.GetAckTx().GetTxHash())
 		if !sentOK || !receivedOK || !ackedOK {

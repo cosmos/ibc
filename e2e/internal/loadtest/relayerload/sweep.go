@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
@@ -16,9 +17,7 @@ const progressEvery = 10 * time.Second
 
 // trackedPacket is one sent packet and the relayer's latest status for it.
 type trackedPacket struct {
-	key packetKey
-	// sendBlock is the source block that included the transfer.
-	sendBlock uint64
+	sentPacket
 	// status is nil until the relayer lists the packet.
 	status *relayerv2.PacketStatus
 }
@@ -38,34 +37,49 @@ func (p *trackedPacket) terminal() bool {
 }
 
 // listFunc lists the relayer's status of every packet from the direction's
-// source client.
-type listFunc func(ctx context.Context) ([]*relayerv2.PacketStatus, error)
+// source client with at least fromSequence.
+type listFunc func(ctx context.Context, fromSequence uint64) ([]*relayerv2.PacketStatus, error)
 
-// sweep tracks every packet from sent and, every poll, lists the relayer's
-// statuses and records those of tracked packets. It returns once sent is
-// closed and every tracked packet is terminal. It gives up when relaying
-// stalls, no packet sent and none seen newly terminal for stall, or when ctx
-// ends. Packets still non-terminal when sweep returns are unresolved.
+// sweep tracks every packet put in sent and, every poll, lists the relayer's
+// statuses from the oldest tracked packet that is not terminal, so settled
+// packets are not listed again, and records those of tracked packets. It
+// returns once sent is closed and every tracked packet is terminal. It gives
+// up when relaying stalls, packets outstanding but none newly terminal for
+// stall, or when ctx ends. Packets still non-terminal when sweep returns are
+// unresolved.
 func sweep(
 	ctx context.Context,
 	label string,
 	poll, stall time.Duration,
 	list listFunc,
-	sent <-chan sentPacket,
+	sent *inbox,
 ) ([]*trackedPacket, error) {
 	var (
-		tracked    = map[packetKey]*trackedPacket{}
-		order      []*trackedPacket
-		settled    int
+		tracked = map[packetKey]*trackedPacket{}
+		order   []*trackedPacket
+		// unsettled holds the tracked packets not yet terminal.
+		unsettled  []*trackedPacket
+		closed     bool
 		listErr    error
 		progressed = time.Now()
 		logged     = time.Now()
 	)
+	// track takes the packets sent since the last poll.
+	track := func() {
+		var packets []sentPacket
+		packets, closed = sent.take()
+		for _, packet := range packets {
+			p := &trackedPacket{sentPacket: packet}
+			tracked[packet.key] = p
+			order = append(order, p)
+			unsettled = append(unsettled, p)
+		}
+	}
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
 	// unresolved explains why sweep gave up with packets still in flight.
 	unresolved := func(cause error) error {
-		err := fmt.Errorf("%d of %d packets not terminal: %w", len(order)-settled, len(order), cause)
+		err := fmt.Errorf("%d of %d packets not terminal: %w", len(unsettled), len(order), cause)
 		if listErr != nil {
 			err = fmt.Errorf("%w (last listing error: %w)", err, listErr)
 		}
@@ -74,44 +88,41 @@ func sweep(
 	for {
 		select {
 		case <-ctx.Done():
+			track()
 			return order, unresolved(context.Cause(ctx))
-		case packet, ok := <-sent:
-			if !ok {
-				sent = nil
-				continue
-			}
-			p := &trackedPacket{key: packet.key, sendBlock: packet.block}
-			tracked[packet.key] = p
-			order = append(order, p)
-			progressed = time.Now()
-			continue
 		case <-ticker.C:
 		}
+		track()
 
-		if statuses, err := list(ctx); err != nil {
-			listErr = err
-			slog.WarnContext(ctx, "list relayer packets", "direction", label, "err", err)
-		} else {
-			listErr = nil
-			for _, status := range statuses {
-				key := packetKey{clientID: status.GetSourceClientId(), sequence: status.GetSequenceNumber()}
-				if p, ok := tracked[key]; ok {
-					p.status = status
+		if len(unsettled) > 0 {
+			from := unsettled[0].key.sequence
+			for _, p := range unsettled[1:] {
+				from = min(from, p.key.sequence)
+			}
+			if statuses, err := list(ctx, from); err != nil {
+				listErr = err
+				slog.WarnContext(ctx, "list relayer packets", "direction", label, "err", err)
+			} else {
+				listErr = nil
+				for _, status := range statuses {
+					key := packetKey{clientID: status.GetSourceClientId(), sequence: status.GetSequenceNumber()}
+					if p, ok := tracked[key]; ok {
+						p.status = status
+					}
+				}
+				before := len(unsettled)
+				unsettled = slices.DeleteFunc(unsettled, (*trackedPacket).terminal)
+				if len(unsettled) < before {
+					progressed = time.Now()
 				}
 			}
-			terminal := 0
-			for _, p := range order {
-				if p.terminal() {
-					terminal++
-				}
-			}
-			if terminal > settled {
-				settled = terminal
-				progressed = time.Now()
-			}
-			if sent == nil && settled == len(order) {
+		}
+		// Nothing outstanding is no stall, however long sending pauses.
+		if len(unsettled) == 0 {
+			if closed {
 				return order, nil
 			}
+			progressed = time.Now()
 		}
 		// A slow listing delays this check but never hides progress it saw.
 		if time.Since(progressed) >= stall {
@@ -119,7 +130,8 @@ func sweep(
 		}
 		if time.Since(logged) >= progressEvery {
 			logged = time.Now()
-			slog.InfoContext(ctx, "relay progress", "direction", label, "tracked", len(order), "settled", settled)
+			slog.InfoContext(ctx, "relay progress", "direction", label, "tracked", len(order),
+				"settled", len(order)-len(unsettled))
 		}
 	}
 }

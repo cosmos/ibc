@@ -13,7 +13,7 @@ func TestSummarize(t *testing.T) {
 	assert.Equal(t, Summary{}, Summarize(nil))
 	assert.Equal(t, "n=0", Summarize(nil).String())
 
-	// 100 samples of 1..100ms, shuffled order must not matter.
+	// 100 samples of 1..100ms in reverse order: the order must not matter.
 	samples := make([]time.Duration, 0, 100)
 	for i := 100; i >= 1; i-- {
 		samples = append(samples, time.Duration(i)*time.Millisecond)
