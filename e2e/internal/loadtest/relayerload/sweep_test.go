@@ -430,6 +430,15 @@ func TestReportJSONAndText(t *testing.T) {
 	assert.Contains(t, text, "sends:    target=5 sent=5")
 	assert.Regexp(t, `send->recv +\(block time\): +n=1 p50=1s`, text)
 	assert.Contains(t, text, "b-to-a: 1 of 5 packets not terminal: no relay progress for 40s")
+	assert.NotContains(t, text, "WARNING")
+
+	// Status regressions are called out under the headline.
+	report.Directions[0].Reverted = 2
+	out.Reset()
+	require.NoError(t, report.WriteText(&out))
+	assert.Contains(t, out.String(), "WARNING: the relayer listed 2 packets in another state after a terminal one")
+	assert.Contains(t, out.String(), "unresolved=0 reverted=2")
+	report.Directions[0].Reverted = 0
 
 	// A duration run names its duration and has no targets.
 	report.Packets, report.DurationMS = 0, (20 * time.Minute).Milliseconds()

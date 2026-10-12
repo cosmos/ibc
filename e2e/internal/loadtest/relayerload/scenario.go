@@ -434,6 +434,9 @@ func runDirection(
 		problems = append(problems, sweepErr)
 	}
 	for _, p := range packets {
+		if p.reverted {
+			d.Reverted++
+		}
 		switch p.state() {
 		case relayerv2.PacketState_PACKET_STATE_SUCCEEDED:
 			d.Succeeded++

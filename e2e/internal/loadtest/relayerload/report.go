@@ -48,6 +48,10 @@ type DirectionReport struct {
 	RelayFailed int `json:"relay_failed"`
 	// Unresolved packets were sent but not terminal when the sweep ended.
 	Unresolved int `json:"unresolved"`
+	// Reverted packets were listed by the relayer in another state after a
+	// terminal one: a relayer status regression. Their first terminal state
+	// is the one counted.
+	Reverted int `json:"reverted"`
 	// RelayDrainMS runs from the last sent packet to the end of the sweep.
 	RelayDrainMS int64 `json:"relay_drain_ms"`
 	// Relay latencies of succeeded packets, from block timestamps.
@@ -102,10 +106,11 @@ func (r *Report) WriteText(w io.Writer) error {
 	case !r.LoadDelivered:
 		verdict = "INCONCLUSIVE (load not delivered)"
 	}
-	succeeded, sent := 0, 0
+	succeeded, sent, reverted := 0, 0, 0
 	for _, d := range r.Directions {
 		succeeded += d.Succeeded
 		sent += d.Sent
+		reverted += d.Reverted
 	}
 	load := fmt.Sprintf("%d packets", r.Packets)
 	if r.DurationMS > 0 {
@@ -116,6 +121,10 @@ func (r *Report) WriteText(w io.Writer) error {
 			"%d of %d sent packets succeeded in %s, %.1f packets/s\n",
 		verdict, r.Provider, r.LightClient, load, r.Wallets, r.PerBlock, r.Batch, succeeded, sent, ms(r.WallTimeMS),
 		r.Throughput)
+	if reverted > 0 {
+		fmt.Fprintf(&out, "\nWARNING: the relayer listed %d packets in another state after a terminal one "+
+			"(relayer status regression; their first terminal state is counted)\n", reverted)
+	}
 	for _, d := range r.Directions {
 		fmt.Fprintf(&out, "\n[%s] %s -> %s\n", d.Route, d.Source, d.Destination)
 		target := ""
@@ -127,7 +136,8 @@ func (r *Report) WriteText(w io.Writer) error {
 		fmt.Fprintf(&out, "  blocks:   with_txs=%d span=%d per_block min=%d p50=%d max=%d\n",
 			d.BlocksWithTxs, d.BlockSpan, d.PerBlockMin, d.PerBlockP50, d.PerBlockMax)
 		fmt.Fprintf(&out, "  packets:  succeeded=%d timed_out=%d rejected=%d relay_failed=%d unresolved=%d "+
-			"relay_drain=%s\n", d.Succeeded, d.TimedOut, d.Rejected, d.RelayFailed, d.Unresolved, ms(d.RelayDrainMS))
+			"reverted=%d relay_drain=%s\n", d.Succeeded, d.TimedOut, d.Rejected, d.RelayFailed, d.Unresolved,
+			d.Reverted, ms(d.RelayDrainMS))
 		fmt.Fprintf(&out, "  submit->receipt (wall clock): %s\n", d.SubmitToReceipt)
 		fmt.Fprintf(&out, "  send->recv  (block time):     %s\n", d.SendToRecv)
 		fmt.Fprintf(&out, "  recv->ack   (block time):     %s\n", d.RecvToAck)

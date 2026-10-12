@@ -108,7 +108,10 @@ How a direction runs:
    intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
    stops the direction's senders. Sending is not progress, and a pause with nothing
    outstanding is not a stall. Packets sent but not terminal when it ends are
-   `unresolved`, so a direction's outcomes add up to its sent packets. If the relayer
+   `unresolved`, so a direction's outcomes add up to its sent packets, and fail the run. A
+   terminal state is final: the first one listed counts. A packet the relayer later lists in
+   another state is counted as `reverted`, a relayer status regression the report warns about
+   under its overall line. If the relayer
    process exits, every direction stops at once and the run fails, reporting how it exited.
    Packets time out after 12 hours (the harness default), well past any realistic run.
 6. **Latency.** After the sweep, each succeeded packet's relay is measured from chain data:
@@ -126,7 +129,8 @@ The report has one overall line (pass or fail, the packet count or duration, suc
 sent packets, wall time from the first send to the end of the last sweep, and succeeded
 packets per second) and, per direction: sends (target in a count run, sent, send failures,
 backpressure, send phase), achieved pacing, packet outcomes
-(succeeded, timed out, rejected, relay failed, unresolved, relay drain after the last send),
+(succeeded, timed out, rejected, relay failed, unresolved, reverted, relay drain after the last
+send),
 and p50/p90/p95/p99/max latency for submit to receipt (wall clock per transaction, from the
 senders) and send
 to receive, receive to acknowledgement, and send to acknowledgement (block time).
