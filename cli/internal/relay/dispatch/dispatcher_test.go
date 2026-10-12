@@ -141,6 +141,18 @@ func (s *listHookStorage) ListDispatchablePackets(ctx context.Context) ([]store.
 	return packets, err
 }
 
+// waitForLeft waits until n transfers have left the deduper's pipeline.
+func waitForLeft(t *testing.T, deduper *Deduper, n int) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		deduper.mu.Lock()
+		defer deduper.mu.Unlock()
+
+		return len(deduper.left) == n
+	}, 5*time.Second, time.Millisecond)
+}
+
 func dispatcherStore(t *testing.T) *store.SqliteDB {
 	t.Helper()
 
@@ -224,12 +236,7 @@ func TestRelayDispatcher(t *testing.T) {
 
 		storage.afterList = func() {
 			inner.out <- inner.pushed[0]
-			require.Eventually(t, func() bool {
-				deduper.mu.Lock()
-				defer deduper.mu.Unlock()
-
-				return len(deduper.left) == 1
-			}, 5*time.Second, time.Millisecond)
+			waitForLeft(t, deduper, 1)
 		}
 		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
 		assert.Equal(t, 1, inner.pushCount())
@@ -288,14 +295,10 @@ func TestPipelineDeduper(t *testing.T) {
 
 		// a transfer that exited the pipeline can be pushed again once released
 		inner.out <- tr
-		assert.Never(t, func() bool {
-			return deduper.Push(ctx, tr)
-		}, 50*time.Millisecond, 10*time.Millisecond)
-		require.Eventually(t, func() bool {
-			deduper.Release()
-
-			return deduper.Push(ctx, tr)
-		}, 5*time.Second, 10*time.Millisecond)
+		waitForLeft(t, deduper, 1)
+		assert.False(t, deduper.Push(ctx, tr))
+		deduper.Release()
+		assert.True(t, deduper.Push(ctx, tr))
 
 		deduper.Close()
 	})
