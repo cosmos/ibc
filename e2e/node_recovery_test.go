@@ -22,7 +22,7 @@ func TestRelayerRecoversAfterNodeRestart(t *testing.T) {
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
 	require.NoError(t, err)

@@ -64,7 +64,7 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 			externalEndpoint: {RPCURL: externalNode.RPCURL()},
 		}
 		env := e2etest.Start(t, spec, runtime)
-		route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+		route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 		driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 		transferApp, appErr := traffic.NewTransfer(env, deployment, sender, route)
 		require.NoError(t, appErr)

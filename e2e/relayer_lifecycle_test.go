@@ -30,7 +30,7 @@ func TestAutoRelay_PacketIsClearedOnRestart(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 
 	// Given relayer deployment with clearing enabled
-	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	configMutator := func(cfg *ibccli.RelayerConfig) {
 		cfg.ClearOnStart = true
 		cfg.ClearInterval = 2 * time.Second
@@ -76,8 +76,8 @@ func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 
 	// Given relayer deployment with clearing enabled and two routes
-	routeAB := traffic.AtoB(traffic.ChainA, traffic.ChainB)
-	routeBA := traffic.BtoA(traffic.ChainB, traffic.ChainA)
+	routeAB := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
+	routeBA := traffic.NewRoute(traffic.ChainB, traffic.ChainA)
 
 	configMutator := func(cfg *ibccli.RelayerConfig) {
 		cfg.ClearOnStart = true
@@ -126,7 +126,7 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 	relayerSigner := e2etest.NewSigner(t)
 
 	// Given relayer deployment with auto-relay
-	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 
 	// Given chain A
 	chainA, err := env.Chain(traffic.ChainA)
@@ -190,7 +190,7 @@ func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := traffic.ManualAtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
 	require.NoError(t, err)

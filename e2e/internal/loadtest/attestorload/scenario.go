@@ -105,7 +105,7 @@ type Report struct {
 // when the packets phase seeds packets, and no relayer.
 func SessionOptions(base session.Options, cfg Config) session.Options {
 	if slices.Contains(cfg.Phases, PhasePackets) {
-		base.Routes = []traffic.Route{traffic.AtoB(traffic.ChainA, traffic.ChainB)}
+		base.Routes = []traffic.Route{traffic.NewRoute(traffic.ChainA, traffic.ChainB)}
 	}
 	return base
 }
@@ -252,7 +252,7 @@ func (r *Report) WriteText(w io.Writer) error {
 // and waits until the attestor can attest the block that included it. The
 // packets are never relayed, so their commitments stay in place.
 func seed(ctx context.Context, s *session.Session, attestor *environment.Attestor) ([]attestablePacket, error) {
-	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	app, err := traffic.NewIFT(s.Env, s.Deployment, s.Deployer, route)
 	if err != nil {
 		return nil, err

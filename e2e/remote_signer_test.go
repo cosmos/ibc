@@ -156,7 +156,7 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 	sender := e2etest.NewSigner(t)
 	relayerSigner, err := traffic.NewSignerFromHex(remoteSignerPrivateKeyHex)
 	require.NoError(t, err)
-	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t,
 		env,
@@ -221,7 +221,7 @@ func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 		traffic.ChainA,
 		traffic.ChainB,
 	)...)
-	route := traffic.AtoB(traffic.ChainA, traffic.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	remoteAttestorID := traffic.MeshAttestorFor(route.Destination, route.Source)
 	remoteAttestorKey := runtime.Authorities[environment.AuthorityID(remoteAttestorID)].PrivateKeyHex
 	remoteSignerEndpoint, remoteSigner := startRemoteSignerFixture(

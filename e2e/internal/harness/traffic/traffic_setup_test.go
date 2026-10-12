@@ -58,9 +58,9 @@ func TestMergeRelayerConnection(t *testing.T) {
 func TestRoutesBetweenDifferentChainsAreDistinct(t *testing.T) {
 	chainC := environment.ChainID("chain-c")
 	require.NoError(t, distinctRoutes([]Route{
-		AtoB(ChainA, ChainB), NewRoute(ChainB, ChainA), NewRoute(chainC, ChainA), NewRoute(ChainA, chainC),
+		NewRoute(ChainA, ChainB), NewRoute(ChainB, ChainA), NewRoute(chainC, ChainA), NewRoute(ChainA, chainC),
 	}))
 	require.ErrorContains(t, distinctRoutes([]Route{
-		AtoB(ChainA, ChainB), ManualAtoB(ChainA, ChainB),
+		NewRoute(ChainA, ChainB), NewManualRoute(ChainA, ChainB),
 	}), "given twice")
 }

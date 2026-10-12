@@ -49,9 +49,9 @@ const (
 func (d Direction) route() traffic.Route {
 	switch d {
 	case DirectionAtoB:
-		return traffic.AtoB(traffic.ChainA, traffic.ChainB)
+		return traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	case DirectionBtoA:
-		return traffic.BtoA(traffic.ChainB, traffic.ChainA)
+		return traffic.NewRoute(traffic.ChainB, traffic.ChainA)
 	default:
 		panic(fmt.Sprintf("relayerload: unknown direction %q", d))
 	}
