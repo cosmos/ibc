@@ -260,9 +260,10 @@ AND (packet_source_client_id = ?4 OR ?4 = '')
 AND (packet_destination_client_id = ?5 OR ?5 = '')
 AND (source_tx_hash = ?6 OR ?6 = '')
 AND (packet_sequence_number = ?7 OR ?7 = 0)
-AND id < ?8
+AND packet_sequence_number >= ?8
+AND id < ?9
 ORDER BY id DESC
-LIMIT ?9
+LIMIT ?10
 `
 
 type ListPacketsParams struct {
@@ -273,6 +274,7 @@ type ListPacketsParams struct {
 	DestinationClientID string
 	SourceTxHash        string
 	SequenceNumber      int64
+	MinSequenceNumber   int64
 	Before              int64
 	RowLimit            int64
 }
@@ -286,6 +288,7 @@ func (q *Queries) ListPackets(ctx context.Context, arg ListPacketsParams) ([]Pac
 		arg.DestinationClientID,
 		arg.SourceTxHash,
 		arg.SequenceNumber,
+		arg.MinSequenceNumber,
 		arg.Before,
 		arg.RowLimit,
 	)
