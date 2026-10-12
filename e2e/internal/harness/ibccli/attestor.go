@@ -66,6 +66,11 @@ type AttestorLaunch struct {
 	// ListenAddress defaults to an ephemeral loopback port. Restarts pass the
 	// previously announced address so a running relayer config stays valid.
 	ListenAddress string
+
+	Observability bool
+	// RunID leads the process's OTel instance name, so the telemetry of
+	// runs that overlap stays apart.
+	RunID string
 }
 
 type readinessResult struct {
@@ -127,6 +132,9 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 		"--config", configFilename,
 	)
 	cmd.Dir = paths.dir
+
+	otelEnvApply(cmd, launch.RunID, "attestor", launch.Name)
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -406,7 +414,8 @@ func prepareAttestorWorkspace(
 	}
 
 	config := fileConfig{
-		Server: serverConfig{ListenAddress: listenAddress},
+		Server:        serverConfig{ListenAddress: listenAddress},
+		Observability: otelFileConfig(spec.Observability),
 		DB: dbConfig{
 			Type: dbTypeSQLite,
 			URL:  filepath.Join(dir, "ibc.db"),
@@ -548,12 +557,13 @@ const (
 )
 
 type fileConfig struct {
-	Server    serverConfig         `yaml:"server"`
-	DB        dbConfig             `yaml:"db"`
-	Chains    []chainConfig        `yaml:"chains"`
-	Relayer   *relayerFileConfig   `yaml:"relayer,omitempty"`
-	Attestors []attestorFileConfig `yaml:"attestors"`
-	Signers   []signerConfig       `yaml:"signers"`
+	Server        serverConfig         `yaml:"server"`
+	DB            dbConfig             `yaml:"db"`
+	Observability observabilityConfig  `yaml:"observability,omitempty"`
+	Chains        []chainConfig        `yaml:"chains"`
+	Relayer       *relayerFileConfig   `yaml:"relayer,omitempty"`
+	Attestors     []attestorFileConfig `yaml:"attestors"`
+	Signers       []signerConfig       `yaml:"signers"`
 }
 
 type chainConfig struct {

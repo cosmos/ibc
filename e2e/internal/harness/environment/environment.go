@@ -28,12 +28,20 @@ type Environment struct {
 
 	lease *environmentLease
 
+	observability bool
+
 	closeMu sync.Mutex
 	closed  bool
 }
 
 func (e *Environment) RunID() string {
 	return e.ws.runID
+}
+
+// Observability reports whether the Runtime enabled OTel export, which every
+// IBC CLI process started for the Environment follows.
+func (e *Environment) Observability() bool {
+	return e.observability
 }
 
 func (e *Environment) Chain(id ChainID) (*Chain, error) {

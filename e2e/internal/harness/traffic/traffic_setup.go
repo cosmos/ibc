@@ -427,13 +427,15 @@ func registerIFTBridge(
 }
 
 // baseConfig is what the relayer and prover configurations share: the signer,
-// the database, the finality offset, and the Environment's Attestors.
+// the database, the finality offset, the Environment's observability, and its
+// Attestors.
 func baseConfig(env *environment.Environment, signerKeyPath, dbPath string) (ibccli.RelayerConfig, error) {
 	config := ibccli.RelayerConfig{
 		DBPath:         dbPath,
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
 		FinalityOffset: ibccli.HarnessFinalityOffset,
+		Observability:  env.Observability(),
 	}
 	for _, id := range env.Attestors() {
 		attestor, err := env.Attestor(id)
@@ -463,6 +465,7 @@ func buildConfig(
 	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
 		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
+		RunID:        env.RunID(),
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)
