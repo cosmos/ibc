@@ -164,6 +164,7 @@ func packetFilterFromProto(filter *proto.PacketFilter) (relayer.PacketFilter, er
 		DestinationClientID: filter.GetDestinationClientId(),
 		SourceTxHash:        filter.GetSourceTxHash(),
 		SequenceNumber:      filter.GetSequenceNumber(),
+		MinSequenceNumber:   filter.GetMinSequenceNumber(),
 		State:               state,
 	}, nil
 }
