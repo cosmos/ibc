@@ -146,17 +146,19 @@ type EVMClient struct {
 	client  *ethclient.Client
 	chainID *big.Int
 
-	// Local sends from one account are serialized across nonce reads and
-	// submission; sends from different accounts proceed concurrently.
-	txGatesMu sync.Mutex
-	txGates   map[common.Address]chan struct{}
+	accountsMu sync.Mutex
+	accounts   map[common.Address]*accountState
+}
 
-	// nonceFloors holds, per account, one past the highest nonce whose
-	// transaction this client saw included. A node can briefly report an
-	// older pending nonce right after the inclusion (Besu once did); the
-	// floor keeps it from being reused.
-	nonceMu     sync.Mutex
-	nonceFloors map[common.Address]uint64
+// accountState is this client's send state for one account.
+type accountState struct {
+	// gate serializes local sends from the account across nonce reads and
+	// submission; sends from different accounts proceed concurrently.
+	gate chan struct{}
+	// floor is one past the highest nonce whose transaction this client saw
+	// included. A node can briefly report an older pending nonce right after
+	// the inclusion (Besu once did); the floor keeps it from being reused.
+	floor uint64
 }
 
 // The caller remains responsible for readiness.
@@ -166,10 +168,9 @@ func NewConnectedClient(ctx context.Context, c *ethclient.Client) (*EVMClient, e
 		return nil, fmt.Errorf("query chain id: %w", err)
 	}
 	return &EVMClient{
-		client:      c,
-		chainID:     id,
-		txGates:     map[common.Address]chan struct{}{},
-		nonceFloors: map[common.Address]uint64{},
+		client:   c,
+		chainID:  id,
+		accounts: map[common.Address]*accountState{},
 	}, nil
 }
 
@@ -289,7 +290,7 @@ func (e *EVMClient) signAndSend(
 	data []byte,
 	value *big.Int,
 ) (*types.Transaction, error) {
-	gate := e.txGate(from.addr)
+	gate := e.account(from.addr).gate
 	if err := acquireTx(ctx, gate); err != nil {
 		return nil, err
 	}
@@ -335,15 +336,15 @@ func (e *EVMClient) send(ctx context.Context, wait TransactionWait, signed *type
 	return err
 }
 
-func (e *EVMClient) txGate(from common.Address) chan struct{} {
-	e.txGatesMu.Lock()
-	defer e.txGatesMu.Unlock()
-	gate, ok := e.txGates[from]
+func (e *EVMClient) account(address common.Address) *accountState {
+	e.accountsMu.Lock()
+	defer e.accountsMu.Unlock()
+	state, ok := e.accounts[address]
 	if !ok {
-		gate = make(chan struct{}, 1)
-		e.txGates[from] = gate
+		state = &accountState{gate: make(chan struct{}, 1)}
+		e.accounts[address] = state
 	}
-	return gate
+	return state
 }
 
 func acquireTx(ctx context.Context, gate chan struct{}) error {
@@ -381,16 +382,12 @@ func (e *EVMClient) buildSignedTx(
 	}
 
 	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
+	// Estimated at latest: Besu's pending estimate uses a future timestamp,
+	// which rejects otherwise-valid short-lived transactions, and every send
+	// from this client waits for its predecessor's receipt, so latest holds
+	// what the transaction depends on.
 	est, err := Retry(ctx, wait, func(ctx context.Context) (uint64, error) {
-		est, estimateErr := e.client.EstimateGas(ctx, msg)
-		var nodeErr rpc.Error
-		if errors.As(estimateErr, &nodeErr) {
-			// Besu can reject otherwise-valid short-lived transactions because its
-			// pending estimate uses a future timestamp, and fail internally on
-			// it under load. Retry against latest.
-			est, estimateErr = e.client.EstimateGasAtBlock(ctx, msg, nil)
-		}
-		return est, estimateErr
+		return e.client.EstimateGasAtBlock(ctx, msg, nil)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("estimate gas: %w", err)
@@ -435,18 +432,20 @@ func (e *EVMClient) buildSignedTx(
 	return signed, nil
 }
 
-func (e *EVMClient) nonceFloor(account common.Address) uint64 {
-	e.nonceMu.Lock()
-	defer e.nonceMu.Unlock()
-	return e.nonceFloors[account]
+func (e *EVMClient) nonceFloor(address common.Address) uint64 {
+	state := e.account(address)
+	e.accountsMu.Lock()
+	defer e.accountsMu.Unlock()
+	return state.floor
 }
 
 // raiseNonceFloor only raises: receipts of one account's transactions can
 // arrive out of order.
-func (e *EVMClient) raiseNonceFloor(account common.Address, floor uint64) {
-	e.nonceMu.Lock()
-	defer e.nonceMu.Unlock()
-	e.nonceFloors[account] = max(e.nonceFloors[account], floor)
+func (e *EVMClient) raiseNonceFloor(address common.Address, floor uint64) {
+	state := e.account(address)
+	e.accountsMu.Lock()
+	defer e.accountsMu.Unlock()
+	state.floor = max(state.floor, floor)
 }
 
 func (e *EVMClient) WaitNextPendingTx(ctx context.Context, wait TransactionWait) error {

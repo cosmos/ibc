@@ -82,26 +82,30 @@ func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	n.mu.Unlock()
 
 	response := map[string]any{"jsonrpc": "2.0", "id": req.ID}
-	switch {
-	case len(script) == 0:
+	if len(script) == 0 {
 		response["error"] = map[string]any{"code": -32601, "message": "method not found: " + req.Method}
-	case script[min(call, len(script)-1)].stall:
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
+	step := script[min(call, len(script)-1)]
+	switch {
+	case step.stall:
 		<-r.Context().Done()
 		return
-	case script[min(call, len(script)-1)].drop:
+	case step.drop:
 		conn, _, err := w.(http.Hijacker).Hijack()
 		if err == nil {
 			_ = conn.Close()
 		}
 		return
-	case script[min(call, len(script)-1)].status != 0:
-		w.WriteHeader(script[min(call, len(script)-1)].status)
+	case step.status != 0:
+		w.WriteHeader(step.status)
 		return
-	case script[min(call, len(script)-1)].nodeErr != "":
-		code := cmp.Or(script[min(call, len(script)-1)].code, -32000)
-		response["error"] = map[string]any{"code": code, "message": script[min(call, len(script)-1)].nodeErr}
+	case step.nodeErr != "":
+		response["error"] = map[string]any{"code": cmp.Or(step.code, -32000), "message": step.nodeErr}
 	default:
-		response["result"] = script[min(call, len(script)-1)].result
+		response["result"] = step.result
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(response)
@@ -213,7 +217,7 @@ func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
 		"the unanswered lookup is repeated, for the transaction sent")
 }
 
-func TestBroadcastTxFallsBackOnAnInternalEstimateError(t *testing.T) {
+func TestBroadcastTxEstimatesGasAtTheLatestBlock(t *testing.T) {
 	node, client := newFakeNode(t, map[string][]reply{
 		"eth_estimateGas": {{nodeErr: "Internal error", code: -32603}, {result: "0x5208"}},
 	})
@@ -221,7 +225,7 @@ func TestBroadcastTxFallsBackOnAnInternalEstimateError(t *testing.T) {
 	require.NoError(t, broadcast(t, client))
 	node.mu.Lock()
 	defer node.mu.Unlock()
-	assert.Equal(t, []string{"", "latest"}, node.estimateBlocks, "the latest block answers at once")
+	assert.Equal(t, []string{"latest", "latest"}, node.estimateBlocks, "an internal error is repeated, at latest")
 }
 
 func TestBroadcastTxRepeatsAnInternalError(t *testing.T) {
@@ -257,7 +261,7 @@ func TestBroadcastTxRetriesOnlyTheHTTPStatusesThatAskTo(t *testing.T) {
 
 	node.script("eth_estimateGas", reply{status: http.StatusNotFound})
 	require.ErrorContains(t, broadcast(t, client), "404")
-	assert.Equal(t, 4, node.count("eth_estimateGas"), "one call: only a node error falls back")
+	assert.Equal(t, 4, node.count("eth_estimateGas"), "one call: a 404 is final")
 }
 
 func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
@@ -267,7 +271,7 @@ func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
 	})
 
 	require.ErrorContains(t, broadcast(t, client), "execution reverted")
-	assert.Equal(t, 2, node.count("eth_estimateGas"), "a node error is not retried, beyond Besu's fallback")
+	assert.Equal(t, 1, node.count("eth_estimateGas"), "a node error is final")
 	assert.Zero(t, node.count("eth_sendRawTransaction"))
 
 	node.script("eth_estimateGas", reply{result: "0x5208"})
