@@ -116,9 +116,30 @@ func (r *fakePipelines) Pipeline(context.Context, *processors.Transfer) (pipelin
 	return r.pipeline, nil
 }
 
+func (r *fakePipelines) Release() {
+	if deduper, ok := r.pipeline.(*Deduper); ok {
+		deduper.Release()
+	}
+}
+
 func (r *fakePipelines) Close() { r.closed = true }
 
 func (r *fakePipelines) Routes() []processors.Route { return nil }
+
+// listHookStorage runs afterList once the dispatchable packets are read.
+type listHookStorage struct {
+	*store.SqliteDB
+	afterList func()
+}
+
+func (s *listHookStorage) ListDispatchablePackets(ctx context.Context) ([]store.Packet, error) {
+	packets, err := s.SqliteDB.ListDispatchablePackets(ctx)
+	if s.afterList != nil {
+		s.afterList()
+	}
+
+	return packets, err
+}
 
 func dispatcherStore(t *testing.T) *store.SqliteDB {
 	t.Helper()
@@ -181,6 +202,43 @@ func TestRelayDispatcher(t *testing.T) {
 		assert.Equal(t, store.RelayStatusPending, dispatchable[0].Status)
 	})
 
+	// the packet was read before the transfer's last writes
+	t.Run("skipsAPacketWhoseTransferLeftAfterTheRead", func(t *testing.T) {
+		db := dispatcherStore(t)
+		createStoredPacket(t, db, 1)
+
+		inner := newFakePipeline(true)
+		deduper := NewDeduper(inner)
+		defer deduper.Close()
+
+		storage := &listHookStorage{SqliteDB: db}
+		dispatcher := NewRelayDispatcher(
+			storage,
+			&fakePipelines{pipeline: deduper},
+			DefaultPollInterval,
+			slog.Default(),
+		)
+
+		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
+		require.Equal(t, 1, inner.pushCount())
+
+		storage.afterList = func() {
+			inner.out <- inner.pushed[0]
+			require.Eventually(t, func() bool {
+				deduper.mu.Lock()
+				defer deduper.mu.Unlock()
+
+				return len(deduper.left) == 1
+			}, 5*time.Second, time.Millisecond)
+		}
+		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
+		assert.Equal(t, 1, inner.pushCount())
+
+		storage.afterList = nil
+		require.NoError(t, dispatcher.SubmitWaitingDispatchablePackets(ctx))
+		assert.Equal(t, 2, inner.pushCount(), "the next read pushes it again")
+	})
+
 	t.Run("submitErrorMarksPacketFailed", func(t *testing.T) {
 		db := dispatcherStore(t)
 		createStoredPacket(t, db, 1)
@@ -228,9 +286,14 @@ func TestPipelineDeduper(t *testing.T) {
 		assert.False(t, deduper.Push(ctx, tr))
 		assert.Equal(t, 1, inner.pushCount())
 
-		// once the transfer exits the pipeline it can be pushed again
+		// a transfer that exited the pipeline can be pushed again once released
 		inner.out <- tr
+		assert.Never(t, func() bool {
+			return deduper.Push(ctx, tr)
+		}, 50*time.Millisecond, 10*time.Millisecond)
 		require.Eventually(t, func() bool {
+			deduper.Release()
+
 			return deduper.Push(ctx, tr)
 		}, 5*time.Second, 10*time.Millisecond)
 
