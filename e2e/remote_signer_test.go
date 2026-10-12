@@ -23,6 +23,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 const (
@@ -140,12 +141,12 @@ func TestRemoteSignerFixtureRequiresKeyID(t *testing.T) {
 
 func TestIFTTransfer_RemoteSigner(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(
 		t,
 		e2etest.EVMRequirements{},
-		e2etest.ChainA,
-		e2etest.ChainB,
-	))
+		traffic.ChainA,
+		traffic.ChainB,
+	)...)
 	env := e2etest.Start(t, spec, runtime)
 	remoteSignerEndpoint, _ := startRemoteSignerFixture(
 		t,
@@ -153,8 +154,9 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 		remoteSignerPrivateKeyHex,
 	)
 	sender := e2etest.NewSigner(t)
-	relayerSigner := e2etest.NewSignerFromHex(t, remoteSignerPrivateKeyHex)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	relayerSigner, err := traffic.NewSignerFromHex(remoteSignerPrivateKeyHex)
+	require.NoError(t, err)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t,
 		env,
@@ -167,13 +169,14 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 		},
 		route,
 	)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
-	status, err := e2etest.AwaitState(
+	status, err := traffic.AwaitState(
 		ctx,
 		relayer,
 		transfer.PacketTx(),
@@ -212,14 +215,14 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 
 func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(
 		t,
 		e2etest.EVMRequirements{},
-		e2etest.ChainA,
-		e2etest.ChainB,
-	))
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	remoteAttestorID := meshAttestorFor(route.Destination, route.Source)
+		traffic.ChainA,
+		traffic.ChainB,
+	)...)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
+	remoteAttestorID := traffic.MeshAttestorFor(route.Destination, route.Source)
 	remoteAttestorKey := runtime.Authorities[environment.AuthorityID(remoteAttestorID)].PrivateKeyHex
 	remoteSignerEndpoint, remoteSigner := startRemoteSignerFixture(
 		t,
@@ -242,13 +245,14 @@ func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
-	status, err := e2etest.AwaitState(
+	status, err := traffic.AwaitState(
 		ctx,
 		relayer,
 		transfer.PacketTx(),

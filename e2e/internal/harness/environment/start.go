@@ -280,7 +280,7 @@ func acquireChains(
 		wg.Go(func() {
 			acquisition, err := d.acquireChain(ctx, declaration, runtime, ws)
 			if err != nil {
-				errs[i] = fmt.Errorf("start Chain %q failed: %w", declaration.chainID(), err)
+				errs[i] = fmt.Errorf("start Chain %q failed: %w", declaration.ChainID(), err)
 				cancel()
 				return
 			}

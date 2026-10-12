@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package e2etest starts Environments and provides the traffic bindings the
-// acceptance tests drive against IBC CLI.
+// Package e2etest resolves test requirements into Environments and adapts the
+// harness traffic layer to testing.TB for the acceptance tests.
 package e2etest
 
 import (
@@ -9,11 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"maps"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,18 +19,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
-const (
-	ChainA environment.ChainID = "chain-a"
-	ChainB environment.ChainID = "chain-b"
-)
-
-const (
-	cleanupTimeout = 30 * time.Second
-	modeEnv        = "E2E_MODE"
-
-	anvilChainIDBase = 31337
-	besuChainIDBase  = 32337
-)
+const modeEnv = "E2E_MODE"
 
 type Mode string
 
@@ -42,23 +29,11 @@ const (
 	ModeProduction Mode = "production"
 )
 
-type EVMProvider string
-
-const (
-	EVMProviderAnvil EVMProvider = "anvil"
-	EVMProviderBesu  EVMProvider = "besu"
-)
-
 type EVMRequirements struct {
-	Provider         EVMProvider
+	Provider         environment.EVMProvider
 	ControlledMining bool
 	NodeLifecycle    bool
 }
-
-const ProtocolAuthorityID environment.AuthorityID = "protocol-deployer"
-
-// Deterministic deployer key used by test protocol realization; funded by managed Chains.
-const protocolAuthorityKeyHex = "0000000000000000000000000000000000000000000000000000000000000005"
 
 var modeFlag = flag.String(
 	"e2e.mode",
@@ -68,7 +43,7 @@ var modeFlag = flag.String(
 
 type evmResolution struct {
 	chains     []environment.ChainSpec
-	provider   EVMProvider
+	provider   environment.EVMProvider
 	skipReason string
 }
 
@@ -123,14 +98,14 @@ func resolveEVMChains(
 		return evmResolution{}, err
 	}
 
-	var providers []EVMProvider
+	var providers []environment.EVMProvider
 	switch mode {
 	case ModeFast:
-		providers = []EVMProvider{EVMProviderAnvil}
+		providers = []environment.EVMProvider{environment.EVMProviderAnvil}
 	case ModeComplete:
-		providers = []EVMProvider{EVMProviderAnvil, EVMProviderBesu}
+		providers = []environment.EVMProvider{environment.EVMProviderAnvil, environment.EVMProviderBesu}
 	case ModeProduction:
-		providers = []EVMProvider{EVMProviderBesu, EVMProviderAnvil}
+		providers = []environment.EVMProvider{environment.EVMProviderBesu, environment.EVMProviderAnvil}
 	default:
 		return evmResolution{}, fmt.Errorf("unknown e2e mode %q", mode)
 	}
@@ -139,10 +114,14 @@ func resolveEVMChains(
 		if requirements.Provider != "" && requirements.Provider != provider {
 			continue
 		}
-		if (requirements.ControlledMining || requirements.NodeLifecycle) && provider != EVMProviderAnvil {
+		if (requirements.ControlledMining || requirements.NodeLifecycle) && provider != environment.EVMProviderAnvil {
 			continue
 		}
-		return evmResolution{chains: evmChainSpecs(provider, ids), provider: provider}, nil
+		chains, err := environment.ManagedEVMChains(provider, ids...)
+		if err != nil {
+			return evmResolution{}, err
+		}
+		return evmResolution{chains: chains, provider: provider}, nil
 	}
 
 	reason := fmt.Sprintf("no EVM provider satisfies requirements %+v in %s mode", requirements, mode)
@@ -153,12 +132,11 @@ func resolveEVMChains(
 }
 
 func validateEVMRequirements(requirements EVMRequirements) error {
-	switch requirements.Provider {
-	case "", EVMProviderAnvil, EVMProviderBesu:
+	if requirements.Provider == "" {
 		return nil
-	default:
-		return fmt.Errorf("unknown EVM provider %q", requirements.Provider)
 	}
+	_, err := environment.ParseEVMProvider(string(requirements.Provider))
+	return err
 }
 
 func validateChainIDs(ids []environment.ChainID) error {
@@ -178,33 +156,6 @@ func validateChainIDs(ids []environment.ChainID) error {
 	return nil
 }
 
-func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environment.ChainSpec {
-	chains := make([]environment.ChainSpec, len(ids))
-	for i, id := range ids {
-		switch provider {
-		case EVMProviderAnvil:
-			chains[i] = environment.ManagedAnvil{ID: id, EVMChainID: anvilChainIDBase + uint64(i)}
-		case EVMProviderBesu:
-			chains[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
-		}
-	}
-	return chains
-}
-
-// RuntimeWithProtocolDeployer returns runtime with the protocol deployer
-// authority, without retaining caller-owned maps.
-func RuntimeWithProtocolDeployer(runtime environment.Runtime) environment.Runtime {
-	runtime.Endpoints = maps.Clone(runtime.Endpoints)
-	runtime.Authorities = maps.Clone(runtime.Authorities)
-	if runtime.Authorities == nil {
-		runtime.Authorities = map[environment.AuthorityID]environment.EVMAuthority{}
-	}
-	runtime.Authorities[ProtocolAuthorityID] = environment.EVMAuthority{
-		PrivateKeyHex: protocolAuthorityKeyHex,
-	}
-	return runtime
-}
-
 func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *environment.Environment {
 	t.Helper()
 	if matrixDiscoveryEnabled() {
@@ -222,7 +173,7 @@ func Start(t testing.TB, spec environment.Spec, runtime environment.Runtime) *en
 	env, err := environment.Start(t.Context(), spec, runtime)
 	require.NoError(t, err, "e2etest: start Environment")
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), environment.CloseTimeout)
 		defer cancel()
 		assert.NoError(t, env.Close(ctx), "e2etest: close Environment")
 	})

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"testing"
 )
 
 const (
@@ -26,22 +25,6 @@ var (
 
 func DumpEnabled() bool {
 	return dumpEnabled
-}
-
-func DumpTestDirectory(t testing.TB, runID string, path string) {
-	t.Helper()
-
-	log := dumpLogger(runID, "test", t.Name())
-
-	dest, err := tryDumpDirectory(runID, path, t.Name())
-	switch {
-	case err != nil:
-		log.Error("Failed to dump directory", "path", path, "error", err)
-	case dest == "":
-		log.Info("No files to dump", "path", path)
-	default:
-		log.Info("Dumped directory", "dest", dest)
-	}
 }
 
 func init() {
@@ -86,14 +69,19 @@ func setupDumpEnabled() (bool, string, error) {
 	return true, absDir, nil
 }
 
-func dumpDirectory(runID, path string) {
+// DumpDirectory copies the directory at path into the dump directory for
+// runID, under a label subdirectory when label is non-empty, and logs the
+// outcome. Callers check DumpEnabled first.
+func DumpDirectory(runID, path, label string) {
 	log := dumpLogger(runID)
+	if label != "" {
+		log = log.With("label", label)
+	}
 
-	dest, err := tryDumpDirectory(runID, path, "")
+	dest, err := tryDumpDirectory(runID, path, label)
 	switch {
 	case err != nil:
 		log.Error("Failed to dump directory", "path", path, "error", err)
-		return
 	case dest == "":
 		log.Info("No files to dump", "path", path)
 	default:

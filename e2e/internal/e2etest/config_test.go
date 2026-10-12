@@ -10,27 +10,6 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
-func TestRuntimeWithProtocolDeployer(t *testing.T) {
-	input := environment.Runtime{
-		Endpoints: map[environment.EndpointBindingID]environment.EndpointBinding{
-			"rpc": {RPCURL: "http://example.test"},
-		},
-		Authorities: map[environment.AuthorityID]environment.EVMAuthority{
-			ProtocolAuthorityID: {PrivateKeyHex: "old"},
-			"other":             {PrivateKeyHex: "other-key"},
-		},
-	}
-	got := RuntimeWithProtocolDeployer(input)
-	got.Endpoints["new"] = environment.EndpointBinding{RPCURL: "http://new.test"}
-	got.Authorities["new"] = environment.EVMAuthority{PrivateKeyHex: "new-key"}
-
-	require.Equal(t, protocolAuthorityKeyHex, got.Authorities[ProtocolAuthorityID].PrivateKeyHex)
-	require.Equal(t, "old", input.Authorities[ProtocolAuthorityID].PrivateKeyHex)
-	require.Empty(t, input.Authorities["new"].PrivateKeyHex)
-	require.Empty(t, input.Endpoints["new"].RPCURL)
-	require.Equal(t, input.Endpoints["rpc"], got.Endpoints["rpc"])
-}
-
 func TestResolveMode(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -65,101 +44,101 @@ func TestResolveEVMChains(t *testing.T) {
 		name         string
 		mode         Mode
 		requirements EVMRequirements
-		wantProvider EVMProvider
+		wantProvider environment.EVMProvider
 		wantSkip     bool
 		wantErr      bool
 	}{
-		{name: "fast portable", mode: ModeFast, wantProvider: EVMProviderAnvil},
-		{name: "complete portable", mode: ModeComplete, wantProvider: EVMProviderAnvil},
-		{name: "production portable", mode: ModeProduction, wantProvider: EVMProviderBesu},
+		{name: "fast portable", mode: ModeFast, wantProvider: environment.EVMProviderAnvil},
+		{name: "complete portable", mode: ModeComplete, wantProvider: environment.EVMProviderAnvil},
+		{name: "production portable", mode: ModeProduction, wantProvider: environment.EVMProviderBesu},
 		{
 			name:         "fast controlled mining",
 			mode:         ModeFast,
 			requirements: EVMRequirements{ControlledMining: true},
-			wantProvider: EVMProviderAnvil,
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "complete controlled mining",
 			mode:         ModeComplete,
 			requirements: EVMRequirements{ControlledMining: true},
-			wantProvider: EVMProviderAnvil,
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "production controlled mining",
 			mode:         ModeProduction,
 			requirements: EVMRequirements{ControlledMining: true},
-			wantProvider: EVMProviderAnvil,
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "fast node lifecycle",
 			mode:         ModeFast,
 			requirements: EVMRequirements{NodeLifecycle: true},
-			wantProvider: EVMProviderAnvil,
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "complete node lifecycle",
 			mode:         ModeComplete,
 			requirements: EVMRequirements{NodeLifecycle: true},
-			wantProvider: EVMProviderAnvil,
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "production node lifecycle",
 			mode:         ModeProduction,
 			requirements: EVMRequirements{NodeLifecycle: true},
-			wantProvider: EVMProviderAnvil,
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "fast exact anvil",
 			mode:         ModeFast,
-			requirements: EVMRequirements{Provider: EVMProviderAnvil},
-			wantProvider: EVMProviderAnvil,
+			requirements: EVMRequirements{Provider: environment.EVMProviderAnvil},
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "complete exact anvil",
 			mode:         ModeComplete,
-			requirements: EVMRequirements{Provider: EVMProviderAnvil},
-			wantProvider: EVMProviderAnvil,
+			requirements: EVMRequirements{Provider: environment.EVMProviderAnvil},
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "production exact anvil",
 			mode:         ModeProduction,
-			requirements: EVMRequirements{Provider: EVMProviderAnvil},
-			wantProvider: EVMProviderAnvil,
+			requirements: EVMRequirements{Provider: environment.EVMProviderAnvil},
+			wantProvider: environment.EVMProviderAnvil,
 		},
 		{
 			name:         "fast exact besu skips",
 			mode:         ModeFast,
-			requirements: EVMRequirements{Provider: EVMProviderBesu},
+			requirements: EVMRequirements{Provider: environment.EVMProviderBesu},
 			wantSkip:     true,
 		},
 		{
 			name:         "complete exact besu",
 			mode:         ModeComplete,
-			requirements: EVMRequirements{Provider: EVMProviderBesu},
-			wantProvider: EVMProviderBesu,
+			requirements: EVMRequirements{Provider: environment.EVMProviderBesu},
+			wantProvider: environment.EVMProviderBesu,
 		},
 		{
 			name:         "production exact besu",
 			mode:         ModeProduction,
-			requirements: EVMRequirements{Provider: EVMProviderBesu},
-			wantProvider: EVMProviderBesu,
+			requirements: EVMRequirements{Provider: environment.EVMProviderBesu},
+			wantProvider: environment.EVMProviderBesu,
 		},
 		{
 			name:         "fast incompatible skips",
 			mode:         ModeFast,
-			requirements: EVMRequirements{Provider: EVMProviderBesu, ControlledMining: true},
+			requirements: EVMRequirements{Provider: environment.EVMProviderBesu, ControlledMining: true},
 			wantSkip:     true,
 		},
 		{
 			name:         "complete incompatible fails",
 			mode:         ModeComplete,
-			requirements: EVMRequirements{Provider: EVMProviderBesu, ControlledMining: true},
+			requirements: EVMRequirements{Provider: environment.EVMProviderBesu, ControlledMining: true},
 			wantErr:      true,
 		},
 		{
 			name:         "production incompatible fails",
 			mode:         ModeProduction,
-			requirements: EVMRequirements{Provider: EVMProviderBesu, NodeLifecycle: true},
+			requirements: EVMRequirements{Provider: environment.EVMProviderBesu, NodeLifecycle: true},
 			wantErr:      true,
 		},
 		{name: "unknown mode", mode: "other", wantErr: true},
@@ -167,7 +146,7 @@ func TestResolveEVMChains(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveEVMChains(tt.mode, tt.requirements, []environment.ChainID{ChainA})
+			got, err := resolveEVMChains(tt.mode, tt.requirements, []environment.ChainID{"chain-a"})
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("resolveEVMChains() error = %v, wantErr %t", err, tt.wantErr)
 			}
@@ -189,7 +168,7 @@ func TestResolveEVMChainsIDs(t *testing.T) {
 		}
 		want := make([]environment.ChainSpec, len(ids))
 		for i, id := range ids {
-			want[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
+			want[i] = environment.ManagedBesu{ID: id, EVMChainID: 32337 + uint64(i)}
 		}
 		require.Equal(t, want, got.chains)
 	}
@@ -203,13 +182,13 @@ func TestResolveEVMChainsInvalidIDs(t *testing.T) {
 	}
 }
 
-func providerOf(t *testing.T, chain environment.ChainSpec) EVMProvider {
+func providerOf(t *testing.T, chain environment.ChainSpec) environment.EVMProvider {
 	t.Helper()
 	switch chain.(type) {
 	case environment.ManagedAnvil:
-		return EVMProviderAnvil
+		return environment.EVMProviderAnvil
 	case environment.ManagedBesu:
-		return EVMProviderBesu
+		return environment.EVMProviderBesu
 	default:
 		t.Fatalf("unexpected chain type %T", chain)
 		return ""

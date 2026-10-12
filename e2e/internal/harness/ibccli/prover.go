@@ -4,6 +4,7 @@ package ibccli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/netip"
@@ -18,11 +19,12 @@ const (
 	proverBinEnv     = "IBC_TEST_PROVER_BIN"
 	proverReadyWait  = 30 * time.Second
 	proverReadyToken = "listening"
+	proverStopGrace  = 10 * time.Second
 )
 
 // Prover is a running prover service.
 type Prover struct {
-	cmd     *exec.Cmd
+	handle  *processHandle
 	address string
 }
 
@@ -35,9 +37,9 @@ func (p *Prover) Address() string {
 	return p.address
 }
 
-// StartProver runs the test prover on an ephemeral port, waiting for it to
-// announce the one it got
-func StartProver(configPath string) (*Prover, error) {
+// StartProver runs the test prover on an ephemeral port, waiting until ctx
+// ends for it to announce the one it got.
+func StartProver(ctx context.Context, configPath string) (*Prover, error) {
 	cmd := exec.Command(resolvedProverBin(), "--config", configPath, "--listen", loopbackAnyPort)
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -51,11 +53,17 @@ func StartProver(configPath string) (*Prover, error) {
 		return nil, fmt.Errorf("ibc prover: start: %w", err)
 	}
 
-	prover := &Prover{cmd: cmd}
+	announced := make(chan announcement, 1)
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		readAnnouncement(stdout, announced)
+	}()
+	prover := &Prover{handle: reapProcess(cmd, processHooks{BeforeWait: func() { <-drained }})}
 
-	address, err := awaitProverAddress(stdout)
+	address, err := awaitProverAddress(ctx, announced)
 	if err != nil {
-		_ = prover.Stop()
+		_ = prover.Stop(context.WithoutCancel(ctx))
 
 		return nil, err
 	}
@@ -65,45 +73,46 @@ func StartProver(configPath string) (*Prover, error) {
 	return prover, nil
 }
 
-// Stop signals the prover's process group and waits for it to exit.
-func (p *Prover) Stop() error {
-	if p == nil || p.cmd == nil || p.cmd.Process == nil {
+// Stop asks the prover's process group to exit and escalates to SIGKILL after
+// a grace period or when ctx ends. It is safe to call more than once.
+func (p *Prover) Stop(ctx context.Context) error {
+	if p == nil || p.handle == nil {
 		return nil
 	}
 
-	_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
-	_ = p.cmd.Wait()
-
-	return nil
+	return p.handle.signalAndWait(ctx, syscall.SIGTERM, proverStopGrace)
 }
 
-// awaitProverAddress reads the address announced on the prover's first stdout line.
-func awaitProverAddress(stdout io.ReadCloser) (string, error) {
-	type result struct {
-		address string
-		err     error
+type announcement struct {
+	address string
+	err     error
+}
+
+// readAnnouncement sends the address the prover announces on its first stdout
+// line, then discards the rest of stdout until it closes, so the prover never
+// blocks writing to it.
+func readAnnouncement(stdout io.Reader, announced chan<- announcement) {
+	defer func() { _, _ = io.Copy(io.Discard, stdout) }()
+
+	scanner := bufio.NewScanner(stdout)
+	if !scanner.Scan() {
+		announced <- announcement{err: fmt.Errorf("ibc prover: no readiness line: %w", scanner.Err())}
+
+		return
 	}
 
-	announced := make(chan result, 1)
+	fields := strings.Fields(scanner.Text())
+	if len(fields) != 2 || fields[0] != proverReadyToken {
+		announced <- announcement{err: fmt.Errorf("ibc prover: unexpected readiness line %q", scanner.Text())}
 
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		if !scanner.Scan() {
-			announced <- result{err: fmt.Errorf("ibc prover: no readiness line: %w", scanner.Err())}
+		return
+	}
 
-			return
-		}
+	announced <- announcement{address: fields[1]}
+}
 
-		fields := strings.Fields(scanner.Text())
-		if len(fields) != 2 || fields[0] != proverReadyToken {
-			announced <- result{err: fmt.Errorf("ibc prover: unexpected readiness line %q", scanner.Text())}
-
-			return
-		}
-
-		announced <- result{address: fields[1]}
-	}()
-
+// awaitProverAddress waits for the prover's announced address.
+func awaitProverAddress(ctx context.Context, announced <-chan announcement) (string, error) {
 	select {
 	case got := <-announced:
 		if got.err != nil {
@@ -118,6 +127,8 @@ func awaitProverAddress(stdout io.ReadCloser) (string, error) {
 		return got.address, nil
 	case <-time.After(proverReadyWait):
 		return "", fmt.Errorf("ibc prover: did not announce an address within %s", proverReadyWait)
+	case <-ctx.Done():
+		return "", fmt.Errorf("ibc prover: startup canceled: %w", ctx.Err())
 	}
 }
 
