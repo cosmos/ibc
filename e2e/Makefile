@@ -3,6 +3,8 @@
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
 FORGE_BUILD_FLAGS ?=
+# Flags passed to a load-test scenario, e.g. LOADTEST_FLAGS='--duration 20m --per-block 10 --json'.
+LOADTEST_FLAGS ?=
 
 HARNESS_DIR := internal/harness
 GEN_SOLIDITY_ABI_DIR := ../gen/go/solidity-abi
@@ -46,6 +48,15 @@ generate-matrix: ## Regenerate the E2E provider and topology matrix
 check-matrix: ## Check that the generated E2E matrix is current
 	go run ./cmd/e2e-matrix -check test-matrix.md
 
+build-loadtest: ## Build the load-test binary into bin/loadtest
+	go build -o bin/loadtest ./cmd/loadtest
+
+run-relayer: build-loadtest _build-cli ## Run the relayer load scenario (LOADTEST_FLAGS=...)
+	./bin/loadtest relayer $(LOADTEST_FLAGS)
+
+run-attestor: build-loadtest _build-cli ## Run the attestor load scenario (LOADTEST_FLAGS=...)
+	./bin/loadtest attestor $(LOADTEST_FLAGS)
+
 clean: ## Kill e2e processes and remove Docker resources
 	./scripts/clean.sh
 
@@ -85,5 +96,6 @@ _build-cli:
 .PHONY: help doctor doctor-tools lint lint-fix
 .PHONY: test-harness test-apps test
 .PHONY: generate-matrix check-matrix
+.PHONY: build-loadtest run-relayer run-attestor
 .PHONY:	clean clean-dry-run check-stale run-all-checks
 .PHONY: _build-cli

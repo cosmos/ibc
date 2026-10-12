@@ -1,0 +1,188 @@
+<!--
+  ~ SPDX-License-Identifier: Apache-2.0
+-->
+
+# Load tests
+
+`e2e/cmd/loadtest` is a command-line binary that puts load on a local IBC environment built by
+the e2e [harness](../../internal/harness/AGENTS.md): two managed EVM Chains (Anvil by default,
+Besu with `--provider besu`) joined by an attested mesh with one Attestor per Client (or,
+for the relayer with `--light-client besu-qbft`, by Besu QBFT light clients), the traffic
+test applications, and the real `ibc` relayer with auto-relay. Every run starts a
+fresh environment and tears it down at the end, including on Ctrl-C (unless
+`--keep-on-failure` keeps a failed run's environment).
+
+The scenarios are not `go test` tests and never run in CI; CI only builds the binary and
+runs its unit tests (`make -C e2e test-harness`).
+
+## Running
+
+Docker must be running. From the repository root:
+
+```bash
+make -C e2e run-relayer                                       # burst
+make -C e2e run-relayer LOADTEST_FLAGS='--duration 20m --per-block 10'    # long run
+make -C e2e run-attestor
+make -C e2e run-relayer LOADTEST_FLAGS='--packets 40 --wallets 10 --per-block 5'   # smoke
+make -C e2e run-attestor LOADTEST_FLAGS='--duration 5s'                           # smoke
+```
+
+`run-*` builds `cli/bin/ibc` and `e2e/bin/loadtest` first. To call the binary directly,
+`make -C e2e build-loadtest` and run `e2e/bin/loadtest <scenario> [flags]`
+(`-h` lists every flag). The binary finds `cli/bin/ibc` through the harness source path it
+was built from; `IBC_BIN` overrides it.
+
+The report goes to stdout (text, or JSON with `--json`) and progress logs to stderr. The exit
+status is 0 only when the scenario met its target, 1 when it did not or setup failed, 2 on bad
+usage, and 3 when a relayer run is inconclusive (below), whether or not `--keep-on-failure`
+keeps the environment; a failed teardown or a report that could not be written exits 1
+whatever the verdict. Invalid flag values, including an attestor phase too short to send a
+single call at its rate, are rejected before anything starts. A run that is interrupted or exceeds its budget still
+reports what it measured.
+
+### Common flags
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--provider` | `anvil` | Managed EVM provider: `anvil` or `besu`. |
+| `--observability` | off | Export OTel telemetry from the relayer and attestors (see below). |
+| `--timeout` | `30m` | Budget for setup and the run beyond the planned send time (a relayer `--duration`, or the attestor's phases), which is added to it. Teardown follows it with its own bound (relayer stop, then 30s for the environment). |
+| `--json` | off | Print the report as JSON instead of text. |
+| `--keep-on-failure` | off | When setup or the run fails, skip teardown: containers, the relayer, and the deployment directory (relayer config, database, `relayer.log`; run id and path logged) stay up for inspection. A report that could not be written counts as a failure here too. Clean up with `make -C e2e clean`. |
+| `-v` | off | Debug logging. |
+
+## Relayer scenario
+
+`loadtest relayer` sends IFT transfers in both directions (A to B and B to A, or one with
+`--directions a-to-b|b-to-a`) and requires every packet to reach `SUCCEEDED` in the relayer
+status API. The defaults are a short, dense burst: `--packets 3000` (split evenly across
+directions), `--wallets 200`, and `--per-block 150`. `--duration 20m --per-block 10` is a
+long, moderate run: with `--duration`, every direction sends until the duration passes,
+however many packets that takes, instead of a packet count (the two do not combine, and
+`--timeout` comes on top of the duration). `--batch N` sends N transfers per transaction through
+the IFT batch shim, so each transaction emits N packets (every transaction of a batched run
+goes through the shim, including a count run's shorter last one); it must divide
+`--per-block`, which stays a count of transfers. The default `--batch 1` sends a plain
+`iftTransfer` from the wallet, without the shim. Only the selected directions' routes are deployed and relayed.
+`--light-client besu-qbft` (with `--provider besu`) joins the Chains with Besu QBFT light
+clients, which verify each other's sealed headers, instead of attested ones.
+
+The relayer runs with `ClearOnStart`, a 1s clear interval, and per-Chain packet batches of 64
+with a 1s batch timeout.
+
+How a direction runs:
+
+1. **Wallets.** A pool of fresh keys. Each gets 1 native coin of gas and 1 IFT on the source
+   Chain of every direction before the run, from payable shim calls.
+   Wallet *i* sends to wallet *i+1* on the destination Chain (itself in a pool of one).
+2. **Pacing.** A ticker at the source Chain's block interval puts `--per-block`/`--batch`
+   tokens, one per transaction, into a bucket of that size, so the offered rate is
+   `--per-block` transfers per block interval, not per mined block. Tokens still unused when
+   the next tick arrives are counted, in transfers and at most the packets left to claim, as
+   `backpressure` (no wallet was free to send them) and discarded. With `--duration`, no
+   transaction starts once it passes (a sender checks after taking a token), and
+   transactions in flight then complete and count.
+3. **Senders.** One goroutine per wallet takes a token, claims up to `--batch` of the
+   direction's packet slots (the last transaction of a count run may carry fewer), and
+   submits them in one transaction through the harness sender, which waits for its receipt. So
+   each wallet has at most one transaction in flight, which Besu's per-sender pool limit
+   needs. The sender retries requests the node leaves unanswered (a dropped connection, a
+   stalled request, an empty latest block, an HTTP 5xx or 429) or fails internally
+   (JSON-RPC -32603, which Besu answers under load), and gives submission and inclusion one
+   completion budget each. A node that refuses a resend after an unanswered attempt is
+   believed only if it answers that it does not hold the transaction. A transaction that still
+   fails (the node refuses it, it reverts, or it is not included in time) counts as a
+   `send_failure` and retires that wallet, whose packet slots go back for another wallet to
+   send; the first such error is reported. One cut short by an interruption does not count.
+4. **Achieved pacing.** The receipts' block numbers show how the sends landed: blocks with at
+   least one send, the span from the first to the last of them, and the min/p50/max sends
+   per such block. Managed Anvil also mines on transaction arrival, so there sends spread
+   over many small blocks.
+5. **Relay sweep.** While sending runs, one loop per direction lists the packets of the
+   direction's source client from the relayer's `Packets` RPC (following cursors) once per
+   poll interval (the slower Chain's block interval), from the oldest sent packet not yet
+   terminal (`min_sequence_number`), so a settled packet is not listed again, and records
+   each sent packet's state. It ends when sending finished and every sent packet is terminal
+   (`SUCCEEDED`, `TIMED_OUT`, `REJECTED`, `RELAY_FAILED`). It gives up when relaying stalls:
+   packets outstanding but none newly terminal for the route's completion budget (20 block
+   intervals of each Chain: 40s on Anvil, 80s on Besu), checked after each listing, and then
+   stops the direction's senders. Sending is not progress, and a pause with nothing
+   outstanding is not a stall. Packets sent but not terminal when it ends are
+   `unresolved`, so a direction's outcomes add up to its sent packets, and fail the run. A
+   terminal state is final: the first one listed counts. A packet the relayer later lists in
+   another state is counted as `reverted`, a relayer status regression the report warns about
+   under its overall line. If the relayer
+   process exits, every direction stops at once and the run fails, reporting how it exited.
+   Packets time out after 12 hours (the harness default), well past any realistic run.
+6. **Latency.** After the sweep, each succeeded packet's relay is measured from chain data:
+   the receipts of its relayer-reported receive and acknowledgement transactions and the
+   timestamps of the including blocks. Send to receive is the destination block of the
+   receive minus the source block of the transfer; receive to acknowledgement and send to
+   acknowledgement end at the source block of the acknowledgement. Block timestamps have
+   one-second resolution, so the precision is the block time. Latency is reported, not
+   judged: chain reads are retried as the sender's are, within the Chain's completion budget,
+   and one that still fails skips the packets that need it and shows as `latency error`.
+   With `--observability`, the relayer's own `relay_duration` metric (`send_to_recv`,
+   `recv_to_ack`) is in Grafana.
+
+The report has one overall line (pass or fail, the packet count or duration, succeeded of
+sent packets, wall time from the first send to the end of the last sweep, and succeeded
+packets per second) and, per direction: sends (target in a count run, sent, send failures,
+backpressure, send phase), achieved pacing, packet outcomes
+(succeeded, timed out, rejected, relay failed, unresolved, reverted, relay drain after the last
+send),
+and p50/p90/p95/p99/max latency for submit to receipt (wall clock per transaction, from the
+senders) and send
+to receive, receive to acknowledgement, and send to acknowledgement (block time).
+
+The verdict judges the relayer on the packets that were sent. It is `PASS` when every one
+succeeded and every direction kept a wallet sending, and `FAIL` when a sent packet did not
+succeed, the relay stalled, the relayer exited, or the run was interrupted. When the relayer
+relayed everything sent but every wallet of a direction retired, so it stopped short of its
+target or duration, the load was not delivered and the run is `INCONCLUSIVE` (exit status
+3): it says nothing about the relayer at the asked load.
+
+## Attestor scenario
+
+`loadtest attestor` sends gRPC requests at a fixed rate to the Attestor observing chain A.
+No relayer runs.
+
+| Phase | Request | Default |
+| --- | --- | --- |
+| `packets` | `PacketAttestation` of a random seeded packet at its send height | 30s at 500 rps |
+| `state` | `StateAttestation` at a random height in `1..latest` | 30s at 100 rps |
+
+`--phases` lists the phases to run, in order (a phase may repeat); `--duration`,
+`--packets-rps`, and `--state-rps` shape them. The `packets` phase first deploys the
+applications (once), seeds 10 IFT transfers from chain A in one batch transaction, and waits
+until the Attestor's latest height reaches its block; the packets are never relayed. A
+`state`-only run deploys nothing.
+
+The load is open loop: the phase keeps starting the calls due by then at `rps`, whether or
+not earlier calls have returned, so an attestor that cannot keep up shows as latency and
+timeouts, not as fewer calls, and a full phase sends exactly `rps` calls per second (a late
+check sends the calls due as a burst). Each call has a 3s timeout. At the phase deadline no new calls start and the phase
+waits for those in flight. Latency covers succeeded calls. A phase passes when at least one
+call succeeded and failed plus timed-out calls are at most `--max-error-rate` (default 0.01)
+of the calls sent. A phase that cannot start, or an interruption, ends the run; an
+interrupted phase is reported with the calls it sent, over the time it ran, and fails.
+
+## Observability
+
+`--observability` makes every managed `ibc` process (the relayer and attestors) push OTel
+metrics to the local LGTM stack:
+
+```bash
+make -C cli/scripts/otel up
+make -C e2e run-relayer LOADTEST_FLAGS='--observability'
+make -C cli/scripts/otel down
+```
+
+The "IBC Local Metrics" dashboard is provisioned automatically when the stack starts. The
+stack must be running before the load test starts. See
+[cli/scripts/otel](../../../cli/scripts/otel/README.md).
+
+## After a crash
+
+A run that is killed hard (second Ctrl-C, `kill -9`) can leave containers and processes
+behind. They carry the harness labels: `make -C e2e clean-dry-run`, then `make -C e2e clean`.
