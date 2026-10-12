@@ -30,7 +30,7 @@ func TestTransfer_AutoRelay(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
+	amount := traffic.Coins(500_000)
 	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{
 		Amount: amount,
 		Memo:   "transfer-auto-relay",
@@ -194,7 +194,7 @@ func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
+	amount := traffic.Coins(500_000)
 	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{
 		Amount: amount,
 		Memo:   "transfer-besu-qbft",

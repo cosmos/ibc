@@ -16,18 +16,18 @@ import (
 
 func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	t.Parallel()
-	const (
-		chainA environment.ChainID = "chain-a"
-		chainB environment.ChainID = "chain-b"
-		chainC environment.ChainID = "chain-c"
-	)
+	const chainC environment.ChainID = "chain-c"
 	// Both routes share destination chain-a and send sequence 1 to probe
 	// bare-seq collision.
-	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, chainA, chainB, chainC)...)
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB, chainC)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	routes := []traffic.Route{traffic.NewRoute(chainB, chainA), traffic.NewRoute(chainC, chainA)}
+	routes := []traffic.Route{
+		traffic.NewRoute(traffic.ChainB, traffic.ChainA),
+		traffic.NewRoute(chainC, traffic.ChainA),
+	}
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, routes...)
 	bToAApp, err := traffic.NewTransfer(env, deployment, sender, routes[0])
 	require.NoError(t, err)

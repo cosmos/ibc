@@ -12,12 +12,12 @@ corroborates outcomes by reading chain state with its own clients.
   behavior remains observable only through the executable and HTTP surface.
 - `traffic` is the workflow layer above `environment`: it deploys the test applications, writes the
   relayer configuration, starts the relayer and prover, creates and funds signers, and sends and awaits
-  ICS20, GMP, and IFT packets. It never imports `testing`: functions that do I/O take a
-  `context.Context`, failures are returned as errors, files go under a caller-supplied directory, and
-  started processes are returned to the caller, who stops them before removing that directory and
-  closing the Environment. E2e tests and the load-test binary call it directly (`e2e/README.md`
-  describes the few `testing.TB` wrappers in `e2e/internal/e2etest`).
-  Harness non-test code never imports `testing`.
+  ICS20, GMP, and IFT packets. Like all harness non-test code, it never imports `testing`: functions
+  that do I/O take a `context.Context`, failures are returned as errors, files go under a
+  caller-supplied directory, and started processes are returned to the caller, who stops them
+  before removing that directory and closing the Environment. E2e tests and the load-test binary
+  call it directly (`e2e/README.md` describes the few `testing.TB` wrappers in
+  `e2e/internal/e2etest`).
 - Wait budgets derive from the resolved Chain's `environment.Timing`, never from a literal tuned
   to instant Anvil. Launch-side readiness uses `chain/evm/poll.Until`; test-application effect and
   stability observation lives in `traffic`, with the bindings that interpret those effects.
