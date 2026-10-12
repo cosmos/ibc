@@ -24,7 +24,7 @@ func AccountFromHex(hexKey string) (Account, error) {
 	if err != nil {
 		return Account{}, fmt.Errorf("parse private key: %w", err)
 	}
-	return accountFromKey(key), nil
+	return AccountFromKey(key), nil
 }
 
 func NewAccount() (Account, error) {
@@ -32,10 +32,10 @@ func NewAccount() (Account, error) {
 	if err != nil {
 		return Account{}, fmt.Errorf("generate key: %w", err)
 	}
-	return accountFromKey(key), nil
+	return AccountFromKey(key), nil
 }
 
-func accountFromKey(key *ecdsa.PrivateKey) Account {
+func AccountFromKey(key *ecdsa.PrivateKey) Account {
 	return Account{key: key, addr: crypto.PubkeyToAddress(key.PublicKey)}
 }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"encoding/hex"
@@ -12,7 +12,8 @@ import (
 )
 
 func TestSignerFormattingExposesOnlyAddress(t *testing.T) {
-	signer := NewSigner(t)
+	signer, err := NewSigner()
+	require.NoError(t, err)
 	privateKey := hex.EncodeToString(crypto.FromECDSA(signer.key))
 
 	for _, formatted := range []string{

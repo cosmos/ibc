@@ -8,7 +8,12 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 )
+
+// CloseTimeout is the budget callers give Close, which stops containers and
+// managed processes.
+const CloseTimeout = 30 * time.Second
 
 // Environment is returned only after every supported declaration is ready. It
 // is the sole owner of acquired local handles and environment-owned resources.

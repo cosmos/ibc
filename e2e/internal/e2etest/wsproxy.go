@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package evm
+package e2etest
 
 import (
 	"io"

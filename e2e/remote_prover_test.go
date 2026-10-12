@@ -12,24 +12,25 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 type remoteProverEnv struct {
 	env        *environment.Environment
 	driver     *ibccli.Driver
-	deployment *e2etest.Deployment
-	route      e2etest.Route
-	sender     e2etest.Signer
+	deployment *traffic.Deployment
+	route      traffic.Route
+	sender     traffic.Signer
 }
 
 func startRemoteProverEnv(t *testing.T, requirements e2etest.EVMRequirements) remoteProverEnv {
 	t.Helper()
 
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t, requirements, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 
 	prover := e2etest.StartProver(t, env, relayerSigner)
 
@@ -50,16 +51,17 @@ func TestRemoteProver_RelaysPacket(t *testing.T) {
 
 	setup := startRemoteProverEnv(t, e2etest.EVMRequirements{})
 
-	transferApp := e2etest.NewTransfer(t, setup.env, setup.deployment, setup.sender, setup.route)
+	transferApp, err := traffic.NewTransfer(setup.env, setup.deployment, setup.sender, setup.route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
 	ctx := t.Context()
 
 	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: amount})
+	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{Amount: amount})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
@@ -76,13 +78,14 @@ func TestRemoteProver_TimesOutPacket(t *testing.T) {
 
 	setup := startRemoteProverEnv(t, e2etest.EVMRequirements{ControlledMining: true})
 
-	transferApp := e2etest.NewTransfer(t, setup.env, setup.deployment, setup.sender, setup.route)
+	transferApp, err := traffic.NewTransfer(setup.env, setup.deployment, setup.sender, setup.route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
 	ctx := t.Context()
 
 	require.NoError(t, relayer.Stop(ctx))
 
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{
 		Amount:  big.NewInt(3_000_000),
 		Timeout: packetTimeout,
 	})
@@ -97,7 +100,7 @@ func TestRemoteProver_TimesOutPacket(t *testing.T) {
 
 	relayer = e2etest.StartRelayer(t, setup.driver, setup.env)
 
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx, status.GetTimeoutTx().GetTxHash()))
@@ -110,14 +113,15 @@ func TestRemoteProver_ErrorAcknowledgement(t *testing.T) {
 
 	setup := startRemoteProverEnv(t, e2etest.EVMRequirements{})
 
-	gmp := e2etest.NewGMP(t, setup.env, setup.deployment, setup.sender, setup.route)
+	gmp, err := traffic.NewGMP(setup.env, setup.deployment, setup.sender, setup.route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, setup.driver, setup.env)
 	ctx := t.Context()
 
-	call, err := gmp.Call(ctx, e2etest.GMPRequest{Payload: invalidGMPPayload})
+	call, err := gmp.Call(ctx, traffic.GMPRequest{Payload: invalidGMPPayload})
 	require.NoError(t, err)
 
-	_, err = e2etest.AwaitState(ctx, relayer, call.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, call.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
 	require.NoError(t, call.VerifyCounterUnchanged(ctx))

@@ -9,8 +9,6 @@
 | `TestAttachedChainRemainsCallerOwned` | EVM portable | environment: 1× Anvil; 1× Attached EVM; 2 IBC instances; 1 connection; 2 attestors | environment: 1× Anvil; 1× Attached EVM; 2 IBC instances; 1 connection; 2 attestors | environment: 1× Attached EVM; 1× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAttestedClient_MisbehaviourFreeze` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAttestedIFTTransfer_RemoteSigner` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
-| `TestAttestedMesh` | None | No environment | No environment | No environment |
-| `TestAttestedMeshConnectsEveryChainPair` | None | No environment | No environment | No environment |
 | `TestAutoRelay_AllPacketsAreClearedOnStart` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAutoRelay_PacketIsClearedOnRestart` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestAutoRelay_SubscriptionReconnect` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
@@ -37,7 +35,6 @@
 | `TestIFTTransfer_TwoTokensSameClientPair` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestManualRelay_RequestSurvivesRestart` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
 | `TestPendingPacketStatusWhileDestinationMiningPaused` | EVM (controlled mining) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |
-| `TestQBFTMesh` | None | No environment | No environment | No environment |
 | `TestRelay_FilteredSequences` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestRelay_FilteredTimeoutSequences` | EVM portable | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Besu; 2 IBC instances; 1 connection; 2 attestors |
 | `TestRelayerRecoversAfterNodeRestart` | EVM (node lifecycle) | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors | 2× Anvil; 2 IBC instances; 1 connection; 2 attestors |

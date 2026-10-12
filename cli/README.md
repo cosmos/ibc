@@ -76,5 +76,5 @@ for a worked example.
 ## E2E
 
 Repository-wide black-box tests live in [`../e2e/`](../e2e/README.md), with the
-harness in `../e2e/internal/harness` as a separate Go module. From the
-repository root, `make -C e2e doctor && make -C e2e test` runs the suite.
+harness in `../e2e/internal/harness`. From the repository root,
+`make -C e2e doctor && make -C e2e test` runs the suite.
