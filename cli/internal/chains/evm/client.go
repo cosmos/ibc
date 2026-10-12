@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"log/slog"
 	"math/big"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -72,9 +73,24 @@ type Client struct {
 	logger        *slog.Logger
 }
 
+// nodeTransport keeps connections to each node open for reuse. go-ethereum's
+// default HTTP client keeps two idle per host, so concurrent calls beyond two
+// each open and close a connection, and under load the closed connections
+// hold every local port in TIME_WAIT.
+var nodeTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = 256
+	return transport
+}()
+
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	rpcClient, err := rpc.Dial(rpcURL)
+	rpcClient, err := rpc.DialOptions(
+		context.Background(),
+		rpcURL,
+		rpc.WithHTTPClient(&http.Client{Transport: nodeTransport}),
+	)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
