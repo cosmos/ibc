@@ -217,7 +217,7 @@ func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
 		"the unanswered lookup is repeated, for the transaction sent")
 }
 
-func TestBroadcastTxEstimatesGasAtTheLatestBlock(t *testing.T) {
+func TestBroadcastTxFallsBackOnAnInternalEstimateError(t *testing.T) {
 	node, client := newFakeNode(t, map[string][]reply{
 		"eth_estimateGas": {{nodeErr: "Internal error", code: -32603}, {result: "0x5208"}},
 	})
@@ -225,7 +225,7 @@ func TestBroadcastTxEstimatesGasAtTheLatestBlock(t *testing.T) {
 	require.NoError(t, broadcast(t, client))
 	node.mu.Lock()
 	defer node.mu.Unlock()
-	assert.Equal(t, []string{"latest", "latest"}, node.estimateBlocks, "an internal error is repeated, at latest")
+	assert.Equal(t, []string{"", "latest"}, node.estimateBlocks, "the latest block answers at once")
 }
 
 func TestBroadcastTxRepeatsAnInternalError(t *testing.T) {
@@ -261,7 +261,7 @@ func TestBroadcastTxRetriesOnlyTheHTTPStatusesThatAskTo(t *testing.T) {
 
 	node.script("eth_estimateGas", reply{status: http.StatusNotFound})
 	require.ErrorContains(t, broadcast(t, client), "404")
-	assert.Equal(t, 4, node.count("eth_estimateGas"), "one call: a 404 is final")
+	assert.Equal(t, 4, node.count("eth_estimateGas"), "one call: only a node error falls back")
 }
 
 func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
@@ -271,7 +271,7 @@ func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
 	})
 
 	require.ErrorContains(t, broadcast(t, client), "execution reverted")
-	assert.Equal(t, 1, node.count("eth_estimateGas"), "a node error is final")
+	assert.Equal(t, 2, node.count("eth_estimateGas"), "a node error is not retried, beyond the latest-block fallback")
 	assert.Zero(t, node.count("eth_sendRawTransaction"))
 
 	node.script("eth_estimateGas", reply{result: "0x5208"})

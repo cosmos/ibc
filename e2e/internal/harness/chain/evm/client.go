@@ -382,12 +382,20 @@ func (e *EVMClient) buildSignedTx(
 	}
 
 	msg := ethereum.CallMsg{From: from.addr, To: to, Value: val, Data: data}
-	// Estimated at latest: Besu's pending estimate uses a future timestamp,
-	// which rejects otherwise-valid short-lived transactions, and every send
-	// from this client waits for its predecessor's receipt, so latest holds
-	// what the transaction depends on.
 	est, err := Retry(ctx, wait, func(ctx context.Context) (uint64, error) {
-		return e.client.EstimateGasAtBlock(ctx, msg, nil)
+		// Pending first: its timestamp is the next block's, and state stamped
+		// with a block's time (the IFT rate limiter's bucket, which every
+		// sender shares) can be newer than the latest block a node estimates
+		// against, which reverts with an underflow. Besu, whose pending
+		// estimate uses a future timestamp, can reject an otherwise valid
+		// short-lived transaction there or fail internally on it under load,
+		// so any node error is retried once against latest.
+		est, estimateErr := e.client.EstimateGas(ctx, msg)
+		var nodeErr rpc.Error
+		if errors.As(estimateErr, &nodeErr) {
+			est, estimateErr = e.client.EstimateGasAtBlock(ctx, msg, nil)
+		}
+		return est, estimateErr
 	})
 	if err != nil {
 		return nil, fmt.Errorf("estimate gas: %w", err)
