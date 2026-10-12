@@ -62,8 +62,8 @@ func (c *common) register(fs *flag.FlagSet) {
 	fs.BoolVar(&c.observability, "observability", false,
 		"export OTel telemetry from the relayer and attestors; start the stack first with "+
 			"make -C cli/scripts/otel up (Grafana on http://localhost:3001)")
-	fs.DurationVar(&c.timeout, "timeout", 30*time.Minute, "budget for setup and the run; teardown follows "+
-		"with its own bound")
+	fs.DurationVar(&c.timeout, "timeout", 30*time.Minute, "budget for setup and the run beyond its planned "+
+		"send time (a relayer --duration, or the attestor's phases); teardown follows with its own bound")
 	fs.BoolVar(&c.jsonOut, "json", false, "print the report as JSON instead of text")
 	fs.BoolVar(&c.keepOnFailure, "keep-on-failure", false,
 		"leave the environment (containers, relayer, deployment directory) running when the run fails")
@@ -132,7 +132,7 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 	c.register(fs)
 	packets := fs.Int("packets", 3000, "total packets, split across directions")
 	duration := fs.Duration("duration", 0, "send for this long in every direction instead of a packet count "+
-		"(not with --packets); it counts against --timeout")
+		"(not with --packets); --timeout comes on top of it")
 	wallets := fs.Int("wallets", 200, "wallet pool size; each wallet has at most one transaction "+
 		"in flight per direction")
 	perBlock := fs.Int("per-block", 150, "transfers offered per source block interval and direction")
@@ -161,11 +161,7 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 		cfg.Packets = 0
 	}
 	opts, err := c.sessionOptions()
-	switch {
-	case err != nil:
-	case cfg.Duration >= c.timeout:
-		err = fmt.Errorf("--duration %s leaves no time within --timeout %s", cfg.Duration, c.timeout)
-	default:
+	if err == nil {
 		err = cfg.Validate(opts.Provider)
 	}
 	if err != nil {
@@ -175,6 +171,7 @@ func runRelayer(args []string, stdout, stderr io.Writer) int {
 		c,
 		stdout,
 		stderr,
+		cfg.Duration,
 		relayerload.SessionOptions(opts, cfg),
 		func(ctx context.Context, s *session.Session) (report, error) {
 			return relayerload.Run(ctx, s, cfg)
@@ -215,6 +212,7 @@ func runAttestor(args []string, stdout, stderr io.Writer) int {
 		c,
 		stdout,
 		stderr,
+		time.Duration(len(cfg.Phases))*(*duration),
 		attestorload.SessionOptions(opts, cfg),
 		func(ctx context.Context, s *session.Session) (report, error) {
 			return attestorload.Run(ctx, s, cfg)
@@ -227,14 +225,15 @@ type report interface {
 	WriteText(w io.Writer) error
 }
 
-// execute wires logging, the run budget, and signal
-// handling around a scenario, starts its session, writes the scenario's
-// report to stdout, and tears the session down unless setup or the run
-// failed and --keep-on-failure asks to keep it. Teardown is deferred, so a
-// panic tears down too.
+// execute wires logging, the run budget (--timeout on top of the scenario's
+// planned send time), and signal handling around a scenario, starts its
+// session, writes the scenario's report to stdout, and tears the session
+// down unless setup or the run failed and --keep-on-failure asks to keep it.
+// Teardown is deferred, so a panic tears down too.
 func execute(
 	c common,
 	stdout, stderr io.Writer,
+	planned time.Duration,
 	opts session.Options,
 	scenario func(context.Context, *session.Session) (report, error),
 ) (code int) {
@@ -245,11 +244,11 @@ func execute(
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level})))
 
 	if c.observability {
-		slog.Info("observability enabled: expects the stack from `make -C cli/scripts/otel up`; " +
-			"Grafana at http://localhost:3001")
+		slog.Info("observability enabled: expects the stack from `make -C cli/scripts/otel up`")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	budget := c.timeout + planned
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -257,7 +256,7 @@ func execute(
 		if errors.Is(ctx.Err(), context.Canceled) {
 			slog.Warn("interrupted; tearing down (interrupt again to force-exit, then run `make -C e2e clean`)")
 		} else {
-			slog.Warn("run budget exhausted; tearing down", "timeout", c.timeout)
+			slog.Warn("run budget exhausted; tearing down", "budget", budget)
 		}
 		// A second signal takes the default action.
 		stop()
@@ -265,7 +264,8 @@ func execute(
 	defer announce()
 
 	s, err := session.Start(ctx, opts)
-	// finish sets the exit code once the run ends, after a panic too.
+	// finish tears down and sets the exit code once the run ends; a panic
+	// still tears down, though its exit status wins.
 	defer func() { code = finish(ctx, s, err, c.keepOnFailure) }()
 	if err != nil {
 		slog.Error("setup failed", "err", err)

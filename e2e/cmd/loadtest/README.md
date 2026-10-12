@@ -37,7 +37,7 @@ status is 0 only when the scenario met its target, 1 when it did not or setup fa
 usage, and 3 when a relayer run is inconclusive (below), whether or not `--keep-on-failure`
 keeps the environment; a failed teardown or a report that could not be written exits 1
 whatever the verdict. Invalid flag values, including an attestor phase too short to send a
-single call at its rate, are rejected before anything starts. A run that is interrupted or exceeds `--timeout` still
+single call at its rate, are rejected before anything starts. A run that is interrupted or exceeds its budget still
 reports what it measured.
 
 ### Common flags
@@ -46,9 +46,9 @@ reports what it measured.
 | --- | --- | --- |
 | `--provider` | `anvil` | Managed EVM provider: `anvil` or `besu`. |
 | `--observability` | off | Export OTel telemetry from the relayer and attestors (see below). |
-| `--timeout` | `30m` | Budget for setup and the run. Teardown follows it with its own bound (relayer stop, then 30s for the environment). |
+| `--timeout` | `30m` | Budget for setup and the run beyond the planned send time (a relayer `--duration`, or the attestor's phases), which is added to it. Teardown follows it with its own bound (relayer stop, then 30s for the environment). |
 | `--json` | off | Print the report as JSON instead of text. |
-| `--keep-on-failure` | off | When setup or the run fails, skip teardown: containers, the relayer, and the deployment directory (relayer config, database, `relayer.log`; run id and path logged) stay up for inspection. Clean up with `make -C e2e clean`. |
+| `--keep-on-failure` | off | When setup or the run fails, skip teardown: containers, the relayer, and the deployment directory (relayer config, database, `relayer.log`; run id and path logged) stay up for inspection. A report that could not be written counts as a failure here too. Clean up with `make -C e2e clean`. |
 | `-v` | off | Debug logging. |
 
 ## Relayer scenario
@@ -58,8 +58,8 @@ reports what it measured.
 status API. The defaults are a short, dense burst: `--packets 3000` (split evenly across
 directions), `--wallets 200`, and `--per-block 150`. `--duration 20m --per-block 10` is a
 long, moderate run: with `--duration`, every direction sends until the duration passes,
-however many packets that takes, instead of a packet count (the two do not combine, and the
-duration counts against `--timeout`). `--batch N` sends N transfers per transaction through
+however many packets that takes, instead of a packet count (the two do not combine, and
+`--timeout` comes on top of the duration). `--batch N` sends N transfers per transaction through
 the IFT batch shim, so each transaction emits N packets; it must divide `--per-block`, which
 stays a count of transfers. The default `--batch 1` sends a plain `iftTransfer` from the
 wallet, without the shim. Only the selected directions' routes are deployed and relayed.
@@ -72,7 +72,7 @@ with a 1s batch timeout.
 How a direction runs:
 
 1. **Wallets.** A pool of fresh keys. Each gets 1 native coin of gas and 1 IFT on the source
-   Chain of every direction before the run, from one payable shim call per 64 wallets.
+   Chain of every direction before the run, from payable shim calls.
    Wallet *i* sends to wallet *i+1* on the destination Chain (itself in a pool of one).
 2. **Pacing.** A ticker at the source Chain's block interval puts `--per-block`/`--batch`
    tokens, one per transaction, into a bucket of that size, so the offered rate is
@@ -97,8 +97,8 @@ How a direction runs:
    per such block. Managed Anvil also mines on transaction arrival, so there sends spread
    over many small blocks.
 5. **Relay sweep.** While sending runs, one loop per direction lists every packet of the
-   direction's source client from the relayer's `Packets` RPC (1000 per page, following
-   cursors) once per poll interval (the slower Chain's block interval) and records each sent
+   direction's source client from the relayer's `Packets` RPC (following cursors) once per
+   poll interval (the slower Chain's block interval) and records each sent
    packet's state. It ends when sending finished and every sent packet is terminal
    (`SUCCEEDED`, `TIMED_OUT`, `REJECTED`, `RELAY_FAILED`). It gives up when relaying stalls:
    no packet sent and none newly terminal for the route's completion budget (20 block
@@ -150,7 +150,7 @@ applications (once), seeds 10 IFT transfers from chain A in one batch transactio
 until the Attestor's latest height reaches its block; the packets are never relayed. A
 `state`-only run deploys nothing.
 
-The load is open loop: every 10ms the phase starts the calls due by then at `rps`, whether or
+The load is open loop: the phase keeps starting the calls due by then at `rps`, whether or
 not earlier calls have returned, so an attestor that cannot keep up shows as latency and
 timeouts, not as fewer calls, and a full phase sends exactly `rps` calls per second (a late
 check sends the calls due as a burst). Each call has a 3s timeout. At the phase deadline no new calls start and the phase
@@ -165,7 +165,7 @@ interrupted phase is reported with the calls it sent, over the time it ran, and 
 metrics to the local LGTM stack:
 
 ```bash
-make -C cli/scripts/otel up    # Grafana on http://localhost:3001 (admin/admin)
+make -C cli/scripts/otel up
 make -C e2e run-relayer LOADTEST_FLAGS='--observability'
 make -C cli/scripts/otel down
 ```
