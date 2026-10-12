@@ -18,8 +18,11 @@ const progressEvery = 10 * time.Second
 // trackedPacket is one sent packet and the relayer's latest status for it.
 type trackedPacket struct {
 	sentPacket
-	// status is nil until the relayer lists the packet.
+	// status is nil until the relayer lists the packet, and stays at the
+	// first terminal status listed.
 	status *relayerv2.PacketStatus
+	// reverted marks a terminal packet the relayer later listed otherwise.
+	reverted bool
 }
 
 func (p *trackedPacket) state() relayerv2.PacketState { return p.status.GetState() }
@@ -106,8 +109,16 @@ func sweep(
 				listErr = nil
 				for _, status := range statuses {
 					key := packetKey{clientID: status.GetSourceClientId(), sequence: status.GetSequenceNumber()}
-					if p, ok := tracked[key]; ok {
+					p, ok := tracked[key]
+					switch {
+					case !ok:
+					case !p.terminal():
 						p.status = status
+					case status.GetState() != p.state() && !p.reverted:
+						// A terminal state is final; the first one counts.
+						p.reverted = true
+						slog.WarnContext(ctx, "relayer listed a terminal packet in another state", "direction", label,
+							"sequence", key.sequence, "first", p.state(), "now", status.GetState())
 					}
 				}
 				before := len(unsettled)

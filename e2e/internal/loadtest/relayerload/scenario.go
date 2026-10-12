@@ -447,6 +447,10 @@ func runDirection(
 	}
 	// Includes packets sent after the sweep gave up, which it never tracked.
 	d.Unresolved = d.Sent - d.Succeeded - d.TimedOut - d.Rejected - d.RelayFailed
+	// Unresolved packets without a sweep error would pass unnoticed.
+	if d.Unresolved > 0 && sweepErr == nil {
+		problems = append(problems, fmt.Errorf("%d sent packets were never seen terminal", d.Unresolved))
+	}
 	if failed := d.TimedOut + d.Rejected + d.RelayFailed; failed > 0 {
 		problems = append(problems, fmt.Errorf("%d packets did not succeed: timed_out=%d rejected=%d relay_failed=%d",
 			failed, d.TimedOut, d.Rejected, d.RelayFailed))

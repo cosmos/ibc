@@ -111,6 +111,21 @@ func TestSweepListsFromTheOldestUnsettledPacket(t *testing.T) {
 	assert.Equal(t, []uint64{1, 2, 2}, relayer.froms, "settled packets are not listed again")
 }
 
+// A packet listed again below an unsettled one keeps its first terminal
+// state, so the count at the end matches what settled.
+func TestSweepKeepsTheFirstTerminalState(t *testing.T) {
+	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{
+		1: {pending, pending, pending, succeeded},
+		2: {succeeded, pending},
+	}}
+
+	packets, err := sweep(t.Context(), "test", time.Millisecond, time.Minute, relayer.list, sent(true, 1, 2))
+
+	require.NoError(t, err)
+	assert.Equal(t, succeeded, packets[1].state())
+	assert.True(t, packets[1].reverted)
+}
+
 func TestSweepWaitsForSendingToFinish(t *testing.T) {
 	relayer := &fakeRelayer{progress: map[uint64][]relayerv2.PacketState{1: {succeeded}, 2: {succeeded}}}
 	out := sent(false, 1)
