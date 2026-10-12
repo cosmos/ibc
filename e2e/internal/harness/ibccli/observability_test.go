@@ -27,7 +27,7 @@ func TestOTelFileConfig(t *testing.T) {
 
 func TestOTelEnvApplyKeepsTheInheritedEnvironment(t *testing.T) {
 	cmd := exec.Command("unused")
-	otelEnvApply(cmd, "attestor", "test")
-	require.Contains(t, cmd.Env, otelServiceInstanceEnv+"=attestor/test")
+	otelEnvApply(cmd, "run-1", "attestor", "test")
+	require.Contains(t, cmd.Env, otelServiceInstanceEnv+"=run-1/attestor/test")
 	require.Contains(t, cmd.Env, "PATH="+os.Getenv("PATH"))
 }

@@ -476,6 +476,7 @@ func buildConfig(
 	options := ibccli.RelayerOptions{
 		ChainIDs:     make(map[string]string, len(env.Chains())),
 		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
+		RunID:        env.RunID(),
 	}
 	for _, id := range env.Chains() {
 		chain, err := env.Chain(id)

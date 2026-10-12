@@ -68,6 +68,9 @@ type AttestorLaunch struct {
 	ListenAddress string
 
 	Observability bool
+	// RunID leads the process's OTel instance name, so the telemetry of
+	// runs that overlap stays apart.
+	RunID string
 }
 
 type readinessResult struct {
@@ -130,7 +133,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 	)
 	cmd.Dir = paths.dir
 
-	otelEnvApply(cmd, "attestor", launch.Name)
+	otelEnvApply(cmd, launch.RunID, "attestor", launch.Name)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stderr, err := cmd.StderrPipe()
