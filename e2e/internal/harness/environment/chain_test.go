@@ -24,12 +24,12 @@ func TestFundingUnavailableWithoutManagedControl(t *testing.T) {
 	require.ErrorIs(t, err, ErrCapabilityUnavailable)
 }
 
-func TestEVMTransactionWaitUsesChainTiming(t *testing.T) {
+func TestTransactionWaitUsesChainTiming(t *testing.T) {
 	timing := Timing{
 		CompletionBudget: 17 * time.Second,
 		PollInterval:     23 * time.Millisecond,
 	}
-	wait := (&EVM{chain: &Chain{timing: timing}}).transactionWait()
+	wait := timing.TransactionWait()
 	require.Equal(t, timing.CompletionBudget, wait.Timeout)
 	require.Equal(t, timing.PollInterval, wait.PollInterval)
 }
