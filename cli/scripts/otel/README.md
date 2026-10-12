@@ -52,6 +52,13 @@ OTEL_CONFIG_FILE="$(pwd)/scripts/otel/ibc-otel.yaml" ibc relayer run
 3. Run IBC, then open Grafana at http://localhost:3001 (`admin` / `admin`).
 The stack does not need to be restarted when switching modes.
 
+## Dashboards
+
+Grafana provisions every JSON file in [`dashboards/`](./dashboards) on startup, including
+the "IBC Local Metrics" load-test dashboard. The stack keeps no state, so UI edits are lost
+on `down`: to keep them, use Export → Export as JSON (Grafana v2 resource format), save it
+over [`dashboards/loadtest.json`](./dashboards/loadtest.json), and commit.
+
 ## Ports
 
 | Label                                         | Port              | Note                  |
