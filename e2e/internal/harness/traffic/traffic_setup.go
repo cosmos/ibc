@@ -322,13 +322,7 @@ func DeployApps(
 			return nil, fmt.Errorf("traffic: deploy IFT send-call constructor on Chain %q: %w", id, err)
 		}
 
-		iftBatchShim, err := deployIFTBatchShim(
-			ctx,
-			evmAccess,
-			deployer.account,
-			iftToken,
-			initialTokenSupply,
-		)
+		iftBatchShim, err := deployIFTBatchShim(ctx, evmAccess, deployer.account, iftToken)
 		if err != nil {
 			return nil, fmt.Errorf("traffic: deploy IFT batch transfer shim on Chain %q: %w", id, err)
 		}
@@ -671,21 +665,20 @@ func deployIFTToken(
 	return token, nil
 }
 
-// deployIFTBatchShim deploys the IFT batch-transfer shim and funds it with
-// IFT balance
+// deployIFTBatchShim deploys the IFT batch-transfer shim and mints it
+// initialTokenSupply IFT.
 func deployIFTBatchShim(
 	ctx context.Context,
 	client *environment.EVM,
 	sender evm.Account,
 	iftToken common.Address,
-	amount *big.Int,
 ) (common.Address, error) {
 	shim, err := deployContract(ctx, client, sender, iftbatchtransfershim.IFTBatchTransferShimMetaData)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("traffic: deploy IFT batch transfer shim: %w", err)
 	}
 	mint, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return iftTransactor.Mint(opts, shim, amount)
+		return iftTransactor.Mint(opts, shim, initialTokenSupply)
 	})
 	if err != nil {
 		return common.Address{}, fmt.Errorf("traffic: pack IFT mint for batch shim: %w", err)

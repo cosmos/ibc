@@ -89,7 +89,7 @@ func DeployIFTTokenPair(
 	if err != nil {
 		return nil, fmt.Errorf("traffic: deploy additional IFT on Chain %q: %w", route.Destination, err)
 	}
-	batcher, err := deployIFTBatchShim(ctx, r.source.evm, deployer.account, sourceIFT, initialTokenSupply)
+	batcher, err := deployIFTBatchShim(ctx, r.source.evm, deployer.account, sourceIFT)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"traffic: deploy additional IFT batch transfer shim on Chain %q: %w", route.Source, err,

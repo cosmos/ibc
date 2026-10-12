@@ -97,7 +97,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		g.sender,
 		g.sourceGMP,
 		data,
-		sendPacketSequence(g.sourceRouter),
+		g.sourceRouter,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("traffic: send GMP on route %q: %w", g.routeID, err)

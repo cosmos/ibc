@@ -154,29 +154,31 @@ func deployContract(
 	return receipt.ContractAddress, nil
 }
 
+// send broadcasts data to to and returns the receipt and the sequence of the
+// first packet router emitted in it.
 func send(
 	ctx context.Context,
 	client *environment.EVM,
 	sender evm.Account,
 	to common.Address,
 	data []byte,
-	sequenceFromReceipt func(*types.Receipt) (uint64, bool, error),
+	router common.Address,
 ) (*types.Receipt, uint64, error) {
 	receipt, err := client.BroadcastTx(ctx, sender, &to, data, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("traffic: broadcast transaction: %w", err)
 	}
-	sequence, found, err := sequenceFromReceipt(receipt)
+	sent, err := sentPackets(receipt, router)
 	if err != nil {
 		return nil, 0, err
 	}
-	if !found {
+	if len(sent) == 0 {
 		return nil, 0, fmt.Errorf(
 			"traffic: source transaction %s emitted no application send event",
 			receipt.TxHash.Hex(),
 		)
 	}
-	return receipt, sequence, nil
+	return receipt, sent[0].Packet.Sequence, nil
 }
 
 func awaitBalance(

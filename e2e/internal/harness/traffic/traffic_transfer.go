@@ -168,7 +168,7 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		p.app.sender,
 		p.app.sourceICS20,
 		data,
-		sendPacketSequence(p.app.sourceRouter),
+		p.app.sourceRouter,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("traffic: send Transfer on route %q: %w", p.app.routeID, err)
@@ -545,19 +545,6 @@ func verifyPacketTimeout(
 	return nil
 }
 
-func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, bool, error) {
-	return func(receipt *types.Receipt) (uint64, bool, error) {
-		sequences, err := sendPacketSequences(router, receipt)
-		if err != nil {
-			return 0, false, err
-		}
-		if len(sequences) == 0 {
-			return 0, false, nil
-		}
-		return sequences[0], true, nil
-	}
-}
-
 // sentPackets decodes every SendPacket event router emitted in receipt, in
 // log order. Logs from any other address are ignored, so only the source
 // ICS26 router's packets are returned. Each event's Raw.Data is its packet's
@@ -569,17 +556,4 @@ func sentPackets(receipt *types.Receipt, router common.Address) ([]*ics26router.
 		return nil, fmt.Errorf("traffic: decode SendPacket: %w", err)
 	}
 	return events, nil
-}
-
-// sendPacketSequences returns the sequences of sentPackets.
-func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
-	events, err := sentPackets(receipt, router)
-	if err != nil {
-		return nil, err
-	}
-	sequences := make([]uint64, len(events))
-	for i, event := range events {
-		sequences[i] = event.Packet.Sequence
-	}
-	return sequences, nil
 }

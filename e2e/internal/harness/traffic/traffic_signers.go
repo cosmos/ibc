@@ -5,7 +5,6 @@ package traffic
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,7 @@ func NewSigner() (Signer, error) {
 	if err != nil {
 		return Signer{}, fmt.Errorf("traffic: generate signer key: %w", err)
 	}
-	return signerFromKey(key)
+	return signerFromKey(key), nil
 }
 
 // NewSignerFromHex creates a deterministically keyed local identity.
@@ -40,15 +39,11 @@ func NewSignerFromHex(privateKeyHex string) (Signer, error) {
 	if err != nil {
 		return Signer{}, fmt.Errorf("traffic: parse signer key: %w", err)
 	}
-	return signerFromKey(key)
+	return signerFromKey(key), nil
 }
 
-func signerFromKey(key *ecdsa.PrivateKey) (Signer, error) {
-	account, err := evm.AccountFromHex(hex.EncodeToString(crypto.FromECDSA(key)))
-	if err != nil {
-		return Signer{}, fmt.Errorf("traffic: create signer account: %w", err)
-	}
-	return Signer{key: key, account: account}, nil
+func signerFromKey(key *ecdsa.PrivateKey) Signer {
+	return Signer{key: key, account: evm.AccountFromKey(key)}
 }
 
 // Address returns the signer's public identity.

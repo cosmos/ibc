@@ -134,7 +134,7 @@ func (i *IFT) Transfer(
 		i.sender,
 		i.sourceIFT,
 		data,
-		sendPacketSequence(i.sourceRouter),
+		i.sourceRouter,
 	)
 	if err != nil {
 		return SendResult{}, fmt.Errorf("traffic: send IFT on route %q: %w", i.routeID, err)
@@ -186,23 +186,9 @@ func (i *IFT) TransferBatch(
 			Receiver: receiver.Hex(), Amount: amount, TimeoutTimestamp: timeoutTimestamp,
 		}
 	}
-	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("traffic: pack IFT batchIftTransfer: %w", err)
-	}
-	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
-	if err != nil {
-		return nil, fmt.Errorf("traffic: send IFT batch on route %q: %w", i.routeID, err)
-	}
-	sent, err := sentPackets(receipt, i.sourceRouter)
+	receipt, sent, err := i.broadcastBatch(ctx, transfers)
 	if err != nil {
 		return nil, err
-	}
-	if len(sent) != len(receivers) {
-		return nil, fmt.Errorf("traffic: IFT batch on route %q emitted %d packets, want %d",
-			i.routeID, len(sent), len(receivers))
 	}
 	results := make([]SendResult, len(sent))
 	for k, event := range sent {
@@ -211,7 +197,33 @@ func (i *IFT) TransferBatch(
 	return results, nil
 }
 
-// SendBatch emits multiple IFT transfers from a single source transaction
+// broadcastBatch sends transfers in one batchIftTransfer through the shim
+// and returns the receipt and the SendPacket events, one per transfer.
+func (i *IFT) broadcastBatch(
+	ctx context.Context,
+	transfers []iftbatchtransfershim.IFTBatchTransferShimTransfer,
+) (*types.Receipt, []*ics26router.ContractSendPacket, error) {
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("traffic: pack IFT batchIftTransfer: %w", err)
+	}
+	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("traffic: send IFT batch on route %q: %w", i.routeID, err)
+	}
+	sent, err := sentPackets(receipt, i.sourceRouter)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(sent) != len(transfers) {
+		return nil, nil, fmt.Errorf("traffic: IFT batch on route %q emitted %d packets, want %d",
+			i.routeID, len(sent), len(transfers))
+	}
+	return receipt, sent, nil
+}
+
 func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
 	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))
 	destinationsBefore := make([]*big.Int, len(requests))
@@ -259,27 +271,9 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	if err != nil {
 		return nil, err
 	}
-	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return iftBatchShimTransactor.BatchIftTransfer(opts, i.sourceIFT, i.sourceClientID, transfers)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("traffic: pack IFT batchIftTransfer: %w", err)
-	}
-	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
-	if err != nil {
-		return nil, fmt.Errorf("traffic: send IFT batch on route %q: %w", i.routeID, err)
-	}
-	sent, err := sentPackets(receipt, i.sourceRouter)
+	receipt, sent, err := i.broadcastBatch(ctx, transfers)
 	if err != nil {
 		return nil, err
-	}
-	if len(sent) != len(requests) {
-		return nil, fmt.Errorf(
-			"traffic: IFT batch on route %q emitted %d packets, want %d",
-			i.routeID,
-			len(sent),
-			len(requests),
-		)
 	}
 
 	packets := make([]iftBatchPacket, len(requests))
