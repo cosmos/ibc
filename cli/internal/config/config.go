@@ -549,7 +549,7 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
 
-		if err := errPath("grpc", checkHTTPURL(c.GRPC, false)); err != nil {
+		if err := errPath("grpc", checkHTTPURL(c.EndpointURL(), false)); err != nil {
 			return err
 		}
 
@@ -561,14 +561,9 @@ func (c AttestorConfig) Validate() error {
 	return nil
 }
 
-// EndpointURL returns GRPC as a URL: as written when it has a scheme, and as
-// http:// for a bare host:port.
+// EndpointURL returns GRPC as a URL, see endpointURL.
 func (c AttestorConfig) EndpointURL() string {
-	if strings.Contains(c.GRPC, "://") {
-		return c.GRPC
-	}
-
-	return "http://" + c.GRPC
+	return endpointURL(c.GRPC)
 }
 
 func (c Signers) Validate() error {

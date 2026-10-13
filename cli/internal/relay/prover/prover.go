@@ -169,7 +169,13 @@ func addGenerator(
 			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
 		}
 
-		endpoint, err := config.ResolveEndpoint(remoteParams.URL, remoteParams.TLS, logger, "connection", connAlias)
+		endpoint, err := config.ResolveEndpoint(
+			remoteParams.EndpointURL(),
+			remoteParams.TLS,
+			logger,
+			"connection",
+			connAlias,
+		)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)
 		}

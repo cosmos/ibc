@@ -202,6 +202,16 @@ func usesTLS(addr string) bool {
 	return strings.HasPrefix(strings.ToLower(addr), "https://")
 }
 
+// endpointURL returns addr as a URL: as written when it has a scheme, and as
+// http:// for a bare host:port.
+func endpointURL(addr string) string {
+	if strings.Contains(addr, "://") {
+		return addr
+	}
+
+	return "http://" + addr
+}
+
 // isHTTPURL reports whether addr is an http:// or https:// URL.
 func isHTTPURL(addr string) bool {
 	return usesTLS(addr) || strings.HasPrefix(strings.ToLower(addr), "http://")

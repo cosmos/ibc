@@ -289,6 +289,8 @@ func TestAttestorConfigTLS(t *testing.T) {
 			"https://attestor.example.com#":               "grpc: must not have a query or fragment",
 			"https://":                                    "grpc: must include a host",
 			"https://attestor.example.com:abc":            "grpc: invalid URL",
+			"attestor.example.com:abc":                    "grpc: invalid URL",
+			"attestor.example.com:3000?token=abc":         "grpc: must not have a query or fragment",
 		} {
 			cfg := AttestorConfig{Name: "attestor-1", Type: AttestorTypeRemote, GRPC: grpc}
 			require.ErrorContains(t, cfg.Validate(), want, grpc)
@@ -462,6 +464,16 @@ func TestRemoteParamsValidate(t *testing.T) {
 			errContains: "url: must include a host",
 		},
 		{
+			name:        "bare host:port with a bad port",
+			params:      RemoteParams{URL: "prover.example.com:abc"},
+			errContains: "url: invalid URL",
+		},
+		{
+			name:        "bare host:port with a query",
+			params:      RemoteParams{URL: "prover.example.com:9090?token=abc"},
+			errContains: "url: must not have a query or fragment",
+		},
+		{
 			name:        "url with a bad port",
 			params:      RemoteParams{URL: "https://prover.example.com:abc"},
 			errContains: "url: invalid URL",
@@ -487,13 +499,17 @@ func TestRemoteParamsValidate(t *testing.T) {
 	}
 }
 
-func TestAttestorConfigEndpointURL(t *testing.T) {
-	for grpc, want := range map[string]string{
-		"attestor:3000":         "http://attestor:3000",
-		"http://attestor:3000":  "http://attestor:3000",
-		"https://attestor:3000": "https://attestor:3000",
+// Attestors and provers share endpointURL, so a bare host:port means http://
+// for both.
+func TestEndpointURL(t *testing.T) {
+	for addr, want := range map[string]string{
+		"svc.example.com:3000":         "http://svc.example.com:3000",
+		"http://svc.example.com:3000":  "http://svc.example.com:3000",
+		"https://svc.example.com:3000": "https://svc.example.com:3000",
+		"https://svc.example.com/grpc": "https://svc.example.com/grpc",
 	} {
-		require.Equal(t, want, AttestorConfig{GRPC: grpc}.EndpointURL(), grpc)
+		require.Equal(t, want, AttestorConfig{GRPC: addr}.EndpointURL(), addr)
+		require.Equal(t, want, RemoteParams{URL: addr}.EndpointURL(), addr)
 	}
 }
 
