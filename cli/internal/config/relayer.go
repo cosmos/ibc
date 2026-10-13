@@ -4,8 +4,8 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -112,17 +112,11 @@ type AutoRelayConfig struct {
 
 // RemoteParams is the params block a remote client declares.
 type RemoteParams struct {
-	// URL is the ProverService endpoint: an http(s):// URL, whose scheme
-	// decides TLS, or a bare host:port, which is https with a tls block and
-	// http without one.
+	// URL is the ProverService endpoint.
 	URL string `yaml:"url"`
 
+	// TLS carries settings for an https:// URL, see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
-}
-
-// EndpointURL returns URL with a scheme, see endpointURL.
-func (p RemoteParams) EndpointURL() string {
-	return endpointURL(p.URL, p.TLS)
 }
 
 // AttestationParams is empty
@@ -304,20 +298,12 @@ func (p RemoteParams) Validate() error {
 		return errPathf("url", "required")
 	}
 
-	parsed, err := parseEndpoint(p.EndpointURL(), "http", "https")
-	if err != nil {
-		return errPath("url", err)
-	}
-	// Either would swallow the RPC path connect appends to the base URL.
-	if parsed.RawQuery != "" || parsed.ForceQuery {
-		return errPathf("url", "must not contain a query")
-	}
-	if strings.Contains(p.URL, "#") {
-		return errPathf("url", "must not contain a fragment")
+	if p.TLS == nil {
+		return nil
 	}
 
-	if p.TLS != nil && parsed.Scheme != "https" {
-		return errPathf("tls", "requires an https:// url, got scheme %q", parsed.Scheme)
+	if parsed, err := url.Parse(p.URL); err != nil || parsed.Scheme != "https" {
+		return errPathf("tls", "requires an https:// url")
 	}
 
 	return errPath("tls", p.TLS.Validate())

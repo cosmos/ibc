@@ -16,15 +16,16 @@ import (
 // TLSClientConfig holds the settings for an outbound TLS connection.
 //
 // The block carries settings. Whether TLS is used depends on the endpoint:
-//   - a remote prover url with a scheme: the scheme. https:// uses TLS with
-//     Go's defaults even without the block; the block with http:// is rejected.
-//   - a remote attestor grpc address, or a remote prover url written as a bare
-//     host:port: the block's presence, which selects https over http.
-//   - a remote signer grpc target: the block's presence, which selects TLS
-//     credentials over plaintext, whatever scheme the target has.
+//   - a remote prover url: its scheme. https:// uses TLS with Go's defaults
+//     even without the block; the block requires an https:// url.
+//   - a remote attestor grpc address: the block's presence, which selects
+//     https over http.
+//   - a remote signer grpc target, passed to gRPC as written: the block's
+//     presence, which selects TLS credentials over plaintext. An https://
+//     scheme does not.
 //
 // An empty block (`tls: {}`) is valid and means system roots and no client
-// certificate.
+// certificate. A `tls:` key with no value decodes to nil, the same as no block.
 type TLSClientConfig struct {
 	// CAFile is a PEM bundle verifying the server. Empty uses system roots.
 	// Read at startup, so a changed bundle needs a restart.
@@ -53,14 +54,6 @@ type TLSClientConfig struct {
 // does not warn about InsecureSkipVerify; the caller that goes on to actually
 // build a connection with the result does that.
 func (c *TLSClientConfig) Validate() error {
-	if c == nil {
-		return nil
-	}
-
-	if c.InsecureSkipVerify && c.CAFile != "" {
-		return errPathf("caFile", "must not be set when insecureSkipVerify is enabled")
-	}
-
 	_, err := c.TLSConfig()
 
 	return err
@@ -69,8 +62,9 @@ func (c *TLSClientConfig) Validate() error {
 // TLSConfig resolves the block into a *tls.Config, or nil when the block is
 // absent, leaving the transport's defaults in place. The CA bundle and client
 // certificate are read once here, so a rotated certificate takes effect only
-// after a restart. An expired client certificate is rejected here rather than
-// presented for the server to reject with a generic alert.
+// after a restart. A client certificate outside its validity period is
+// rejected here rather than presented for the server to reject with a generic
+// alert.
 //
 // A client certificate error isn't attributed to a field: a mismatched pair
 // or malformed PEM could be either file's fault, and the error already names
@@ -83,6 +77,8 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 	// Checked here rather than in Validate, which a load can skip, so a
 	// half-configured client certificate never yields one-way TLS.
 	switch {
+	case c.InsecureSkipVerify && c.CAFile != "":
+		return nil, errPathf("caFile", "must not be set when insecureSkipVerify is enabled")
 	case c.CertFile != "" && c.KeyFile == "":
 		return nil, errPathf("keyFile", "required when certFile is set")
 	case c.KeyFile != "" && c.CertFile == "":
@@ -122,11 +118,18 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("load client certificate: %w", err)
 	}
 
-	if cert.Leaf != nil && time.Now().After(cert.Leaf.NotAfter) {
-		return nil, fmt.Errorf(
-			"client certificate %s expired %s",
-			certFile, cert.Leaf.NotAfter.Format(time.RFC3339),
-		)
+	if leaf := cert.Leaf; leaf != nil {
+		now := time.Now()
+
+		switch {
+		case now.After(leaf.NotAfter):
+			return nil, fmt.Errorf("client certificate %s expired %s", certFile, leaf.NotAfter.Format(time.RFC3339))
+		case now.Before(leaf.NotBefore):
+			return nil, fmt.Errorf(
+				"client certificate %s is not valid until %s",
+				certFile, leaf.NotBefore.Format(time.RFC3339),
+			)
+		}
 	}
 
 	cfg.Certificates = []tls.Certificate{cert}

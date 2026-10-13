@@ -355,7 +355,7 @@ attestors:
 |---|---|---|---|
 | `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
-| `grpc` | `string` | **required** | Bare host:port, without a scheme or userinfo. |
+| `grpc` | `string` | **required** | Bare host:port. |
 | `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
 | `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
 | `tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
@@ -386,7 +386,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L173](cli/internal/config/config.go#L173) -->
+<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -408,7 +408,7 @@ signers:
 |---|---|---|---|
 | `alias` | `string` | **required** | Unique name for a signer. |
 | `type` | `remote` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
-| `grpc` | `string` | **required** | The gRPC target for a remote signer, such as host:port. An http(s) URL is rejected. |
+| `grpc` | `string` | **required** | Address for a remote signer. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
 | `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
 | `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
@@ -416,7 +416,7 @@ signers:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L173](cli/internal/config/config.go#L173) -->
+<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
 
 <!-- GEN:config:signers:remote END -->
 
@@ -439,15 +439,13 @@ attestors:
 
 The `tls` block carries settings. Whether TLS is used depends on the endpoint:
 
-- A remote prover `url` with a scheme keeps it: an `https://` url uses TLS with system roots even without a `tls` block, and a `tls` block with an `http://` url is rejected. <!-- [cli/internal/config/relayer.go: RemoteParams.Validate] -->
-- A remote attestor's `grpc`, and a remote prover `url` given as a bare `host:port`, are dialed as `https://` with a `tls` block and `http://` without one. <!-- [cli/internal/config/endpoint.go: endpointURL] -->
-- A remote signer's `grpc` target is passed to gRPC as written, with TLS credentials when the block is present and plaintext otherwise, whatever scheme the target has. <!-- [cli/internal/service/signer/remote.go: newGRPCClient] -->
+- A remote prover's `url` is dialed as written, so its scheme decides: an `https://` url uses TLS with system roots even without a `tls` block, and a `tls` block requires an `https://` url. <!-- [cli/internal/config/relayer.go: RemoteParams.Validate] -->
+- A remote attestor's `grpc` is dialed as `https://` with a `tls` block and `http://` without one. <!-- [cli/internal/config/config.go: AttestorConfig.EndpointURL] -->
+- A remote signer's `grpc` target, such as `host:port` or `dns:///host:port`, is passed to gRPC as written, with TLS credentials when the block is present and plaintext otherwise. An `https://` scheme does not turn on TLS for a signer. <!-- [cli/internal/service/signer/remote.go: newGRPCClient] -->
 
-`tls: {}` means TLS with system roots and no client certificate. <!-- [cli/internal/config/tls.go: TLSClientConfig] -->
+`tls: {}` means TLS with system roots and no client certificate. A `tls:` key with no value counts as no block, so write `tls: {}` when setting no fields. <!-- [cli/internal/config/tls.go: TLSClientConfig] -->
 
-Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. An expired client certificate fails validation. <!-- [cli/internal/config/tls.go: TLSClientConfig.TLSConfig] -->
-
-Remote attestors and provers are called over gRPC, which needs HTTP/2. Over TLS it is negotiated during the handshake. Over plaintext the server must accept HTTP/2 without TLS (h2c), as standard gRPC servers do. The client also offers HTTP/1.1 over TLS, which only servers that serve gRPC over HTTP/1.1, such as connect-go, can use. <!-- [cli/internal/network/tls.go: NewGRPCHTTPClient] -->
+Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. A client certificate that has expired or is not yet valid fails validation. <!-- [cli/internal/config/tls.go: TLSClientConfig.TLSConfig] -->
 
 TLS here covers outbound connections only. The CLI's own API server on `server.listenAddr` listens without TLS. <!-- [cli/internal/server/server.go: New] -->
 

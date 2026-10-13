@@ -148,6 +148,14 @@ func WriteExpiredSelfSigned(t testing.TB, dir, name string) (certFile, keyFile s
 	return writeSelfSigned(t, dir, name, time.Now().Add(-validity), time.Now().Add(-time.Minute))
 }
 
+// WriteNotYetValidSelfSigned is WriteSelfSigned with a certificate whose
+// validity starts in the future.
+func WriteNotYetValidSelfSigned(t testing.TB, dir, name string) (certFile, keyFile string) {
+	t.Helper()
+
+	return writeSelfSigned(t, dir, name, time.Now().Add(time.Hour), time.Now().Add(validity))
+}
+
 func writeSelfSigned(t testing.TB, dir, name string, notBefore, notAfter time.Time) (certFile, keyFile string) {
 	t.Helper()
 

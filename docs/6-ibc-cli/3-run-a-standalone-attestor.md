@@ -187,6 +187,8 @@ attestors:
   grpc: 127.0.0.1:3001
 ```
 
+If the attestor is served behind TLS, add a `tls` block to that entry, as described in [TLS for remote services](5-configuration.md#tls-for-remote-services).
+
 ## Next steps
 
 - [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries these attestors instead of hosting its own.

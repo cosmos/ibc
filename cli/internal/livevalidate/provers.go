@@ -15,21 +15,18 @@ import (
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
 
-// checkQuorumAndProverReachability resolves every configured attestor
-// (local and remote, failing on an unreachable remote one) and confirms every
-// attestation-type client end of every configured connection can currently
-// satisfy its attestor quorum against on-chain state. Resolving every prover
-// as a side effect also probes every remote prover's reachability, which is
-// why a remote-prover-only config exercises this too.
-func checkQuorumAndProverReachability(ctx context.Context, cfg config.Config, clientSet *chains.ClientSet) error {
+// checkProvers resolves every configured attestor (local and remote) and
+// builds a prover for every client end of every configured connection, which
+// confirms against on-chain state that attestation ends can satisfy their
+// attestor quorum and that besu-qbft ends prove the configured counterparty
+// router.
+func checkProvers(ctx context.Context, cfg config.Config, clientSet *chains.ClientSet) error {
 	signers, err := signer.NewSetFromConfig(ctx, cfg.Signers)
 	if err != nil {
 		return errors.Wrap(err, "signers")
 	}
 
-	local, remote, err := attestor.ResolveFromConfig(
-		ctx, cfg.Attestors, clientSet, signers, attestor.ResolveOptions{RequireReachable: true},
-	)
+	local, remote, err := attestor.ResolveFromConfig(ctx, cfg.Attestors, clientSet, signers)
 	if err != nil {
 		return errors.Wrap(err, "attestors")
 	}
@@ -38,18 +35,8 @@ func checkQuorumAndProverReachability(ctx context.Context, cfg config.Config, cl
 	attestors = append(attestors, local...)
 	attestors = append(attestors, remote...)
 
-	// This resolves every client end's prover, which for an attestation client
-	// is what checks the quorum. A remote client end resolves here too, so the
-	// error is labeled for what failed rather than assuming a quorum problem.
-	if _, err := prover.NewSetFromConfig(
-		ctx,
-		cfg,
-		clientSet,
-		attestors,
-		slog.Default(),
-		prover.SetOptions{RequireReachable: true},
-	); err != nil {
-		return errors.Wrap(err, "provers")
+	if _, err := prover.NewSetFromConfig(ctx, cfg, clientSet, attestors, slog.Default()); err != nil {
+		return errors.Wrap(err, "prover validation")
 	}
 
 	return nil

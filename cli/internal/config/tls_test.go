@@ -157,12 +157,23 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 		require.ErrorContains(t, err, "certFile: required when keyFile is set")
 	})
 
+	t.Run("caFile with insecureSkipVerify is rejected", func(t *testing.T) {
+		_, err := (&TLSClientConfig{CAFile: certFile, InsecureSkipVerify: true}).TLSConfig()
+		require.ErrorContains(t, err, "caFile: must not be set when insecureSkipVerify is enabled")
+	})
+
 	// The pair is read once, so an expired one fails validation instead of
 	// every handshake.
 	t.Run("an expired client certificate is rejected", func(t *testing.T) {
 		expiredCert, expiredKey := certs.WriteExpiredSelfSigned(t, dir, "expired")
 		err := (&TLSClientConfig{CertFile: expiredCert, KeyFile: expiredKey}).Validate()
 		require.ErrorContains(t, err, "client certificate "+expiredCert+" expired")
+	})
+
+	t.Run("a not yet valid client certificate is rejected", func(t *testing.T) {
+		futureCert, futureKey := certs.WriteNotYetValidSelfSigned(t, dir, "future")
+		err := (&TLSClientConfig{CertFile: futureCert, KeyFile: futureKey}).Validate()
+		require.ErrorContains(t, err, "client certificate "+futureCert+" is not valid until")
 	})
 }
 
@@ -333,16 +344,6 @@ func TestRemoteParamsValidate(t *testing.T) {
 			params: RemoteParams{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
 		},
 		{
-			name:        "unsupported scheme",
-			params:      RemoteParams{URL: "ftp://prover.example.com"},
-			errContains: "url: must start with",
-		},
-		{
-			name:        "missing host",
-			params:      RemoteParams{URL: "https:///path"},
-			errContains: "url: must start with",
-		},
-		{
 			name:        "empty url",
 			params:      RemoteParams{},
 			errContains: "url: required",
@@ -364,11 +365,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 				URL: "prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
-		},
-		{
-			name:        "bare host:port with a bad port",
-			params:      RemoteParams{URL: "prover.example.com:abc"},
-			errContains: "url: invalid URL",
+			errContains: "tls: requires an https:// url",
 		},
 		{
 			name: "bad tls block on an https url",
@@ -388,20 +385,6 @@ func TestRemoteParamsValidate(t *testing.T) {
 
 			require.ErrorContains(t, err, tt.errContains)
 		})
-	}
-}
-
-func TestRemoteParamsEndpointURL(t *testing.T) {
-	for _, tt := range []struct {
-		params RemoteParams
-		want   string
-	}{
-		{RemoteParams{URL: "prover.example.com:9090"}, "http://prover.example.com:9090"},
-		{RemoteParams{URL: "prover.example.com:9090", TLS: &TLSClientConfig{}}, "https://prover.example.com:9090"},
-		{RemoteParams{URL: "http://prover.example.com:9090"}, "http://prover.example.com:9090"},
-		{RemoteParams{URL: "https://prover.example.com:9090", TLS: &TLSClientConfig{}}, "https://prover.example.com:9090"},
-	} {
-		require.Equal(t, tt.want, tt.params.EndpointURL())
 	}
 }
 

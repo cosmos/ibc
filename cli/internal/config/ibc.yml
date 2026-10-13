@@ -68,7 +68,8 @@ relayer:
         clientId: "custom-0"
         type: "remote"
         params:
-          url: https://prover.example.com:9090
+          url: prover.example.com:9090
+#          # tls requires an https:// url
 #          tls:
 #            caFile: /etc/ibc/tls/ca.crt
 #            certFile: /etc/ibc/tls/client.crt
@@ -85,6 +86,7 @@ attestors:
   - name: "attestor-base"
     type: remote
     grpc: attestor.example.com:3000
+#    # without fields, write `tls: {}`: a bare `tls:` counts as no block
 #    tls:
 #      caFile: /etc/ibc/tls/ca.crt
 #      certFile: /etc/ibc/tls/client.crt
@@ -106,6 +108,7 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "eth-relayer-key-id"
+#    # without fields, write `tls: {}`: a bare `tls:` counts as no block
 #    tls:
 #      caFile: /etc/ibc/tls/ca.crt
 #      certFile: /etc/ibc/tls/client.crt

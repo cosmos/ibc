@@ -425,7 +425,7 @@ chains:
 signers:
   - alias: signer-a
     type: remote
-    grpc: kms.example.com:9090
+    grpc: https://kms.example.com
     remoteKeyId: key-a
 attestors:
   - name: attestation-a
@@ -449,7 +449,7 @@ attestors:
 signers:
   - alias: signer-a
     type: remote
-    grpc: kms.example.com:9090
+    grpc: https://kms.example.com
     remoteKeyId: key-a
 attestors:
   - name: attestation-a
@@ -736,14 +736,6 @@ func TestAttestorsValidate(t *testing.T) {
 			errContains: ".grpc: must be a bare host:port, not a URL",
 		},
 		{
-			name: "remote grpc includes userinfo",
-			attestors: Attestors{{
-				Name: "attestor-a", Type: AttestorTypeRemote,
-				GRPC: "user:token@attestor-a.example.com:3000",
-			}},
-			errContains: ".grpc: must be a bare host:port without userinfo",
-		},
-		{
 			name: "remote with chainId set",
 			attestors: Attestors{{
 				Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeRemote,
@@ -828,7 +820,7 @@ func TestSignerConfigValidate(t *testing.T) {
 			signers: Signers{{
 				Alias:       "remote",
 				Type:        SignerRemote,
-				GRPC:        "kms.example.com:9090",
+				GRPC:        "https://kms.example.com",
 				RemoteKeyID: "key-1",
 			}},
 		},
@@ -883,21 +875,11 @@ func TestSignerConfigValidate(t *testing.T) {
 			errContains: ".grpc: required",
 		},
 		{
-			name: "url grpc rejected",
-			signers: Signers{{
-				Alias:       "remote",
-				Type:        SignerRemote,
-				GRPC:        "https://kms.example.com",
-				RemoteKeyID: "key-1",
-			}},
-			errContains: ".grpc: must be a gRPC target",
-		},
-		{
 			name: "remote key id required",
 			signers: Signers{{
 				Alias: "remote",
 				Type:  SignerRemote,
-				GRPC:  "kms.example.com:9090",
+				GRPC:  "https://kms.example.com",
 			}},
 			errContains: ".remoteKeyId: required",
 		},
@@ -912,7 +894,7 @@ func TestSignerConfigValidate(t *testing.T) {
 				{
 					Alias:       "same",
 					Type:        SignerRemote,
-					GRPC:        "kms.example.com:9090",
+					GRPC:        "https://kms.example.com",
 					RemoteKeyID: "key-1",
 				},
 			},

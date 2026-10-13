@@ -157,8 +157,7 @@ type AttestorConfig struct {
 	// tag; n > 0 attests up to "latest" - n instead.
 	FinalityOffset uint `yaml:"finalityOffset"`
 
-	// GRPC required for type: remote only. Bare host:port, without a scheme
-	// or userinfo.
+	// GRPC required for type: remote only. Bare host:port.
 	GRPC string `yaml:"grpc,omitempty"`
 
 	// TLS remote only. Present selects https over http for grpc, see
@@ -180,15 +179,14 @@ type SignerConfig struct {
 	// File key file path for a local signer
 	File string `yaml:"file,omitempty"`
 
-	// GRPC is the gRPC target for a remote signer, such as host:port. An
-	// http(s) URL is rejected.
+	// GRPC address for a remote signer
 	GRPC string `yaml:"grpc,omitempty"`
 
 	// RemoteKeyID KMS key ID for a remote signer
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 
 	// TLS remote only. Present selects TLS credentials over plaintext for grpc,
-	// whatever scheme the target has, see TLSClientConfig.
+	// see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
@@ -543,9 +541,7 @@ func (c AttestorConfig) Validate() error {
 		case c.GRPC == "":
 			return errPathf("grpc", "required for remote attestors")
 		case strings.Contains(c.GRPC, "://"):
-			return errPathf("grpc", "must be a bare host:port, not a URL")
-		case strings.Contains(c.GRPC, "@"):
-			return errPathf("grpc", "must be a bare host:port without userinfo")
+			return errPathf("grpc", "must be a bare host:port, not a URL: %q", c.GRPC)
 		case c.ChainID != "":
 			return errPathf("chainId", "must not be set for remote attestors")
 		case c.Signer != "":
@@ -562,9 +558,14 @@ func (c AttestorConfig) Validate() error {
 	return nil
 }
 
-// EndpointURL returns GRPC with a scheme, see endpointURL.
+// EndpointURL returns GRPC as an https:// URL with a tls block and http://
+// without one.
 func (c AttestorConfig) EndpointURL() string {
-	return endpointURL(c.GRPC, c.TLS)
+	if c.TLS != nil {
+		return "https://" + c.GRPC
+	}
+
+	return "http://" + c.GRPC
 }
 
 func (c Signers) Validate() error {
@@ -599,8 +600,6 @@ func (c SignerConfig) Validate() error {
 		return errPathf("file", "required for local signer")
 	case c.Type == SignerRemote && c.GRPC == "":
 		return errPathf("grpc", "required for remote signer")
-	case strings.HasPrefix(c.GRPC, "http://") || strings.HasPrefix(c.GRPC, "https://"):
-		return errPathf("grpc", "must be a gRPC target such as host:port, not an http(s) URL")
 	case c.Type == SignerRemote && c.RemoteKeyID == "":
 		return errPathf("remoteKeyId", "required for remote signer")
 	case c.Type == SignerLocal && c.TLS != nil:

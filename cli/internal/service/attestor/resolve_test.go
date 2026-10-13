@@ -37,24 +37,12 @@ func TestResolveFromConfig(t *testing.T) {
 			{Name: "bob", Type: config.AttestorTypeRemote, GRPC: "127.0.0.1:0"},
 		}
 
-		local, remote, err := ResolveFromConfig(ctx, entries, clients, signers, ResolveOptions{})
+		local, remote, err := ResolveFromConfig(ctx, entries, clients, signers)
 
 		require.NoError(t, err)
 		require.Len(t, local, 1)
 		require.Equal(t, "alice", local[0].Name())
 		require.Empty(t, remote, "an unreachable remote is skipped, not fatal")
-	})
-
-	t.Run("unreachableRemoteErrorsWhenRequired", func(t *testing.T) {
-		entries := config.Attestors{
-			{Name: "bob", Type: config.AttestorTypeRemote, GRPC: "127.0.0.1:0"},
-		}
-
-		_, _, err := ResolveFromConfig(
-			ctx, entries, chains.NewClientSet(nil), signer.NewSet(), ResolveOptions{RequireReachable: true},
-		)
-
-		require.ErrorContains(t, err, "attestor bob")
 	})
 
 	t.Run("remoteBadTLSConfigErrorsFatally", func(t *testing.T) {
@@ -65,10 +53,23 @@ func TestResolveFromConfig(t *testing.T) {
 			TLS:  &config.TLSClientConfig{CAFile: "/nonexistent/ca.pem"},
 		}}
 
-		_, _, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet(), ResolveOptions{})
+		_, _, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet())
 
 		require.ErrorContains(t, err, "attestor bob")
 		require.ErrorContains(t, err, "caFile")
+	})
+
+	t.Run("remoteWithoutGRPCIsSkippedBeforeTLS", func(t *testing.T) {
+		entries := config.Attestors{{
+			Name: "bob",
+			Type: config.AttestorTypeRemote,
+			TLS:  &config.TLSClientConfig{CAFile: "/nonexistent/ca.pem"},
+		}}
+
+		_, remote, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet())
+
+		require.NoError(t, err)
+		require.Empty(t, remote)
 	})
 
 	t.Run("localMissingClientErrorsFatally", func(t *testing.T) {
@@ -81,7 +82,7 @@ func TestResolveFromConfig(t *testing.T) {
 			{Name: "alice", Type: config.AttestorTypeLocal, ChainID: "unknown-chain", Signer: "key"},
 		}
 
-		_, _, err = ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signers, ResolveOptions{})
+		_, _, err = ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signers)
 
 		require.ErrorContains(t, err, "attestor alice")
 		require.ErrorContains(t, err, "client not found for chain unknown-chain")
@@ -94,7 +95,7 @@ func TestResolveFromConfig(t *testing.T) {
 			{Name: "alice", Type: config.AttestorTypeLocal, ChainID: "1", Signer: "missing"},
 		}
 
-		_, _, err := ResolveFromConfig(ctx, entries, clients, signer.NewSet(), ResolveOptions{})
+		_, _, err := ResolveFromConfig(ctx, entries, clients, signer.NewSet())
 
 		require.ErrorContains(t, err, "attestor alice")
 		require.ErrorContains(t, err, "unknown signer missing")
@@ -116,7 +117,7 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	plaintextAddr := startPlaintextAttestor(t)
 
 	t.Run("a tls block dials https", func(t *testing.T) {
-		got, err := resolveRemote(t, config.AttestorConfig{
+		got, err := dialRemote(t, config.AttestorConfig{
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: tlsAddr,
@@ -132,7 +133,7 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	})
 
 	t.Run("no tls block dials http", func(t *testing.T) {
-		got, err := resolveRemote(t, config.AttestorConfig{
+		got, err := dialRemote(t, config.AttestorConfig{
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: plaintextAddr,
@@ -142,7 +143,7 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	})
 
 	t.Run("a tls block against a plaintext listener fails", func(t *testing.T) {
-		_, err := resolveRemote(t, config.AttestorConfig{
+		_, err := dialRemote(t, config.AttestorConfig{
 			Name: "attestor-1",
 			Type: config.AttestorTypeRemote,
 			GRPC: plaintextAddr,
@@ -152,13 +153,10 @@ func TestResolveRemoteDerivesScheme(t *testing.T) {
 	})
 }
 
-func resolveRemote(t *testing.T, entry config.AttestorConfig) (Attestor, error) {
+func dialRemote(t *testing.T, entry config.AttestorConfig) (Attestor, error) {
 	t.Helper()
 
-	endpoint, err := remoteEndpoint(entry)
-	require.NoError(t, err)
-
-	return NewRemoteFromEndpoint(context.Background(), entry.Name, endpoint)
+	return resolveRemote(context.Background(), entry)
 }
 
 // startTLSAttestor serves AttestationService over TLS and returns its address.

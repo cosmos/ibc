@@ -5,7 +5,6 @@ package remote
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -21,9 +20,9 @@ import (
 	"github.com/cosmos/ibc/cli/internal/testutil/certs"
 )
 
-// Probe exists because construction is inert: under TLS 1.3 the handshake
-// succeeds and a rejected client certificate only surfaces on a request.
-func TestProverProbe(t *testing.T) {
+// Under TLS 1.3 a rejected client certificate only surfaces on a request, so
+// these make one rather than just constructing the prover.
+func TestProverTLS(t *testing.T) {
 	ca := certs.NewCA(t)
 	dir := t.TempDir()
 
@@ -32,7 +31,7 @@ func TestProverProbe(t *testing.T) {
 
 	addr := startTLSProver(t, ca.ServerTLS(t, "localhost", true))
 
-	t.Run("succeeds against a reachable prover", func(t *testing.T) {
+	t.Run("mTLS succeeds", func(t *testing.T) {
 		prover := newProver(t, "https://"+addr, &config.TLSClientConfig{
 			CAFile:     caFile,
 			CertFile:   clientCert,
@@ -40,57 +39,43 @@ func TestProverProbe(t *testing.T) {
 			ServerName: "localhost",
 		})
 
-		require.NoError(t, prover.Probe(context.Background()))
+		height, _, err := prover.LatestProvableHeight(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, uint64(42), height)
 	})
 
-	t.Run("reports a rejected client certificate", func(t *testing.T) {
+	t.Run("a missing client certificate is rejected", func(t *testing.T) {
 		prover := newProver(t, "https://"+addr, &config.TLSClientConfig{
 			CAFile:     caFile,
 			ServerName: "localhost",
 		})
 
-		require.ErrorContains(t, prover.Probe(context.Background()), "probe")
+		_, _, err := prover.LatestProvableHeight(context.Background())
+		require.Error(t, err)
 	})
 
-	t.Run("reports an unreachable prover", func(t *testing.T) {
-		prover := NewFromEndpoint(network.Endpoint{URL: "https://127.0.0.1:1"}, "1", "client-0", slog.Default())
+	t.Run("an untrusted server is rejected", func(t *testing.T) {
+		prover := newProver(t, "https://"+addr, &config.TLSClientConfig{
+			CertFile:   clientCert,
+			KeyFile:    clientKey,
+			ServerName: "localhost",
+		})
 
-		require.Error(t, prover.Probe(context.Background()))
+		_, _, err := prover.LatestProvableHeight(context.Background())
+		require.Error(t, err)
 	})
 }
 
-// A plaintext prover keeps working, so an https-only change would be caught.
+// A plaintext prover keeps working over h2c, so an https-only change would be
+// caught.
 func TestProverPlaintextStillWorks(t *testing.T) {
 	addr := startPlaintextProver(t)
 
 	prover := NewFromEndpoint(network.Endpoint{URL: "http://" + addr}, "1", "client-0", slog.Default())
 
-	require.NoError(t, prover.Probe(context.Background()))
-}
-
-func TestProverProbeServerErrors(t *testing.T) {
-	for code, reachable := range map[connect.Code]bool{
-		connect.CodeNotFound:           true,
-		connect.CodeFailedPrecondition: true,
-		connect.CodeInternal:           false,
-		connect.CodeUnknown:            false,
-		connect.CodeUnauthenticated:    false,
-		connect.CodePermissionDenied:   false,
-		connect.CodeUnimplemented:      false,
-		connect.CodeUnavailable:        false,
-	} {
-		t.Run(code.String(), func(t *testing.T) {
-			addr := startPlaintextProverWith(t, failingProverService{code: code})
-			prover := NewFromEndpoint(network.Endpoint{URL: "http://" + addr}, "1", "client-0", slog.Default())
-
-			err := prover.Probe(context.Background())
-			if reachable {
-				require.NoError(t, err)
-			} else {
-				require.ErrorContains(t, err, "probe")
-			}
-		})
-	}
+	height, _, err := prover.LatestProvableHeight(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, uint64(42), height)
 }
 
 func newProver(t *testing.T, url string, cfg *config.TLSClientConfig) *Prover {
@@ -124,17 +109,11 @@ func startTLSProver(t *testing.T, tlsConfig *tls.Config) string {
 func startPlaintextProver(t *testing.T) string {
 	t.Helper()
 
-	return startPlaintextProverWith(t, stubProverService{})
-}
-
-func startPlaintextProverWith(t *testing.T, svc proverv2.ProverServiceHandler) string {
-	t.Helper()
-
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	srv := newProverServerWith(protocols, svc)
+	srv := newProverServer(protocols)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -146,11 +125,7 @@ func startPlaintextProverWith(t *testing.T, svc proverv2.ProverServiceHandler) s
 }
 
 func newProverServer(protocols *http.Protocols) *http.Server {
-	return newProverServerWith(protocols, stubProverService{})
-}
-
-func newProverServerWith(protocols *http.Protocols, svc proverv2.ProverServiceHandler) *http.Server {
-	path, handler := proverv2.NewProverServiceHandler(svc)
+	path, handler := proverv2.NewProverServiceHandler(stubProverService{})
 	mux := http.NewServeMux()
 	mux.Handle(path, handler)
 
@@ -191,16 +166,4 @@ func (stubProverService) PacketProofs(
 	}
 
 	return connect.NewResponse(&proverv2.PacketProofsResponse{Proofs: proofs}), nil
-}
-
-// failingProverService answers LatestProvableHeight with code.
-type failingProverService struct {
-	stubProverService
-	code connect.Code
-}
-
-func (s failingProverService) LatestProvableHeight(
-	context.Context, *connect.Request[proverv2.LatestProvableHeightRequest],
-) (*connect.Response[proverv2.LatestProvableHeightResponse], error) {
-	return nil, connect.NewError(s.code, errors.New("stub"))
 }
