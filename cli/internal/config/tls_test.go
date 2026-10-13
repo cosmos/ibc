@@ -170,6 +170,13 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 		require.ErrorContains(t, err, "client certificate "+expiredCert+" expired")
 	})
 
+	t.Run("an expired client certificate is rejected without a parsed leaf", func(t *testing.T) {
+		t.Setenv("GODEBUG", "x509keypairleaf=0")
+		expiredCert, expiredKey := certs.WriteExpiredSelfSigned(t, dir, "expired-noleaf")
+		err := (&TLSClientConfig{CertFile: expiredCert, KeyFile: expiredKey}).Validate()
+		require.ErrorContains(t, err, "client certificate "+expiredCert+" expired")
+	})
+
 	t.Run("a not yet valid client certificate is rejected", func(t *testing.T) {
 		futureCert, futureKey := certs.WriteNotYetValidSelfSigned(t, dir, "future")
 		err := (&TLSClientConfig{CertFile: futureCert, KeyFile: futureKey}).Validate()
@@ -273,6 +280,31 @@ func TestAttestorConfigTLS(t *testing.T) {
 		require.ErrorContains(t, cfg.Validate(), "tls.keyFile")
 	})
 
+	t.Run("remote attestor rejects a malformed URL", func(t *testing.T) {
+		for grpc, want := range map[string]string{
+			"https://attestor.example.com?token=abc":      "grpc: must not have a query or fragment",
+			"https://attestor.example.com/grpc?token=abc": "grpc: must not have a query or fragment",
+			"https://attestor.example.com?":               "grpc: must not have a query or fragment",
+			"https://attestor.example.com#section":        "grpc: must not have a query or fragment",
+			"https://attestor.example.com#":               "grpc: must not have a query or fragment",
+			"https://":                                    "grpc: must include a host",
+			"https://attestor.example.com:abc":            "grpc: invalid URL",
+		} {
+			cfg := AttestorConfig{Name: "attestor-1", Type: AttestorTypeRemote, GRPC: grpc}
+			require.ErrorContains(t, cfg.Validate(), want, grpc)
+		}
+
+		for _, grpc := range []string{
+			"https://attestor.example.com",
+			"https://attestor.example.com/grpc",
+			"https://user:secret@attestor.example.com",
+			"attestor.example.com:3000",
+		} {
+			cfg := AttestorConfig{Name: "attestor-1", Type: AttestorTypeRemote, GRPC: grpc}
+			require.NoError(t, cfg.Validate(), grpc)
+		}
+	})
+
 	t.Run("remote attestor rejects a tls block on a plaintext address", func(t *testing.T) {
 		for _, grpc := range []string{"attestor.example.com:3000", "http://attestor.example.com:3000"} {
 			cfg := AttestorConfig{Name: "attestor-1", Type: AttestorTypeRemote, GRPC: grpc, TLS: &TLSClientConfig{}}
@@ -305,6 +337,27 @@ func TestSignerConfigTLS(t *testing.T) {
 			TLS:         &TLSClientConfig{CAFile: certFile, CertFile: certFile, KeyFile: keyFile},
 		}
 		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("remote signer rejects a malformed URL", func(t *testing.T) {
+		for grpc, want := range map[string]string{
+			"https://kms.example.com/kms":         "grpc: must not have a path",
+			"http://kms.example.com/kms":          "grpc: must not have a path",
+			"https://kms.example.com?x=1":         "grpc: must not have a query or fragment",
+			"https://kms.example.com#x":           "grpc: must not have a query or fragment",
+			"https://":                            "grpc: must include a host",
+			"https://kms.example.com:abc":         "grpc: invalid URL",
+			"https://user:secret@kms.example.com": "grpc: must not have userinfo",
+			"https://token@kms.example.com":       "grpc: must not have userinfo",
+		} {
+			cfg := SignerConfig{Alias: "kms", Type: SignerRemote, GRPC: grpc, RemoteKeyID: "key-1"}
+			require.ErrorContains(t, cfg.Validate(), want, grpc)
+		}
+
+		for _, grpc := range []string{"https://kms.example.com", "https://kms.example.com/", "kms.example.com:9090"} {
+			cfg := SignerConfig{Alias: "kms", Type: SignerRemote, GRPC: grpc, RemoteKeyID: "key-1"}
+			require.NoError(t, cfg.Validate(), grpc)
+		}
 	})
 
 	t.Run("remote signer rejects a tls block on a plaintext address", func(t *testing.T) {
@@ -384,6 +437,34 @@ func TestRemoteParamsValidate(t *testing.T) {
 				TLS: &TLSClientConfig{},
 			},
 			errContains: "tls: requires an https:// address",
+		},
+		{
+			name:        "query on a url",
+			params:      RemoteParams{URL: "https://prover.example.com/grpc?token=abc"},
+			errContains: "url: must not have a query or fragment",
+		},
+		{
+			name:        "fragment on a url",
+			params:      RemoteParams{URL: "http://prover.example.com#section"},
+			errContains: "url: must not have a query or fragment",
+		},
+		{
+			name:   "path on a url",
+			params: RemoteParams{URL: "https://prover.example.com/grpc"},
+		},
+		{
+			name:   "userinfo on a url",
+			params: RemoteParams{URL: "https://user:secret@prover.example.com"},
+		},
+		{
+			name:        "url without a host",
+			params:      RemoteParams{URL: "https://"},
+			errContains: "url: must include a host",
+		},
+		{
+			name:        "url with a bad port",
+			params:      RemoteParams{URL: "https://prover.example.com:abc"},
+			errContains: "url: invalid URL",
 		},
 		{
 			name: "bad tls block on an https url",

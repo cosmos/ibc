@@ -157,8 +157,8 @@ type AttestorConfig struct {
 	// tag; n > 0 attests up to "latest" - n instead.
 	FinalityOffset uint `yaml:"finalityOffset"`
 
-	// GRPC required for type: remote only. Bare host:port, or an http(s):// URL.
-	// https:// uses TLS.
+	// GRPC required for type: remote only. Bare host:port, or an http(s):// URL
+	// without a query or fragment. https:// uses TLS.
 	GRPC string `yaml:"grpc,omitempty"`
 
 	// TLS remote only. Settings for an https:// grpc, see TLSClientConfig.
@@ -549,6 +549,10 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
 
+		if err := errPath("grpc", checkHTTPURL(c.GRPC, false)); err != nil {
+			return err
+		}
+
 		if err := validateEndpointTLS(c.GRPC, c.TLS); err != nil {
 			return err
 		}
@@ -603,6 +607,10 @@ func (c SignerConfig) Validate() error {
 		return errPathf("remoteKeyId", "required for remote signer")
 	case c.Type == SignerLocal && c.TLS != nil:
 		return errPathf("tls", "must not be set for local signer")
+	}
+
+	if err := errPath("grpc", checkHTTPURL(c.GRPC, true)); err != nil {
+		return err
 	}
 
 	if err := validateEndpointTLS(c.GRPC, c.TLS); err != nil {

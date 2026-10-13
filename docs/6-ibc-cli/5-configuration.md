@@ -355,7 +355,7 @@ attestors:
 |---|---|---|---|
 | `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
-| `grpc` | `string` | **required** | Bare host:port, or an http(s):// URL. https:// uses TLS. |
+| `grpc` | `string` | **required** | Bare host:port, or an http(s):// URL without a query or fragment. https:// uses TLS. |
 | `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
 | `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
 | `tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
@@ -439,7 +439,7 @@ attestors:
 
 Without a `tls` block, TLS trusts the system's CAs and presents no client certificate. Add a `tls` block, with the keys listed in the remote attestor and remote signer tables, to change that; a remote prover takes it as `params.tls`. A `tls` block on an address that isn't `https://` is rejected, since its settings would be ignored. <!-- [cli/internal/config/tls.go: validateEndpointTLS] -->
 
-An `https://` address without a port uses 443, so `https://attestor.example.com` connects to port 443; write `https://host:port` for any other port. A bare `host:port` keeps working as before and connects in plaintext. For a signer, an `https://` URL becomes the gRPC target `host:443` or `host:port`; other targets, such as `dns:///host:port`, are passed to gRPC as written. <!-- [cli/internal/network/tls.go: Endpoint.GRPCTarget] -->
+An `https://` address without a port uses 443, so `https://attestor.example.com` connects to port 443; write `https://host:port` for any other port. A bare `host:port` keeps working as before and connects in plaintext. An attestor or prover URL may carry a path but not a query or fragment, since the RPC path is appended to it. For a signer, an `http://` or `https://` URL becomes the gRPC target `host:port`, with 80 or 443 when the port is omitted, and must not carry userinfo, a path, a query or a fragment, which a gRPC target can't express; other targets, such as `dns:///host:port`, are passed to gRPC as written. <!-- [cli/internal/network/tls.go: Endpoint.GRPCTarget] -->
 
 Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. A client certificate that has expired or is not yet valid fails validation. <!-- [cli/internal/config/tls.go: TLSClientConfig.TLSConfig] -->
 

@@ -5,8 +5,10 @@ package config
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -110,73 +112,29 @@ func (c *TLSClientConfig) TLSConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("load client certificate: %w", err)
 	}
 
-	if leaf := cert.Leaf; leaf != nil {
-		now := time.Now()
-
-		switch {
-		case now.After(leaf.NotAfter):
-			return nil, fmt.Errorf("client certificate %s expired %s", certFile, leaf.NotAfter.Format(time.RFC3339))
-		case now.Before(leaf.NotBefore):
-			return nil, fmt.Errorf(
-				"client certificate %s is not valid until %s",
-				certFile, leaf.NotBefore.Format(time.RFC3339),
-			)
+	// Leaf is left nil under GODEBUG=x509keypairleaf=0.
+	leaf := cert.Leaf
+	if leaf == nil {
+		if leaf, err = x509.ParseCertificate(cert.Certificate[0]); err != nil {
+			return nil, fmt.Errorf("parse client certificate: %w", err)
 		}
+	}
+
+	now := time.Now()
+
+	switch {
+	case now.After(leaf.NotAfter):
+		return nil, fmt.Errorf("client certificate %s expired %s", certFile, leaf.NotAfter.Format(time.RFC3339))
+	case now.Before(leaf.NotBefore):
+		return nil, fmt.Errorf(
+			"client certificate %s is not valid until %s",
+			certFile, leaf.NotBefore.Format(time.RFC3339),
+		)
 	}
 
 	cfg.Certificates = []tls.Certificate{cert}
 
 	return cfg, nil
-}
-
-// caPool loads caFile into a cert pool verifying a TLS server.
-func caPool(caFile string) (*x509.CertPool, error) {
-	path, err := ExpandHome(caFile)
-	if err != nil {
-		return nil, err
-	}
-
-	bz, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read CA file: %w", err)
-	}
-
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(bz) {
-		return nil, fmt.Errorf("CA file %q contains no PEM certificates", path)
-	}
-
-	return pool, nil
-}
-
-// usesTLS reports whether addr is an https:// URL, which is what turns TLS on
-// for every remote service.
-func usesTLS(addr string) bool {
-	return strings.HasPrefix(strings.ToLower(addr), "https://")
-}
-
-// isHTTPURL reports whether addr is an http:// or https:// URL.
-func isHTTPURL(addr string) bool {
-	return usesTLS(addr) || strings.HasPrefix(strings.ToLower(addr), "http://")
-}
-
-// checkTLSAddr rejects a tls block on an address that doesn't use TLS, where
-// its settings would be silently ignored.
-func checkTLSAddr(addr string, tlsCfg *TLSClientConfig) error {
-	if tlsCfg != nil && !usesTLS(addr) {
-		return errPathf("tls", "requires an https:// address")
-	}
-
-	return nil
-}
-
-// validateEndpointTLS checks tlsCfg against addr and loads its files.
-func validateEndpointTLS(addr string, tlsCfg *TLSClientConfig) error {
-	if err := checkTLSAddr(addr, tlsCfg); err != nil {
-		return err
-	}
-
-	return errPath("tls", tlsCfg.Validate())
 }
 
 // ResolveEndpoint pairs addr with its TLS settings: for an https:// addr,
@@ -216,4 +174,82 @@ func ResolveEndpoint(
 	}
 
 	return network.Endpoint{URL: addr, TLS: tlsConfig}, nil
+}
+
+// caPool loads caFile into a cert pool verifying a TLS server.
+func caPool(caFile string) (*x509.CertPool, error) {
+	path, err := ExpandHome(caFile)
+	if err != nil {
+		return nil, err
+	}
+
+	bz, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read CA file: %w", err)
+	}
+
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(bz) {
+		return nil, fmt.Errorf("CA file %q contains no PEM certificates", path)
+	}
+
+	return pool, nil
+}
+
+// usesTLS reports whether addr is an https:// URL, which is what turns TLS on
+// for every remote service.
+func usesTLS(addr string) bool {
+	return strings.HasPrefix(strings.ToLower(addr), "https://")
+}
+
+// isHTTPURL reports whether addr is an http:// or https:// URL.
+func isHTTPURL(addr string) bool {
+	return usesTLS(addr) || strings.HasPrefix(strings.ToLower(addr), "http://")
+}
+
+// checkHTTPURL validates an http(s):// addr: it must parse and name a host,
+// and carry no query or fragment, which would swallow the RPC path appended
+// to it. targetOnly also rejects userinfo and a path, which a gRPC target
+// can't carry. Any other addr is left alone. Errors don't echo addr, which can
+// carry credentials.
+func checkHTTPURL(addr string, targetOnly bool) error {
+	if !isHTTPURL(addr) {
+		return nil
+	}
+
+	u, err := url.Parse(addr)
+
+	switch {
+	case err != nil:
+		return errors.New("invalid URL")
+	case u.Hostname() == "":
+		return errors.New("must include a host")
+	case u.RawQuery != "" || u.ForceQuery || strings.Contains(addr, "#"):
+		return errors.New("must not have a query or fragment")
+	case targetOnly && u.User != nil:
+		return errors.New("must not have userinfo")
+	case targetOnly && strings.Trim(u.Path, "/") != "":
+		return errors.New("must not have a path")
+	}
+
+	return nil
+}
+
+// checkTLSAddr rejects a tls block on an address that doesn't use TLS, where
+// its settings would be silently ignored.
+func checkTLSAddr(addr string, tlsCfg *TLSClientConfig) error {
+	if tlsCfg != nil && !usesTLS(addr) {
+		return errPathf("tls", "requires an https:// address")
+	}
+
+	return nil
+}
+
+// validateEndpointTLS checks tlsCfg against addr and loads its files.
+func validateEndpointTLS(addr string, tlsCfg *TLSClientConfig) error {
+	if err := checkTLSAddr(addr, tlsCfg); err != nil {
+		return err
+	}
+
+	return errPath("tls", tlsCfg.Validate())
 }

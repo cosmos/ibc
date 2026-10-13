@@ -111,7 +111,7 @@ type AutoRelayConfig struct {
 
 // RemoteParams is the params block a remote client declares.
 type RemoteParams struct {
-	// URL is the ProverService endpoint.
+	// URL is the ProverService endpoint, without a query or fragment.
 	URL string `yaml:"url"`
 
 	// TLS settings for an https:// URL, see TLSClientConfig.
@@ -295,6 +295,10 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 func (p RemoteParams) Validate() error {
 	if p.URL == "" {
 		return errPathf("url", "required")
+	}
+
+	if err := errPath("url", checkHTTPURL(p.URL, false)); err != nil {
+		return err
 	}
 
 	return validateEndpointTLS(p.URL, p.TLS)
