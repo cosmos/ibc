@@ -185,16 +185,19 @@ The next steps deploy the General Message Passing (GMP) app and the Interchain F
 2. Deploy an IFT contract on each chain. This is the token that will be transferred between the chains:
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --chain 41001 --yes
 ```
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --chain 41002 --yes
 ```
 
 ```
 level=INFO msg="ift token deployed" chain=41001 symbol=DEMO address=0x6bbcD66DA283F6cD4e630b9fc6A91C37D5B2C7A8
+level=INFO msg="ift rate limit set" chain=41001 symbol=DEMO capacity=1000000000000000000000 window=86400
 ```
+
+An IFT token rejects every transfer until it has a rate limit, so `deploy ift` requires one: each direction lets up to `--rate-limit-capacity` base units through, refilling over `--rate-limit-window` (24 hours by default). Here that is 1000 tokens at 18 decimals. Rerunning with a different limit updates it.
 
 3. Use the following commands to read both token addresses out of the deployment records. These will be used in later steps:
 
