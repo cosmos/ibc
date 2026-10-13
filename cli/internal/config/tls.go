@@ -8,24 +8,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 )
 
-// TLSClientConfig holds the settings for an outbound TLS connection.
-//
-// The block carries settings. Whether TLS is used depends on the endpoint:
-//   - a remote prover url: its scheme. https:// uses TLS with Go's defaults
-//     even without the block; the block requires an https:// url.
-//   - a remote attestor grpc address: the block's presence, which selects
-//     https over http.
-//   - a remote signer grpc target, passed to gRPC as written: the block's
-//     presence, which selects TLS credentials over plaintext. An https://
-//     scheme does not.
-//
-// An empty block (`tls: {}`) is valid and means system roots and no client
-// certificate. A `tls:` key with no value decodes to nil, the same as no block.
+// TLSClientConfig holds the settings for an outbound TLS connection. For every
+// remote service an https:// address turns TLS on, see usesTLS; the block only
+// customizes it and requires one. Without the block, or with an empty one, TLS
+// uses system roots and no client certificate.
 type TLSClientConfig struct {
 	// CAFile is a PEM bundle verifying the server. Empty uses system roots.
 	// Read at startup, so a changed bundle needs a restart.
@@ -157,22 +149,65 @@ func caPool(caFile string) (*x509.CertPool, error) {
 	return pool, nil
 }
 
-// ResolveEndpoint pairs url with the resolved form of tlsCfg, see TLSConfig,
-// and warns through logger when server verification is disabled.
+// usesTLS reports whether addr is an https:// URL, which is what turns TLS on
+// for every remote service.
+func usesTLS(addr string) bool {
+	return strings.HasPrefix(strings.ToLower(addr), "https://")
+}
+
+// isHTTPURL reports whether addr is an http:// or https:// URL.
+func isHTTPURL(addr string) bool {
+	return usesTLS(addr) || strings.HasPrefix(strings.ToLower(addr), "http://")
+}
+
+// checkTLSAddr rejects a tls block on an address that doesn't use TLS, where
+// its settings would be silently ignored.
+func checkTLSAddr(addr string, tlsCfg *TLSClientConfig) error {
+	if tlsCfg != nil && !usesTLS(addr) {
+		return errPathf("tls", "requires an https:// address")
+	}
+
+	return nil
+}
+
+// validateEndpointTLS checks tlsCfg against addr and loads its files.
+func validateEndpointTLS(addr string, tlsCfg *TLSClientConfig) error {
+	if err := checkTLSAddr(addr, tlsCfg); err != nil {
+		return err
+	}
+
+	return errPath("tls", tlsCfg.Validate())
+}
+
+// ResolveEndpoint pairs addr with its TLS settings: for an https:// addr,
+// tlsCfg resolved by TLSConfig or Go's defaults when it is nil; for any other
+// addr none. Warns through logger when server verification is disabled.
 // logAttrs identify the endpoint in that warning; keep URLs out of them, since
 // a URL can carry credentials in its userinfo.
 func ResolveEndpoint(
-	url string,
+	addr string,
 	tlsCfg *TLSClientConfig,
 	logger *slog.Logger,
 	logAttrs ...any,
 ) (network.Endpoint, error) {
+	if err := checkTLSAddr(addr, tlsCfg); err != nil {
+		return network.Endpoint{}, err
+	}
+
+	if !usesTLS(addr) {
+		return network.Endpoint{URL: addr}, nil
+	}
+
 	tlsConfig, err := tlsCfg.TLSConfig()
 	if err != nil {
 		return network.Endpoint{}, errPath("tls", err)
 	}
 
-	if tlsConfig != nil && tlsConfig.InsecureSkipVerify {
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{}
+	}
+
+	if tlsConfig.InsecureSkipVerify {
 		if logger == nil {
 			logger = slog.Default()
 		}
@@ -180,5 +215,5 @@ func ResolveEndpoint(
 		logger.Warn("TLS server certificate verification is disabled", logAttrs...)
 	}
 
-	return network.Endpoint{URL: url, TLS: tlsConfig}, nil
+	return network.Endpoint{URL: addr, TLS: tlsConfig}, nil
 }

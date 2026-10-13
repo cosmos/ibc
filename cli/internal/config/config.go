@@ -157,11 +157,11 @@ type AttestorConfig struct {
 	// tag; n > 0 attests up to "latest" - n instead.
 	FinalityOffset uint `yaml:"finalityOffset"`
 
-	// GRPC required for type: remote only. Bare host:port.
+	// GRPC required for type: remote only. Bare host:port, or an http(s):// URL.
+	// https:// uses TLS.
 	GRPC string `yaml:"grpc,omitempty"`
 
-	// TLS remote only. Present selects https over http for grpc, see
-	// TLSClientConfig.
+	// TLS remote only. Settings for an https:// grpc, see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
@@ -179,14 +179,13 @@ type SignerConfig struct {
 	// File key file path for a local signer
 	File string `yaml:"file,omitempty"`
 
-	// GRPC address for a remote signer
+	// GRPC address for a remote signer. An https:// URL uses TLS.
 	GRPC string `yaml:"grpc,omitempty"`
 
 	// RemoteKeyID KMS key ID for a remote signer
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
 
-	// TLS remote only. Present selects TLS credentials over plaintext for grpc,
-	// see TLSClientConfig.
+	// TLS remote only. Settings for an https:// grpc, see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
@@ -540,8 +539,8 @@ func (c AttestorConfig) Validate() error {
 		switch {
 		case c.GRPC == "":
 			return errPathf("grpc", "required for remote attestors")
-		case strings.Contains(c.GRPC, "://"):
-			return errPathf("grpc", "must be a bare host:port, not a URL: %q", c.GRPC)
+		case strings.Contains(c.GRPC, "://") && !isHTTPURL(c.GRPC):
+			return errPathf("grpc", "must be a bare host:port or an http(s):// URL: %q", c.GRPC)
 		case c.ChainID != "":
 			return errPathf("chainId", "must not be set for remote attestors")
 		case c.Signer != "":
@@ -550,19 +549,19 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
 
-		if err := c.TLS.Validate(); err != nil {
-			return errPath("tls", err)
+		if err := validateEndpointTLS(c.GRPC, c.TLS); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-// EndpointURL returns GRPC as an https:// URL with a tls block and http://
-// without one.
+// EndpointURL returns GRPC as a URL: as written when it has a scheme, and as
+// http:// for a bare host:port.
 func (c AttestorConfig) EndpointURL() string {
-	if c.TLS != nil {
-		return "https://" + c.GRPC
+	if strings.Contains(c.GRPC, "://") {
+		return c.GRPC
 	}
 
 	return "http://" + c.GRPC
@@ -606,8 +605,8 @@ func (c SignerConfig) Validate() error {
 		return errPathf("tls", "must not be set for local signer")
 	}
 
-	if err := c.TLS.Validate(); err != nil {
-		return errPath("tls", err)
+	if err := validateEndpointTLS(c.GRPC, c.TLS); err != nil {
+		return err
 	}
 
 	if c.Type == SignerLocal {

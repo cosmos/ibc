@@ -238,7 +238,7 @@ insecureSkipVerify: true
 		var attestor AttestorConfig
 
 		require.NoError(t, yaml.Unmarshal([]byte("name: a\ntype: remote\ngrpc: host:3000\ntls: {}\n"), &attestor))
-		require.NotNil(t, attestor.TLS, "an empty tls block still enables TLS")
+		require.NotNil(t, attestor.TLS, "an empty tls block decodes as present")
 	})
 
 	t.Run("omitted block stays nil", func(t *testing.T) {
@@ -257,7 +257,7 @@ func TestAttestorConfigTLS(t *testing.T) {
 		cfg := AttestorConfig{
 			Name: "attestor-1",
 			Type: AttestorTypeRemote,
-			GRPC: "attestor.example.com:3000",
+			GRPC: "https://attestor.example.com:3000",
 			TLS:  &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
 		}
 		require.NoError(t, cfg.Validate())
@@ -267,10 +267,17 @@ func TestAttestorConfigTLS(t *testing.T) {
 		cfg := AttestorConfig{
 			Name: "attestor-1",
 			Type: AttestorTypeRemote,
-			GRPC: "attestor.example.com:3000",
+			GRPC: "https://attestor.example.com:3000",
 			TLS:  &TLSClientConfig{CertFile: certFile},
 		}
 		require.ErrorContains(t, cfg.Validate(), "tls.keyFile")
+	})
+
+	t.Run("remote attestor rejects a tls block on a plaintext address", func(t *testing.T) {
+		for _, grpc := range []string{"attestor.example.com:3000", "http://attestor.example.com:3000"} {
+			cfg := AttestorConfig{Name: "attestor-1", Type: AttestorTypeRemote, GRPC: grpc, TLS: &TLSClientConfig{}}
+			require.ErrorContains(t, cfg.Validate(), "tls: requires an https:// address", grpc)
+		}
 	})
 
 	t.Run("local attestor rejects a tls block", func(t *testing.T) {
@@ -293,11 +300,22 @@ func TestSignerConfigTLS(t *testing.T) {
 		cfg := SignerConfig{
 			Alias:       "kms",
 			Type:        SignerRemote,
-			GRPC:        "kms.example.com:9090",
+			GRPC:        "https://kms.example.com:9090",
 			RemoteKeyID: "key-1",
 			TLS:         &TLSClientConfig{CAFile: certFile, CertFile: certFile, KeyFile: keyFile},
 		}
 		require.NoError(t, cfg.Validate())
+	})
+
+	t.Run("remote signer rejects a tls block on a plaintext address", func(t *testing.T) {
+		cfg := SignerConfig{
+			Alias:       "kms",
+			Type:        SignerRemote,
+			GRPC:        "kms.example.com:9090",
+			RemoteKeyID: "key-1",
+			TLS:         &TLSClientConfig{},
+		}
+		require.ErrorContains(t, cfg.Validate(), "tls: requires an https:// address")
 	})
 
 	t.Run("local signer rejects a tls block", func(t *testing.T) {
@@ -357,7 +375,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 				URL: "http://prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
-			errContains: "tls: requires an https:// url",
+			errContains: "tls: requires an https:// address",
 		},
 		{
 			name: "tls block with a bare host:port",
@@ -365,7 +383,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 				URL: "prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
-			errContains: "tls: requires an https:// url",
+			errContains: "tls: requires an https:// address",
 		},
 		{
 			name: "bad tls block on an https url",
@@ -389,12 +407,46 @@ func TestRemoteParamsValidate(t *testing.T) {
 }
 
 func TestAttestorConfigEndpointURL(t *testing.T) {
-	require.Equal(t, "http://attestor:3000", AttestorConfig{GRPC: "attestor:3000"}.EndpointURL())
-	require.Equal(
-		t,
-		"https://attestor:3000",
-		AttestorConfig{GRPC: "attestor:3000", TLS: &TLSClientConfig{}}.EndpointURL(),
-	)
+	for grpc, want := range map[string]string{
+		"attestor:3000":         "http://attestor:3000",
+		"http://attestor:3000":  "http://attestor:3000",
+		"https://attestor:3000": "https://attestor:3000",
+	} {
+		require.Equal(t, want, AttestorConfig{GRPC: grpc}.EndpointURL(), grpc)
+	}
+}
+
+// The scheme decides TLS for every service; the block only customizes it.
+func TestResolveEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	certFile, _ := certs.WriteSelfSigned(t, dir, "test")
+
+	t.Run("https without a block uses default TLS", func(t *testing.T) {
+		got, err := ResolveEndpoint("https://svc.example.com", nil, nil)
+		require.NoError(t, err)
+		require.NotNil(t, got.TLS)
+		require.Nil(t, got.TLS.RootCAs)
+	})
+
+	t.Run("https with a block uses its settings", func(t *testing.T) {
+		got, err := ResolveEndpoint("HTTPS://svc.example.com", &TLSClientConfig{CAFile: certFile}, nil)
+		require.NoError(t, err)
+		require.NotNil(t, got.TLS.RootCAs)
+	})
+
+	t.Run("plaintext addresses use no TLS", func(t *testing.T) {
+		for _, addr := range []string{"http://svc.example.com", "svc.example.com:3000", "dns:///svc.example.com"} {
+			got, err := ResolveEndpoint(addr, nil, nil)
+			require.NoError(t, err)
+			require.Nil(t, got.TLS, addr)
+			require.Equal(t, addr, got.URL)
+		}
+	})
+
+	t.Run("a block on a plaintext address is rejected", func(t *testing.T) {
+		_, err := ResolveEndpoint("svc.example.com:3000", &TLSClientConfig{}, nil)
+		require.ErrorContains(t, err, "tls: requires an https:// address")
+	})
 }
 
 func TestConfigValidateReportsTLSPath(t *testing.T) {
@@ -406,13 +458,13 @@ func TestConfigValidateReportsTLSPath(t *testing.T) {
 	cfg.Attestors = Attestors{{
 		Name: "attestor-1",
 		Type: AttestorTypeRemote,
-		GRPC: "attestor.example.com:3000",
+		GRPC: "https://attestor.example.com:3000",
 		TLS:  &TLSClientConfig{CAFile: filepath.Join(dir, "absent.crt")},
 	}}
 	cfg.Signers = Signers{{
 		Alias:       "kms",
 		Type:        SignerRemote,
-		GRPC:        "kms.example.com:9090",
+		GRPC:        "https://kms.example.com:9090",
 		RemoteKeyID: "key-1",
 		TLS:         &TLSClientConfig{CAFile: certFile},
 	}}

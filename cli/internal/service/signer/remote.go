@@ -46,8 +46,8 @@ func NewRemote(ctx context.Context, client signerservice.SignerServiceClient, ke
 	return s, nil
 }
 
-// NewRemoteFromEndpoint dials the KMS at endpoint, over TLS when
-// endpoint.TLS is set, and resolves keyID.
+// NewRemoteFromEndpoint dials the KMS at endpoint, over TLS for an https://
+// URL, and resolves keyID.
 func NewRemoteFromEndpoint(ctx context.Context, keyID string, endpoint network.Endpoint) (*RemoteSigner, error) {
 	grpcClient, err := newGRPCClient(endpoint)
 	if err != nil {
@@ -129,7 +129,7 @@ func newGRPCClient(endpoint network.Endpoint) (*grpc.ClientConn, error) {
 		creds = credentials.NewTLS(endpoint.TLS)
 	}
 
-	return grpc.NewClient(endpoint.URL, grpc.WithTransportCredentials(creds))
+	return grpc.NewClient(endpoint.GRPCTarget(), grpc.WithTransportCredentials(creds))
 }
 
 func bytesToPayload(message []byte) *signerservice.Payload {

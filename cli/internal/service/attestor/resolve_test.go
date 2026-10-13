@@ -4,20 +4,13 @@ package attestor
 
 import (
 	"context"
-	"crypto/tls"
-	"net"
-	"net/http"
 	"testing"
-	"time"
 
-	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
-	proto "github.com/cosmos/ibc/cli/api/v2/attestor"
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
-	"github.com/cosmos/ibc/cli/internal/testutil/certs"
 )
 
 func TestResolveFromConfig(t *testing.T) {
@@ -49,7 +42,7 @@ func TestResolveFromConfig(t *testing.T) {
 		entries := config.Attestors{{
 			Name: "bob",
 			Type: config.AttestorTypeRemote,
-			GRPC: "127.0.0.1:0",
+			GRPC: "https://127.0.0.1:0",
 			TLS:  &config.TLSClientConfig{CAFile: "/nonexistent/ca.pem"},
 		}}
 
@@ -100,123 +93,4 @@ func TestResolveFromConfig(t *testing.T) {
 		require.ErrorContains(t, err, "attestor alice")
 		require.ErrorContains(t, err, "unknown signer missing")
 	})
-}
-
-// attestors[].grpc is a bare host:port, so presence of the tls block is what
-// selects https over http. Resolving against a real listener is the only way
-// to show the scheme actually followed.
-func TestResolveRemoteDerivesScheme(t *testing.T) {
-	ca := certs.NewCA(t)
-	dir := t.TempDir()
-	caFile := ca.WriteCA(t, dir)
-
-	clientCert, clientKey := ca.WriteLeaf(t, dir, "client")
-
-	tlsAddr := startTLSAttestor(t, ca.ServerTLS(t, "localhost", true))
-
-	plaintextAddr := startPlaintextAttestor(t)
-
-	t.Run("a tls block dials https", func(t *testing.T) {
-		got, err := dialRemote(t, config.AttestorConfig{
-			Name: "attestor-1",
-			Type: config.AttestorTypeRemote,
-			GRPC: tlsAddr,
-			TLS: &config.TLSClientConfig{
-				CAFile:     caFile,
-				CertFile:   clientCert,
-				KeyFile:    clientKey,
-				ServerName: "localhost",
-			},
-		})
-		require.NoError(t, err)
-		require.Equal(t, "41001", got.ChainID())
-	})
-
-	t.Run("no tls block dials http", func(t *testing.T) {
-		got, err := dialRemote(t, config.AttestorConfig{
-			Name: "attestor-1",
-			Type: config.AttestorTypeRemote,
-			GRPC: plaintextAddr,
-		})
-		require.NoError(t, err)
-		require.Equal(t, "41001", got.ChainID())
-	})
-
-	t.Run("a tls block against a plaintext listener fails", func(t *testing.T) {
-		_, err := dialRemote(t, config.AttestorConfig{
-			Name: "attestor-1",
-			Type: config.AttestorTypeRemote,
-			GRPC: plaintextAddr,
-			TLS:  &config.TLSClientConfig{CAFile: caFile, ServerName: "localhost"},
-		})
-		require.Error(t, err)
-	})
-}
-
-func dialRemote(t *testing.T, entry config.AttestorConfig) (Attestor, error) {
-	t.Helper()
-
-	return resolveRemote(context.Background(), entry)
-}
-
-// startTLSAttestor serves AttestationService over TLS and returns its address.
-func startTLSAttestor(t *testing.T, tlsConfig *tls.Config) string {
-	t.Helper()
-
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetHTTP2(true)
-
-	srv := newAttestorServer(protocols)
-	srv.TLSConfig = tlsConfig
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
-	go func() { _ = srv.ServeTLS(ln, "", "") }()
-	t.Cleanup(func() { _ = srv.Close() })
-
-	return ln.Addr().String()
-}
-
-// startPlaintextAttestor serves AttestationService without TLS over HTTP/1.1
-// only, so it also pins that plaintext attestors don't require h2c.
-func startPlaintextAttestor(t *testing.T) string {
-	t.Helper()
-
-	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
-	protocols.SetUnencryptedHTTP2(true)
-
-	srv := newAttestorServer(protocols)
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-
-	go func() { _ = srv.Serve(ln) }()
-	t.Cleanup(func() { _ = srv.Close() })
-
-	return ln.Addr().String()
-}
-
-func newAttestorServer(protocols *http.Protocols) *http.Server {
-	path, handler := proto.NewAttestationServiceHandler(stubAttestationService{})
-	mux := http.NewServeMux()
-	mux.Handle(path, handler)
-
-	return &http.Server{
-		Handler:           mux,
-		Protocols:         protocols,
-		ReadHeaderTimeout: 3 * time.Second,
-	}
-}
-
-type stubAttestationService struct {
-	proto.UnimplementedAttestationServiceHandler
-}
-
-func (stubAttestationService) Info(
-	context.Context, *connect.Request[proto.InfoRequest],
-) (*connect.Response[proto.InfoResponse], error) {
-	return connect.NewResponse(&proto.InfoResponse{ChainId: "41001", Address: "0xabc"}), nil
 }

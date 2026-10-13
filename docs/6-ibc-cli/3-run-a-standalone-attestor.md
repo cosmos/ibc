@@ -187,7 +187,7 @@ attestors:
   grpc: 127.0.0.1:3001
 ```
 
-If the attestor is served behind TLS, add a `tls` block to that entry, as described in [TLS for remote services](5-configuration.md#tls-for-remote-services).
+If the attestor is served behind TLS, write its address as `https://host`, which uses port 443 unless you add one, and add a `tls` block for a private CA or mTLS, as described in [TLS for remote services](5-configuration.md#tls-for-remote-services).
 
 ## Next steps
 

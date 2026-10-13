@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"slices"
 	"time"
 
@@ -115,7 +114,7 @@ type RemoteParams struct {
 	// URL is the ProverService endpoint.
 	URL string `yaml:"url"`
 
-	// TLS carries settings for an https:// URL, see TLSClientConfig.
+	// TLS settings for an https:// URL, see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
@@ -298,15 +297,7 @@ func (p RemoteParams) Validate() error {
 		return errPathf("url", "required")
 	}
 
-	if p.TLS == nil {
-		return nil
-	}
-
-	if parsed, err := url.Parse(p.URL); err != nil || parsed.Scheme != "https" {
-		return errPathf("tls", "requires an https:// url")
-	}
-
-	return errPath("tls", p.TLS.Validate())
+	return validateEndpointTLS(p.URL, p.TLS)
 }
 
 func (AttestationParams) Validate() error { return nil }
