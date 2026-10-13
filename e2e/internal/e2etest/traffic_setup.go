@@ -429,7 +429,7 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
 		}
-		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
+		options.WaitPolicies[string(route.ID)] = RouteWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
@@ -472,7 +472,9 @@ func mergeRelayerConnection(
 	config.Connections = append(config.Connections, connection)
 }
 
-func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
+// RouteWaitPolicy is the end-to-end packet wait policy for a route between
+// Chains with the given timings.
+func RouteWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
 	return ibccli.WaitPolicy{
 		CompletionBudget: source.CompletionBudget + destination.CompletionBudget,
 		StatusPoll:       max(source.PollInterval, destination.PollInterval),
