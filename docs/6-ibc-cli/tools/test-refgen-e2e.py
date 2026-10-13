@@ -1076,13 +1076,11 @@ def _():
         # rendered `optional` with nothing raising. The binary does not care
         # which function the rule lives in.
         box.edit("cli/internal/config/config.go",
-                 """	if c.RPC == "" {
+                 """	case c.RPC == "":
 		return errPathf("rpc", "required")
-	}
 """,
-                 """	if err := c.validateRPC(); err != nil {
-		return err
-	}
+                 """	case c.validateRPC() != nil:
+		return c.validateRPC()
 """)
         box.edit("cli/internal/config/config.go",
                  "func (c EVMChainConfig) Validate(validateICS26Router bool) error {",
