@@ -41,7 +41,7 @@ lint-fix: ## Lint the code and fix errors
 test: ## Run tests
 	go test ./... -v
 
-codegen: codegen-sql codegen-proto codegen-abi codegen-mocks ## Generate code
+codegen: codegen-sql codegen-proto codegen-mocks ## Generate code
 
 codegen-sql: ## Generate Go code based on migrations and queries
 	cd internal/store && $(SQLC) generate
@@ -51,22 +51,6 @@ codegen-proto: ## Generate Go proto bindings
 
 codegen-mocks: ## Generate mocks for the code
 	go run github.com/vektra/mockery/v3@v3.7.1 --log-level ERROR
-
-# todo: replace the copied ABI files and this target with the contracts' own build
-# outputs and go-abigen bindings once they are migrated from solidity-ibc-eureka
-codegen-abi: ## Generate Go bindings for EVM contract ABIs
-	mkdir -p internal/chains/evm/contracts/ics26router
-	go tool abigen \
-		--abi internal/chains/evm/abi/ics26_router.json \
-		--pkg ics26router \
-		--type Contract \
-		--out internal/chains/evm/contracts/ics26router/ics26router.go
-	mkdir -p internal/chains/evm/contracts/attestation
-	go tool abigen \
-		--abi internal/chains/evm/abi/attestation_light_client.json \
-		--pkg attestation \
-		--type Contract \
-		--out internal/chains/evm/contracts/attestation/attestation.go
 
 check-stale: ## Run all checks for stale code
 	@echo "Checking for stale proto bindings..."
@@ -95,7 +79,7 @@ run-all-checks: ## Run "all-in-one" code validation step.
 
 .PHONY: build-test-bin
 .PHONY: help build install docker-build lint lint-fix test
-.PHONY: codegen codegen-sql codegen-proto codegen-abi codegen-mocks
+.PHONY: codegen codegen-sql codegen-proto codegen-mocks
 .PHONY: check-stale run-all-checks
 
 .PHONY: sync-besu-fixture

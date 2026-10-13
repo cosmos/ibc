@@ -468,13 +468,18 @@ func (s *Setup) PrepareBesuQBFTClient(
 			address, transaction, _, deployErr := besuqbft.DeployContract(
 				opts,
 				s.backend,
-				config.CounterpartyRouter,
-				config.InitialHeight,
-				config.InitialTimestamp,
-				config.InitialStateRoot,
-				config.InitialValidators,
-				config.TrustingPeriod,
-				config.MaxClockDrift,
+				besuqbft.IBesuLightClientMsgsClientState{
+					IbcRouter:      config.CounterpartyRouter,
+					LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
+					TrustingPeriod: config.TrustingPeriod,
+					MaxClockDrift:  config.MaxClockDrift,
+					TrustLevel:     besu.DefaultTrustLevel,
+				},
+				besuqbft.IBesuLightClientMsgsConsensusState{
+					Timestamp:  config.InitialTimestamp,
+					StateRoot:  config.InitialStateRoot,
+					Validators: config.InitialValidators,
+				},
 				config.RoleManager,
 			)
 			return address, transaction, deployErr

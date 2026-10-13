@@ -228,7 +228,6 @@ func (d *Driver) provisionAttestation(
 func (d *Driver) provisionBesuQBFT(
 	ctx context.Context, router string, params deploy.BesuQBFTParams,
 ) (deploy.ClientRef, error) {
-	trusted := params.InitialConsensusState
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
 		return deploy.ClientRef{}, err
@@ -236,13 +235,14 @@ func (d *Driver) provisionBesuQBFT(
 	addr, tx, _, err := besuqbft.DeployContract(
 		opts,
 		d.backend,
-		params.IBCRouter,
-		params.InitialHeight,
-		trusted.Timestamp,
-		trusted.StateRoot,
-		trusted.Validators,
-		params.TrustingPeriod,
-		params.MaxClockDrift,
+		besuqbft.IBesuLightClientMsgsClientState{
+			IbcRouter:      params.IBCRouter,
+			LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
+			TrustingPeriod: params.TrustingPeriod,
+			MaxClockDrift:  params.MaxClockDrift,
+			TrustLevel:     besu.DefaultTrustLevel,
+		},
+		besuqbft.IBesuLightClientMsgsConsensusState(params.InitialConsensusState),
 		common.HexToAddress(router),
 	)
 	if err != nil {

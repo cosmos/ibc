@@ -25,6 +25,9 @@ import (
 // any EVM chain hosting the contract qualifies.
 type Host interface {
 	BesuQBFTClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
+	// BesuQBFTConsensusStateHash fails when the client stores no consensus
+	// state at height.
+	BesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error)
 }
 
 // Counterparty is the Besu chain the light client tracks.
@@ -74,9 +77,11 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 }
 
 // ClientUpdatePayloads returns one updateMsg from the client's latest
-// consensus state to target, or none when target is the latest height. After
-// full verification the contract installs a target below the latest height as
-// a historical consensus state, or no-ops when it already stores it.
+// consensus state to target, or none when target is not above it. The
+// contract only accepts headers above the trusted height, so a target a
+// concurrent update left behind cannot be installed from the latest state; it
+// fails here unless the client already stores it, since the packet proofs at
+// target would revert.
 func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, error) {
 	state, err := g.host.BesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
@@ -85,6 +90,15 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 
 	trustedHeight := state.LatestHeight.RevisionHeight
 	if target == trustedHeight {
+		return nil, nil
+	}
+	if target < trustedHeight {
+		if _, errStored := g.host.BesuQBFTConsensusStateHash(ctx, g.clientID, target); errStored != nil {
+			return nil, fmt.Errorf(
+				"client advanced to height %d past target %d, which it does not store; retry at a newer height: %w",
+				trustedHeight, target, errStored,
+			)
+		}
 		return nil, nil
 	}
 
