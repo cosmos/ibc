@@ -186,12 +186,9 @@ func TestTLSClientConfigTLSConfig(t *testing.T) {
 
 // Certificate paths go through the same ~ expansion as signer key files.
 func TestTLSClientConfigExpandsHome(t *testing.T) {
-	home, err := os.UserHomeDir()
-	require.NoError(t, err)
-
-	dir, err := os.MkdirTemp(home, ".ibc-tls-test-")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := home
 
 	certFile, keyFile := certs.WriteSelfSigned(t, dir, "test")
 
