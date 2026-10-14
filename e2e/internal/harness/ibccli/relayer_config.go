@@ -58,9 +58,8 @@ type RelayerChain struct {
 
 // RelayerClientEnd is a registered client and its endpoint relay policy.
 type RelayerClientEnd struct {
-	ChainID  string
-	ClientID string
-	// ClientType is required unless the connection uses a remote prover.
+	ChainID    string
+	ClientID   string
 	ClientType clientkind.Kind
 	AutoRelay  bool
 }
@@ -69,8 +68,8 @@ type RelayerClientEnd struct {
 type RelayerConnection struct {
 	A, B RelayerClientEnd
 
-	// ProverURL points both client ends at a ProverService, overriding the
-	// declared client types.
+	// ProverURL points both client ends at a ProverService instead of their
+	// built-in provers.
 	ProverURL string
 }
 
@@ -187,18 +186,14 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 }
 
 func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) ClientEndFileConfig {
-	result := ClientEndFileConfig{
+	return ClientEndFileConfig{
 		ChainID:   end.ChainID,
 		ClientID:  end.ClientID,
 		Signer:    signer,
 		Type:      end.ClientType,
+		ProverURL: proverURL,
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
-	if proverURL != "" {
-		result.Type = clientkind.Remote
-		result.Params = map[string]any{"url": proverURL}
-	}
-	return result
 }
 
 // addAttestor declares one explicitly-configured candidate attestor.
@@ -265,7 +260,7 @@ type ClientEndFileConfig struct {
 	Signer    string               `yaml:"signer"`
 	ClientID  string               `yaml:"clientId"`
 	Type      clientkind.Kind      `yaml:"type"`
-	Params    map[string]any       `yaml:"params,omitempty"`
+	ProverURL string               `yaml:"proverUrl,omitempty"`
 	AutoRelay *AutoRelayFileConfig `yaml:"autoRelay,omitempty"`
 }
 

@@ -57,23 +57,21 @@ relayer:
         autoRelay:
           enabled: true
 
-    # a client end of type: remote delegates proof generation to a
-    # ProverService over gRPC instead of building proofs from attestations, so
-    # a light client IBC CLI does not implement can be relayed by serving that
-    # API
-    - alias: "eth-custom"
+    # proverUrl delegates proof generation to a ProverService over gRPC
+    # instead of the built-in prover. With it, type may name a light client
+    # the IBC CLI does not implement.
+    - alias: "eth-base-op"
       clientA:
         chainId: "1"
         signer: "eth-relayer-key"
-        clientId: "custom-0"
-        type: "remote"
-        params:
-          url: prover.example.com:9090
-#          # TLS needs url: https://prover.example.com; tls only customizes it
-#          tls:
-#            caFile: /etc/ibc/tls/ca.crt
-#            certFile: /etc/ibc/tls/client.crt
-#            keyFile: /etc/ibc/tls/client.key
+        clientId: "op-stack-0"
+        type: "op-stack"
+        proverUrl: prover.example.com:9090
+#        # TLS needs proverUrl: https://prover.example.com; proverTls only customizes it
+#        proverTls:
+#          caFile: /etc/ibc/tls/ca.crt
+#          certFile: /etc/ibc/tls/client.crt
+#          keyFile: /etc/ibc/tls/client.key
       clientB:
         chainId: "8453"
         signer: "base-relayer-key"

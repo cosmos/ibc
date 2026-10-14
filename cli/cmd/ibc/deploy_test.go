@@ -263,7 +263,6 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	require.Len(t, out.Connections, 1)
 	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
 	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
-	require.Empty(t, out.Connections[0].ClientA.Params)
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
 }
 
