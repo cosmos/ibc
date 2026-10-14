@@ -67,8 +67,8 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 }
 
 // relayPackets generates a client update payload and per-packet proofs for events at
-// proofHeight, asks txBuilder for the resulting transaction, and submits it
-// via txSubmitter
+// proofHeight, or at the later height the prover returns, asks txBuilder for
+// the resulting transaction, and submits it via txSubmitter
 func relayPackets(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -86,13 +86,21 @@ func relayPackets(
 		sequences[i] = event.Packet.Sequence
 	}
 
-	logger = logger.With("kind", relayKind, "clientID", clientID, "proofHeight", proofHeight, "sequences", sequences)
-	logger.Debug("Relaying packets")
+	logger = logger.With("kind", relayKind, "clientID", clientID, "sequences", sequences)
 
-	clientUpdatePayloads, err := prover.ClientUpdatePayloads(ctx, proofHeight)
+	clientUpdatePayloads, updatedHeight, err := prover.ClientUpdatePayloads(ctx, proofHeight)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating client update payloads")
 	}
+	// the events are at or below proofHeight, so they are provable at any
+	// later height a concurrent update moved the client to
+	if updatedHeight < proofHeight {
+		return nil, errors.Errorf("prover returned proof height %d below requested %d", updatedHeight, proofHeight)
+	}
+	proofHeight = updatedHeight
+
+	logger = logger.With("proofHeight", proofHeight)
+	logger.Debug("Relaying packets")
 
 	packets := make([]channeltypesv2.Packet, len(events))
 	for i, event := range events {

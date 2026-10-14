@@ -292,7 +292,11 @@ type ClientUpdatePayloadsResponse struct {
 	// The encoded updates, each passed unchanged as one updateMsg and submitted
 	// in order before the packets. Empty when no update is needed; each entry is
 	// a non-empty updateMsg.
-	Payloads      [][]byte `protobuf:"bytes,1,rep,name=payloads,proto3" json:"payloads,omitempty"`
+	Payloads [][]byte `protobuf:"bytes,1,rep,name=payloads,proto3" json:"payloads,omitempty"`
+	// The height to prove the packets at: zero or the requested height, or a
+	// later height the client already trusts when it has moved past the
+	// requested one.
+	ProofHeight   uint64 `protobuf:"varint,2,opt,name=proof_height,json=proofHeight,proto3" json:"proof_height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -332,6 +336,13 @@ func (x *ClientUpdatePayloadsResponse) GetPayloads() [][]byte {
 		return x.Payloads
 	}
 	return nil
+}
+
+func (x *ClientUpdatePayloadsResponse) GetProofHeight() uint64 {
+	if x != nil {
+		return x.ProofHeight
+	}
+	return 0
 }
 
 type PacketProofsRequest struct {
@@ -630,9 +641,10 @@ const file_prover_proto_rawDesc = "" +
 	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\"d\n" +
 	"\x1bClientUpdatePayloadsRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
-	"\x06height\x18\x02 \x01(\x04R\x06height\":\n" +
+	"\x06height\x18\x02 \x01(\x04R\x06height\"]\n" +
 	"\x1cClientUpdatePayloadsResponse\x12\x1a\n" +
-	"\bpayloads\x18\x01 \x03(\fR\bpayloads\"\xbb\x01\n" +
+	"\bpayloads\x18\x01 \x03(\fR\bpayloads\x12!\n" +
+	"\fproof_height\x18\x02 \x01(\x04R\vproofHeight\"\xbb\x01\n" +
 	"\x13PacketProofsRequest\x12-\n" +
 	"\x06client\x18\x01 \x01(\v2\x15.ibc.v2.prover.ClientR\x06client\x12\x16\n" +
 	"\x06height\x18\x02 \x01(\x04R\x06height\x12,\n" +

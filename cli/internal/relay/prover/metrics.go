@@ -112,13 +112,13 @@ func (p *instrumentedProver) LatestProvableHeight(ctx context.Context) (uint64, 
 	return height, timestamp, err
 }
 
-func (p *instrumentedProver) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {
+func (p *instrumentedProver) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, uint64, error) {
 	started := time.Now()
-	payloads, err := p.Prover.ClientUpdatePayloads(ctx, height)
+	payloads, proofHeight, err := p.Prover.ClientUpdatePayloads(ctx, height)
 
 	metrics.record(ctx, "client_update_payloads", p.chainID, p.clientID, p.proverType, err, started)
 
-	return payloads, err
+	return payloads, proofHeight, err
 }
 
 func (p *instrumentedProver) PacketProofs(

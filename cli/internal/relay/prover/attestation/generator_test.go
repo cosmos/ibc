@@ -84,9 +84,10 @@ func TestGeneratorClientUpdatePayloads(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		payloads, err := gen.ClientUpdatePayloads(ctx, 10)
+		payloads, proofHeight, err := gen.ClientUpdatePayloads(ctx, 10)
 		require.NoError(t, err)
 		require.Len(t, payloads, 1)
+		require.Equal(t, uint64(10), proofHeight)
 		require.NotEmpty(t, payloads[0])
 	})
 
@@ -98,7 +99,7 @@ func TestGeneratorClientUpdatePayloads(t *testing.T) {
 
 		gen := New(attestors, 2, nil, slog.Default())
 
-		_, err := gen.ClientUpdatePayloads(ctx, 11)
+		_, _, err := gen.ClientUpdatePayloads(ctx, 11)
 		require.Error(t, err)
 	})
 }

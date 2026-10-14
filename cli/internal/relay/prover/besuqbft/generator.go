@@ -25,9 +25,6 @@ import (
 // any EVM chain hosting the contract qualifies.
 type Host interface {
 	BesuQBFTClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
-	// BesuQBFTConsensusStateHash fails when the client stores no consensus
-	// state at height.
-	BesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error)
 }
 
 // Counterparty is the Besu chain the light client tracks.
@@ -79,36 +76,27 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 // ClientUpdatePayloads returns one updateMsg from the client's latest
 // consensus state to target, or none when target is not above it. The
 // contract only accepts headers above the trusted height, so a target a
-// concurrent update left behind cannot be installed from the latest state; it
-// fails here unless the client already stores it, since the packet proofs at
-// target would revert.
-func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, error) {
+// concurrent update left behind is proven at the client's latest height
+// instead, which it always stores.
+func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, uint64, error) {
 	state, err := g.host.BesuQBFTClientState(ctx, g.clientID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	trustedHeight := state.LatestHeight.RevisionHeight
-	if target == trustedHeight {
-		return nil, nil
-	} else if target < trustedHeight {
-		if _, errStored := g.host.BesuQBFTConsensusStateHash(ctx, g.clientID, target); errStored != nil {
-			return nil, fmt.Errorf(
-				"client advanced to height %d past target %d, which it does not store; retry at a newer height: %w",
-				trustedHeight, target, errStored,
-			)
-		}
-		return nil, nil
+	if target <= trustedHeight {
+		return nil, trustedHeight, nil
 	}
 
 	trusted, err := g.counterparty.SealedHeader(ctx, trustedHeight)
 	if err != nil {
-		return nil, fmt.Errorf("reading trusted header: %w", err)
+		return nil, 0, fmt.Errorf("reading trusted header: %w", err)
 	}
 
 	targetHeader, err := g.counterparty.SealedHeader(ctx, target)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	update, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
@@ -117,9 +105,9 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 		ConsensusStatePreimage: trusted.ConsensusState(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
+		return nil, 0, fmt.Errorf("encoding update to height %d: %w", target, err)
 	}
-	return [][]byte{update}, nil
+	return [][]byte{update}, target, nil
 }
 
 // PacketProofs proves each packet's claim against the router storage at

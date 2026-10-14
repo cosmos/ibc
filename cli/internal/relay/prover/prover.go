@@ -31,10 +31,11 @@ type Prover interface {
 	// along with that height's counterparty-chain timestamp
 	LatestProvableHeight(ctx context.Context) (uint64, time.Time, error)
 
-	// ClientUpdatePayloads returns the encoded updateMsgs that bring the client
-	// to the counterparty state at height, submitted in order. Empty when the
-	// client already trusts height.
-	ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error)
+	// ClientUpdatePayloads returns the encoded updateMsgs, submitted in order,
+	// after which the client can verify proofs at proofHeight: height itself,
+	// or a later height the client already trusts when it has moved past
+	// height. Empty when the client already trusts proofHeight.
+	ClientUpdatePayloads(ctx context.Context, height uint64) (payloads [][]byte, proofHeight uint64, err error)
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns

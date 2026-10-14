@@ -45,19 +45,19 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	return latestProvableHeight(ctx, g.logger, g.attestors, g.threshold, g.counterpartyChain)
 }
 
-func (g *Generator) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {
+func (g *Generator) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, uint64, error) {
 	result, err := queryStateQuorum(ctx, g.logger, g.attestors, g.threshold, height)
 	if err != nil {
-		return nil, errors.Wrap(err, "querying state attestation quorum")
+		return nil, 0, errors.Wrap(err, "querying state attestation quorum")
 	}
 
 	decodedHeight, _, err := attestorevm.DecodeStateAttestation(result.AttestationData)
 	if err != nil {
-		return nil, errors.Wrap(err, "decoding state attestation quorum result")
+		return nil, 0, errors.Wrap(err, "decoding state attestation quorum result")
 	}
 
 	if decodedHeight != height {
-		return nil, errors.Errorf(
+		return nil, 0, errors.Errorf(
 			"state attestation height %d does not match requested height %d",
 			decodedHeight,
 			height,
@@ -66,10 +66,10 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, height uint64) ([]
 
 	payload, err := attestorevm.EncodeAttestationProof(result.AttestationData, result.Signatures)
 	if err != nil {
-		return nil, errors.Wrap(err, "encoding state attestation proof")
+		return nil, 0, errors.Wrap(err, "encoding state attestation proof")
 	}
 
-	return [][]byte{payload}, nil
+	return [][]byte{payload}, height, nil
 }
 
 func (g *Generator) PacketProofs(
