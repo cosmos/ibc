@@ -15,6 +15,9 @@ receivers:
     config:
       scrape_configs:
         - job_name: ibc
+          # Grafana's assumed interval: the dashboards' $__rate_interval
+          # windows hold at least four samples.
+          scrape_interval: 15s
           static_configs:
             - targets: ["127.0.0.1:9090"]
           metrics_path: /metrics

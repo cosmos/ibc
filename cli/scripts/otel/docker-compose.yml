@@ -2,7 +2,7 @@
 
 services:
   grafana-lgtm:
-    image: grafana/otel-lgtm:latest
+    image: grafana/otel-lgtm:0.36.0
     network_mode: host
     environment:
       GF_SERVER_HTTP_PORT: 3001
@@ -11,5 +11,7 @@ services:
       - ./otelcol-config.yaml:/otel-lgtm/otelcol-config.yaml:ro
       - ./prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
       - ./grafana-datasources.yaml:/otel-lgtm/grafana/conf/provisioning/datasources/grafana-datasources.yaml:ro
+      - ./grafana-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/ibc-dashboards.yaml:ro
+      - ./dashboards:/otel-lgtm/ibc-dashboards:ro
     healthcheck:
       disable: true
