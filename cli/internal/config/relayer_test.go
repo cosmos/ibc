@@ -247,13 +247,6 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: ".chainId: required",
 			},
 			{
-				name: "unsupported client type",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.Type = "tendermint"
-				},
-				errContains: `.clientA.type: unknown client type: "tendermint"`,
-			},
-			{
 				name: "duplicate client",
 				patch: func(c *Config) {
 					duplicate := ConnectionConfig{
@@ -304,14 +297,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Connections[0].ClientA.Signer = ""
 				},
 				errContains: ".signer: required",
-			},
-			{
-				name: "remote client params decode error",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.Type = ClientTypeRemote
-					c.Relayer.Connections[0].ClientA.Params = yaml.RawMessage("endpoint: http://prover:9090\n")
-				},
-				errContains: "relayer.connections[0].clientA.params:",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -408,29 +393,24 @@ func TestConnectionConfigSourceEnd(t *testing.T) {
 	}
 }
 
-// Params are checked by Validate, not by parsing, so commands that load a
-// config without validating it still work.
-func TestClientEndParams(t *testing.T) {
+// A proverUrl relays a light client the IBC CLI does not implement, so it
+// lifts the restriction to built-in types.
+func TestClientEndType(t *testing.T) {
 	t.Parallel()
 
 	const base = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\n"
 
 	for _, tt := range []struct {
-		name       string
-		doc        string
-		wantURL    string
-		wantParams ClientParams
-		wantErr    string
+		name    string
+		doc     string
+		wantErr string
 	}{
-		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
-		{name: "remote without params", doc: "type: remote\n", wantErr: "params.url: required"},
-		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: "params.url: required"},
-		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
-		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
-		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "besu", doc: "type: besu\n", wantParams: &BesuParams{}},
-		{name: "besu takes no params", doc: "type: besu\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
+		{name: "attestation", doc: "type: attestation\n"},
+		{name: "besu", doc: "type: besu\n"},
+		{name: "built-in type with proverUrl", doc: "type: besu\nproverUrl: http://prover:9090\n"},
+		{name: "any type with proverUrl", doc: "type: tendermint\nproverUrl: http://prover:9090\n"},
+		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set proverUrl"},
+		{name: "missing type", doc: "proverUrl: http://prover:9090\n", wantErr: "type: required"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -444,16 +424,6 @@ func TestClientEndParams(t *testing.T) {
 			}
 
 			require.NoError(t, client.Validate())
-
-			params, err := client.ClientParams()
-			require.NoError(t, err)
-
-			if tt.wantURL == "" {
-				require.IsType(t, tt.wantParams, params)
-				return
-			}
-
-			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
 		})
 	}
 }

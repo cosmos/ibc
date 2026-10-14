@@ -5,34 +5,26 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
-
-	"github.com/goccy/go-yaml"
 )
 
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
 	ClientTypeBesu        ClientType = "besu"
-	ClientTypeRemote      ClientType = "remote"
 )
 
 // DefaultClearOnStart whether a clearing pass runs at startup when clearOnStart is unset.
 const DefaultClearOnStart = true
 
-// clientTypes are the values ClientEnd.Type accepts.
-var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesu, ClientTypeRemote}
+// builtInClientTypes are the types the IBC CLI proves without a ProverService.
+var builtInClientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesu}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
 
-// ClientParams is a client type's decoded params
-type ClientParams interface {
-	isClientParams()
-	Validate() error
-}
-
-// ClientType the light client type.
+// ClientType the on-chain light client type.
 type ClientType string
 
 // RelayerConfig the relayer block of the config.
@@ -79,16 +71,21 @@ type ConnectionConfig struct {
 // ClientEnd one side of a connection: a light client on chainId,
 // tracking the connection's other end as its counterparty
 type ClientEnd struct {
-	ChainID  string     `yaml:"chainId"`
-	Signer   string     `yaml:"signer"`
-	ClientID string     `yaml:"clientId"`
-	Type     ClientType `yaml:"type"`
+	ChainID  string `yaml:"chainId"`
+	Signer   string `yaml:"signer"`
+	ClientID string `yaml:"clientId"`
 
-	// Params is this client type's settings, decoded per Type by ClientParams:
-	// empty for `attestation` and `besu`, and
-	// `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it
-	// is required.
-	Params yaml.RawMessage `yaml:"params,omitempty"`
+	// Type is the on-chain light client type. Any value is accepted with a
+	// proverUrl, which serves light clients the IBC CLI does not implement.
+	Type ClientType `yaml:"type"`
+
+	// ProverURL is a ProverService endpoint that generates this client's
+	// proofs instead of the built-in prover for Type: an http(s):// URL, or a
+	// bare host:port dialed as http://. Without a query or fragment.
+	ProverURL string `yaml:"proverUrl,omitempty"`
+
+	// ProverTLS settings for an https:// proverUrl, see TLSClientConfig.
+	ProverTLS *TLSClientConfig `yaml:"proverTls,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -107,23 +104,6 @@ func (c ClientEnd) identity() clientEndIdentity {
 type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
-
-// RemoteParams is the params block a remote client declares.
-type RemoteParams struct {
-	// URL is the ProverService endpoint: an http(s):// URL, or a bare host:port
-	// dialed as http://. Without a query or fragment.
-	URL string `yaml:"url"`
-
-	// TLS settings for an https:// URL, see TLSClientConfig.
-	TLS *TLSClientConfig `yaml:"tls,omitempty"`
-}
-
-// AttestationParams is empty
-type AttestationParams struct{}
-
-// BesuParams is empty: the Besu provers read everything they need from the
-// two chains and the light client itself.
-type BesuParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -257,56 +237,35 @@ func (c ClientEnd) Validate() error {
 		return errPathf("clientId", "required")
 	case c.Signer == "":
 		return errPathf("signer", "required")
-	case !slices.Contains(clientTypes, c.Type):
-		return errPathf("type", "unknown client type: %q", c.Type)
+	case c.Type == "":
+		return errPathf("type", "required")
+	case c.ProverURL == "" && !slices.Contains(builtInClientTypes, c.Type):
+		return errPathf(
+			"type", "unknown client type: %q; set proverUrl for a light client the IBC CLI does not implement", c.Type,
+		)
 	}
 
-	params, err := c.ClientParams()
-	if err != nil {
-		return errPath("params", err)
+	if c.ProverURL != "" {
+		if strings.Contains(c.ProverURL, "://") && !isHTTPURL(c.ProverURL) {
+			return errPathf("proverUrl", "must be a bare host:port or an http(s):// URL")
+		}
+
+		if err := errPath("proverUrl", checkHTTPURL(c.ProverEndpointURL(), false)); err != nil {
+			return err
+		}
 	}
 
-	if err := params.Validate(); err != nil {
-		return errPath("params", err)
+	if c.ProverTLS != nil && !usesTLS(c.ProverURL) {
+		return errPathf("proverTls", "requires an https:// proverUrl")
 	}
 
-	return nil
+	return errPath("proverTls", c.ProverTLS.Validate())
 }
 
-// ClientParams decodes this client's params
-func (c ClientEnd) ClientParams() (ClientParams, error) {
-	switch c.Type {
-	case ClientTypeAttestation:
-		return decodeYAML[AttestationParams](c.Params)
-	case ClientTypeBesu:
-		return decodeYAML[BesuParams](c.Params)
-	case ClientTypeRemote:
-		return decodeYAML[RemoteParams](c.Params)
-	default:
-		return nil, errPathf("type", "unknown client type: %q", c.Type)
-	}
+// ProverEndpointURL returns ProverURL as a URL, see endpointURL.
+func (c ClientEnd) ProverEndpointURL() string {
+	return endpointURL(c.ProverURL)
 }
-
-// EndpointURL returns URL as a URL, see endpointURL.
-func (p RemoteParams) EndpointURL() string {
-	return endpointURL(p.URL)
-}
-
-func (p RemoteParams) Validate() error {
-	if p.URL == "" {
-		return errPathf("url", "required")
-	}
-
-	if err := errPath("url", checkHTTPURL(p.EndpointURL(), false)); err != nil {
-		return err
-	}
-
-	return validateEndpointTLS(p.URL, p.TLS)
-}
-
-func (AttestationParams) Validate() error { return nil }
-
-func (BesuParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -358,24 +317,6 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 	}
 
 	return nil
-}
-
-func (RemoteParams) isClientParams()      {}
-func (AttestationParams) isClientParams() {}
-func (BesuParams) isClientParams()        {}
-
-func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
-	var params T
-
-	if len(raw) == 0 {
-		return &params, nil
-	}
-
-	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
-		return nil, err
-	}
-
-	return &params, nil
 }
 
 // ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.
