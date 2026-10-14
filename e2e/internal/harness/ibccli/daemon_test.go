@@ -94,6 +94,7 @@ type fakeRelayerAPI struct {
 	// pageSize serves results a page at a time; zero returns them all at once.
 	pageSize     int
 	pageRequests int
+	minSequences []uint64
 }
 
 func (f *fakeRelayerAPI) Relay(
@@ -110,7 +111,12 @@ func (f *fakeRelayerAPI) Packets(
 ) (*connect.Response[relayerv2.PacketsResponse], error) {
 	filter := req.Msg.GetFilter()
 	// An unknown transaction lists nothing
-	packets := f.statuses[filter.GetSourceChainId()+"/"+filter.GetSourceTxHash()]
+	key := filter.GetSourceTxHash()
+	if filter.SourceClientId != nil {
+		key = "client:" + filter.GetSourceClientId()
+	}
+	packets := f.statuses[filter.GetSourceChainId()+"/"+key]
+	f.minSequences = append(f.minSequences, filter.GetMinSequenceNumber())
 
 	f.pageRequests++
 
@@ -303,4 +309,25 @@ func TestPacketStatusesFollowsEveryPage(t *testing.T) {
 
 	require.Equal(t, []uint64{1, 2, 3, 4, 5}, sequences)
 	require.Equal(t, 3, api.pageRequests, "5 packets at 2 per page needs 3 requests")
+}
+
+func TestClientPacketsFollowsEveryPage(t *testing.T) {
+	packets := make([]*relayerv2.PacketStatus, 0, 5)
+	for i := 1; i <= 5; i++ {
+		packets = append(packets, &relayerv2.PacketStatus{SourceClientId: "client-a", SequenceNumber: uint64(i)})
+	}
+	api := &fakeRelayerAPI{
+		statuses: map[string][]*relayerv2.PacketStatus{"31338/client:client-a": packets},
+		pageSize: 2,
+	}
+	relayer := testRelayer(t, api)
+
+	got, err := relayer.ClientPackets(context.Background(), "chain-b", "client-a", 7)
+	require.NoError(t, err)
+	require.Len(t, got, 5, "every page must be collected")
+	require.Equal(t, 3, api.pageRequests)
+	require.Equal(t, []uint64{7, 7, 7}, api.minSequences, "every page asks from the same sequence")
+
+	_, err = relayer.ClientPackets(context.Background(), "chain-x", "client-a", 0)
+	require.ErrorContains(t, err, "no configured chain id")
 }

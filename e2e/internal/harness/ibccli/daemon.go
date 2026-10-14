@@ -50,6 +50,9 @@ type RelayerOptions struct {
 	ChainIDs map[string]string
 	// WaitPolicies maps route identifiers to their end-to-end packet wait policy.
 	WaitPolicies map[string]WaitPolicy
+	// RunID leads the relayer's OTel instance name, so the telemetry of runs
+	// that overlap stays apart.
+	RunID string
 }
 
 type Relayer struct {
@@ -85,6 +88,8 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	// Long-lived child: exec.Command (not CommandContext) + Setpgid so Stop can signal the whole group.
 	cmd := exec.Command(bin, args...)
 	cmd.Env = processEnv
+	otelEnvApply(cmd, opts.RunID, "relayer")
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Structured stderr logs carry readiness and land in relayer.log for post-mortems.
@@ -224,6 +229,12 @@ func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (r
 
 func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
 
+// Done is closed once the relayer process exits.
+func (d *Relayer) Done() <-chan struct{} { return d.h.doneCh() }
+
+// Err is how the relayer process exited once Done is closed, and nil before.
+func (d *Relayer) Err() error { return d.h.err() }
+
 // WaitPolicy returns the configured packet wait policy for routeID.
 func (d *Relayer) WaitPolicy(routeID string) (WaitPolicy, bool) {
 	policy, ok := d.waitPolicies[routeID]
@@ -280,30 +291,44 @@ func (d *Relayer) PacketStatuses(
 	if err != nil {
 		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
-	request := &relayerv2.PacketsRequest{
-		Filter: &relayerv2.PacketFilter{
-			SourceChainId: &chainID,
-			SourceTxHash:  &sourceTxHash,
-		},
+	return d.listPackets(ctx, &relayerv2.PacketFilter{SourceChainId: &chainID, SourceTxHash: &sourceTxHash})
+}
+
+// ClientPackets returns the relayer's status for every packet it knows sent
+// from sourceClientID on sourceChainID with at least fromSequence, most recent
+// first.
+func (d *Relayer) ClientPackets(
+	ctx context.Context,
+	sourceChainID string,
+	sourceClientID string,
+	fromSequence uint64,
+) ([]*relayerv2.PacketStatus, error) {
+	chainID, err := d.wireChainID(sourceChainID)
+	if err != nil {
+		return nil, fmt.Errorf("ibc packets: %w", err)
 	}
+	return d.listPackets(ctx, &relayerv2.PacketFilter{
+		SourceChainId:     &chainID,
+		SourceClientId:    &sourceClientID,
+		MinSequenceNumber: &fromSequence,
+	})
+}
 
-	// A transaction can emit more packets than one page holds. Stopping at the
-	// first page would report the rest as absent, which callers read as "not
-	// indexed yet" and poll on until their budget expires.
+// listPackets follows every page of the Packets RPC for filter. Stopping at
+// the first page would report the rest as absent, which callers read as "not
+// indexed yet" and poll on until their budget expires.
+func (d *Relayer) listPackets(ctx context.Context, filter *relayerv2.PacketFilter) ([]*relayerv2.PacketStatus, error) {
+	request := &relayerv2.PacketsRequest{Filter: filter}
 	var statuses []*relayerv2.PacketStatus
-
 	for {
 		response, err := d.client.Packets(ctx, connect.NewRequest(request))
 		if err != nil {
 			return nil, fmt.Errorf("ibc packets: %w", err)
 		}
-
 		statuses = append(statuses, response.Msg.GetPackets()...)
-
 		if !response.Msg.GetHasMore() {
 			return statuses, nil
 		}
-
 		request.Cursor = response.Msg.GetNextCursor()
 	}
 }

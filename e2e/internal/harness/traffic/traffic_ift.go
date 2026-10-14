@@ -161,6 +161,42 @@ func (i *IFT) transferCalldata(receiver common.Address, amount *big.Int, timeout
 	return data, nil
 }
 
+// TransferBatch submits one transaction from the route's sender that moves
+// amount to each receiver through the batch shim, out of the shim's IFT
+// balance, and waits for its receipt. It returns one SendResult per packet,
+// in receivers' order. Like Transfer it takes no balance baselines.
+func (i *IFT) TransferBatch(
+	ctx context.Context,
+	receivers []common.Address,
+	amount *big.Int,
+	timeoutTimestamp uint64,
+) ([]SendResult, error) {
+	amount, err := validAmount(amount)
+	switch {
+	case err != nil:
+		return nil, err
+	case len(receivers) == 0:
+		return nil, errors.New("traffic: IFT batch needs a receiver")
+	case timeoutTimestamp == 0:
+		return nil, errors.New("traffic: IFT timeout timestamp is required")
+	}
+	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(receivers))
+	for k, receiver := range receivers {
+		transfers[k] = iftbatchtransfershim.IFTBatchTransferShimTransfer{
+			Receiver: receiver.Hex(), Amount: amount, TimeoutTimestamp: timeoutTimestamp,
+		}
+	}
+	receipt, sent, err := i.broadcastBatch(ctx, transfers)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]SendResult, len(sent))
+	for k, event := range sent {
+		results[k] = newSendResult(i.routeID, i.source, i.sourceClientID, receipt, event.Packet.Sequence)
+	}
+	return results, nil
+}
+
 // broadcastBatch sends transfers in one batchIftTransfer through the shim
 // and returns the receipt and the SendPacket events, one per transfer.
 func (i *IFT) broadcastBatch(
@@ -245,6 +281,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 		sequence := event.Packet.Sequence
 		packets[k] = iftBatchPacket{
 			packetTx:          newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence).PacketTx(),
+			encoded:           event.Raw.Data,
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
 			destinationBefore: destinationsBefore[k],
@@ -262,7 +299,9 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 }
 
 type iftBatchPacket struct {
-	packetTx          PacketTx
+	packetTx PacketTx
+	// encoded is the packet's ABI encoding, as attestors attest it.
+	encoded           []byte
 	receiver          common.Address
 	amount            *big.Int
 	destinationBefore *big.Int
@@ -288,6 +327,16 @@ func (b *IFTBatch) PacketTxs() []PacketTx {
 		packetTxs[k] = packet.packetTx
 	}
 	return packetTxs
+}
+
+// EncodedPackets returns every packet's ABI encoding, the form attestors
+// attest, in send order.
+func (b *IFTBatch) EncodedPackets() [][]byte {
+	encoded := make([][]byte, len(b.packets))
+	for k, packet := range b.packets {
+		encoded[k] = packet.encoded
+	}
+	return encoded
 }
 
 // TxHash is the hex hash of the one source transaction that emitted the batch.
