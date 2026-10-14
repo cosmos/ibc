@@ -5,7 +5,9 @@ package evm
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -43,12 +45,19 @@ func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte,
 		return nil, err
 	}
 
-	return normalizeSignature(signature)
+	return NormalizeSignature(signature)
 }
 
-// normalizeSignature converts the recovery ID from the signer's 0/1 form to
-// Solidity's 27/28 form. It accepts either form and does not mutate the input.
-func normalizeSignature(signature []byte) ([]byte, error) {
+var (
+	secp256k1N     = crypto.S256().Params().N
+	secp256k1HalfN = new(big.Int).Rsh(secp256k1N, 1)
+)
+
+// NormalizeSignature puts a 65-byte r||s||v signature in the only form
+// AttestationLightClient.sol's ECDSA.recover accepts: v of 27/28 and s in the
+// lower half of the curve order. It accepts v of 0/1 or 27/28 and either s,
+// which recover to the same signer, and does not mutate the input.
+func NormalizeSignature(signature []byte) ([]byte, error) {
 	if len(signature) != 65 {
 		return nil, fmt.Errorf("invalid signature length %d, expected 65", len(signature))
 	}
@@ -62,25 +71,32 @@ func normalizeSignature(signature []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid recovery ID %d", normalized[64])
 	}
 
+	// (r, n-s) with the other recovery ID is the same signature.
+	s := new(big.Int).SetBytes(normalized[32:64])
+	if s.Cmp(secp256k1HalfN) > 0 && s.Cmp(secp256k1N) < 0 {
+		s.Sub(secp256k1N, s).FillBytes(normalized[32:64])
+		normalized[64] = 27 + 28 - normalized[64]
+	}
+
 	return normalized, nil
 }
 
-// RecoverSigner recovers the address that produced sig (65-byte r||s||v)
-// over digest, the inverse of SignABI: it accepts either recovery-ID form
-// (crypto.SigToPub requires the signer's raw 0/1 form, but attestors sign
-// with Ethereum's legacy v of 27/28 via normalizeSignature above, and a
-// verifier only ever sees the signature on the wire, never picks the form
-// itself).
+// RecoverSigner recovers the address that produced sig over digest, the
+// inverse of SignABI. It accepts exactly the signatures NormalizeSignature
+// turns into ones the light client accepts, so the relayer counts no
+// signature the contract would reject.
 func RecoverSigner(digest [32]byte, sig []byte) (common.Address, error) {
-	if len(sig) != 65 {
-		return common.Address{}, fmt.Errorf("signature must be 65 bytes, got %d", len(sig))
+	normalized, err := NormalizeSignature(sig)
+	if err != nil {
+		return common.Address{}, err
 	}
 
-	normalized := make([]byte, 65)
-	copy(normalized, sig)
-
-	if normalized[64] >= 27 {
-		normalized[64] -= 27
+	// crypto.SigToPub takes the signer's raw 0/1 recovery ID.
+	normalized[64] -= 27
+	r := new(big.Int).SetBytes(normalized[:32])
+	s := new(big.Int).SetBytes(normalized[32:64])
+	if !crypto.ValidateSignatureValues(normalized[64], r, s, true) {
+		return common.Address{}, errors.New("signature r or s out of range")
 	}
 
 	pub, err := crypto.SigToPub(digest[:], normalized)

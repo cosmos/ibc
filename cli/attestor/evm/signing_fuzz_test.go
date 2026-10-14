@@ -3,6 +3,7 @@
 package evm
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -10,8 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// FuzzRecoverSigner feeds attestor-supplied signatures to RecoverSigner. The
-// two forms of a recovery ID, 0/1 and 27/28, must recover the same signer.
+// FuzzRecoverSigner feeds attestor-supplied signatures to RecoverSigner, which
+// must count only signatures that normalize to the form the light client
+// accepts.
 func FuzzRecoverSigner(f *testing.F) {
 	key, err := crypto.ToECDSA(common.LeftPadBytes([]byte{1}, 32))
 	require.NoError(f, err)
@@ -32,17 +34,19 @@ func FuzzRecoverSigner(f *testing.F) {
 			return
 		}
 
-		other := append([]byte(nil), sig...)
-		switch other[64] {
-		case 0, 1:
-			other[64] += 27
-		case 27, 28:
-			other[64] -= 27
-		default:
-			return
-		}
-		otherSigner, err := RecoverSigner(d, other)
-		require.NoError(t, err)
-		require.Equal(t, signer, otherSigner)
+		normalized, err := NormalizeSignature(sig)
+		require.NoError(t, err, "accepted signature does not normalize")
+		require.Contains(t, []byte{27, 28}, normalized[64], "normalized v")
+
+		r := new(big.Int).SetBytes(normalized[:32])
+		s := new(big.Int).SetBytes(normalized[32:64])
+		require.Positive(t, r.Sign(), "r")
+		require.Negative(t, r.Cmp(secp256k1N), "r %x not below n", r)
+		require.Positive(t, s.Sign(), "s")
+		require.LessOrEqual(t, s.Cmp(secp256k1HalfN), 0, "s %x above n/2", s)
+
+		again, err := RecoverSigner(d, normalized)
+		require.NoError(t, err, "normalized signature does not recover")
+		require.Equal(t, signer, again, "normalized signature recovers a different signer")
 	})
 }

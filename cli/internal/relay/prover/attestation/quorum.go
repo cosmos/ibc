@@ -123,9 +123,15 @@ func queryOne(
 	}
 
 	data := attestation.AttestedData
-	sig := attestation.Signature
 
-	signer, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
+	// The proof must carry the normalized form: the light client rejects any other.
+	sig, err := attestorevm.NormalizeSignature(attestation.Signature)
+
+	var signer common.Address
+	if err == nil {
+		signer, err = attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
+	}
+
 	if err != nil {
 		logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
