@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: ClusterFuzzLite PR fuzzing
+
+on:
+  pull_request:
+    paths:
+      - "cli/**"
+      - "gen/go/solidity-abi/**"
+      - ".clusterfuzzlite/**"
+      - ".github/workflows/cflite-*.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  fuzz:
+    name: Fuzz changed code
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Downloads the corpus and main-branch build from other runs.
+      actions: read
+    steps:
+      - name: Build fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: go
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run fuzzers
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          mode: code-change
+          fuzz-seconds: 300

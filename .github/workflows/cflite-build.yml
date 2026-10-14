@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Builds main's fuzzers so PR fuzzing reports only crashes a PR introduces.
+name: ClusterFuzzLite continuous build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cli/**"
+      - "gen/go/solidity-abi/**"
+      - ".clusterfuzzlite/**"
+      - ".github/workflows/cflite-*.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build fuzzers
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Build fuzzers
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: go
+          upload-build: true
