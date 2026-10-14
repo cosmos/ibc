@@ -272,7 +272,14 @@ func TestDeployIFTBridge(t *testing.T) {
 				"--yes",
 			},
 			{"gmp", "--chain", chainID, "--yes"},
-			{"ift", "--chain", chainID, "--name", "Foo", "--symbol", "FOO", "--yes"},
+			{
+				"ift",
+				"--chain", chainID,
+				"--name", "Foo",
+				"--symbol", "FOO",
+				"--rate-limit-capacity", "1000000",
+				"--yes",
+			},
 		}
 	}
 	bringUp := append(perChain(d.chainAID, d.chainBID), perChain(d.chainBID, d.chainAID)...)

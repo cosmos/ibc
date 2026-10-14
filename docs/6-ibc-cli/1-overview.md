@@ -40,7 +40,7 @@ Signer keys, contract addresses, client IDs, and finality settings all have to s
 
 Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to learn the full process of deploying IBC between two chains and sending a token.
 
-Deployment is done from a single key. It becomes the access manager's admin, which governs the router and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
+Deployment is done from a single key. It becomes the access manager's admin, which governs the router and the GMP app, and the owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
 
 ## The relayer
 

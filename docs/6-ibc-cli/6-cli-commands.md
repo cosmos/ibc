@@ -291,7 +291,8 @@ Deploy an IFT token on one chain.
 | Flag | Default | Description |
 |---|---|---|
 | `--name <string>` | required | ERC20 token name. |
-| `--owner <string>` | `deployer` | Token owner address. |
+| `--rate-limit-capacity <string>` | required | Most base units that may flow each way at once; refills over `--rate-limit-window`. |
+| `--rate-limit-window <duration>` | `24h0m0s` | Time for a drained rate limit to refill. |
 | `--symbol <string>` | required | ERC20 token symbol (need not be unique). |
 | `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
@@ -304,8 +305,10 @@ Deploy an IFT token on one chain.
 <!-- GEN:cli:cmd:deploy-ift END -->
 
 ```bash
-ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --yes
+ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --yes
 ```
+
+The deployer owns the token, so it can set the rate limit and register bridges. An IFT token rejects every transfer until a rate limit is set: `--rate-limit-capacity` base units may flow each way, refilling over `--rate-limit-window`. Rerunning with different rate limit flags updates the limit on the existing token.
 
 ### `ibc deploy ift-bridge`
 
@@ -328,7 +331,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L201](cli/cmd/ibc/main.go#L201) -->
+<!-- [main.go:L205](cli/cmd/ibc/main.go#L205) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -541,7 +544,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L227](cli/cmd/ibc/main.go#L227) -->
+<!-- [main.go:L231](cli/cmd/ibc/main.go#L231) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -561,7 +564,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L232](cli/cmd/ibc/main.go#L232) -->
+<!-- [main.go:L236](cli/cmd/ibc/main.go#L236) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

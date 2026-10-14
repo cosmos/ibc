@@ -91,8 +91,7 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 	trustedHeight := state.LatestHeight.RevisionHeight
 	if target == trustedHeight {
 		return nil, nil
-	}
-	if target < trustedHeight {
+	} else if target < trustedHeight {
 		if _, errStored := g.host.BesuQBFTConsensusStateHash(ctx, g.clientID, target); errStored != nil {
 			return nil, fmt.Errorf(
 				"client advanced to height %d past target %d, which it does not store; retry at a newer height: %w",

@@ -72,7 +72,7 @@ The config is stored in `~/.ibc/ibc.yml` by default.
 
 This is the home directory for everything that follows: the config, the keystore, the deployment records, and the relayer's database.
 
-2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router and the GMP app. It is also the default owner of any token you deploy. 
+2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router and the GMP app. It is also the owner of any token you deploy. 
 
 Passing `--populate-config` adds each key to the config as a named signer. Later commands then name a key by alias instead of by path.
 
@@ -182,14 +182,14 @@ The next steps deploy the General Message Passing (GMP) app and the Interchain F
 ./bin/ibc deploy gmp --chain 41002 --yes
 ```
 
-2. Deploy an IFT contract on each chain. This is the token that will be transferred between the chains:
+2. Deploy an IFT contract on each chain. This is the token that will be transferred between the chains. Each token limits how much may flow in and out of the chain, and rejects every transfer until a limit is set. Here the limit is 1,000 DEMO per direction, refilling over a day:
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --rate-limit-capacity 1000000000000000000000 --rate-limit-window 24h --yes
 ```
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --rate-limit-capacity 1000000000000000000000 --rate-limit-window 24h --yes
 ```
 
 ```

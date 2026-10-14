@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
@@ -54,7 +55,8 @@ var (
 
 	flagDeployIFTName        string
 	flagDeployIFTSymbol      string
-	flagDeployIFTOwner       string
+	flagDeployIFTRateCap     string
+	flagDeployIFTRateWindow  time.Duration
 	flagDeployBridgeChainA   string
 	flagDeployBridgeIFTA     string
 	flagDeployBridgeChainB   string
@@ -212,17 +214,20 @@ func confirmOrAbort(results []deploy.StepResult) error {
 	if flagDeployYes || flagDeployDryRun {
 		return nil
 	}
-	pending := 0
+	var pending []string
 	for _, r := range results {
 		if r.Action != deploy.ActionSkipped {
-			pending++
+			pending = append(pending, r.Name)
 		}
 	}
-	if pending == 0 {
+	if len(pending) == 0 {
 		return nil
 	}
+	for _, name := range pending {
+		fmt.Printf("  - %s\n", name)
+	}
 	return confirmPrompt(os.Stdout,
-		fmt.Sprintf("About to execute %d step(s) that submit transactions.", pending))
+		fmt.Sprintf("About to execute %d step(s) that submit transactions.", len(pending)))
 }
 
 func confirmPrompt(w io.Writer, action string) error {
@@ -832,19 +837,40 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagDeployChain)
 	}
-	owner := flagDeployIFTOwner
-	if owner == "" {
-		owner, err = deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
-		if err != nil {
-			return err
-		}
+	rateLimit, err := iftRateLimit(flagDeployIFTRateCap, flagDeployIFTRateWindow)
+	if err != nil {
+		return err
+	}
+	// the deployer owns the token so it can set the rate limit and register bridges
+	owner, err := deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+	if err != nil {
+		return err
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
-	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol}
+	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol, RateLimit: rateLimit}
 	return planThenRun(cmd.Context(), deploy.IFTSteps(target, flagDeployManifestDir, flagDeployChain, spec))
+}
+
+// iftRateLimit parses the rate limit flags. The contract stores the capacity
+// as uint208.
+func iftRateLimit(capacity string, window time.Duration) (deploy.IFTRateLimit, error) {
+	c, ok := new(big.Int).SetString(capacity, 10)
+	if !ok || c.Sign() <= 0 || c.BitLen() > 208 {
+		return deploy.IFTRateLimit{}, errors.Errorf(
+			"--rate-limit-capacity: want a positive integer below 2^208, got %q", capacity,
+		)
+	}
+	w, err := wholeSeconds(window)
+	if err != nil {
+		return deploy.IFTRateLimit{}, errors.Wrap(err, "--rate-limit-window")
+	}
+	if w == 0 {
+		return deploy.IFTRateLimit{}, errors.Errorf("--rate-limit-window: want at least 1s, got %s", window)
+	}
+	return deploy.IFTRateLimit{Capacity: c, Window: w}, nil
 }
 
 // deployIFTBridge registers both sides of an IFT bridge in one invocation:
