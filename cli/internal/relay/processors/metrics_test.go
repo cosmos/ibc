@@ -120,6 +120,78 @@ func TestMetrics(t *testing.T) {
 		}
 	})
 
+	t.Run("transactionRetry", func(t *testing.T) {
+		// ARRANGE
+		suite := newMetricsTestSuite(t)
+		tr := NewTransfer(store.Packet{
+			SourceChainID:             "source",
+			DestinationChainID:        "destination",
+			PacketSourceClientID:      "source-client",
+			PacketDestinationClientID: "destination-client",
+		}, slog.Default())
+
+		// ACT
+		suite.instruments.txSubmitted(suite.ctx, "destination", "destination-client", "0xrecv")
+		suite.instruments.txRetry(suite.ctx, tr, relayTypeSendToRecv, "0xrecv")
+		suite.instruments.txRetry(suite.ctx, tr, relayTypeSendToRecv, "0xrecv")
+
+		// ASSERT
+		var data metricdata.ResourceMetrics
+		require.NoError(t, suite.reader.Collect(suite.ctx, &data))
+
+		for _, scope := range data.ScopeMetrics {
+			for _, metric := range scope.Metrics {
+				if metric.Name != "transaction_retries_total" {
+					continue
+				}
+
+				sum, ok := metric.Data.(metricdata.Sum[int64])
+				require.True(t, ok)
+				require.Len(t, sum.DataPoints, 1)
+				assert.Equal(t, int64(1), sum.DataPoints[0].Value)
+
+				expectedAttributes := attribute.NewSet(
+					otel.AttrChainID.String("source"),
+					otel.AttrDestChainID.String("destination"),
+					otel.AttrClientID.String("source-client"),
+					otel.AttrDestClientID.String("destination-client"),
+					otel.AttrType.String(string(relayTypeSendToRecv)),
+				)
+				assert.Equal(t, expectedAttributes.ToSlice(), sum.DataPoints[0].Attributes.ToSlice())
+
+				return
+			}
+		}
+
+		require.Fail(t, "transaction_retries_total was not collected")
+	})
+
+	t.Run("transactionLifecycle", func(t *testing.T) {
+		// ARRANGE
+		suite := newMetricsTestSuite(t)
+
+		// ACT
+		suite.instruments.txSubmitted(suite.ctx, "1", "client-01", "0xrelay")
+		suite.instruments.txConfirmed(suite.ctx, "1", "client-01", "0xrelay")
+		suite.instruments.txConfirmed(suite.ctx, "1", "client-01", "0xrelay")
+		suite.instruments.txConfirmed(suite.ctx, "1", "client-01", "0xforeign")
+
+		// ASSERT
+		var data metricdata.ResourceMetrics
+		require.NoError(t, suite.reader.Collect(suite.ctx, &data))
+
+		expectedAttributes := attribute.NewSet(
+			otel.AttrChainID.String("1"),
+			otel.AttrClientID.String("client-01"),
+		)
+		for _, name := range []string{"transactions_submitted_total", "transactions_confirmed_total"} {
+			sum := findInt64Sum(t, data, name)
+			require.Len(t, sum.DataPoints, 1)
+			assert.Equal(t, int64(1), sum.DataPoints[0].Value)
+			assert.Equal(t, expectedAttributes.ToSlice(), sum.DataPoints[0].Attributes.ToSlice())
+		}
+	})
+
 	t.Run("stateFinisherEmission", func(t *testing.T) {
 		t.Run("retryAndNonTerminalTransferIsNotCounted", func(t *testing.T) {
 			// ARRANGE
@@ -129,7 +201,7 @@ func TestMetrics(t *testing.T) {
 				Status:                 store.RelayStatusDeliverRecvPacket,
 				PacketTimeoutTimestamp: time.Now().Add(time.Hour),
 			}, slog.Default())
-			tr.ProcessingError = ErrSubmissionPending
+			tr.ProcessingError = ErrRetryingRecvPacket
 
 			// ACT
 			_, err := NewStateFinisher(&fakeStatusStorage{}).Process(suite.ctx, tr)
@@ -231,6 +303,25 @@ func TestMetrics(t *testing.T) {
 			assertCompletionMetrics(t, suite, tr, nil)
 		})
 	})
+}
+
+func findInt64Sum(t *testing.T, data metricdata.ResourceMetrics, name string) metricdata.Sum[int64] {
+	t.Helper()
+
+	for _, scope := range data.ScopeMetrics {
+		for _, candidate := range scope.Metrics {
+			if candidate.Name != name {
+				continue
+			}
+
+			sum, ok := candidate.Data.(metricdata.Sum[int64])
+			require.True(t, ok)
+			return sum
+		}
+	}
+
+	require.Fail(t, name+" was not collected")
+	return metricdata.Sum[int64]{}
 }
 
 func assertCompletionMetrics(

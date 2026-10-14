@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -24,26 +23,24 @@ import (
 
 // Default transaction limits.
 const (
-	DefaultResubmitAfter  = 15 * time.Minute
-	DefaultRequestTimeout = 10 * time.Second
-	DefaultMaxInFlight    = 16
-	DefaultMaxGas         = 10_000_000
-	DefaultMaxFeePerGas   = 500000000000
-	maxBroadcastAttempts  = 8
+	DefaultPendingTxTimeout = 2 * time.Minute
+	DefaultRequestTimeout   = 10 * time.Second
+	DefaultMaxInFlight      = 16
+	DefaultMaxFeePerGas     = 20000000000
+	maxBroadcastAttempts    = 8
 )
 
 // ChainOptions controls transaction pricing and nonce recovery.
 type ChainOptions struct {
 	GasFeeCapMultiplier *float64
 	GasTipCapMultiplier *float64
-	ResubmitAfter       time.Duration
+	PendingTxTimeout    time.Duration
 	RequestTimeout      time.Duration
 	MaxInFlight         int
-	MaxGas              uint64
 	MaxFeePerGas        *big.Int
 }
 
-// ETHClient is the RPC surface used for submission and wallet metrics.
+// ETHClient go-ethereum methods used by the EVM tx submitter.
 type ETHClient interface {
 	BalanceAt(context.Context, common.Address, *big.Int) (*big.Int, error)
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
@@ -56,21 +53,21 @@ type ETHClient interface {
 	TransactionReceipt(context.Context, common.Hash) (*types.Receipt, error)
 }
 
-// TxSubmitter serializes submissions from one dedicated account. Packet retries
-// supply fresh work when the account's lowest unmined nonce stalls.
+// TxSubmitter signs and broadcasts transactions on one EVM chain.
 type TxSubmitter struct {
-	chainID      string
-	eth          ETHClient
-	signer       signer.Signer
-	address      common.Address
-	ethSigner    types.Signer
-	opts         ChainOptions
-	mu           sync.Mutex
-	nextNonce    uint64
-	pendingNonce uint64
-	pendingSince time.Time
-	feeCap       *big.Int
-	tipCap       *big.Int
+	chainID                        string
+	eth                            ETHClient
+	signer                         signer.Signer
+	address                        common.Address
+	ethSigner                      types.Signer
+	opts                           ChainOptions
+	mu                             sync.Mutex
+	nextNonce                      uint64
+	lowestUnminedNonceHeight       uint64
+	lowestUnminedNonce             uint64
+	lowestUnminedNoncePendingSince time.Time
+	lastAttemptedFeeCap            *big.Int
+	lastAttemptedTipCap            *big.Int
 }
 
 // ErrBusy leaves the packet available for a later dispatch.
@@ -87,8 +84,8 @@ func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOpt
 }
 
 func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOptions) (*TxSubmitter, error) {
-	if opts.ResubmitAfter == 0 {
-		opts.ResubmitAfter = DefaultResubmitAfter
+	if opts.PendingTxTimeout == 0 {
+		opts.PendingTxTimeout = DefaultPendingTxTimeout
 	}
 	if opts.RequestTimeout == 0 {
 		opts.RequestTimeout = DefaultRequestTimeout
@@ -96,13 +93,10 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	if opts.MaxInFlight == 0 {
 		opts.MaxInFlight = DefaultMaxInFlight
 	}
-	if opts.MaxGas == 0 {
-		opts.MaxGas = DefaultMaxGas
-	}
 	if opts.MaxFeePerGas == nil {
 		opts.MaxFeePerGas = big.NewInt(DefaultMaxFeePerGas)
 	}
-	if opts.ResubmitAfter <= 0 || opts.RequestTimeout <= 0 || opts.MaxInFlight <= 0 || opts.MaxGas < 21000 ||
+	if opts.PendingTxTimeout <= 0 || opts.RequestTimeout <= 0 || opts.MaxInFlight <= 0 ||
 		opts.MaxFeePerGas.Sign() <= 0 {
 		return nil, errors.New("invalid transaction limits")
 	}
@@ -138,8 +132,9 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 	if err != nil {
 		return nil, err
 	}
-	if nonce == c.pendingNonce && c.feeCap != nil {
-		fee, tip = maxBig(fee, bump(c.feeCap)), maxBig(tip, bump(c.tipCap))
+	if nonce == c.lowestUnminedNonce && c.lastAttemptedFeeCap != nil {
+		fee, tip = maxBig(fee, bump(c.lastAttemptedFeeCap)), maxBig(tip, bump(c.lastAttemptedTipCap))
+		fee, tip = capFees(fee, tip, c.opts.MaxFeePerGas)
 	}
 	var submission *v2.Submission
 	for range maxBroadcastAttempts {
@@ -147,32 +142,32 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		if err != nil {
 			return submission, err
 		}
-		// A lost response may still mean the node accepted this nonce.
-		c.nextNonce = max(c.nextNonce, nonce+1)
-		if nonce == c.pendingNonce {
-			c.feeCap, c.tipCap = fee, tip
-			if c.pendingSince.IsZero() {
-				c.pendingSince = time.Now()
-			}
-		}
 		submission = &v2.Submission{
 			TxHash:         tx.Hash().Hex(),
 			SubmittedAt:    time.Now().UTC(),
 			RelayerAddress: c.address.Hex(),
 		}
 		err = broadcast(ctx, c.eth, tx)
+		if nonce == c.lowestUnminedNonce {
+			c.lastAttemptedFeeCap, c.lastAttemptedTipCap = fee, tip
+		}
 		if err == nil {
-			if nonce == c.pendingNonce {
-				c.pendingSince = time.Now()
+			c.nextNonce = max(c.nextNonce, nonce+1)
+			if nonce == c.lowestUnminedNonce {
+				c.lowestUnminedNoncePendingSince = time.Now()
 			}
 			metrics.startTx(c.chainID, c.address.Hex(), tx.Hash().Hex())
 			slog.Debug("Transaction broadcast", "chainID", c.chainID, "nonce", nonce, "txHash", tx.Hash())
 			return submission, nil
 		}
-		if !strings.Contains(strings.ToLower(err.Error()), "underpriced") {
+		if !isReplacementUnderpriced(err) {
 			return submission, errors.Wrapf(err, "broadcasting transaction %s at nonce %d", tx.Hash(), nonce)
 		}
-		fee, tip = bump(fee), bump(tip)
+		nextFee, nextTip := capFees(bump(fee), bump(tip), c.opts.MaxFeePerGas)
+		if nextFee.Cmp(fee) == 0 && nextTip.Cmp(tip) == 0 {
+			return submission, errors.Wrapf(err, "fee cap %s wei reached for nonce %d", c.opts.MaxFeePerGas, nonce)
+		}
+		fee, tip = nextFee, nextTip
 	}
 	return submission, errors.Errorf(
 		"replacement still underpriced after %d attempts at nonce %d",
@@ -182,7 +177,19 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 }
 
 func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, error) {
-	mined, err := c.eth.NonceAt(ctx, c.address, nil)
+	head, err := c.eth.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	height := head.Number.Uint64()
+	if height < c.lowestUnminedNonceHeight {
+		return 0, errors.Errorf(
+			"RPC block height %d is behind last nonce observation at %d",
+			height,
+			c.lowestUnminedNonceHeight,
+		)
+	}
+	mined, err := c.eth.NonceAt(ctx, c.address, head.Number)
 	if err != nil {
 		return 0, err
 	}
@@ -190,16 +197,17 @@ func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, e
 	if err != nil {
 		return 0, err
 	}
-	if mined != c.pendingNonce {
-		c.pendingNonce, c.pendingSince = mined, time.Time{}
-		c.feeCap, c.tipCap = nil, nil
+	c.lowestUnminedNonceHeight = height
+	if mined != c.lowestUnminedNonce {
+		c.lowestUnminedNonce, c.lowestUnminedNoncePendingSince = mined, time.Time{}
+		c.lastAttemptedFeeCap, c.lastAttemptedTipCap = nil, nil
 	}
 	c.nextNonce = max(c.nextNonce, mined, pending)
 	if c.nextNonce > mined {
-		if c.pendingSince.IsZero() {
-			c.pendingSince = now
+		if c.lowestUnminedNoncePendingSince.IsZero() {
+			c.lowestUnminedNoncePendingSince = now
 		}
-		if now.Sub(c.pendingSince) >= c.opts.ResubmitAfter {
+		if now.Sub(c.lowestUnminedNoncePendingSince) >= c.opts.PendingTxTimeout {
 			return mined, nil
 		}
 	}
@@ -216,7 +224,7 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
 	switch {
 	case errors.Is(err, ethereum.NotFound):
-		if time.Since(sentAt) >= c.opts.ResubmitAfter {
+		if time.Since(sentAt) >= c.opts.PendingTxTimeout {
 			metrics.forgetTx(c.chainID, txHash)
 			return true, nil
 		}

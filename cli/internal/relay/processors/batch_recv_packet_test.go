@@ -84,6 +84,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	destinationChainClient := mocks.NewMockClient(t)
 	destinationChainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationChainClient.EXPECT().ChainID().Return(route.DestinationChainID).Once()
 
 	sourceChainClient := mocks.NewMockClient(t)
 
@@ -114,8 +115,9 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-		TxHash:      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-		SubmittedAt: time.Now(), RelayerAddress: "0xrelayer",
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
@@ -135,7 +137,7 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 	require.Len(t, capturedTxIDs, 1, "only the valid tx hash should be included")
 
 	require.Error(t, invalid.ProcessingError)
-	require.ErrorIs(t, valid.ProcessingError, ErrSubmissionPending)
+	require.NoError(t, valid.ProcessingError)
 	require.NotNil(t, valid.RecvTxHash)
 }
 
@@ -183,6 +185,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	destinationChainClient := mocks.NewMockClient(t)
 	destinationChainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationChainClient.EXPECT().ChainID().Return(route.DestinationChainID).Once()
 
 	healthyTxID, err := hex.DecodeString(healthyHash[2:])
 	require.NoError(t, err)
@@ -212,8 +215,9 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-		TxHash:      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-		SubmittedAt: time.Now(), RelayerAddress: "0xrelayer",
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
@@ -235,7 +239,7 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		failing.ProcessingError,
 		"the transfer whose tx failed to fetch must be excluded and retried later",
 	)
-	require.ErrorIs(t, healthy.ProcessingError, ErrSubmissionPending)
+	require.NoError(t, healthy.ProcessingError, "the transfer whose tx fetched fine must still be relayed")
 	require.NotNil(t, healthy.RecvTxHash)
 }
 
@@ -283,6 +287,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	destinationChainClient := mocks.NewMockClient(t)
 	destinationChainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+	destinationChainClient.EXPECT().ChainID().Return(route.DestinationChainID).Once()
 
 	provableTxID, err := hex.DecodeString(provableHash[2:])
 	require.NoError(t, err)
@@ -318,8 +323,9 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
-		TxHash:      "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-		SubmittedAt: time.Now(), RelayerAddress: "0xrelayer",
+		TxHash:         "0xrecv",
+		SubmittedAt:    time.Now().UTC(),
+		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
 	p, err := NewBatchRecvPacket(
@@ -336,7 +342,7 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 	_, err = p.Process(context.Background(), []*Transfer{provable, tooRecent})
 	require.NoError(t, err, "the batch as a whole must not fail just because one packet isn't provable yet")
 
-	require.ErrorIs(t, provable.ProcessingError, ErrSubmissionPending)
+	require.NoError(t, provable.ProcessingError)
 	require.NotNil(t, provable.RecvTxHash)
 
 	require.Error(

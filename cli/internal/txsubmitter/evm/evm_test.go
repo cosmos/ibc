@@ -24,6 +24,7 @@ const chainIDEth = "1"
 
 // Submission is serialized by the submitter, including access to this RPC stub.
 type testRPC struct {
+	height         uint64
 	mined, pending uint64
 	sent           []*types.Transaction
 	send           func(*types.Transaction) error
@@ -38,7 +39,7 @@ func (r *testRPC) BalanceAt(context.Context, common.Address, *big.Int) (*big.Int
 }
 
 func (r *testRPC) HeaderByNumber(context.Context, *big.Int) (*types.Header, error) {
-	return &types.Header{BaseFee: big.NewInt(100)}, nil
+	return &types.Header{Number: new(big.Int).SetUint64(r.height), BaseFee: big.NewInt(100)}, nil
 }
 func (r *testRPC) SuggestGasTipCap(context.Context) (*big.Int, error) { return big.NewInt(10), nil }
 func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error) {
@@ -52,7 +53,10 @@ func (r *testRPC) EstimateGasAtBlock(_ context.Context, _ ethereum.CallMsg, bloc
 	return 100_000, r.gasErr
 }
 
-func (r *testRPC) NonceAt(context.Context, common.Address, *big.Int) (uint64, error) {
+func (r *testRPC) NonceAt(_ context.Context, _ common.Address, block *big.Int) (uint64, error) {
+	if block == nil || block.Uint64() != r.height {
+		return 0, errors.New("nonce query must be pinned to the observed block height")
+	}
 	return r.mined, r.nonceErr
 }
 
@@ -80,7 +84,7 @@ func newSubmitter(t *testing.T) (*TxSubmitter, *testRPC) {
 	t.Helper()
 	key, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)
-	rpc := &testRPC{}
+	rpc := &testRPC{height: 100}
 	c, err := New(chainIDEth, rpc, key, ChainOptions{})
 	require.NoError(t, err)
 	return c, rpc
@@ -89,7 +93,10 @@ func newSubmitter(t *testing.T) (*TxSubmitter, *testRPC) {
 func testIntent() v2.TxIntent {
 	return v2.TxIntent{To: "0x1111111111111111111111111111111111111111", Data: []byte{1}}
 }
-func expireNonce(c *TxSubmitter) { c.pendingSince = time.Now().Add(-2 * c.opts.ResubmitAfter) }
+
+func expireNonce(c *TxSubmitter) {
+	c.lowestUnminedNoncePendingSince = time.Now().Add(-2 * c.opts.PendingTxTimeout)
+}
 
 func submit(t *testing.T, c *TxSubmitter) error {
 	t.Helper()
@@ -137,29 +144,37 @@ func TestStalledNonceRecoveredAtCapacity(t *testing.T) {
 }
 
 func TestRetryBumpsOnUnderpricedAndPreservesProgress(t *testing.T) {
-	c, rpc := newSubmitter(t)
-	rpc.pending = 1
-	rpc.send = func(tx *types.Transaction) error {
-		if tx.GasTipCap().Cmp(big.NewInt(100)) < 0 {
-			return errors.New("replacement transaction underpriced")
-		}
-		return nil
-	}
-	// A fresh process gives the unknown transaction a grace period.
-	_, err := c.selectNonce(t.Context(), time.Now())
-	require.NoError(t, err)
-	expireNonce(c)
-	require.ErrorContains(t, submit(t, c), "still underpriced")
-	require.Len(t, rpc.sent, maxBroadcastAttempts)
-	// The next call continues escalating rather than restarting at the estimate.
-	require.NoError(t, submit(t, c))
-	require.Greater(t, len(rpc.sent), maxBroadcastAttempts)
-	for i, tx := range rpc.sent {
-		require.Zero(t, tx.Nonce())
-		if i > 0 {
-			require.Positive(t, tx.GasFeeCap().Cmp(rpc.sent[i-1].GasFeeCap()))
-			require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
-		}
+	for _, message := range []string{
+		"replacement transaction underpriced",
+		"Replacement transaction underpriced",
+		"rpc error: Replacement transaction underpriced",
+	} {
+		t.Run(message, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			rpc.pending = 1
+			rpc.send = func(tx *types.Transaction) error {
+				if tx.GasTipCap().Cmp(big.NewInt(100)) < 0 {
+					return errors.New(message)
+				}
+				return nil
+			}
+			// A fresh process gives the unknown transaction a grace period.
+			_, err := c.selectNonce(t.Context(), time.Now())
+			require.NoError(t, err)
+			expireNonce(c)
+			require.ErrorContains(t, submit(t, c), "still underpriced")
+			require.Len(t, rpc.sent, maxBroadcastAttempts)
+			// The next call continues escalating rather than restarting at the estimate.
+			require.NoError(t, submit(t, c))
+			require.Greater(t, len(rpc.sent), maxBroadcastAttempts)
+			for i, tx := range rpc.sent {
+				require.Zero(t, tx.Nonce())
+				if i > 0 {
+					require.Positive(t, tx.GasFeeCap().Cmp(rpc.sent[i-1].GasFeeCap()))
+					require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
+				}
+			}
+		})
 	}
 }
 
@@ -178,19 +193,55 @@ func TestAcceptedTransactionStillGetsHigherFeesAfterStalling(t *testing.T) {
 	}
 }
 
-func TestLostResponseAndDroppedTransactionRecover(t *testing.T) {
+func TestBroadcastErrorDoesNotAdvanceNonce(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "rejected", err: errors.New("transaction pool full")},
+		{name: "underpriced without replacement", err: errors.New("transaction underpriced")},
+		{name: "lost response", err: context.DeadlineExceeded},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			c.opts.MaxInFlight = 1
+			rpc.send = func(*types.Transaction) error { return tt.err }
+			submission, err := c.Submit(t.Context(), testIntent())
+			require.ErrorIs(t, err, tt.err)
+			require.Len(t, rpc.sent, 1)
+			require.Equal(t, rpc.sent[0].Hash().Hex(), submission.TxHash)
+			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
+			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
+			require.Zero(t, c.nextNonce)
+
+			rpc.send = nil
+			require.NoError(t, submit(t, c))
+			require.Zero(t, rpc.sent[1].Nonce())
+			require.Equal(t, uint64(1), c.nextNonce)
+		})
+	}
+}
+
+func TestLostResponseUsesObservedPendingNonce(t *testing.T) {
 	c, rpc := newSubmitter(t)
-	rpc.send = func(*types.Transaction) error { return errors.New("connection closed after acceptance") }
-	submission, err := c.Submit(t.Context(), testIntent())
-	require.Error(t, err)
-	require.Equal(t, rpc.sent[0].Hash().Hex(), submission.TxHash)
-	require.Equal(t, c.address.Hex(), submission.RelayerAddress)
-	require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
+	rpc.send = func(tx *types.Transaction) error {
+		rpc.pending = tx.Nonce() + 1
+		return context.DeadlineExceeded
+	}
+	require.ErrorIs(t, submit(t, c), context.DeadlineExceeded)
+	require.Zero(t, c.nextNonce)
 	rpc.send = nil
-	// The node no longer reports the original, but local allocation remembers the gap.
-	expireNonce(c)
 	require.NoError(t, submit(t, c))
-	require.Zero(t, rpc.sent[1].Nonce())
+	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
+}
+
+func TestAlreadyKnownTransactionAdvancesNonce(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.send = func(*types.Transaction) error { return errors.New("already known") }
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), c.nextNonce)
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
 }
 
 func TestRestartRecoversUnknownGap(t *testing.T) {
@@ -240,13 +291,73 @@ func TestSignerDeadlineDoesNotConsumeNonce(t *testing.T) {
 	require.Zero(t, rpc.sent[0].Nonce())
 }
 
-func TestReplacementFeeCapBoundsRetries(t *testing.T) {
+func TestSubmissionCapsEstimatedFees(t *testing.T) {
+	for _, tt := range []struct {
+		name                         string
+		maxFee                       int64
+		feeMultiplier, tipMultiplier float64
+		wantFee, wantTip             int64
+	}{
+		{name: "below cap", maxFee: 250, feeMultiplier: 1, tipMultiplier: 1, wantFee: 210, wantTip: 10},
+		{name: "estimate exceeds cap", maxFee: 200, feeMultiplier: 1, tipMultiplier: 1, wantFee: 200, wantTip: 10},
+		{name: "multipliers exceed cap", maxFee: 250, feeMultiplier: 2, tipMultiplier: 30, wantFee: 250, wantTip: 250},
+		{name: "tip exceeds fee", maxFee: 500, feeMultiplier: 1, tipMultiplier: 30, wantFee: 210, wantTip: 210},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			c.opts.MaxFeePerGas = big.NewInt(tt.maxFee)
+			c.opts.GasFeeCapMultiplier = &tt.feeMultiplier
+			c.opts.GasTipCapMultiplier = &tt.tipMultiplier
+			require.NoError(t, submit(t, c))
+			require.Len(t, rpc.sent, 1)
+			require.Equal(t, big.NewInt(tt.wantFee), rpc.sent[0].GasFeeCap())
+			require.Equal(t, big.NewInt(tt.wantTip), rpc.sent[0].GasTipCap())
+			require.Equal(t, big.NewInt(tt.maxFee), c.opts.MaxFeePerGas)
+		})
+	}
+}
+
+func TestStalledReplacementUsesFeeCap(t *testing.T) {
 	c, rpc := newSubmitter(t)
 	c.opts.MaxFeePerGas = big.NewInt(250)
 	require.NoError(t, submit(t, c))
 	expireNonce(c)
-	require.ErrorContains(t, submit(t, c), "fee cap")
-	require.Len(t, rpc.sent, 1)
+	require.NoError(t, submit(t, c))
+	require.Len(t, rpc.sent, 2)
+	require.Equal(t, rpc.sent[0].Nonce(), rpc.sent[1].Nonce())
+	require.Equal(t, big.NewInt(250), rpc.sent[1].GasFeeCap())
+	require.Equal(t, big.NewInt(12), rpc.sent[1].GasTipCap())
+}
+
+func TestUnderpricedRetriesStopAtFeeCap(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	c.opts.MaxFeePerGas = big.NewInt(250)
+	tipMultiplier := 20.0
+	c.opts.GasTipCapMultiplier = &tipMultiplier
+	underpriced := errors.New("replacement transaction underpriced")
+	rpc.send = func(*types.Transaction) error { return underpriced }
+
+	submission, err := c.Submit(t.Context(), testIntent())
+	require.ErrorIs(t, err, underpriced)
+	require.ErrorContains(t, err, "fee cap 250 wei")
+	require.Len(t, rpc.sent, 3)
+	for i, tx := range rpc.sent {
+		require.Zero(t, tx.Nonce())
+		require.LessOrEqual(t, tx.GasFeeCap().Int64(), int64(250))
+		if i > 0 {
+			require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
+		}
+	}
+	last := rpc.sent[2]
+	require.Equal(t, big.NewInt(250), last.GasFeeCap())
+	require.Equal(t, big.NewInt(250), last.GasTipCap())
+	require.Equal(t, last.Hash().Hex(), submission.TxHash)
+
+	// A later submission can still succeed if the conflicting transaction disappears.
+	rpc.send = nil
+	require.NoError(t, submit(t, c))
+	require.Len(t, rpc.sent, 4)
+	require.Equal(t, last.Hash(), rpc.sent[3].Hash())
 }
 
 func TestNonceQueryFailureDoesNotBroadcast(t *testing.T) {
@@ -256,18 +367,76 @@ func TestNonceQueryFailureDoesNotBroadcast(t *testing.T) {
 	require.Empty(t, rpc.sent)
 }
 
-func TestReorgAllowsLowestNonceReuse(t *testing.T) {
+func TestLaggingHeadDoesNotResetNonceRecovery(t *testing.T) {
 	c, rpc := newSubmitter(t)
+	c.opts.MaxInFlight = 2
 	rpc.mined, rpc.pending = 7, 7
 	require.NoError(t, submit(t, c))
-	rpc.mined, rpc.pending = 8, 8
 	require.NoError(t, submit(t, c))
-	rpc.mined, rpc.pending = 7, 7
-	_, err := c.selectNonce(t.Context(), time.Now())
-	require.NoError(t, err)
+	require.ErrorIs(t, submit(t, c), ErrBusy)
 	expireNonce(c)
+	lowestUnminedNoncePendingSince := c.lowestUnminedNoncePendingSince
+	feeCap := new(big.Int).Set(c.lastAttemptedFeeCap)
+	tipCap := new(big.Int).Set(c.lastAttemptedTipCap)
+
+	for range 3 {
+		rpc.height, rpc.mined = 99, 6
+		require.ErrorContains(t, submit(t, c), "behind last nonce observation")
+		require.Equal(t, uint64(7), c.lowestUnminedNonce)
+		require.Equal(t, lowestUnminedNoncePendingSince, c.lowestUnminedNoncePendingSince)
+		require.Equal(t, feeCap, c.lastAttemptedFeeCap)
+		require.Equal(t, tipCap, c.lastAttemptedTipCap)
+
+		rpc.height, rpc.mined = 100, 7
+		nonce, err := c.selectNonce(t.Context(), time.Now())
+		require.NoError(t, err)
+		require.Equal(t, uint64(7), nonce)
+	}
+
+	require.Len(t, rpc.sent, 2)
 	require.NoError(t, submit(t, c))
 	require.Equal(t, uint64(7), rpc.sent[2].Nonce())
+	require.Positive(t, rpc.sent[2].GasFeeCap().Cmp(feeCap))
+}
+
+func TestFailedNonceQueryDoesNotAdvanceObservedHeight(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	require.NoError(t, submit(t, c))
+	rpc.height = 101
+	rpc.nonceErr = errors.New("unavailable")
+	require.ErrorIs(t, submit(t, c), rpc.nonceErr)
+	rpc.height = 100
+	rpc.nonceErr = nil
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
+}
+
+func TestReorgAllowsLowestNonceReuse(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		height uint64
+	}{
+		{name: "same height", height: 101},
+		{name: "higher height", height: 102},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			rpc.mined, rpc.pending = 7, 7
+			require.NoError(t, submit(t, c))
+			rpc.height, rpc.mined, rpc.pending = 101, 8, 8
+			require.NoError(t, submit(t, c))
+			expireNonce(c)
+			rpc.height, rpc.mined, rpc.pending = tt.height, 7, 7
+			now := time.Now()
+			nonce, err := c.selectNonce(t.Context(), now)
+			require.NoError(t, err)
+			require.Equal(t, uint64(9), nonce)
+			require.Equal(t, now, c.lowestUnminedNoncePendingSince)
+			expireNonce(c)
+			require.NoError(t, submit(t, c))
+			require.Equal(t, uint64(7), rpc.sent[2].Nonce())
+		})
+	}
 }
 
 func TestDroppedNonceRecoversBelowLocalAllocation(t *testing.T) {
@@ -307,7 +476,7 @@ func TestShouldRetry(t *testing.T) {
 			rpc.receipt, rpc.receiptErr = tt.receipt, tt.err
 			sentAt := time.Now()
 			if tt.expired {
-				sentAt = sentAt.Add(-2 * c.opts.ResubmitAfter)
+				sentAt = sentAt.Add(-2 * c.opts.PendingTxTimeout)
 			}
 			retry, err := c.ShouldRetry(t.Context(), common.Hash{}.Hex(), sentAt)
 			require.ErrorIs(t, err, tt.wantErr)

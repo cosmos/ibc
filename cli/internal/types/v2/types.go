@@ -58,24 +58,24 @@ func (k ProofKind) CommitmentPath(packet channeltypesv2.Packet) ([]byte, error) 
 	}
 }
 
-// OperationType identifies the action performed on a packet.
-type OperationType int
+// RelayKind the packet operation one PacketRelayItem asks to perform.
+type RelayKind int
 
-// Operation types
+// Relay kinds
 const (
-	OperationTypeUnknown OperationType = iota
-	OperationTypeRecv
-	OperationTypeAck
-	OperationTypeTimeout
+	RelayKindUnknown RelayKind = iota
+	RelayKindRecv
+	RelayKindAck
+	RelayKindTimeout
 )
 
-func (t OperationType) String() string {
-	switch t {
-	case OperationTypeRecv:
+func (k RelayKind) String() string {
+	switch k {
+	case RelayKindRecv:
 		return "recv"
-	case OperationTypeAck:
+	case RelayKindAck:
 		return "ack"
-	case OperationTypeTimeout:
+	case RelayKindTimeout:
 		return "timeout"
 	default:
 		return "unknown"
@@ -85,9 +85,9 @@ func (t OperationType) String() string {
 // PacketRelayItem one packet operation to include in a relay tx, along with
 // the membership/non-membership proof authorizing it.
 type PacketRelayItem struct {
-	Type        OperationType
+	Kind        RelayKind
 	Packet      channeltypesv2.Packet
-	Acks        [][]byte // one per payload, order preserved; only set for OperationTypeAck
+	Acks        [][]byte // one per payload, order preserved; only set for RelayKindAck
 	Proof       []byte
 	ProofHeight uint64
 }
@@ -125,13 +125,13 @@ type Tx struct {
 	RelayerAddress string
 }
 
-// TxIntent describes a contract call to submit.
+// TxIntent a transaction for the relayer to submit.
 type TxIntent struct {
 	To   string
 	Data []byte
 }
 
-// Submission identifies a signed transaction whose broadcast was attempted.
+// Submission a transaction broadcast by the relayer.
 type Submission struct {
 	TxHash         string
 	SubmittedAt    time.Time

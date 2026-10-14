@@ -102,19 +102,19 @@ func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
 
 	packet := toRouterPacket(item.Packet)
 
-	switch item.Type {
-	case v2.OperationTypeRecv:
+	switch item.Kind {
+	case v2.RelayKindRecv:
 		return packRecvPacket(packet, item.Proof, item.ProofHeight)
-	case v2.OperationTypeAck:
+	case v2.RelayKindAck:
 		if len(item.Acks) == 0 {
 			return nil, errors.Errorf("no acknowledgement recorded for sequence %d", item.Packet.Sequence)
 		}
 
 		return packAckPacket(packet, item.Acks[0], item.Proof, item.ProofHeight)
-	case v2.OperationTypeTimeout:
+	case v2.RelayKindTimeout:
 		return packTimeoutPacket(packet, item.Proof, item.ProofHeight)
 	default:
-		return nil, errors.Errorf("unsupported operation type %v", item.Type)
+		return nil, errors.Errorf("unsupported relay kind %v", item.Kind)
 	}
 }
 

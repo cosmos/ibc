@@ -681,7 +681,7 @@ DEFAULTS_FUNC = r"^func [A-Z]\w*\(\s*\)\s*\*?" + CONFIG_ROOT + r"\s*\{"
 # that is renamed or deleted is a real change that says so by name.
 DEFAULT_CONSTS = {
     ("RelayerEVMConfig", "maxFeePerGas"): [("", "DefaultMaxFeePerGas")],
-    ("RelayerEVMConfig", "resubmitAfter"): [("", "DefaultResubmitAfter")],
+    ("RelayerEVMConfig", "pendingTxTimeout"): [("", "DefaultPendingTxTimeout")],
     ("RelayerConfig", "dispatchPollInterval"): [("", "DefaultPollInterval")],
     ("RelayerChainOverride", "packetBatchSize"): [("", "DefaultBatchSize")],
     ("RelayerChainOverride", "packetBatchTimeout"): [

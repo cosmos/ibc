@@ -66,8 +66,8 @@ type RelayerChainOverride struct {
 type RelayerEVMConfig struct {
 	// MaxFeePerGas caps each transaction's fee per gas, in wei.
 	MaxFeePerGas *uint64 `yaml:"maxFeePerGas,omitempty"`
-	// ResubmitAfter sets the missing-transaction retry interval and the delay before reusing a stalled nonce.
-	ResubmitAfter *time.Duration `yaml:"resubmitAfter,omitempty"`
+	// PendingTxTimeout sets how long to wait before retrying an unmined transaction or reusing a stalled nonce.
+	PendingTxTimeout *time.Duration `yaml:"pendingTxTimeout,omitempty"`
 
 	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
 	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
@@ -214,8 +214,8 @@ func (c RelayerEVMConfig) Validate() error {
 	switch {
 	case c.MaxFeePerGas != nil && *c.MaxFeePerGas == 0:
 		return errPathf("maxFeePerGas", "must be positive")
-	case c.ResubmitAfter != nil && *c.ResubmitAfter <= 0:
-		return errPathf("resubmitAfter", "must be positive")
+	case c.PendingTxTimeout != nil && *c.PendingTxTimeout <= 0:
+		return errPathf("pendingTxTimeout", "must be positive")
 	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
 		return errPathf("gasFeeCapMultiplier", "must be positive")
 	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:

@@ -19,10 +19,11 @@ import (
 // TxSubmitter signs and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
-	// Submit returns the last attempted transaction even if broadcast fails.
-	// A nil submission means no broadcast was attempted.
 	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
-	// ShouldRetry reports failure or expiry; an unmined transaction returns ErrTxNotFound.
+
+	// ShouldRetry reports whether a transaction submitted at sentAt is failed
+	// or has been pending past the implementation's retry expiry and should be
+	// resubmitted.
 	ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error)
 }
 
@@ -75,8 +76,8 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 				if e.MaxFeePerGas != nil {
 					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
 				}
-				if e.ResubmitAfter != nil {
-					opts.ResubmitAfter = *e.ResubmitAfter
+				if e.PendingTxTimeout != nil {
+					opts.PendingTxTimeout = *e.PendingTxTimeout
 				}
 				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
 				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier

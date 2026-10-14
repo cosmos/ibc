@@ -7,7 +7,7 @@ import (
 	"math/big"
 	"strings"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -29,7 +29,22 @@ func estimateFees(ctx context.Context, eth ETHClient, opts *ChainOptions) (fee, 
 		return nil, nil, err
 	}
 	fee = new(big.Int).Add(tip, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
-	return applyMultiplier(fee, opts.GasFeeCapMultiplier), applyMultiplier(tip, opts.GasTipCapMultiplier), nil
+	fee, tip = capFees(
+		applyMultiplier(fee, opts.GasFeeCapMultiplier),
+		applyMultiplier(tip, opts.GasTipCapMultiplier),
+		opts.MaxFeePerGas,
+	)
+	return fee, tip, nil
+}
+
+func capFees(fee, tip, limit *big.Int) (*big.Int, *big.Int) {
+	if fee.Cmp(limit) > 0 {
+		fee = limit
+	}
+	if tip.Cmp(fee) > 0 {
+		tip = fee
+	}
+	return fee, tip
 }
 
 func signTransaction(
@@ -38,12 +53,7 @@ func signTransaction(
 	chainSigner signer.Signer,
 	ethSigner types.Signer,
 	address common.Address,
-	opts *ChainOptions,
 ) (*types.Transaction, error) {
-	if tx.Gas() < 21000 || tx.Gas() > opts.MaxGas || tx.GasFeeCap().Cmp(opts.MaxFeePerGas) > 0 ||
-		tx.GasTipCap().Cmp(tx.GasFeeCap()) > 0 {
-		return nil, errors.New("transaction exceeds gas or fee cap")
-	}
 	sig, err := chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes())
 	if err != nil {
 		return nil, err
@@ -71,6 +81,10 @@ func broadcast(ctx context.Context, eth ETHClient, tx *types.Transaction) error 
 		}
 	}
 	return err
+}
+
+func isReplacementUnderpriced(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "replacement transaction underpriced")
 }
 
 func applyMultiplier(v *big.Int, m *float64) *big.Int {
@@ -118,7 +132,7 @@ func (c *TxSubmitter) buildAndSignTransaction(
 			GasFeeCap: fee,
 			GasTipCap: tip,
 		},
-	), c.signer, c.ethSigner, c.address, &c.opts)
+	), c.signer, c.ethSigner, c.address)
 }
 
 // Round up by 20%, including when the previous tip was zero.
