@@ -177,7 +177,7 @@ func TestStartFailureIsAtomicAndCleansAcquiredEffects(t *testing.T) {
 	}}
 	env, err := start(t.Context(), spec, Runtime{}, drivers{
 		acquireChain: func(_ context.Context, declaration ChainSpec, _ Runtime, _ workspace) (chainAcquisition, error) {
-			switch declaration.chainID() {
+			switch declaration.ChainID() {
 			case "first":
 				close(firstAcquired)
 				return fakeAcquisition(
@@ -215,7 +215,7 @@ func TestStartFailureReportsCleanupFailure(t *testing.T) {
 
 	_, err := start(t.Context(), spec, Runtime{}, drivers{
 		acquireChain: func(_ context.Context, declaration ChainSpec, _ Runtime, ws workspace) (chainAcquisition, error) {
-			if declaration.chainID() == "first" {
+			if declaration.ChainID() == "first" {
 				privateDir = ws.privateDir
 				diagnosticsDir = ws.diagnosticsDir
 				close(firstAcquired)
@@ -287,7 +287,7 @@ func TestEnvironmentCloseSeparatesBorrowedResourceFromOwnedHandle(t *testing.T) 
 
 	env, err := start(t.Context(), spec, runtime, drivers{
 		acquireChain: func(_ context.Context, declaration ChainSpec, _ Runtime, _ workspace) (chainAcquisition, error) {
-			if declaration.chainID() == "managed" {
+			if declaration.ChainID() == "managed" {
 				return fakeAcquisition(
 					"managed",
 					func(context.Context) error {
@@ -362,10 +362,10 @@ func TestStartAcquiresIndependentChainsConcurrently(t *testing.T) {
 	go func() {
 		env, err := start(context.Background(), spec, Runtime{}, drivers{
 			acquireChain: func(_ context.Context, declaration ChainSpec, _ Runtime, _ workspace) (chainAcquisition, error) {
-				started <- declaration.chainID()
+				started <- declaration.ChainID()
 				<-release
 				return fakeAcquisition(
-					declaration.chainID(),
+					declaration.ChainID(),
 					func(context.Context) error {
 						return nil
 					},

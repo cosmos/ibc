@@ -17,6 +17,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 // zeroAddressReceiver is a well-formed but invalid IFT receiver: the
@@ -36,30 +37,30 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 		attestorDAuthority environment.AuthorityID = "attestor-d-authority"
 	)
 	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+		Chains: e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB),
 		IBCInstances: []environment.IBCInstanceSpec{
 			environment.NewIBCInstance{
 				ID:        "quorum-ibc-a",
-				Chain:     e2etest.ChainA,
-				Authority: e2etest.ProtocolAuthorityID,
+				Chain:     traffic.ChainA,
+				Authority: traffic.ProtocolAuthorityID,
 			},
 			environment.NewIBCInstance{
 				ID:        "quorum-ibc-b",
-				Chain:     e2etest.ChainB,
-				Authority: e2etest.ProtocolAuthorityID,
+				Chain:     traffic.ChainB,
+				Authority: traffic.ProtocolAuthorityID,
 			},
 		},
 		Connections: []environment.ConnectionSpec{{
 			ID: "quorum-connection",
 			A: environment.NewClient{
-				IBCInstance: "quorum-ibc-a", Authority: e2etest.ProtocolAuthorityID,
+				IBCInstance: "quorum-ibc-a", Authority: traffic.ProtocolAuthorityID,
 				MinRequiredSignatures: 1,
 				Attestors: []environment.AttestorSpec{{
 					ID: attestorAID, Authority: attestorAAuthority,
 				}},
 			},
 			B: environment.NewClient{
-				IBCInstance: "quorum-ibc-b", Authority: e2etest.ProtocolAuthorityID,
+				IBCInstance: "quorum-ibc-b", Authority: traffic.ProtocolAuthorityID,
 				MinRequiredSignatures: 2,
 				Attestors: []environment.AttestorSpec{
 					{ID: attestorBID, Authority: attestorBAuthority},
@@ -69,7 +70,7 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 			},
 		}},
 	}
-	runtime := e2etest.RuntimeWithProtocolDeployer(
+	runtime := traffic.RuntimeWithProtocolDeployer(
 		environment.Runtime{Authorities: map[environment.AuthorityID]environment.EVMAuthority{
 			attestorAAuthority: {
 				PrivateKeyHex: "0000000000000000000000000000000000000000000000000000000000000006",
@@ -88,7 +89,7 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	destinationAttestorB, err := env.Attestor(attestorBID)
 	require.NoError(t, err)
 	destinationAttestorC, err := env.Attestor(attestorCID)
@@ -96,7 +97,8 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	destinationAttestorD, err := env.Attestor(attestorDID)
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	ctx := t.Context()
 	// Keep every endpoint in the IBC CLI's config while starting it with one attestor unavailable.
 	require.NoError(t, destinationAttestorD.Stop(ctx))
@@ -111,27 +113,27 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 	require.Equal(t, uint8(2), destinationClient.MinRequiredSignatures())
 
 	// Two live attestors satisfy the destination client's quorum.
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 
 	// One live attestor cannot satisfy the destination client's quorum.
 	require.NoError(t, destinationAttestorC.Stop(ctx))
-	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
+	pending, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(2_345_000)})
 	require.NoError(t, err)
 	require.NoError(t, pending.VerifyBurned(ctx))
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, pending.PacketTx()))
-	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
+	require.NoError(t, traffic.RelayAll(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, traffic.AwaitStable(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING))
 	require.NoError(t, pending.VerifyNotMinted(ctx))
 
 	// Restoring a second attestor lets the pending transfer complete.
 	require.NoError(t, destinationAttestorC.Restart(ctx))
-	_, err = e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, pending.VerifyDelivered(ctx))
@@ -139,10 +141,10 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 
 func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	destinationAttestorID := meshAttestorFor(route.Destination, route.Source)
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
+	destinationAttestorID := traffic.MeshAttestorFor(route.Destination, route.Source)
 	destinationAttestorKey := runtime.Authorities[environment.AuthorityID(destinationAttestorID)].PrivateKeyHex
 
 	env := e2etest.Start(t, spec, runtime)
@@ -151,7 +153,8 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	destinationAttestor, err := env.Attestor(destinationAttestorID)
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -163,10 +166,10 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	clientAddress := destinationClient.LightClientAddress()
 	initialState := attestedClientState(t, destinationEVM, clientAddress)
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -188,13 +191,13 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	require.Equal(t, height, frozenState.LatestHeight)
 	require.Equal(t, trustedTimestamp, attestedConsensusTimestamp(t, destinationEVM, clientAddress, height))
 
-	pending, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(2_345_000)})
+	pending, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(2_345_000)})
 	require.NoError(t, err)
 	require.NoError(t, pending.VerifyBurned(ctx))
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, pending.PacketTx()))
-	require.NoError(t, e2etest.AwaitStable(ctx, relayer, pending.PacketTx(),
+	require.NoError(t, traffic.RelayAll(ctx, relayer, pending.PacketTx()))
+	require.NoError(t, traffic.AwaitStable(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING))
-	status, err := e2etest.AwaitState(ctx, relayer, pending.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, pending.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.NoError(t, err)
 	require.Empty(t, status.GetRecvTx().GetTxHash())
@@ -207,16 +210,17 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 // when the source chain is far ahead of the destination.
 func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	sourceAttestor, err := env.Attestor(meshAttestorFor(route.Source, route.Destination))
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
+	sourceAttestor, err := env.Attestor(traffic.MeshAttestorFor(route.Source, route.Destination))
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -236,7 +240,7 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	// Keep the destination fixed while the source moves far ahead. Timeout
 	// still uses the finalized destination anchor rather than the source height.
 	require.NoError(t, relayer.Stop(ctx))
-	asymmetricTransfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+	asymmetricTransfer, err := iftApp.Send(ctx, traffic.IFTRequest{
 		Amount:  big.NewInt(4_000_000),
 		Timeout: packetTimeout,
 	})
@@ -261,7 +265,7 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 		require.GreaterOrEqual(t, sourceHeight, pausedDestinationHeight+40)
 
 		relayer = e2etest.StartRelayer(t, driver, env)
-		_, awaitErr := e2etest.AwaitState(ctx, relayer, asymmetricTransfer.PacketTx(),
+		_, awaitErr := traffic.AwaitState(ctx, relayer, asymmetricTransfer.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 		require.NoError(t, awaitErr)
 		require.NoError(t, asymmetricTransfer.VerifyRefunded(ctx))
@@ -275,22 +279,24 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
 	require.NoError(t, transfer.VerifyPending(ctx))
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -300,46 +306,49 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 func TestIFTTransfer_TwoTokensSameClientPair(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	tokenA := e2etest.NewIFT(t, env, deployment, sender, route)
-	tokenB := e2etest.DeployIFTTokenPair(t, env, deployment, sender, route)
+	tokenA, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
+	tokenB, err := traffic.DeployIFTTokenPair(t.Context(), env, deployment, sender, route)
+	require.NoError(t, err)
 	ctx := t.Context()
 
 	receiver := common.HexToAddress("0xa").Hex()
 
-	transferA, err := tokenA.Send(ctx, e2etest.IFTRequest{
+	transferA, err := tokenA.Send(ctx, traffic.IFTRequest{
 		Amount:   big.NewInt(1_234_000),
 		Receiver: receiver,
 	})
 	require.NoError(t, err)
-	transferB, err := tokenB.Send(ctx, e2etest.IFTRequest{
+	transferB, err := tokenB.Send(ctx, traffic.IFTRequest{
 		Amount:   big.NewInt(5_678_000),
 		Receiver: receiver,
 	})
 	require.NoError(t, err)
 	require.NotEqual(t, transferA.PacketTx().Sequence, transferB.PacketTx().Sequence)
 
-	transfers := []*e2etest.IFTSend{transferA, transferB}
+	transfers := []*traffic.IFTSend{transferA, transferB}
 	for _, transfer := range transfers {
 		require.NoError(t, transfer.VerifyBurned(ctx))
 		require.NoError(t, transfer.VerifyPending(ctx))
 	}
 
 	relayer := e2etest.StartRelayer(t, driver, env)
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, transferA.PacketTx()))
-	_, err = e2etest.AwaitState(ctx, relayer, transferA.PacketTx(),
+	require.NoError(t, traffic.RelayAll(ctx, relayer, transferA.PacketTx()))
+	_, err = traffic.AwaitState(ctx, relayer, transferA.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transferA.VerifyPendingCleared(ctx))
 	require.NoError(t, transferB.VerifyPending(ctx), "token B must remain pending after token A is acknowledged")
 
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, transferB.PacketTx()))
-	_, err = e2etest.AwaitState(ctx, relayer, transferB.PacketTx(),
+	require.NoError(t, traffic.RelayAll(ctx, relayer, transferB.PacketTx()))
+	_, err = traffic.AwaitState(ctx, relayer, transferB.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	for _, transfer := range transfers {
@@ -351,18 +360,19 @@ func TestIFTTransfer_TwoTokensSameClientPair(t *testing.T) {
 
 func TestIFTTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{
 		Amount:  big.NewInt(3_000_000),
 		Timeout: packetTimeout,
 	})
@@ -372,8 +382,8 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 	requireTimeoutFinalized(t, env, route.Destination, transfer.TimeoutTimestamp())
 
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	require.NoError(t, traffic.RelayAll(ctx, relayer, transfer.PacketTx()))
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
@@ -382,14 +392,15 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
@@ -401,9 +412,9 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	require.NoError(t, err)
 
 	finalityOffset := uint64(ibccli.HarnessFinalityOffset)
-	var transfer *e2etest.IFTSend
+	var transfer *traffic.IFTSend
 	require.NoError(t, mining.WithPaused(ctx, func() error {
-		transfer, err = iftApp.Send(ctx, e2etest.IFTRequest{
+		transfer, err = iftApp.Send(ctx, traffic.IFTRequest{
 			Amount:  big.NewInt(3_000_000),
 			Timeout: packetTimeout,
 		})
@@ -427,8 +438,8 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 		require.Less(t, finalizedHeader.Time, transfer.TimeoutTimestamp(),
 			"finalized destination header must remain before the packet timeout")
 
-		require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
-		require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(),
+		require.NoError(t, traffic.RelayAll(ctx, relayer, transfer.PacketTx()))
+		require.NoError(t, traffic.AwaitStable(ctx, relayer, transfer.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_PENDING))
 		require.NoError(t, transfer.VerifyPending(ctx))
 		require.NoError(t, transfer.VerifyNotMinted(ctx))
@@ -452,7 +463,7 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 			"finalized destination header must pass the packet timeout")
 	}, destination.Timing().CompletionBudget, destination.Timing().PollInterval)
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx))
@@ -463,17 +474,19 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 // destination mint rejects, forcing an error acknowledgement and a refund.
 func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{
 		Amount:   big.NewInt(1_234_000),
 		Receiver: zeroAddressReceiver,
 	})
@@ -481,7 +494,7 @@ func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 	require.NoError(t, transfer.VerifyBurned(ctx))
 	require.NoError(t, transfer.VerifyPending(ctx))
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
@@ -493,23 +506,25 @@ func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 // bridge unregistered, so onRecvPacket hits IFTBridgeNotFound.
 func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	route.SkipDestinationIFTBridge = true
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyBurned(ctx))
 	require.NoError(t, transfer.VerifyPending(ctx))
 
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_REJECTED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
@@ -522,21 +537,23 @@ func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 // cleared by its own acknowledgement.
 func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	require.NoError(t, relayer.Stop(ctx))
 	amounts := []*big.Int{big.NewInt(1_000_000), big.NewInt(2_000_000), big.NewInt(3_000_000)}
-	transfers := make([]*e2etest.IFTSend, len(amounts))
+	transfers := make([]*traffic.IFTSend, len(amounts))
 	for i, amount := range amounts {
-		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: amount})
+		transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: amount})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
 		require.NoError(t, transfer.VerifyPending(ctx))
@@ -545,7 +562,7 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 
 	relayer = e2etest.StartRelayer(t, driver, env)
 	for _, transfer := range transfers {
-		_, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		_, err := traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -560,20 +577,22 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 // from that one transaction — none missing, none duplicated.
 func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	const packetCount = 10
-	requests := make([]e2etest.IFTRequest, packetCount)
+	requests := make([]traffic.IFTRequest, packetCount)
 	for i := range requests {
-		requests[i] = e2etest.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))}
+		requests[i] = traffic.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))}
 	}
 	batch, err := iftApp.SendBatch(ctx, requests)
 	require.NoError(t, err)
@@ -586,10 +605,10 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	}
 	require.Len(t, wantSequences, packetCount, "packets must have distinct sequences")
 
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, packetTxs[0]))
+	require.NoError(t, traffic.RelayAll(ctx, relayer, packetTxs[0]))
 
 	for _, packetTx := range packetTxs {
-		_, err = e2etest.AwaitState(ctx, relayer, packetTx,
+		_, err = traffic.AwaitState(ctx, relayer, packetTx,
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 	}
@@ -609,21 +628,22 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 
 func TestRelay_FilteredSequences(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	const packetCount = 10
-	requests := make([]e2etest.IFTRequest, packetCount)
+	requests := make([]traffic.IFTRequest, packetCount)
 	for i := range requests {
-		requests[i] = e2etest.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))}
+		requests[i] = traffic.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))}
 	}
 	batch, err := iftApp.SendBatch(ctx, requests)
 	require.NoError(t, err)
@@ -634,9 +654,9 @@ func TestRelay_FilteredSequences(t *testing.T) {
 	require.NoError(t, batch.VerifyState(ctx, nil, nil))
 
 	selected := []int{1, 5}
-	require.NoError(t, e2etest.RelaySelected(ctx, relayer, packetTxs[1], packetTxs[5]))
+	require.NoError(t, traffic.RelaySelected(ctx, relayer, packetTxs[1], packetTxs[5]))
 	for _, index := range selected {
-		_, err = e2etest.AwaitState(ctx, relayer, packetTxs[index],
+		_, err = traffic.AwaitState(ctx, relayer, packetTxs[index],
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 	}
@@ -644,13 +664,13 @@ func TestRelay_FilteredSequences(t *testing.T) {
 	requireStablePacketState(t, relayer, packetTxs, remaining, relayerv2.PacketState_PACKET_STATE_NOT_SELECTED)
 	require.NoError(t, batch.VerifyState(ctx, selected, nil))
 
-	remainingPackets := make([]e2etest.PacketTx, len(remaining))
+	remainingPackets := make([]traffic.PacketTx, len(remaining))
 	for i, index := range remaining {
 		remainingPackets[i] = packetTxs[index]
 	}
-	require.NoError(t, e2etest.RelaySelected(ctx, relayer, remainingPackets...))
+	require.NoError(t, traffic.RelaySelected(ctx, relayer, remainingPackets...))
 	for _, index := range remaining {
-		_, err = e2etest.AwaitState(ctx, relayer, packetTxs[index],
+		_, err = traffic.AwaitState(ctx, relayer, packetTxs[index],
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 	}
@@ -659,21 +679,22 @@ func TestRelay_FilteredSequences(t *testing.T) {
 
 func TestRelay_FilteredTimeoutSequences(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	const packetCount = 5
-	requests := make([]e2etest.IFTRequest, packetCount)
+	requests := make([]traffic.IFTRequest, packetCount)
 	for i := range requests {
-		requests[i] = e2etest.IFTRequest{
+		requests[i] = traffic.IFTRequest{
 			Amount:  big.NewInt(int64(1_000_000 + i)),
 			Timeout: packetTimeout,
 		}
@@ -689,9 +710,9 @@ func TestRelay_FilteredTimeoutSequences(t *testing.T) {
 	requireTimeoutFinalized(t, env, route.Destination, batch.LatestTimeoutTimestamp())
 
 	selected := []int{1, 2}
-	require.NoError(t, e2etest.RelaySelected(ctx, relayer, packetTxs[1], packetTxs[2]))
+	require.NoError(t, traffic.RelaySelected(ctx, relayer, packetTxs[1], packetTxs[2]))
 	for _, index := range selected {
-		_, err = e2etest.AwaitState(ctx, relayer, packetTxs[index],
+		_, err = traffic.AwaitState(ctx, relayer, packetTxs[index],
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 		require.NoError(t, err)
 	}
@@ -699,9 +720,9 @@ func TestRelay_FilteredTimeoutSequences(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_NOT_SELECTED)
 	require.NoError(t, batch.VerifyState(ctx, nil, selected))
 
-	require.NoError(t, e2etest.RelaySelected(ctx, relayer, packetTxs[0], packetTxs[3], packetTxs[4]))
+	require.NoError(t, traffic.RelaySelected(ctx, relayer, packetTxs[0], packetTxs[3], packetTxs[4]))
 	for _, index := range []int{0, 3, 4} {
-		_, err = e2etest.AwaitState(ctx, relayer, packetTxs[index],
+		_, err = traffic.AwaitState(ctx, relayer, packetTxs[index],
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 		require.NoError(t, err)
 	}
@@ -711,7 +732,7 @@ func TestRelay_FilteredTimeoutSequences(t *testing.T) {
 func requireStablePacketState(
 	t *testing.T,
 	relayer *ibccli.Relayer,
-	packets []e2etest.PacketTx,
+	packets []traffic.PacketTx,
 	indexes []int,
 	state relayerv2.PacketState,
 ) {
@@ -720,7 +741,7 @@ func requireStablePacketState(
 	var wg sync.WaitGroup
 	for i, index := range indexes {
 		wg.Go(func() {
-			errs[i] = e2etest.AwaitStable(t.Context(), relayer, packets[index], state)
+			errs[i] = traffic.AwaitStable(t.Context(), relayer, packets[index], state)
 		})
 	}
 	wg.Wait()
@@ -782,20 +803,22 @@ func withBatchOverride(cfg *ibccli.RelayerConfig) {
 // packet.
 func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, withBatchOverride, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	const packetCount = 10
-	sends := make([]*e2etest.IFTSend, packetCount)
+	sends := make([]*traffic.IFTSend, packetCount)
 	for i := range sends {
-		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))})
+		transfer, err := iftApp.Send(ctx, traffic.IFTRequest{Amount: big.NewInt(int64(1_000_000 + i))})
 		require.NoError(t, err)
 		require.NoError(t, transfer.VerifyBurned(ctx))
 		sends[i] = transfer
@@ -805,9 +828,9 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	var wg sync.WaitGroup
 	for i, send := range sends {
 		wg.Add(1)
-		go func(i int, send *e2etest.IFTSend) {
+		go func(i int, send *traffic.IFTSend) {
 			defer wg.Done()
-			relayErrs[i] = e2etest.RelayAll(ctx, relayer, send.PacketTx())
+			relayErrs[i] = traffic.RelayAll(ctx, relayer, send.PacketTx())
 		}(i, send)
 	}
 	wg.Wait()
@@ -825,7 +848,7 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	recvTxSequences := make(map[string][]uint64, packetCount)
 	ackTxSequences := make(map[string][]uint64, packetCount)
 	for _, send := range sends {
-		status, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
+		status, err := traffic.AwaitState(ctx, relayer, send.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 		require.NoError(t, err)
 		require.NoError(t, send.VerifyDelivered(ctx))
@@ -859,25 +882,26 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 // in batches
 func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner, withBatchOverride, route)
-	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
+	iftApp, err := traffic.NewIFT(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	const packetCount = 10
-	sends := make([]*e2etest.IFTSend, packetCount)
+	sends := make([]*traffic.IFTSend, packetCount)
 	for i := range sends {
-		transfer, err := iftApp.Send(ctx, e2etest.IFTRequest{
+		transfer, sendErr := iftApp.Send(ctx, traffic.IFTRequest{
 			Amount:  big.NewInt(int64(1_000_000 + i)),
 			Timeout: packetTimeout,
 		})
-		require.NoError(t, err)
+		require.NoError(t, sendErr)
 		require.NoError(t, transfer.VerifyBurned(ctx))
 		sends[i] = transfer
 	}
@@ -892,9 +916,9 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	var wg sync.WaitGroup
 	for i, send := range sends {
 		wg.Add(1)
-		go func(i int, send *e2etest.IFTSend) {
+		go func(i int, send *traffic.IFTSend) {
 			defer wg.Done()
-			relayErrs[i] = e2etest.RelayAll(ctx, relayer, send.PacketTx())
+			relayErrs[i] = traffic.RelayAll(ctx, relayer, send.PacketTx())
 		}(i, send)
 	}
 	wg.Wait()
@@ -904,7 +928,7 @@ func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 
 	timeoutTxSequences := make(map[string][]uint64, packetCount)
 	for _, send := range sends {
-		status, err := e2etest.AwaitState(ctx, relayer, send.PacketTx(),
+		status, err := traffic.AwaitState(ctx, relayer, send.PacketTx(),
 			relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 		require.NoError(t, err)
 		require.NoError(t, send.VerifyNotMinted(ctx))

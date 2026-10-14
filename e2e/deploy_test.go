@@ -22,6 +22,7 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 // deployStepResult mirrors cli/internal/deploy.StepResult, which e2e cannot
@@ -76,15 +77,15 @@ type deployCLI struct {
 func startDeployCLI(t *testing.T, requirements e2etest.EVMRequirements) *deployCLI {
 	t.Helper()
 	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB),
+		Chains: e2etest.EVMChains(t, requirements, traffic.ChainA, traffic.ChainB),
 	}
 	env := e2etest.Start(t, spec, environment.Runtime{})
 
 	d := &deployCLI{home: t.TempDir()}
 	var err error
-	d.chainA, err = env.Chain(e2etest.ChainA)
+	d.chainA, err = env.Chain(traffic.ChainA)
 	require.NoError(t, err)
-	d.chainB, err = env.Chain(e2etest.ChainB)
+	d.chainB, err = env.Chain(traffic.ChainB)
 	require.NoError(t, err)
 	d.chainAID = strconv.FormatUint(d.chainA.EVMChainID(), 10)
 	d.chainBID = strconv.FormatUint(d.chainB.EVMChainID(), 10)
@@ -97,16 +98,16 @@ func startDeployCLI(t *testing.T, requirements e2etest.EVMRequirements) *deployC
 	deployerKey, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	d.deployer = crypto.PubkeyToAddress(deployerKey.PublicKey)
-	minimum := e2etest.RequiredSignerBalance()
+	minimum := traffic.RequiredSignerBalance()
 	for _, chain := range []*environment.Chain{d.chainA, d.chainB} {
 		funding, fundingErr := chain.Funding()
 		require.NoError(t, fundingErr)
 		require.NoError(t, funding.EnsureEOABalance(t.Context(), d.deployer, minimum))
 	}
 
-	d.rpcA, err = d.driver.ChainRPC(string(e2etest.ChainA))
+	d.rpcA, err = d.driver.ChainRPC(string(traffic.ChainA))
 	require.NoError(t, err)
-	d.rpcB, err = d.driver.ChainRPC(string(e2etest.ChainB))
+	d.rpcB, err = d.driver.ChainRPC(string(traffic.ChainB))
 	require.NoError(t, err)
 	d.writeConfig(t, "", "")
 	require.NoError(
@@ -224,7 +225,7 @@ func TestDeployConnection(t *testing.T) {
 // so the config carries the routers core deployed.
 func TestDeployBesuQBFTConnection(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu})
+	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu})
 
 	d.deploy(t, [][]string{
 		{"core", "--chain", d.chainAID, "--yes"},

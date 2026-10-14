@@ -57,7 +57,7 @@ func (s Spec) snapshot() Spec {
 // concrete Chain declaration.
 type ChainSpec interface {
 	chainSpec()
-	chainID() ChainID
+	ChainID() ChainID
 	validateChain() error
 }
 
@@ -68,7 +68,7 @@ type ManagedAnvil struct {
 }
 
 func (ManagedAnvil) chainSpec() {}
-func (c ManagedAnvil) chainID() ChainID {
+func (c ManagedAnvil) ChainID() ChainID {
 	return c.ID
 }
 
@@ -89,7 +89,7 @@ type ManagedBesu struct {
 }
 
 func (ManagedBesu) chainSpec() {}
-func (c ManagedBesu) chainID() ChainID {
+func (c ManagedBesu) ChainID() ChainID {
 	return c.ID
 }
 
@@ -114,7 +114,7 @@ type AttachedEVM struct {
 }
 
 func (AttachedEVM) chainSpec() {}
-func (c AttachedEVM) chainID() ChainID {
+func (c AttachedEVM) ChainID() ChainID {
 	return c.ID
 }
 
@@ -245,15 +245,15 @@ func (c NewClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance 
 func (c NewClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
 func (c NewClient) clientAttestors() []AttestorSpec      { return c.Attestors }
 
+// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
+// Besu QBFT clients.
+const BesuQBFTTrustingPeriod = solidityibc.BesuQBFTTrustingPeriod
+
 // NewBesuQBFTClient declares a Besu QBFT IBC Client to create on its host IBC
 // Instance. It verifies the counterparty end's sealed Besu headers, so it needs
 // no Attestors; the counterparty Chain must run Besu QBFT. Authority follows
 // the same rule as NewClient. Periods are seconds; the contract rejects a zero
 // TrustingPeriod at deploy time.
-// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
-// Besu QBFT clients.
-const BesuQBFTTrustingPeriod = solidityibc.BesuQBFTTrustingPeriod
-
 type NewBesuQBFTClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID
@@ -410,7 +410,7 @@ func (s Spec) validate() error {
 		if err := chain.validateChain(); err != nil {
 			return err
 		}
-		id := chain.chainID()
+		id := chain.ChainID()
 		if _, exists := chains[id]; exists {
 			return errorsf("duplicate Chain id %q", id)
 		}

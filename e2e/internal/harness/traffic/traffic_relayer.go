@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
@@ -21,7 +21,7 @@ func AwaitState(
 	want relayerv2.PacketState,
 ) (*relayerv2.PacketStatus, error) {
 	if relayer == nil {
-		return nil, errors.New("e2etest: relayer is required")
+		return nil, errors.New("traffic: relayer is required")
 	}
 	policy, err := packetWaitPolicy(relayer, packet)
 	if err != nil {
@@ -89,7 +89,7 @@ func AwaitStable(
 	want relayerv2.PacketState,
 ) error {
 	if relayer == nil {
-		return errors.New("e2etest: relayer is required")
+		return errors.New("traffic: relayer is required")
 	}
 	policy, err := packetWaitPolicy(relayer, packet)
 	if err != nil {
@@ -174,12 +174,12 @@ func watchPacketState(
 
 func packetWaitPolicy(relayer *ibccli.Relayer, packet PacketTx) (ibccli.WaitPolicy, error) {
 	if packet.RouteID == "" {
-		return ibccli.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
+		return ibccli.WaitPolicy{}, fmt.Errorf("traffic: packet sequence %d has no route id", packet.Sequence)
 	}
 	policy, ok := relayer.WaitPolicy(string(packet.RouteID))
 	if !ok {
 		return ibccli.WaitPolicy{}, fmt.Errorf(
-			"e2etest: packet %s has no wait policy for route %q",
+			"traffic: packet %s has no wait policy for route %q",
 			packet,
 			packet.RouteID,
 		)
@@ -191,7 +191,7 @@ func packetWaitPolicy(relayer *ibccli.Relayer, packet PacketTx) (ibccli.WaitPoli
 // confirms the relayer enumerated this packet.
 func RelayAll(ctx context.Context, relayer *ibccli.Relayer, packet PacketTx) error {
 	if relayer == nil {
-		return errors.New("e2etest: relayer is required")
+		return errors.New("traffic: relayer is required")
 	}
 	if err := relayer.RelayAll(ctx, string(packet.Source), packet.SourceTxHash); err != nil {
 		return err
@@ -202,7 +202,7 @@ func RelayAll(ctx context.Context, relayer *ibccli.Relayer, packet PacketTx) err
 	}
 	if statusForPacket(statuses, packet) == nil {
 		return fmt.Errorf(
-			"e2etest: relay result for packet %s did not include it: %v",
+			"traffic: relay result for packet %s did not include it: %v",
 			packet,
 			statuses,
 		)
@@ -213,17 +213,17 @@ func RelayAll(ctx context.Context, relayer *ibccli.Relayer, packet PacketTx) err
 // RelaySelected submits explicit packets from one source transaction.
 func RelaySelected(ctx context.Context, relayer *ibccli.Relayer, packets ...PacketTx) error {
 	if relayer == nil {
-		return errors.New("e2etest: relayer is required")
+		return errors.New("traffic: relayer is required")
 	}
 	if len(packets) == 0 {
-		return errors.New("e2etest: selected packets are required")
+		return errors.New("traffic: selected packets are required")
 	}
 
 	source := packets[0]
 	selectors := make([]*relayerv2.PacketSelector, len(packets))
 	for i, packet := range packets {
 		if packet.Source != source.Source || packet.SourceTxHash != source.SourceTxHash {
-			return errors.New("e2etest: selected packets must share a source transaction")
+			return errors.New("traffic: selected packets must share a source transaction")
 		}
 		selectors[i] = &relayerv2.PacketSelector{
 			SourceClientId: packet.SourceClientID,
@@ -271,7 +271,7 @@ func verifySourceTx(packet PacketTx, observed *relayerv2.PacketStatus) error {
 	sendTx := observed.GetSendTx().GetTxHash()
 	if sendTx != packet.SourceTxHash {
 		return fmt.Errorf(
-			"e2etest: packet %s status source transaction %q, want %q",
+			"traffic: packet %s status source transaction %q, want %q",
 			packet,
 			sendTx,
 			packet.SourceTxHash,
@@ -288,21 +288,21 @@ func validateTerminalStatus(
 	switch state {
 	case relayerv2.PacketState_PACKET_STATE_TIMED_OUT:
 		if observed.GetTimeoutTx().GetTxHash() == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no timeout transaction", state, packet)
+			return fmt.Errorf("traffic: %s packet %s has no timeout transaction", state, packet)
 		}
 		if observed.GetRecvTx().GetTxHash() != "" {
-			return fmt.Errorf("e2etest: %s packet %s has a receive transaction", state, packet)
+			return fmt.Errorf("traffic: %s packet %s has a receive transaction", state, packet)
 		}
 		if observed.GetAckTx().GetTxHash() != "" {
-			return fmt.Errorf("e2etest: %s packet %s has an acknowledgement transaction", state, packet)
+			return fmt.Errorf("traffic: %s packet %s has an acknowledgement transaction", state, packet)
 		}
 	case relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
 		relayerv2.PacketState_PACKET_STATE_REJECTED:
 		if observed.GetRecvTx().GetTxHash() == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no receive transaction", state, packet)
+			return fmt.Errorf("traffic: %s packet %s has no receive transaction", state, packet)
 		}
 		if observed.GetAckTx().GetTxHash() == "" {
-			return fmt.Errorf("e2etest: %s packet %s has no acknowledgement transaction", state, packet)
+			return fmt.Errorf("traffic: %s packet %s has no acknowledgement transaction", state, packet)
 		}
 	}
 	return nil

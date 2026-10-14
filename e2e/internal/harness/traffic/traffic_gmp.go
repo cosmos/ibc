@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func (g *GMP) Token() common.Address { return g.destToken }
 // GMPCall is the result of a GMP Call: the packet it emitted plus the Counter
 // baseline its Verify methods compare against.
 type GMPCall struct {
-	sendResult
+	SendResult
 	app    *GMP
 	before *big.Int
 }
@@ -89,7 +89,7 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		return gmpTransactor.SendCall(opts, msg)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: pack GMP sendCall: %w", err)
+		return nil, fmt.Errorf("traffic: pack GMP sendCall: %w", err)
 	}
 	receipt, sequence, err := send(
 		ctx,
@@ -97,13 +97,13 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 		g.sender,
 		g.sourceGMP,
 		data,
-		sendPacketSequence(g.sourceRouter),
+		g.sourceRouter,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: send GMP on route %q: %w", g.routeID, err)
+		return nil, fmt.Errorf("traffic: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
-		sendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
+		SendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
 		app:        g,
 		before:     before,
 	}, nil
@@ -140,13 +140,13 @@ func (g *GMP) count(ctx context.Context) (*big.Int, error) {
 	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := counter.NewCounterCaller(g.counter, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind Counter %s: %w", g.counter, err)
+			return fmt.Errorf("traffic: bind Counter %s: %w", g.counter, err)
 		}
 		count, err = bound.Count(&bind.CallOpts{Context: ctx})
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: query Counter %s: %w", g.counter, err)
+		return nil, fmt.Errorf("traffic: query Counter %s: %w", g.counter, err)
 	}
 	return count, nil
 }
@@ -170,13 +170,13 @@ func (g *GMP) AccountAddress(
 	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := ics27gmp.NewContractCaller(g.destGMP, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind ICS27GMP %s: %w", g.destGMP, err)
+			return fmt.Errorf("traffic: bind ICS27GMP %s: %w", g.destGMP, err)
 		}
 		address, err = bound.GetOrComputeAccountAddress(&bind.CallOpts{Context: ctx}, id)
 		return err
 	})
 	if err != nil {
-		return common.Address{}, fmt.Errorf("e2etest: compute ICS27 account address: %w", err)
+		return common.Address{}, fmt.Errorf("traffic: compute ICS27 account address: %w", err)
 	}
 	return address, nil
 }
@@ -191,14 +191,14 @@ func (g *GMP) StoredAccountIdentifier(
 	err := g.destination.evm.UseContractCaller(func(caller bind.ContractCaller) error {
 		bound, err := ics27gmp.NewContractCaller(g.destGMP, caller)
 		if err != nil {
-			return fmt.Errorf("e2etest: bind ICS27GMP %s: %w", g.destGMP, err)
+			return fmt.Errorf("traffic: bind ICS27GMP %s: %w", g.destGMP, err)
 		}
 		id, err = bound.GetAccountIdentifier(&bind.CallOpts{Context: ctx}, account)
 		return err
 	})
 	if err != nil {
 		return ics27gmp.IICS27GMPMsgsAccountIdentifier{}, fmt.Errorf(
-			"e2etest: query ICS27 account identifier for %s: %w", account, err,
+			"traffic: query ICS27 account identifier for %s: %w", account, err,
 		)
 	}
 	return id, nil
@@ -217,10 +217,10 @@ func (g *GMP) FundERC20(ctx context.Context, holder common.Address, amount *big.
 		return testERC20Transactor.Mint(opts, holder, amount)
 	})
 	if err != nil {
-		return fmt.Errorf("e2etest: pack TestERC20.mint: %w", err)
+		return fmt.Errorf("traffic: pack TestERC20.mint: %w", err)
 	}
 	if _, err := g.destination.evm.BroadcastTx(ctx, g.sender, &g.destToken, data, nil); err != nil {
-		return fmt.Errorf("e2etest: fund %s with TestERC20 %s: %w", holder, g.destToken, err)
+		return fmt.Errorf("traffic: fund %s with TestERC20 %s: %w", holder, g.destToken, err)
 	}
 	return nil
 }
@@ -248,7 +248,7 @@ func PackERC20Transfer(to common.Address, amount *big.Int) ([]byte, error) {
 		return testERC20Transactor.Transfer(opts, to, amount)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("e2etest: pack TestERC20.transfer: %w", err)
+		return nil, fmt.Errorf("traffic: pack TestERC20.transfer: %w", err)
 	}
 	return data, nil
 }
@@ -260,7 +260,7 @@ func (c *GMPCall) verifyCount(ctx context.Context, want *big.Int, state string) 
 	}
 	if got.Cmp(want) != 0 {
 		return fmt.Errorf(
-			"e2etest: GMP packet %s target %s %s count: got %s, want %s",
+			"traffic: GMP packet %s target %s %s count: got %s, want %s",
 			c.packetTx.reference(),
 			c.app.counter.Hex(),
 			state,

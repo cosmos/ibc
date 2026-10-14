@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package evm_test
+package e2etest_test
 
 import (
 	"io"
@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/e2etest"
 )
 
 func TestWebSocketProxy(t *testing.T) {
@@ -137,7 +137,7 @@ func TestWebSocketProxy(t *testing.T) {
 			t.Cleanup(func() { _ = upstream.Close() })
 			go serveEcho(upstream)
 
-			proxy := chainevm.NewWebSocketProxy(t, tt.source+upstream.Addr().String())
+			proxy := e2etest.NewWebSocketProxy(t, tt.source+upstream.Addr().String())
 			proxyAddr := strings.TrimPrefix(proxy.URL(), "ws://")
 
 			// ACT
@@ -159,7 +159,7 @@ func TestWebSocketProxy(t *testing.T) {
 type wsProxyTestSuite struct {
 	t         *testing.T
 	upstream  net.Listener
-	proxy     *chainevm.WebSocketProxy
+	proxy     *e2etest.WebSocketProxy
 	proxyAddr string
 }
 
@@ -176,7 +176,7 @@ func newWSProxyTestSuite(t *testing.T) *wsProxyTestSuite {
 	}
 	go serveEcho(upstream)
 
-	ts.proxy = chainevm.NewWebSocketProxy(t, "ws://"+upstream.Addr().String())
+	ts.proxy = e2etest.NewWebSocketProxy(t, "ws://"+upstream.Addr().String())
 	ts.proxyAddr = strings.TrimPrefix(ts.proxy.URL(), "ws://")
 
 	return ts

@@ -13,29 +13,32 @@ import (
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/cosmos/ibc/e2e/internal/harness/traffic"
 )
 
 func TestTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+	amount := traffic.Coins(500_000)
+	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{
 		Amount: amount,
 		Memo:   "transfer-auto-relay",
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -48,25 +51,27 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 func TestTransfer_ManualRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, traffic.ChainA, traffic.ChainB)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewManualRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)})
+	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	require.NoError(t, e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(),
+	require.NoError(t, traffic.AwaitStable(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_PENDING))
 	require.NoError(t, transfer.VerifyNotMinted(ctx))
-	require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
-	_, err = e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	require.NoError(t, traffic.RelayAll(ctx, relayer, transfer.PacketTx()))
+	_, err = traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
@@ -84,8 +89,8 @@ const (
 
 func TestTransferTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
-		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := traffic.AttestedMesh(e2etest.EVMChains(t,
+		e2etest.EVMRequirements{ControlledMining: true}, traffic.ChainA, traffic.ChainB)...)
 	requireTimeoutRefund(t, spec, runtime, func(ctx context.Context, destination *environment.Chain) error {
 		mining, err := destination.Mining()
 		if err != nil {
@@ -100,9 +105,9 @@ func TestTransferTimeout_Refund(t *testing.T) {
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
-	))
+	spec, runtime := traffic.QBFTMesh(e2etest.EVMChains(
+		t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu}, traffic.ChainA, traffic.ChainB,
+	)...)
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }
 
@@ -119,14 +124,15 @@ func requireTimeoutRefund(
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
 	require.NoError(t, relayer.Stop(ctx))
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{
 		Amount:  big.NewInt(3_000_000),
 		Timeout: packetTimeout,
 	})
@@ -137,7 +143,7 @@ func requireTimeoutRefund(
 	require.NoError(t, expire(ctx, destination))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_TIMED_OUT)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyRefunded(ctx, status.GetTimeoutTx().GetTxHash()))
@@ -175,27 +181,28 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 // fast mode, so this skips there.
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
-	))
+	spec, runtime := traffic.QBFTMesh(e2etest.EVMChains(
+		t, e2etest.EVMRequirements{Provider: environment.EVMProviderBesu}, traffic.ChainA, traffic.ChainB,
+	)...)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
-	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
+	route := traffic.NewRoute(traffic.ChainA, traffic.ChainB)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
-	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	transferApp, err := traffic.NewTransfer(env, deployment, sender, route)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+	amount := traffic.Coins(500_000)
+	transfer, err := transferApp.Send(ctx, traffic.TransferRequest{
 		Amount: amount,
 		Memo:   "transfer-besu-qbft",
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
 
-	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+	status, err := traffic.AwaitState(ctx, relayer, transfer.PacketTx(),
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))

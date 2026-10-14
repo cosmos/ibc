@@ -347,7 +347,7 @@ func TestSpecSnapshotOwnsCollections(t *testing.T) {
 	connection.A = client
 	spec.Connections[0] = connection
 
-	require.Equal(t, ChainID("chain-a"), snapshot.Chains[0].chainID())
+	require.Equal(t, ChainID("chain-a"), snapshot.Chains[0].ChainID())
 	require.Equal(t, IBCInstanceID("ibc-a"), snapshot.IBCInstances[0].ibcInstanceID())
 	require.Equal(t, ConnectionID("connection-ab"), snapshot.Connections[0].ID)
 	snapshotClient := snapshot.Connections[0].A.(NewClient)

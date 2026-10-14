@@ -128,7 +128,7 @@ func TestStartRealizesMixedProtocolGraphWithInjectedDrivers(t *testing.T) {
 	env, err := start(t.Context(), spec, runtime, drivers{
 		acquireChain: func(_ context.Context, declaration ChainSpec, _ Runtime, _ workspace) (chainAcquisition, error) {
 			chainsReady.Add(1)
-			id := declaration.chainID()
+			id := declaration.ChainID()
 			return fakeAcquisition(id, func(context.Context) error {
 				recordRelease("chain:" + string(id))
 				return nil
@@ -200,7 +200,7 @@ func TestConnectionFailureStopsBeforeAttestorsAndCleansChains(t *testing.T) {
 
 	env, err := start(t.Context(), spec, mixedProtocolRuntime(), drivers{
 		acquireChain: func(_ context.Context, declaration ChainSpec, _ Runtime, _ workspace) (chainAcquisition, error) {
-			return fakeAcquisition(declaration.chainID(), func(context.Context) error {
+			return fakeAcquisition(declaration.ChainID(), func(context.Context) error {
 				releases.Add(1)
 				return nil
 			}), nil

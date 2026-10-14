@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package e2etest
+package traffic
 
 import (
 	"testing"
@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
@@ -52,4 +53,14 @@ func TestMergeRelayerConnection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRoutesBetweenDifferentChainsAreDistinct(t *testing.T) {
+	chainC := environment.ChainID("chain-c")
+	require.NoError(t, distinctRoutes([]Route{
+		NewRoute(ChainA, ChainB), NewRoute(ChainB, ChainA), NewRoute(chainC, ChainA), NewRoute(ChainA, chainC),
+	}))
+	require.ErrorContains(t, distinctRoutes([]Route{
+		NewRoute(ChainA, ChainB), NewManualRoute(ChainA, ChainB),
+	}), "given twice")
 }

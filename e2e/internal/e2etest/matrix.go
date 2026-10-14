@@ -33,9 +33,9 @@ type matrixKey struct {
 
 // MatrixSelection is one provider selection captured during matrix discovery.
 type MatrixSelection struct {
-	Family       string          `json:"family"`
-	Requirements EVMRequirements `json:"requirements"`
-	Provider     EVMProvider     `json:"provider,omitempty"`
+	Family       string                  `json:"family"`
+	Requirements EVMRequirements         `json:"requirements"`
+	Provider     environment.EVMProvider `json:"provider,omitempty"`
 }
 
 // MatrixChain summarizes a group of resolved Chains of the same type.
@@ -81,7 +81,7 @@ func recordEVMSelection(
 	t testing.TB,
 	mode Mode,
 	requirements EVMRequirements,
-	provider EVMProvider,
+	provider environment.EVMProvider,
 	outcome string,
 	reason string,
 ) {
