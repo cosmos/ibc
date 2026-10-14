@@ -12,5 +12,4 @@ type Kind string
 const (
 	Attestation Kind = "attestation"
 	BesuQBFT    Kind = "besu-qbft"
-	Remote      Kind = "remote"
 )

@@ -381,111 +381,122 @@ func TestSignerConfigTLS(t *testing.T) {
 	})
 }
 
-func TestRemoteParamsValidate(t *testing.T) {
+func TestClientEndProverEndpoint(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := certs.WriteSelfSigned(t, dir, "test")
 
 	for _, tt := range []struct {
 		name        string
-		params      RemoteParams
+		end         ClientEnd
 		errContains string
 	}{
 		{
-			name:   "https url",
-			params: RemoteParams{URL: "https://prover.example.com:9090"},
+			name: "https url",
+			end:  ClientEnd{ProverURL: "https://prover.example.com:9090"},
 		},
 		{
-			name:   "http url",
-			params: RemoteParams{URL: "http://prover.example.com:9090"},
+			name: "http url",
+			end:  ClientEnd{ProverURL: "http://prover.example.com:9090"},
 		},
 		{
-			name:   "bare host:port",
-			params: RemoteParams{URL: "prover.example.com:9090"},
+			name: "bare host:port",
+			end:  ClientEnd{ProverURL: "prover.example.com:9090"},
 		},
 		{
 			name: "https url with tls",
-			params: RemoteParams{
-				URL: "https://prover.example.com:9090",
-				TLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
+			end: ClientEnd{
+				ProverURL: "https://prover.example.com:9090",
+				ProverTLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
 			},
 		},
 		{
-			name:   "uppercase https with tls",
-			params: RemoteParams{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
+			name: "uppercase https with tls",
+			end:  ClientEnd{ProverURL: "HTTPS://prover.example.com:9090", ProverTLS: &TLSClientConfig{}},
 		},
 		{
-			name:        "empty url",
-			params:      RemoteParams{},
-			errContains: "url: required",
+			name:        "non-http scheme",
+			end:         ClientEnd{ProverURL: "grpc://prover.example.com:9090"},
+			errContains: "proverUrl: must be a bare host:port or an http(s):// URL",
+		},
+		{
+			name:        "tls block without a proverUrl",
+			end:         ClientEnd{Type: ClientTypeAttestation, ProverTLS: &TLSClientConfig{}},
+			errContains: "proverTls: requires an https:// proverUrl",
 		},
 		{
 			// tls is a new field, so requiring https rejects nothing that
 			// previously loaded, and catches a block that would otherwise be
 			// read and then silently ignored.
 			name: "tls block with a plaintext url",
-			params: RemoteParams{
-				URL: "http://prover.example.com:9090",
-				TLS: &TLSClientConfig{},
+			end: ClientEnd{
+				ProverURL: "http://prover.example.com:9090",
+				ProverTLS: &TLSClientConfig{},
 			},
-			errContains: "tls: requires an https:// address",
+			errContains: "proverTls: requires an https:// proverUrl",
 		},
 		{
 			name: "tls block with a bare host:port",
-			params: RemoteParams{
-				URL: "prover.example.com:9090",
-				TLS: &TLSClientConfig{},
+			end: ClientEnd{
+				ProverURL: "prover.example.com:9090",
+				ProverTLS: &TLSClientConfig{},
 			},
-			errContains: "tls: requires an https:// address",
+			errContains: "proverTls: requires an https:// proverUrl",
 		},
 		{
 			name:        "query on a url",
-			params:      RemoteParams{URL: "https://prover.example.com/grpc?token=abc"},
-			errContains: "url: must not have a query or fragment",
+			end:         ClientEnd{ProverURL: "https://prover.example.com/grpc?token=abc"},
+			errContains: "proverUrl: must not have a query or fragment",
 		},
 		{
 			name:        "fragment on a url",
-			params:      RemoteParams{URL: "http://prover.example.com#section"},
-			errContains: "url: must not have a query or fragment",
+			end:         ClientEnd{ProverURL: "http://prover.example.com#section"},
+			errContains: "proverUrl: must not have a query or fragment",
 		},
 		{
-			name:   "path on a url",
-			params: RemoteParams{URL: "https://prover.example.com/grpc"},
+			name: "path on a url",
+			end:  ClientEnd{ProverURL: "https://prover.example.com/grpc"},
 		},
 		{
-			name:   "userinfo on a url",
-			params: RemoteParams{URL: "https://user:secret@prover.example.com"},
+			name: "userinfo on a url",
+			end:  ClientEnd{ProverURL: "https://user:secret@prover.example.com"},
 		},
 		{
 			name:        "url without a host",
-			params:      RemoteParams{URL: "https://"},
-			errContains: "url: must include a host",
+			end:         ClientEnd{ProverURL: "https://"},
+			errContains: "proverUrl: must include a host",
 		},
 		{
 			name:        "bare host:port with a bad port",
-			params:      RemoteParams{URL: "prover.example.com:abc"},
-			errContains: "url: invalid URL",
+			end:         ClientEnd{ProverURL: "prover.example.com:abc"},
+			errContains: "proverUrl: invalid URL",
 		},
 		{
 			name:        "bare host:port with a query",
-			params:      RemoteParams{URL: "prover.example.com:9090?token=abc"},
-			errContains: "url: must not have a query or fragment",
+			end:         ClientEnd{ProverURL: "prover.example.com:9090?token=abc"},
+			errContains: "proverUrl: must not have a query or fragment",
 		},
 		{
 			name:        "url with a bad port",
-			params:      RemoteParams{URL: "https://prover.example.com:abc"},
-			errContains: "url: invalid URL",
+			end:         ClientEnd{ProverURL: "https://prover.example.com:abc"},
+			errContains: "proverUrl: invalid URL",
 		},
 		{
 			name: "bad tls block on an https url",
-			params: RemoteParams{
-				URL: "https://prover.example.com:9090",
-				TLS: &TLSClientConfig{CertFile: certFile},
+			end: ClientEnd{
+				ProverURL: "https://prover.example.com:9090",
+				ProverTLS: &TLSClientConfig{CertFile: certFile},
 			},
-			errContains: "tls.keyFile",
+			errContains: "proverTls.keyFile",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.params.Validate()
+			end := tt.end
+			end.ChainID, end.ClientID, end.Signer = "1", "client-0", "relayer"
+			if end.Type == "" {
+				end.Type = "op-stack"
+			}
+
+			err := end.Validate()
 			if tt.errContains == "" {
 				require.NoError(t, err)
 				return
@@ -506,7 +517,7 @@ func TestEndpointURL(t *testing.T) {
 		"https://svc.example.com/grpc": "https://svc.example.com/grpc",
 	} {
 		require.Equal(t, want, AttestorConfig{GRPC: addr}.EndpointURL(), addr)
-		require.Equal(t, want, RemoteParams{URL: addr}.EndpointURL(), addr)
+		require.Equal(t, want, ClientEnd{ProverURL: addr}.ProverEndpointURL(), addr)
 	}
 }
 

@@ -727,7 +727,6 @@ FALLBACK_DOCS = {
     ("ClientEnd", "chainId"): ("The chain this end's client lives on.", "69a3e543"),
     ("ClientEnd", "signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
     ("ClientEnd", "clientId"): ("The light client's id on this chain.", "bb596da7"),
-    ("ClientEnd", "type"): ("Light client type.", "85b1564f"),
 }
 
 # Explicit skips only. Unexported struct fields and yaml:"-" tags are dropped
@@ -750,12 +749,8 @@ NO_NAMED_DEFAULT = {
     ("RelayerChainOverride", "abandonUnrecoverablePackets"),
 }
 
-# What a reader writes where the Go type says nothing useful. `params` is a
-# raw block whose shape is fixed by the sibling `type` key, which no reading of
-# the field alone can recover.
-OPAQUE_TYPES = {
-    ("ClientEnd", "params"): "block",
-}
+# What a reader writes where the Go type says nothing useful.
+OPAQUE_TYPES = {}
 
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
             "bool": "bool", "float64": "float64", "time.Duration": "duration"}
@@ -1466,7 +1461,6 @@ def parse_go_config():
 RULELESS_VALIDATORS = {
     "Attestors", "Chains", "Signers",        # check cross-references, delegate the rest
     "Config", "ServerConfig",
-    "AttestationParams", "BesuQBFTParams",   # `return nil`, satisfies an interface
 }
 
 

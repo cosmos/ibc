@@ -50,6 +50,7 @@ type Prover interface {
 var (
 	_ Prover = (*attestation.Generator)(nil)
 	_ Prover = (*besuqbft.Generator)(nil)
+	_ Prover = (*remote.Prover)(nil)
 )
 
 // Key identifies one configured light client by the chain it lives on and
@@ -128,6 +129,39 @@ func addGenerator(
 ) error {
 	logger = logger.With("module", "prover", "chainID", client.ChainID, "clientID", client.ClientID)
 
+	prover, err := newProver(ctx, client, clientCounterparty, clientSet, attestors, logger)
+	if err != nil {
+		return errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
+		prover,
+		client.ChainID,
+		client.ClientID,
+		client.Type,
+	)
+
+	return nil
+}
+
+// newProver builds the built-in prover for client's type, or a remote one when
+// client sets a ProverURL.
+func newProver(
+	ctx context.Context,
+	client, clientCounterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+	attestors []attestor.Attestor,
+	logger *slog.Logger,
+) (Prover, error) {
+	if client.ProverURL != "" {
+		endpoint, err := config.ResolveEndpoint(client.ProverEndpointURL(), client.ProverTLS, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		return remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger), nil
+	}
+
 	switch client.Type {
 	case config.ClientTypeAttestation:
 		meteredAttestors := make([]attestor.Attestor, len(attestors))
@@ -135,58 +169,11 @@ func addGenerator(
 			meteredAttestors[i] = attestor.MetricsWrapper(a)
 		}
 
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
-		if err != nil {
-			return err
-		}
-
-		meteredProver := metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
-		generators[Key(client.ChainID, client.ClientID)] = meteredProver
-
-		return nil
+		return attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
 	case config.ClientTypeBesuQBFT:
-		gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
-			gen,
-			client.ChainID,
-			client.ClientID,
-			client.Type,
-		)
-
-		return nil
-	case config.ClientTypeRemote:
-		params, err := client.ClientParams()
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		remoteParams, ok := params.(*config.RemoteParams)
-		if !ok {
-			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
-		}
-
-		endpoint, err := config.ResolveEndpoint(
-			remoteParams.EndpointURL(),
-			remoteParams.TLS,
-			logger,
-			"connection",
-			connAlias,
-		)
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		prover := remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger)
-		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
-		generators[Key(client.ChainID, client.ClientID)] = meteredProver
-
-		return nil
+		return besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
 	default:
-		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
+		return nil, errors.Errorf("unsupported client type %q for proof generation", client.Type)
 	}
 }
 
