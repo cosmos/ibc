@@ -1,0 +1,361 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package evm
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// reply is one scripted answer: a result, a node error (code -32000 unless
+// set), an HTTP error status, a dropped connection, or no answer until the
+// client gives up.
+type reply struct {
+	result  any
+	nodeErr string
+	code    int
+	status  int
+	drop    bool
+	stall   bool
+}
+
+// fakeNode answers JSON-RPC requests from per-method scripts; a script's last
+// reply repeats.
+type fakeNode struct {
+	mu      sync.Mutex
+	scripts map[string][]reply
+	calls   map[string]int
+	// sentNonces are the nonces of the raw transactions sent, in order.
+	sentNonces []uint64
+	// sentHashes and lookedUp are the hashes of the raw transactions sent
+	// and of the transactions asked for by hash, in order.
+	sentHashes, lookedUp []common.Hash
+	// estimateBlocks are the blocks gas was estimated at, "" for none given.
+	estimateBlocks []string
+}
+
+func (n *fakeNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID     json.RawMessage   `json:"id"`
+		Method string            `json:"method"`
+		Params []json.RawMessage `json:"params"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	n.mu.Lock()
+	if req.Method == "eth_sendRawTransaction" && len(req.Params) == 1 {
+		var raw string
+		var tx types.Transaction
+		if json.Unmarshal(req.Params[0], &raw) == nil && tx.UnmarshalBinary(common.FromHex(raw)) == nil {
+			n.sentNonces = append(n.sentNonces, tx.Nonce())
+			n.sentHashes = append(n.sentHashes, tx.Hash())
+		}
+	}
+	if req.Method == "eth_estimateGas" {
+		var block string
+		if len(req.Params) > 1 {
+			_ = json.Unmarshal(req.Params[1], &block)
+		}
+		n.estimateBlocks = append(n.estimateBlocks, block)
+	}
+	var hash common.Hash
+	if req.Method == "eth_getTransactionByHash" && len(req.Params) == 1 && json.Unmarshal(req.Params[0], &hash) == nil {
+		n.lookedUp = append(n.lookedUp, hash)
+	}
+	script := n.scripts[req.Method]
+	call := n.calls[req.Method]
+	n.calls[req.Method]++
+	n.mu.Unlock()
+
+	response := map[string]any{"jsonrpc": "2.0", "id": req.ID}
+	if len(script) == 0 {
+		response["error"] = map[string]any{"code": -32601, "message": "method not found: " + req.Method}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
+	step := script[min(call, len(script)-1)]
+	switch {
+	case step.stall:
+		<-r.Context().Done()
+		return
+	case step.drop:
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err == nil {
+			_ = conn.Close()
+		}
+		return
+	case step.status != 0:
+		w.WriteHeader(step.status)
+		return
+	case step.nodeErr != "":
+		response["error"] = map[string]any{"code": cmp.Or(step.code, -32000), "message": step.nodeErr}
+	default:
+		response["result"] = step.result
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (n *fakeNode) script(method string, replies ...reply) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.scripts[method] = replies
+}
+
+func (n *fakeNode) count(method string) int {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.calls[method]
+}
+
+// newFakeNode serves a healthy chain whose scripts overrides replace.
+func newFakeNode(t *testing.T, overrides map[string][]reply) (*fakeNode, *EVMClient) {
+	t.Helper()
+	header, err := json.Marshal(&types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(0), BaseFee: big.NewInt(7)})
+	require.NoError(t, err)
+	node := &fakeNode{
+		scripts: map[string][]reply{
+			"eth_chainId":               {{result: "0x1"}},
+			"eth_getTransactionCount":   {{result: "0x0"}},
+			"eth_estimateGas":           {{result: "0x5208"}},
+			"eth_maxPriorityFeePerGas":  {{result: "0x1"}},
+			"eth_getBlockByNumber":      {{result: json.RawMessage(header)}},
+			"eth_sendRawTransaction":    {{result: common.HexToHash("0x01")}},
+			"eth_getTransactionReceipt": {receiptReply(t)},
+		},
+		calls: map[string]int{},
+	}
+	for method, script := range overrides {
+		node.scripts[method] = script
+	}
+	server := httptest.NewServer(node)
+	t.Cleanup(server.Close)
+	ec, err := Dial(t.Context(), server.URL)
+	require.NoError(t, err)
+	client, err := NewConnectedClient(t.Context(), ec)
+	require.NoError(t, err)
+	t.Cleanup(client.Close)
+	return node, client
+}
+
+var testWait = TransactionWait{Timeout: 2 * time.Second, PollInterval: 10 * time.Millisecond}
+
+func broadcast(t *testing.T, client *EVMClient) error {
+	t.Helper()
+	from, err := NewAccount()
+	require.NoError(t, err)
+	return broadcastFrom(t, client, from)
+}
+
+func broadcastFrom(t *testing.T, client *EVMClient, from Account) error {
+	t.Helper()
+	to := common.HexToAddress("0x02")
+	_, err := client.BroadcastTx(t.Context(), testWait, from, &to, nil, nil)
+	return err
+}
+
+func TestBroadcastTxRetriesAMissingLatestHeader(t *testing.T) {
+	header, err := json.Marshal(&types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(0)})
+	require.NoError(t, err)
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_getBlockByNumber": {{result: nil}, {result: json.RawMessage(header)}},
+	})
+
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 2, node.count("eth_getBlockByNumber"))
+}
+
+func TestBroadcastTxRetriesUnansweredRequests(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionCount":   {{drop: true}, {result: "0x0"}},
+		"eth_estimateGas":           {{drop: true}, {result: "0x5208"}},
+		"eth_getTransactionReceipt": {{drop: true}, {nodeErr: "busy"}, {result: nil}, receiptReply(t)},
+	})
+
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 4, node.count("eth_getTransactionReceipt"), "a failed poll is retried at the next")
+}
+
+func TestBroadcastTxRepeatsAStalledRequest(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_estimateGas": {{stall: true}, {result: "0x5208"}},
+	})
+	started := time.Now()
+
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 2, node.count("eth_estimateGas"))
+	assert.Less(t, time.Since(started), testWait.Timeout/2, "the stalled attempt gave up after its quarter")
+}
+
+func TestBroadcastTxLeavesARefusedResendToTheReceipt(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_sendRawTransaction":   {{drop: true}, {nodeErr: "already known"}},
+		"eth_getTransactionByHash": {{drop: true}, knownTxReply(t)},
+	})
+
+	require.NoError(t, broadcast(t, client), "the unanswered first send arrived")
+	assert.Equal(t, 2, node.count("eth_sendRawTransaction"))
+	assert.Positive(t, node.count("eth_getTransactionReceipt"))
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	assert.Equal(t, []common.Hash{node.sentHashes[0], node.sentHashes[0]}, node.lookedUp,
+		"the unanswered lookup is repeated, for the transaction sent")
+}
+
+func TestBroadcastTxFallsBackOnAnInternalEstimateError(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_estimateGas": {{nodeErr: "Internal error", code: -32603}, {result: "0x5208"}},
+	})
+
+	require.NoError(t, broadcast(t, client))
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	assert.Equal(t, []string{"", "latest"}, node.estimateBlocks, "the latest block answers at once")
+}
+
+func TestBroadcastTxRepeatsAnInternalError(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionCount": {{nodeErr: "Internal error", code: -32603}, {result: "0x0"}},
+	})
+
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 2, node.count("eth_getTransactionCount"))
+}
+
+func TestBroadcastTxReportsARefusalOfATransactionTheNodeLacks(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_sendRawTransaction":   {{drop: true}, {nodeErr: "insufficient funds"}},
+		"eth_getTransactionByHash": {{result: nil}},
+	})
+
+	require.ErrorContains(t, broadcast(t, client), "insufficient funds")
+	assert.Equal(t, 1, node.count("eth_getTransactionByHash"))
+	assert.Zero(t, node.count("eth_getTransactionReceipt"))
+}
+
+func TestBroadcastTxRetriesOnlyTheHTTPStatusesThatAskTo(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_estimateGas": {
+			{status: http.StatusServiceUnavailable},
+			{status: http.StatusTooManyRequests},
+			{result: "0x5208"},
+		},
+	})
+	require.NoError(t, broadcast(t, client))
+	assert.Equal(t, 3, node.count("eth_estimateGas"))
+
+	node.script("eth_estimateGas", reply{status: http.StatusNotFound})
+	require.ErrorContains(t, broadcast(t, client), "404")
+	assert.Equal(t, 4, node.count("eth_estimateGas"), "one call: only a node error falls back")
+}
+
+func TestBroadcastTxFailsWhenTheNodeRefuses(t *testing.T) {
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_sendRawTransaction": {{nodeErr: "insufficient funds"}},
+		"eth_estimateGas":        {{nodeErr: "execution reverted"}},
+	})
+
+	require.ErrorContains(t, broadcast(t, client), "execution reverted")
+	assert.Equal(t, 2, node.count("eth_estimateGas"), "a node error is not retried, beyond the latest-block fallback")
+	assert.Zero(t, node.count("eth_sendRawTransaction"))
+
+	node.script("eth_estimateGas", reply{result: "0x5208"})
+	require.ErrorContains(t, broadcast(t, client), "insufficient funds")
+	assert.Equal(t, 1, node.count("eth_sendRawTransaction"))
+	assert.Zero(t, node.count("eth_getTransactionReceipt"))
+}
+
+// receiptReply answers with a successful receipt.
+func receiptReply(t *testing.T) reply {
+	t.Helper()
+	receipt, err := json.Marshal(&types.Receipt{
+		Status: types.ReceiptStatusSuccessful, TxHash: common.HexToHash("0x01"), Logs: []*types.Log{},
+	})
+	require.NoError(t, err)
+	return reply{result: json.RawMessage(receipt)}
+}
+
+// knownTxReply answers with a signed transaction, as a node that holds it.
+func knownTxReply(t *testing.T) reply {
+	t.Helper()
+	from, err := NewAccount()
+	require.NoError(t, err)
+	tx, err := types.SignNewTx(from.key, types.LatestSignerForChainID(big.NewInt(1)), &types.DynamicFeeTx{
+		ChainID: big.NewInt(1), Gas: 21_000, GasFeeCap: big.NewInt(1), GasTipCap: big.NewInt(1),
+	})
+	require.NoError(t, err)
+	encoded, err := json.Marshal(tx)
+	require.NoError(t, err)
+	return reply{result: json.RawMessage(encoded)}
+}
+
+func TestBroadcastTxNeverReusesAnIncludedNonce(t *testing.T) {
+	// The node keeps reporting nonce 0, as a stale pending read would.
+	reverted, err := json.Marshal(&types.Receipt{
+		Status: types.ReceiptStatusFailed, TxHash: common.HexToHash("0x01"), Logs: []*types.Log{},
+	})
+	require.NoError(t, err)
+	node, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionReceipt": {receiptReply(t), {result: json.RawMessage(reverted)}, receiptReply(t)},
+	})
+	from, err := NewAccount()
+	require.NoError(t, err)
+
+	require.NoError(t, broadcastFrom(t, client, from))
+	require.ErrorContains(t, broadcastFrom(t, client, from), "reverted")
+	require.NoError(t, broadcastFrom(t, client, from))
+	require.NoError(t, broadcast(t, client), "another account has its own floor")
+
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	assert.Equal(t, []uint64{0, 1, 2, 0}, node.sentNonces, "a reverted transaction spends its nonce too")
+}
+
+func TestBroadcastTxRefusalReportsTheNonce(t *testing.T) {
+	_, client := newFakeNode(t, map[string][]reply{
+		"eth_sendRawTransaction":  {{nodeErr: "Nonce too low"}},
+		"eth_getTransactionCount": {{result: "0x3"}},
+	})
+
+	err := broadcast(t, client)
+
+	require.ErrorContains(t, err, "nonce 3 (nonce floor 0)")
+	require.ErrorContains(t, err, "Nonce too low")
+}
+
+func TestWaitForReceiptBlamesOnlyTheLatestPoll(t *testing.T) {
+	_, client := newFakeNode(t, map[string][]reply{
+		"eth_getTransactionReceipt": {{drop: true}, {result: nil}},
+	})
+	wait := TransactionWait{Timeout: 200 * time.Millisecond, PollInterval: 10 * time.Millisecond}
+
+	_, err := client.WaitForReceipt(t.Context(), common.HexToHash("0x01"), wait)
+
+	require.ErrorContains(t, err, "not found in time")
+	require.NotContains(t, err.Error(), "last poll error", "the node answered after the dropped poll")
+}
+
+func TestRetryRejectsAWaitThatIsNotPositive(t *testing.T) {
+	calls := 0
+	_, err := Retry(t.Context(), TransactionWait{}, func(context.Context) (int, error) {
+		calls++
+		return 0, nil
+	})
+	require.ErrorContains(t, err, "must be greater than zero")
+	assert.Zero(t, calls)
+}
