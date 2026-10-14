@@ -77,7 +77,7 @@ relayer:
     - chainId: "1"
       evm:
         gasFeeCapMultiplier: 1.5
-        resubmitAfter: 15m
+        pendingTxTimeout: 2m
         gasTipCapMultiplier: 1.5
       packetBatchSize: 20
       packetBatchTimeout: 10s
@@ -293,12 +293,12 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
-| `chainOverrides[].evm.maxFeePerGas` | `uint64` | `500000000000` | Caps each transaction's fee per gas, in wei. |
-| `chainOverrides[].evm.resubmitAfter` | `duration` | `15m` | Sets the missing-transaction retry interval and the delay before reusing a stalled nonce. |
+| `chainOverrides[].evm.maxFeePerGas` | `uint64` | `20000000000` | Caps each transaction's fee per gas, in wei. |
+| `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L31](cli/internal/txsubmitter/evm/evm.go#L31) --> <!-- [evm.go:L27](cli/internal/txsubmitter/evm/evm.go#L27) -->
+<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L29](cli/internal/txsubmitter/evm/evm.go#L29) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 

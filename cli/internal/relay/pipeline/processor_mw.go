@@ -185,7 +185,7 @@ func (mw BatchProcessorMW) Status() store.RelayStatus {
 
 func batchError(output []*processors.Transfer) error {
 	for _, tr := range output {
-		if tr != nil && tr.ProcessingError != nil && !errors.Is(tr.ProcessingError, processors.ErrSubmissionPending) {
+		if tr != nil && tr.ProcessingError != nil {
 			return tr.ProcessingError
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
@@ -22,6 +23,56 @@ import (
 )
 
 func TestEVMGasSpent(t *testing.T) {
+	// a batch shares one tx hash across its transfers, and each transfer
+	// checks the receipt
+	t.Run("recordsOwnedReceiptOnce", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		_, reader := installTestMetrics(t)
+		txSubmitter, eth := newSubmitter(t)
+		require.NoError(t, submit(t, txSubmitter))
+		txHash := eth.sent[0].Hash().Hex()
+		receipt := successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000))
+		eth.receipt = receipt
+
+		// ACT
+		for range 2 {
+			retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
+			require.NoError(t, err)
+			assert.False(t, retry)
+		}
+
+		// ASSERT
+		sum := collectEVMGasSpent(ctx, t, reader)
+		require.Len(t, sum.DataPoints, 1)
+		assert.InDelta(t, 0.000042, sum.DataPoints[0].Value, 1e-12)
+		assert.ElementsMatch(t, []string{
+			"chain_id=1",
+			"wallet=" + txSubmitter.address.String(),
+		}, metricAttributes(t, sum.DataPoints[0].Attributes))
+	})
+
+	// a recv tx discovered on chain was sent by another relayer and still
+	// reaches ShouldRetry
+	t.Run("ignoresForeignReceipt", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		_, reader := installTestMetrics(t)
+		txSubmitter, eth := newSubmitter(t)
+		foreignHash := common.HexToHash("0x01").String()
+		eth.receipt = successfulReceipt(t, foreignHash, 21_000, big.NewInt(2_000_000_000))
+
+		// ACT
+		retry, err := txSubmitter.ShouldRetry(ctx, foreignHash, time.Now())
+
+		// ASSERT
+		require.NoError(t, err)
+		assert.False(t, retry)
+		assert.Equal(t, map[chainWallet]float64{
+			{chainID: chainIDEth, wallet: txSubmitter.address.String()}: 0,
+		}, evmGasSpentValues(t, collectEVMGasSpent(ctx, t, reader)))
+	})
+
 	t.Run("accumulatesExactWeiAndSeparatesAttributes", func(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
@@ -141,19 +192,73 @@ func TestEVMGasSpent(t *testing.T) {
 			assert.Empty(t, instruments.txOwners)
 		})
 	}
-}
 
-func TestForgetTx(t *testing.T) {
-	instruments, _ := installTestMetrics(t)
-	mined, pending := common.HexToHash("0x01"), common.HexToHash("0x02")
-	instruments.startTx("1", "wallet", mined.Hex())
-	instruments.startTx("1", "wallet", pending.Hex())
-	instruments.forgetTx("1", mined.Hex())
-	require.Len(t, instruments.txOwners, 1)
-	key := transactionKey{chainID: "1", txHash: pending.Hex()}
-	require.Contains(t, instruments.txOwners, key)
-	instruments.forgetTx("1", pending.Hex())
-	require.Empty(t, instruments.txOwners)
+	t.Run("forgetsExpiredTransaction", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		_, reader := installTestMetrics(t)
+		txSubmitter, eth := newSubmitter(t)
+		require.NoError(t, submit(t, txSubmitter))
+		txHash := eth.sent[0].Hash().Hex()
+		eth.receiptErr = ethereum.NotFound
+
+		// ACT #1
+		retry, err := txSubmitter.ShouldRetry(
+			ctx,
+			txHash,
+			time.Now().Add(-txSubmitter.opts.PendingTxTimeout-time.Second),
+		)
+
+		// ASSERT #1
+		require.NoError(t, err)
+		assert.True(t, retry)
+
+		// ARRANGE #2
+		eth.receiptErr = nil
+		eth.receipt = successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000))
+
+		// ACT #2
+		retry, err = txSubmitter.ShouldRetry(ctx, txHash, time.Now())
+
+		// ASSERT #2
+		require.NoError(t, err)
+		assert.False(t, retry)
+		assert.Equal(t, map[chainWallet]float64{
+			{chainID: chainIDEth, wallet: txSubmitter.address.String()}: 0,
+		}, evmGasSpentValues(t, collectEVMGasSpent(ctx, t, reader)))
+	})
+
+	t.Run("doesNotOwnFailedBroadcast", func(t *testing.T) {
+		// ARRANGE
+		ctx := context.Background()
+		_, reader := installTestMetrics(t)
+		txSubmitter, eth := newSubmitter(t)
+		var sent *types.Transaction
+		eth.send = func(tx *types.Transaction) error {
+			sent = tx
+			return errors.New("broadcast failed")
+		}
+
+		// ACT #1
+		_, err := txSubmitter.Submit(ctx, testIntent())
+
+		// ASSERT #1
+		require.ErrorContains(t, err, "broadcast failed")
+		require.NotNil(t, sent)
+
+		// ARRANGE #2
+		eth.receipt = successfulReceipt(t, sent.Hash().String(), 21_000, big.NewInt(2_000_000_000))
+
+		// ACT #2
+		retry, err := txSubmitter.ShouldRetry(ctx, sent.Hash().String(), time.Now())
+
+		// ASSERT #2
+		require.NoError(t, err)
+		assert.False(t, retry)
+		assert.Equal(t, map[chainWallet]float64{
+			{chainID: chainIDEth, wallet: txSubmitter.address.String()}: 0,
+		}, evmGasSpentValues(t, collectEVMGasSpent(ctx, t, reader)))
+	})
 }
 
 func TestGasBalance(t *testing.T) {
@@ -408,6 +513,17 @@ func evmGasSpentValues(t *testing.T, sum metricdata.Sum[float64]) map[chainWalle
 		chainID, _ := point.Attributes.Value(attribute.Key("chain_id"))
 		wallet, _ := point.Attributes.Value(attribute.Key("wallet"))
 		values[chainWallet{chainID: chainID.AsString(), wallet: wallet.AsString()}] = point.Value
+	}
+
+	return values
+}
+
+func metricAttributes(t *testing.T, attrs attribute.Set) []string {
+	t.Helper()
+
+	values := make([]string, 0, attrs.Len())
+	for _, attr := range attrs.ToSlice() {
+		values = append(values, string(attr.Key)+"="+attr.Value.AsString())
 	}
 
 	return values

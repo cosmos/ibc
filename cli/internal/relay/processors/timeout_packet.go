@@ -25,8 +25,8 @@ type BatchTimeoutPacket struct {
 	route             Route
 	prover            prover.Prover
 	txBuilder         txbuilder.TxBuilder
-	storage           TxStorage
 	txSubmitter       txsubmitter.TxSubmitter
+	storage           TxStorage
 	logger            *slog.Logger
 }
 
@@ -116,22 +116,49 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 
 	submission, err := relayPackets(
 		ctx, p.logger, p.sourceChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.SourceClientID, v2.OperationTypeTimeout,
+		p.route.SourceClientID, v2.RelayKindTimeout,
 		proofHeight, events,
 	)
-	if submission == nil {
-		return nil, err
-	}
-	if saveErr := recordSubmission(ctx, p.storage, transfers, submission, v2.OperationTypeTimeout); saveErr != nil {
-		return nil, saveErr
-	}
 	if err != nil {
 		return nil, err
 	}
-	for _, tr := range transfers {
-		if tr.ProcessingError == nil {
-			tr.ProcessingError = ErrSubmissionPending
+
+	tx := store.PacketTx{
+		Hash:           submission.TxHash,
+		Time:           submission.SubmittedAt,
+		RelayerAddress: submission.RelayerAddress,
+	}
+
+	err = p.storage.Transact(ctx, func(repo store.Repository) error {
+		for _, tr := range transfers {
+			if tr.ProcessingError != nil {
+				continue
+			}
+
+			if errRecord := repo.UpdatePacketTimeoutTx(ctx, tr.Key(), tx); errRecord != nil {
+				return errors.Wrapf(
+					errRecord,
+					"recording relay tx %s for sequence %d",
+					tx.Hash,
+					tr.PacketSequenceNumber,
+				)
+			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "recording batch relay txs")
+	}
+
+	for _, tr := range transfers {
+		if tr.ProcessingError != nil {
+			continue
+		}
+
+		tr.TimeoutTxHash = &tx.Hash
+		tr.TimeoutTxTime = &tx.Time
+		tr.TimeoutTxRelayerAddress = &tx.RelayerAddress
 	}
 
 	return transfers, nil

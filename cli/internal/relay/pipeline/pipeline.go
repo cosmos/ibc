@@ -28,8 +28,10 @@ type Storage interface {
 	processors.RecvTxStorage
 	processors.AckTimeoutTxStorage
 	processors.WriteAckStorage
+	processors.ClearRecvTxStorage
+	processors.ClearAckTxStorage
+	processors.ClearTimeoutTxStorage
 	processors.TxStorage
-	processors.PacketTransactionStorage
 }
 
 // TxSubmitters resolves the tx submitter for a (chain, signer) pair.
@@ -111,9 +113,6 @@ func NewPipeline(
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
 		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
 
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryPacket(srcTxSubmitter, dstTxSubmitter, deps.Storage)), output)
-
 	// wait for the send tx's packet event to be at or before what the
 	// destination client can currently prove
 	checkSendFinality, err := processors.NewCheckSendFinality(deps.Chains, deps.Provers, route)
@@ -152,6 +151,10 @@ func NewPipeline(
 		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
 	)
 
+	// clear stuck or failed timeout txs so they are redelivered next run
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxSubmitter, deps.Storage, route)), output)
+
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
 		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, dstTxSubmitter, route, logger,
@@ -169,6 +172,10 @@ func NewPipeline(
 		output,
 		NewBatchProcessorMW(deps.Storage, batchRecvPacket),
 	)
+
+	// clear stuck or failed recv txs so they are redelivered next run
+	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
+		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxSubmitter, deps.Storage, route)), output)
 
 	// extract the write ack from the recv tx on the destination chain
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
@@ -206,12 +213,9 @@ func NewPipeline(
 		NewBatchProcessorMW(deps.Storage, batchAckPacket),
 	)
 
-	checkSettlementFinality, err := processors.NewCheckSettlementFinality(deps.Chains, deps.Provers, route)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing settlement finality processor")
-	}
+	// clear stuck or failed ack txs so they are redelivered next run
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, checkSettlementFinality), output)
+		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxSubmitter, deps.Storage, route)), output)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,

@@ -5,7 +5,6 @@ package pipeline
 import (
 	"context"
 	"log/slog"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -132,7 +131,7 @@ func mockRelay(
 	const height = uint64(100)
 
 	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
-	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Maybe()
+	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
 	mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, height).Return([][]byte{{0x01}}, nil).Once()
 	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything, mock.Anything).
 		Return(make([][]byte, len(events)), nil).Once()
@@ -241,127 +240,165 @@ func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer)
 	}
 }
 
-func TestPipelineAcknowledgement(t *testing.T) {
-	testAcknowledgementLifecycle(t, v2.WriteAckStatusSuccess, store.RelayStatusCompleteWithAck)
-}
+func TestPipelineLifecycle(t *testing.T) {
+	ctx := context.Background()
 
-func TestPipelineErrorAcknowledgement(t *testing.T) {
-	testAcknowledgementLifecycle(t, v2.WriteAckStatusError, store.RelayStatusCompleteWithWriteAckError)
-}
+	t.Run("recvToWriteAckSuccessComplete", func(t *testing.T) {
+		env, deps := newPipelineEnv(t)
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
 
-func testAcknowledgementLifecycle(t *testing.T, ack v2.WriteAckStatus, terminal store.RelayStatus) {
-	t.Helper()
-	env, deps := newPipelineEnv(t)
-	tr := env.createPacket(t, time.Now().Add(time.Hour))
-	var received, settled atomic.Bool
-	env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
-		RunAndReturn(func(context.Context, string, uint64) (bool, error) { return received.Load(), nil })
-	env.dstClient.EXPECT().FindRecvTx(mock.Anything, testRoute.DestinationClientID, uint64(42)).
-		Return(&v2.Tx{Hash: recvTxHash, Timestamp: time.Now(), RelayerAddress: "0xrelayer"}, nil)
-	env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
-		RunAndReturn(func(context.Context, string, uint64) (bool, error) { return !settled.Load(), nil })
-	env.srcClient.EXPECT().FindAckTx(mock.Anything, testRoute.SourceClientID, uint64(42)).
-		Return(&v2.Tx{Hash: ackTxHash, Timestamp: time.Now(), RelayerAddress: "0xrelayer"}, nil)
-	env.srcClient.EXPECT().
-		FindTimeoutTx(mock.Anything, testRoute.SourceClientID, uint64(42)).
-		Return(nil, v2.ErrTxNotFound)
-	env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
-	env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil)
-	mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
-	env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-	env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
-		Run(func(context.Context, v2.TxIntent) { received.Store(true) }).
-		Return(&v2.Submission{TxHash: recvTxHash, SubmittedAt: time.Now(), RelayerAddress: "0xrelayer"}, nil).Once()
-	env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil)
-	env.dstClient.EXPECT().
-		PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
-		Return(ack, nil).
-		Once()
-	env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil)
-	env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil)
-	mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
-	env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-	env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
-		Run(func(context.Context, v2.TxIntent) { settled.Store(true) }).
-		Return(&v2.Submission{TxHash: ackTxHash, SubmittedAt: time.Now(), RelayerAddress: "0xrelayer"}, nil).Once()
-	env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil)
+		// packet not yet received, commitment present, send finalized
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Times(2)
 
-	out := runPipeline(t, deps, fastOpts(), tr)
-	require.ErrorIs(t, out.ProcessingError, processors.ErrSubmissionPending)
-	saved := env.storedPacket(t, tr)
-	require.Equal(t, recvTxHash, *saved.RecvTxHash)
+		// check send finality: destination client's prover must be able to prove the send tx
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
-	out = runPipeline(t, deps, fastOpts(), processors.NewTransfer(saved, slog.Default()))
-	require.ErrorIs(t, out.ProcessingError, processors.ErrSubmissionPending)
-	saved = env.storedPacket(t, tr)
-	require.Equal(t, recvTxHash, *saved.RecvTxHash)
-	require.Equal(t, ackTxHash, *saved.AckTxHash)
+		// recv delivery
+		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
+		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash:         recvTxHash,
+			SubmittedAt:    time.Now().UTC(),
+			RelayerAddress: "0xrelayer",
+		}, nil).Once()
+		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
 
-	out = runPipeline(t, deps, fastOpts(), processors.NewTransfer(saved, slog.Default()))
-	require.NoError(t, out.ProcessingError)
-	require.Equal(t, terminal, out.Status)
-	saved = env.storedPacket(t, tr)
-	require.Equal(t, terminal, saved.Status)
-	require.Equal(t, ackTxHash, *saved.AckTxHash)
-}
+		// success write ack: relayed back to the source chain like any other ack
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckSuccess(), nil).
+			Once()
 
-func TestPipelineTimeout(t *testing.T) {
-	env, deps := newPipelineEnv(t)
-	tr := env.createPacket(t, time.Now().Add(-time.Hour))
-	var settled atomic.Bool
-	env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil)
-	env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
-		RunAndReturn(func(context.Context, string, uint64) (bool, error) { return !settled.Load(), nil })
-	env.srcClient.EXPECT().FindAckTx(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(nil, v2.ErrTxNotFound)
-	env.srcClient.EXPECT().FindTimeoutTx(mock.Anything, testRoute.SourceClientID, uint64(42)).
-		Return(&v2.Tx{Hash: timeoutTxHash, Timestamp: time.Now(), RelayerAddress: "0xrelayer"}, nil)
-	env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil)
-	env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil)
-	env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil)
-	event := sendPacketEvent(42)
-	event.Height = 150
-	mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{event}, "0xrouter")
-	env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-	env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
-		Run(func(context.Context, v2.TxIntent) { settled.Store(true) }).
-		Return(&v2.Submission{TxHash: timeoutTxHash, SubmittedAt: time.Now(), RelayerAddress: "0xrelayer"}, nil).Once()
-	env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil)
-	out := runPipeline(t, deps, fastOpts(), tr)
-	require.ErrorIs(t, out.ProcessingError, processors.ErrSubmissionPending)
-	saved := env.storedPacket(t, tr)
-	require.Equal(t, timeoutTxHash, *saved.TimeoutTxHash)
-	out = runPipeline(t, deps, fastOpts(), processors.NewTransfer(saved, slog.Default()))
-	require.NoError(t, out.ProcessingError)
-	require.Equal(t, store.RelayStatusCompleteWithTimeout, out.Status)
-	saved = env.storedPacket(t, tr)
-	require.Equal(t, timeoutTxHash, *saved.TimeoutTxHash)
-}
+		// check write ack finality: source client's prover must be able to prove the write ack tx
+		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 
-func TestPipelineRecordsBroadcastAttemptOnError(t *testing.T) {
-	env, deps := newPipelineEnv(t)
-	tr := env.createPacket(t, time.Now().Add(time.Hour))
-	env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).Return(false, nil)
-	env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).Return(true, nil)
-	env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
-	mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
-	env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-	submission := &v2.Submission{TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer"}
-	env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(submission, assert.AnError).Once()
+		// ack delivery on the source chain
+		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
+		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
+		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
 
-	out := runPipeline(t, deps, fastOpts(), tr)
-	require.ErrorIs(t, out.ProcessingError, assert.AnError)
-	saved := env.storedPacket(t, tr)
-	require.Equal(t, submission.TxHash, *saved.RecvTxHash)
-	require.WithinDuration(t, submission.SubmittedAt, *saved.RecvTxTime, time.Millisecond)
-	require.Equal(t, submission.RelayerAddress, *saved.RecvTxRelayerAddress)
+		out := runPipeline(t, deps, fastOpts(), tr)
 
-	env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, *saved.RecvTxTime).
-		Return(false, v2.ErrTxNotFound).Once()
-	out = runPipeline(t, deps, fastOpts(), processors.NewTransfer(saved, slog.Default()))
-	require.ErrorIs(t, out.ProcessingError, processors.ErrSubmissionPending)
-}
+		require.Empty(t, out.Error())
+		assert.Equal(t, store.RelayStatusCompleteWithAck, out.Status)
 
-func TestPipelineUnfinalizedSend(t *testing.T) {
+		stored := env.storedPacket(t, out)
+		assert.Equal(t, store.RelayStatusCompleteWithAck, stored.Status)
+		require.NotNil(t, stored.RecvTxHash)
+		assert.Equal(t, recvTxHash, *stored.RecvTxHash)
+		require.NotNil(t, stored.WriteAckStatus)
+		assert.Equal(t, store.WriteAckStatusSuccess, *stored.WriteAckStatus)
+		_ = ctx
+	})
+
+	t.Run("errorAckRelayedToComplete", func(t *testing.T) {
+		env, deps := newPipelineEnv(t)
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
+
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Times(2)
+
+		// check send finality: destination client's prover must be able to prove the send tx
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
+
+		// recv delivery
+		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
+		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
+		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
+
+		// error write ack: relayed back to the source chain
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, recvTxHash, uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckError(), nil).
+			Once()
+
+		// check write ack finality: source client's prover must be able to prove the write ack tx
+		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		env.dstClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
+
+		// ack delivery on the source chain
+		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
+		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
+		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
+
+		out := runPipeline(t, deps, fastOpts(), tr)
+
+		require.Empty(t, out.Error())
+		assert.Equal(t, store.RelayStatusCompleteWithWriteAckError, out.Status)
+
+		stored := env.storedPacket(t, out)
+		assert.Equal(t, store.RelayStatusCompleteWithWriteAckError, stored.Status)
+		require.NotNil(t, stored.AckTxHash)
+		assert.Equal(t, ackTxHash, *stored.AckTxHash)
+	})
+
+	t.Run("timedOutPacketCompletesWithTimeout", func(t *testing.T) {
+		env, deps := newPipelineEnv(t)
+		tr := env.createPacket(t, time.Now().Add(-time.Hour))
+
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(false, nil).
+			Once()
+		env.srcClient.EXPECT().
+			IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+			Return(true, nil).
+			Once()
+
+		// check send finality: destination client's prover must be able to prove the send tx
+		env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+		env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
+
+		// check timeout finality: source client's prover must be able to prove a destination timestamp past the timeout
+		env.srcProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+
+		// timeout delivery on the source chain
+		timeoutEvent := sendPacketEvent(42)
+		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
+		mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
+		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
+		}, nil).Once()
+		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil).Once()
+
+		out := runPipeline(t, deps, fastOpts(), tr)
+
+		require.Empty(t, out.Error())
+		assert.Equal(t, store.RelayStatusCompleteWithTimeout, out.Status)
+
+		stored := env.storedPacket(t, out)
+		assert.Equal(t, store.RelayStatusCompleteWithTimeout, stored.Status)
+		require.NotNil(t, stored.TimeoutTxHash)
+		assert.Equal(t, timeoutTxHash, *stored.TimeoutTxHash)
+		assert.Nil(t, stored.RecvTxHash)
+	})
+
 	t.Run("sendNotFinalizedPoisonsForRun", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
@@ -389,6 +426,9 @@ func TestPipelineUnfinalizedSend(t *testing.T) {
 		assert.Len(t, dispatchable, 1)
 	})
 }
+
+func chainsWriteAckSuccess() v2.WriteAckStatus { return v2.WriteAckStatusSuccess }
+func chainsWriteAckError() v2.WriteAckStatus   { return v2.WriteAckStatusError }
 
 type staticTxSubmitters map[string]txsubmitter.TxSubmitter
 
@@ -423,65 +463,4 @@ func TestPipelinePushRespectsContextCancellation(t *testing.T) {
 	case <-time.After(time.Second):
 		require.FailNow(t, "Push did not return after its context was canceled; it is still blocked on the full buffer")
 	}
-}
-
-func TestPipelineExcludesPendingPacketFromNextBatch(t *testing.T) {
-	env, deps := newPipelineEnv(t)
-	pending := env.createPacket(t, time.Now().Add(time.Hour))
-	fresh := *pending
-	fresh.PacketSequenceNumber = 43
-	hash, sentAt := recvTxHash, time.Now()
-	pending.RecvTxHash, pending.RecvTxTime = &hash, &sentAt
-	env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, sentAt).Return(false, v2.ErrTxNotFound).Once()
-	require.NoError(t, env.store.UpsertPacket(t.Context(), store.UpsertPacket{
-		Status:                    store.RelayStatusPending,
-		SourceChainID:             fresh.SourceChainID,
-		DestinationChainID:        fresh.DestinationChainID,
-		SourceTxHash:              fresh.SourceTxHash,
-		SourceTxTime:              fresh.SourceTxTime,
-		PacketSequenceNumber:      43,
-		PacketSourceClientID:      fresh.PacketSourceClientID,
-		PacketDestinationClientID: fresh.PacketDestinationClientID,
-		PacketTimeoutTimestamp:    fresh.PacketTimeoutTimestamp,
-	}))
-	env.dstClient.EXPECT().
-		IsPacketReceived(mock.Anything, testRoute.DestinationClientID, mock.Anything).
-		Return(false, nil).
-		Twice()
-	env.srcClient.EXPECT().
-		IsPacketCommitted(mock.Anything, testRoute.SourceClientID, mock.Anything).
-		Return(true, nil).
-		Twice()
-	env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil)
-	env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
-	mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(43)}, "0xrouter")
-	env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-	env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).
-		Return(&v2.Submission{TxHash: recvTxHash, SubmittedAt: time.Now(), RelayerAddress: "0xrelayer"}, nil).Once()
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	opts := fastOpts()
-	opts.RecvBatchSize = 2
-	pipeline, err := NewPipeline(ctx, slog.Default(), deps, testRoute, opts)
-	require.NoError(t, err)
-	require.True(t, pipeline.Push(ctx, pending))
-	require.True(t, pipeline.Push(ctx, &fresh))
-	outputs := make(chan *processors.Transfer, 2)
-	go func() {
-		for range 2 {
-			tr, _ := pipeline.Poll()
-			outputs <- tr
-		}
-	}()
-	for range 2 {
-		select {
-		case tr := <-outputs:
-			require.NotNil(t, tr)
-			require.ErrorIs(t, tr.ProcessingError, processors.ErrSubmissionPending)
-			require.NotNil(t, tr.RecvTxHash)
-		case <-time.After(5 * time.Second):
-			t.Fatal("packets did not leave pipeline")
-		}
-	}
-	pipeline.Close()
 }

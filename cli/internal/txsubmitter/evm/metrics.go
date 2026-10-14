@@ -117,10 +117,6 @@ func (m *instrumentation) startTx(chainID, wallet, txHash string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Bound telemetry memory when a packet loses its transaction reference.
-	if len(m.txOwners) >= 1024 {
-		return
-	}
 	m.txOwners[txKey] = walletKey
 }
 
@@ -149,6 +145,15 @@ func (m *instrumentation) endTx(chainID string, receipt *types.Receipt) {
 
 	cost := new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), receipt.EffectiveGasPrice)
 	w.cumulativeGasCostWei.Add(w.cumulativeGasCostWei, cost)
+}
+
+func (m *instrumentation) forgetTx(chainID, txHash string) {
+	txKey := transactionKey{chainID: chainID, txHash: txHash}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.txOwners, txKey)
 }
 
 func (m *instrumentation) observeEVMGasSpent(_ context.Context, observer metric.Observer) error {
@@ -232,10 +237,4 @@ func (w *walletMetrics) getBalance(ctx context.Context, now time.Time) (*big.Int
 	w.lastBalanceAt = now
 
 	return balance, err
-}
-
-func (m *instrumentation) forgetTx(chainID, txHash string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.txOwners, transactionKey{chainID: chainID, txHash: txHash})
 }

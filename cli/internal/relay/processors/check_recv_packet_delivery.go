@@ -66,7 +66,7 @@ func (p CheckRecvPacketDelivery) Cancel(tr *Transfer, err error) {
 }
 
 func (p CheckRecvPacketDelivery) ShouldProcess(tr *Transfer) bool {
-	return tr.WriteAckTxHash == nil && tr.AckTxHash == nil && tr.TimeoutTxHash == nil
+	return tr.RecvTxHash == nil && tr.AckTxHash == nil && tr.TimeoutTxHash == nil
 }
 
 func (p CheckRecvPacketDelivery) Status() store.RelayStatus {

@@ -27,8 +27,8 @@ type BatchRecvPacket struct {
 	route                  Route
 	prover                 prover.Prover
 	txBuilder              txbuilder.TxBuilder
-	storage                TxStorage
 	txSubmitter            txsubmitter.TxSubmitter
+	storage                TxStorage
 	logger                 *slog.Logger
 }
 
@@ -121,22 +121,49 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 
 	submission, err := relayPackets(
 		ctx, p.logger, p.destinationChainClient, p.prover, p.txBuilder, p.txSubmitter,
-		p.route.DestinationClientID, v2.OperationTypeRecv,
+		p.route.DestinationClientID, v2.RelayKindRecv,
 		proofHeight, events,
 	)
-	if submission == nil {
-		return nil, err
-	}
-	if saveErr := recordSubmission(ctx, p.storage, transfers, submission, v2.OperationTypeRecv); saveErr != nil {
-		return nil, saveErr
-	}
 	if err != nil {
 		return nil, err
 	}
-	for _, tr := range transfers {
-		if tr.ProcessingError == nil {
-			tr.ProcessingError = ErrSubmissionPending
+
+	tx := store.PacketTx{
+		Hash:           submission.TxHash,
+		Time:           submission.SubmittedAt,
+		RelayerAddress: submission.RelayerAddress,
+	}
+
+	err = p.storage.Transact(ctx, func(repo store.Repository) error {
+		for _, tr := range transfers {
+			if tr.ProcessingError != nil {
+				continue
+			}
+
+			if errRecord := repo.UpdatePacketRecvTx(ctx, tr.Key(), tx); errRecord != nil {
+				return errors.Wrapf(
+					errRecord,
+					"recording relay tx %s for sequence %d",
+					tx.Hash,
+					tr.PacketSequenceNumber,
+				)
+			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "recording batch relay txs")
+	}
+
+	for _, tr := range transfers {
+		if tr.ProcessingError != nil {
+			continue
+		}
+
+		tr.RecvTxHash = &tx.Hash
+		tr.RecvTxTime = &tx.Time
+		tr.RecvTxRelayerAddress = &tx.RelayerAddress
 	}
 
 	return transfers, nil

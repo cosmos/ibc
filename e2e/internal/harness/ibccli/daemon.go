@@ -131,8 +131,8 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 
 	readiness, err := d.awaitReady(ctx, readyCh)
 	if err != nil {
-		// kill waits for the stderr drain, so the tail is complete.
-		killErr := d.kill()
+		// Kill waits for the stderr drain, so the tail is complete.
+		killErr := d.Kill()
 		return nil, errors.Join(
 			fmt.Errorf("%w; logs: %s", err, strings.TrimSpace(string(logs.tailSnapshot()))),
 			killErr,
@@ -145,7 +145,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 		connect.WithGRPC(),
 	)
 	if err := d.probePacketsEndpoint(ctx); err != nil {
-		return nil, errors.Join(err, d.kill())
+		return nil, errors.Join(err, d.Kill())
 	}
 	return d, nil
 }
@@ -349,12 +349,8 @@ func (d *Relayer) Stop(ctx context.Context) error {
 	return d.h.signalAndWait(ctx, syscall.SIGTERM, stopGrace)
 }
 
-// Crash terminates the process without allowing graceful shutdown.
-func (d *Relayer) Crash(ctx context.Context) error {
-	return d.h.signalAndWait(ctx, syscall.SIGKILL, 0)
-}
-
-func (d *Relayer) kill() error {
+// Kill terminates the process without allowing graceful shutdown.
+func (d *Relayer) Kill() error {
 	ctx, cancel := context.WithTimeout(context.Background(), killTimeout)
 	defer cancel()
 	return d.h.signalAndWait(ctx, syscall.SIGKILL, 0)
