@@ -115,6 +115,27 @@ func TestNewSetFromConfig(t *testing.T) {
 		// ASSERT
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
 	})
+	t.Run("remoteBadTLSConfigErrors", func(t *testing.T) {
+		// ARRANGE
+		conn := testConnection()
+		conn.ClientA.Type = config.ClientTypeRemote
+		conn.ClientA.Params = []byte(`{"url":"https://127.0.0.1:1","tls":{"caFile":"/nonexistent/ca.crt"}}`)
+		conn.ClientB.Type = config.ClientTypeRemote
+		conn.ClientB.Params = []byte(`{"url":"http://127.0.0.1:1"}`)
+
+		clientSet := chains.NewClientSet(map[string]chains.Client{
+			conn.ClientA.ChainID: mocks.NewMockClient(t),
+			conn.ClientB.ChainID: mocks.NewMockClient(t),
+		})
+
+		cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+
+		// ACT
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+
+		// ASSERT
+		require.ErrorContains(t, err, "tls.caFile")
+	})
 }
 
 func TestNewSetFromConfigBesuQBFT(t *testing.T) {

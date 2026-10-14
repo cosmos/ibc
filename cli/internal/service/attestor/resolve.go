@@ -34,6 +34,9 @@ func ResolveFromConfig(
 			local = append(local, a)
 		case config.AttestorTypeRemote:
 			a, errRemote := resolveRemote(ctx, entry)
+			if errors.Is(errRemote, errBadTLS) {
+				return nil, nil, fmt.Errorf("attestor %s: %w", entry.Name, errRemote)
+			}
 			if errRemote != nil {
 				slog.Warn(
 					"Skipping unresolvable configured attestor",
@@ -65,11 +68,19 @@ func resolveLocal(entry config.AttestorConfig, clients *chains.ClientSet, signer
 	return NewLocal(entry, client, s)
 }
 
+// errBadTLS marks a tls block that can't be loaded: a config error rather
+// than an outage, so it fails instead of being skipped.
+var errBadTLS = errors.New("bad tls block")
+
 func resolveRemote(ctx context.Context, entry config.AttestorConfig) (Attestor, error) {
 	if entry.GRPC == "" {
 		return nil, errors.New("no grpc address configured")
 	}
 
-	// TODO: Support TLS
-	return NewRemoteFromURL(ctx, "http://"+entry.GRPC, entry.Name)
+	endpoint, err := config.ResolveEndpoint(entry.EndpointURL(), entry.TLS, nil, "attestor", entry.Name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errBadTLS, err)
+	}
+
+	return NewRemoteFromEndpoint(ctx, entry.Name, endpoint)
 }
