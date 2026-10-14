@@ -2,7 +2,10 @@
 
 # Inter-Blockchain Communication Protocol (IBC)
 
+[![CodeQL](https://github.com/cosmos/ibc/actions/workflows/codeql.yml/badge.svg)](https://github.com/cosmos/ibc/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/cosmos/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cosmos/ibc/blob/main/LICENSE)
+[![Discord](https://img.shields.io/discord/toreplace?logo=discord&label=Discord)](https://discord.com/invite/toreplace)
 
 ![banner](./.github/assets/cosmos-ibc-github.svg)
 
