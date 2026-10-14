@@ -148,6 +148,12 @@ jobs:
           push: true
           provenance: false
           tags: ${{ env.IMAGE_NAME }}:${{ needs.image-metadata.outputs.image_tag }}-linux-${{ matrix.goarch }}
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
       - name: Generate SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:

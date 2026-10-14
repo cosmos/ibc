@@ -70,8 +70,10 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           mkdir -p out/attestations
           cp LICENSE NOTICE cli/dist/
-          tar --owner=0 --group=0 --numeric-owner -czf "out/ibc-${version}-${PLATFORM}.tar.gz" \
-            -C cli/dist ibc LICENSE NOTICE
+          tar --sort=name --mtime="@$(git log -1 --format=%ct)" \
+            --owner=0 --group=0 --numeric-owner \
+            -C cli/dist -cf - ibc LICENSE NOTICE \
+            | gzip -n > "out/ibc-${version}-${PLATFORM}.tar.gz"
       - name: Generate SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
@@ -143,7 +145,11 @@ jobs:
         env:
           CERT_IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
         run: |
-          if gh release view "$TAG" > /dev/null 2>&1; then
+          if is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null); then
+            if [[ "$is_draft" != "true" ]]; then
+              echo "::error::Release $TAG is already published, refusing to replace its assets"
+              exit 1
+            fi
             gh release upload "$TAG" dist/* --clobber
             exit 0
           fi
@@ -151,13 +157,15 @@ jobs:
           cat > notes.md <<EOF
           ## Verifying the release
 
-          Verify the build provenance and SBOM of an archive. Add
+          Verify the build provenance of an archive. Add
+          \`--predicate-type https://spdx.dev/Document/v2.3\` to verify its SBOM instead, or
           \`--bundle ibc-${VERSION}.intoto.jsonl\` to verify offline:
 
           \`\`\`sh
-          gh attestation verify ibc-${VERSION}-linux-amd64.tar.gz --repo ${GH_REPO}
-          gh attestation verify ibc-${VERSION}-linux-amd64.tar.gz --repo ${GH_REPO} \\
-            --predicate-type https://spdx.dev/Document/v2.3
+          gh attestation verify ibc-${VERSION}-linux-amd64.tar.gz \\
+            --repo ${GH_REPO} \\
+            --signer-workflow ${GITHUB_WORKFLOW_REF%@*} \\
+            --source-ref ${GITHUB_REF}
           \`\`\`
 
           Or verify the signed checksums and then the archives against them:
@@ -168,6 +176,8 @@ jobs:
             --certificate-identity "${CERT_IDENTITY}" \\
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           sha256sum --check --ignore-missing checksums.txt
+          # or, on macOS without sha256sum:
+          shasum -a 256 --check --ignore-missing checksums.txt
           \`\`\`
           EOF
 
