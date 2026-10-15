@@ -30,6 +30,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/besu"
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
@@ -86,7 +87,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 }
 
 func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesuQBFT}
+	return []string{config.ClientTypeAttestation, config.ClientTypeBesuQBFT}
 }
 
 // requireSigner errors if called on a driver built without a deployer

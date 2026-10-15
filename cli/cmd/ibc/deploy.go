@@ -674,10 +674,10 @@ func renderRelayConfig(
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		if ca.Type == deploy.ClientTypeAttestation {
+		if ca.Type == config.ClientTypeAttestation {
 			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
 		}
-		if cb.Type == deploy.ClientTypeAttestation {
+		if cb.Type == config.ClientTypeAttestation {
 			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
 		}
 	}

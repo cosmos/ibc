@@ -24,6 +24,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
@@ -117,7 +118,7 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
 		ClientID:             "cli-2",
-		Type:                 deploy.ClientTypeAttestation,
+		Type:                 config.ClientTypeAttestation,
 		Address:              ref.Address,
 		CounterpartyClientID: "cli-1",
 	})
@@ -330,7 +331,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 	m.Core.Router = core.Router
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
-		ClientID: "besu-2", Type: deploy.ClientTypeBesuQBFT, Address: ref.Address, CounterpartyClientID: "besu-1",
+		ClientID: "besu-2", Type: config.ClientTypeBesuQBFT, Address: ref.Address, CounterpartyClientID: "besu-1",
 	})
 	report, err := d.Verify(ctx, m)
 	require.NoError(t, err)

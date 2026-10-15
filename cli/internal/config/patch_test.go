@@ -131,6 +131,8 @@ func TestReconcileDeploymentPreservesSemanticIdentities(t *testing.T) {
 	original.Attestors[0].FinalityOffset = 42
 	cfg, _, err := cfg.ReconcileDeployment(original)
 	require.NoError(t, err)
+	// Deploy never renders a prover, so only the operator can have added it.
+	cfg.Relayer.Connections[0].ClientA.Prover = &ProverConfig{URL: "http://prover:8080"}
 	incoming := deploymentConfig()
 	incoming.Connections[0].ClientA, incoming.Connections[0].ClientB = incoming.Connections[0].ClientB, incoming.Connections[0].ClientA
 	incoming.Connections[0].ClientA.Signer = ""
