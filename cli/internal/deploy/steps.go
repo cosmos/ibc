@@ -247,10 +247,11 @@ func GMPSteps(t Target, dir, chainID string) []Step {
 	}}
 }
 
-// IFTSteps provisions one IFT token on chainID and records it in the manifest.
-// Requires the gmp step to have run.
+// IFTSteps provisions one IFT token on chainID and records it in the manifest,
+// then sets spec.RateLimit on it unless nil. A rerun with a different rate
+// limit updates it. Requires the gmp step to have run.
 func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
-	return []Step{{
+	steps := []Step{{
 		Name: fmt.Sprintf("ift token %s on chain %s", spec.Symbol, chainID),
 		Done: func(ctx context.Context) (bool, error) {
 			m, err := manifest.Load(dir, chainID)
@@ -285,6 +286,51 @@ func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
 			return m.Save(dir)
 		},
 	}}
+	if spec.RateLimit == nil {
+		return steps
+	}
+	limit := *spec.RateLimit
+	token := func() (string, error) {
+		m, err := manifest.Load(dir, chainID)
+		if err != nil || m == nil {
+			return "", err
+		}
+		tok, _ := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
+		return tok.Address, nil
+	}
+	return append(steps, Step{
+		Name: fmt.Sprintf("ift rate limit %s on chain %s", spec.Symbol, chainID),
+		Done: func(ctx context.Context) (bool, error) {
+			addr, err := token()
+			if err != nil || addr == "" {
+				return false, err
+			}
+			deployed, err := t.HasCode(ctx, addr)
+			if err != nil || !deployed {
+				return false, err
+			}
+			current, err := t.IFTRateLimit(ctx, addr)
+			if err != nil {
+				return false, err
+			}
+			return current.Equal(limit), nil
+		},
+		Run: func(ctx context.Context) error {
+			addr, err := token()
+			if err != nil {
+				return err
+			}
+			if addr == "" {
+				return fmt.Errorf("no ift token %s recorded for chain %s", spec.Symbol, chainID)
+			}
+			if err := t.SetIFTRateLimit(ctx, addr, limit); err != nil {
+				return err
+			}
+			slog.Info("ift rate limit set", "chain", chainID, "symbol", spec.Symbol,
+				"capacity", limit.Capacity.String(), "window", limit.Window)
+			return nil
+		},
+	})
 }
 
 // IFTBridgeSteps deploys the EVM send-call constructor (unless an override is

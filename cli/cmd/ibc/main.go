@@ -195,6 +195,10 @@ func init() {
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTName, "name", "", "ERC20 token name")
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTSymbol, "symbol", "", "ERC20 token symbol (need not be unique)")
 	cmdDeployIFT.Flags().StringVar(&flagDeployIFTOwner, "owner", "", "token owner address (default: deployer)")
+	cmdDeployIFT.Flags().StringVar(&flagDeployIFTCapacity, "rate-limit-capacity", "",
+		"most base units each direction lets through when full; not allowed with an --owner other than the deployer")
+	cmdDeployIFT.Flags().DurationVar(&flagDeployIFTWindow, "rate-limit-window", 24*time.Hour,
+		"time for an empty rate-limit bucket to refill completely")
 	_ = cmdDeployIFT.MarkFlagRequired("name")
 	_ = cmdDeployIFT.MarkFlagRequired("symbol")
 

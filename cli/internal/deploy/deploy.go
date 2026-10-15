@@ -6,6 +6,7 @@ package deploy
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
@@ -100,6 +101,23 @@ type IFTSpec struct {
 	Owner  string
 	Name   string
 	Symbol string
+	// RateLimit is set on the token after deployment; IFT rejects every
+	// transfer until it has one. Nil leaves it to the owner, which must then
+	// set it itself.
+	RateLimit *IFTRateLimit
+}
+
+// IFTRateLimit is an IFT token's rate limit: each direction lets up to
+// Capacity base units through when full, and refills completely over Window
+// seconds.
+type IFTRateLimit struct {
+	Capacity *big.Int
+	Window   uint64
+}
+
+// Equal reports whether l and o are the same rate limit.
+func (l IFTRateLimit) Equal(o IFTRateLimit) bool {
+	return l.Window == o.Window && l.Capacity.Cmp(o.Capacity) == 0
 }
 
 // IFTRef is the result of provisioning an IFT token.
@@ -176,6 +194,11 @@ type Target interface {
 	AppRegistered(ctx context.Context, router, port string) (string, bool, error)
 	// ProvisionIFT deploys an IFT token governed by the GMP app.
 	ProvisionIFT(ctx context.Context, gmp string, spec IFTSpec) (IFTRef, error)
+	// SetIFTRateLimit sets an IFT token's rate limit. Only the token owner
+	// may.
+	SetIFTRateLimit(ctx context.Context, ift string, limit IFTRateLimit) error
+	// IFTRateLimit returns an IFT token's configured rate limit.
+	IFTRateLimit(ctx context.Context, ift string) (IFTRateLimit, error)
 	// ProvisionSendCallConstructor deploys the stateless EVM IFT send-call
 	// constructor and returns its address.
 	ProvisionSendCallConstructor(ctx context.Context) (string, error)
