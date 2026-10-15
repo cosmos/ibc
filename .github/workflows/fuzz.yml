@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Runs every native Go fuzz test in cli daily, continuing from the corpus the
-# previous runs built. A failing input fails the run and is uploaded in Go's
-# corpus format: add it to the package's testdata/fuzz to reproduce it.
+# Runs every native Go fuzz test in cli daily, sharing FUZZ_BUDGET_MINUTES
+# between them and continuing from the corpus the previous runs built. A
+# failing input fails the run and is uploaded in Go's corpus format: add it to
+# the package's testdata/fuzz to reproduce it.
 name: Fuzz
 
 on:
@@ -17,13 +18,13 @@ concurrency:
 permissions: {}
 
 env:
-  FUZZ_TIME: 10m
+  FUZZ_BUDGET_MINUTES: 60
 
 jobs:
   fuzz:
     name: Fuzz
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
@@ -54,14 +55,13 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
-          # One "<package> <Fuzz...>..." line per package with fuzz tests.
-          targets=$(go test -list '^Fuzz' ./... | awk '/^Fuzz/ { fns = fns " " $1 } /^ok/ { if (fns != "") print $2 fns; fns = "" }')
-          while read -r pkg fns; do
-            for fn in $fns; do
-              echo "::group::$pkg $fn"
-              go test -run '^$' -fuzz "^$fn\$" -fuzztime "$FUZZ_TIME" "$pkg" || failed=1
-              echo "::endgroup::"
-            done
+          # One "<package> <Fuzz...>" line per fuzz test.
+          targets=$(go test -list '^Fuzz' ./... | awk '/^Fuzz/ { fns[++n] = $1 } /^ok/ { for (i = 1; i <= n; i++) print $2, fns[i]; n = 0 }')
+          fuzztime=$((FUZZ_BUDGET_MINUTES * 60 / $(wc -l <<< "$targets")))s
+          while read -r pkg fn; do
+            echo "::group::$pkg $fn"
+            go test -run '^$' -fuzz "^$fn\$" -fuzztime "$fuzztime" "$pkg" || failed=1
+            echo "::endgroup::"
           done <<< "$targets"
           exit "$failed"
 

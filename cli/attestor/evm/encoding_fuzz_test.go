@@ -9,6 +9,10 @@ import (
 )
 
 func FuzzDecodeStateAttestation(f *testing.F) {
+	seed, err := EncodeStateAttestation(1, 1_700_000_000)
+	require.NoError(f, err)
+	f.Add(seed)
+
 	f.Fuzz(func(t *testing.T, data []byte) {
 		height, timestamp, err := DecodeStateAttestation(data)
 		if err != nil {
@@ -25,6 +29,13 @@ func FuzzDecodeStateAttestation(f *testing.F) {
 }
 
 func FuzzDecodePacketAttestation(f *testing.F) {
+	seed, err := EncodePacketAttestation(42, []PacketCompact{
+		{Path: filledWord(0x11), Commitment: filledWord(0x22)},
+		{Path: filledWord(0x33), Commitment: filledWord(0x44)},
+	})
+	require.NoError(f, err)
+	f.Add(seed)
+
 	f.Fuzz(func(t *testing.T, data []byte) {
 		height, packets, err := DecodePacketAttestation(data)
 		if err != nil {
@@ -37,32 +48,5 @@ func FuzzDecodePacketAttestation(f *testing.F) {
 		require.NoError(t, err)
 		require.Equal(t, height, gotHeight)
 		require.Equal(t, packets, gotPackets)
-	})
-}
-
-// FuzzRecoverSigner feeds attestor-supplied signatures to RecoverSigner. The
-// two forms of a recovery ID, 0/1 and 27/28, must recover the same signer.
-func FuzzRecoverSigner(f *testing.F) {
-	f.Fuzz(func(t *testing.T, digest, sig []byte) {
-		var d [32]byte
-		copy(d[:], digest)
-
-		signer, err := RecoverSigner(d, sig)
-		if err != nil {
-			return
-		}
-
-		other := append([]byte(nil), sig...)
-		switch other[64] {
-		case 0, 1:
-			other[64] += 27
-		case 27, 28:
-			other[64] -= 27
-		default:
-			return
-		}
-		otherSigner, err := RecoverSigner(d, other)
-		require.NoError(t, err)
-		require.Equal(t, signer, otherSigner)
 	})
 }

@@ -12,6 +12,10 @@ import (
 // FuzzExplainRevert feeds node-supplied revert data to explainRevert, which
 // must not panic or drop the original error.
 func FuzzExplainRevert(f *testing.F) {
+	for _, tc := range namedReverts {
+		f.Add(hexutil.MustDecode(revertData(f, tc.metadata, tc.name, tc.args...)))
+	}
+
 	f.Fuzz(func(t *testing.T, data []byte) {
 		original := revertError{code: 3, data: hexutil.Encode(data)}
 		require.ErrorIs(t, explainRevert(original), original)
