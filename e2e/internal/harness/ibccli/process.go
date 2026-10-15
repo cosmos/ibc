@@ -92,3 +92,10 @@ func defaultBinPath(name string) string {
 	}
 	return filepath.Join(repoRoot, "cli", "bin", name)
 }
+
+func withEnv(cmd *exec.Cmd, key, value string) {
+	if cmd.Env == nil {
+		cmd.Env = os.Environ()
+	}
+	cmd.Env = append(cmd.Env, key+"="+value)
+}
