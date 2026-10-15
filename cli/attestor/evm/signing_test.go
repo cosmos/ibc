@@ -28,21 +28,13 @@ func TestDigestMatchesFormula(t *testing.T) {
 }
 
 func TestRecoverSigner(t *testing.T) {
-	t.Run("roundTrip", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
-		require.NoError(t, err)
-
-		expected := crypto.PubkeyToAddress(key.PublicKey)
-
-		digest := Digest(TagPacketAttestation, []byte("attested data"))
-
-		sig, err := crypto.Sign(digest[:], key)
-		require.NoError(t, err)
-		require.Len(t, sig, 65)
+	t.Run("recoversCanonical", func(t *testing.T) {
+		key, digest, sig := signed(t)
+		sig[64] += 27
 
 		recovered, err := RecoverSigner(digest, sig)
 		require.NoError(t, err)
-		require.Equal(t, expected, recovered)
+		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
 	})
 
 	t.Run("rejectsWrongLength", func(t *testing.T) {
@@ -50,57 +42,25 @@ func TestRecoverSigner(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	// AcceptsLegacyVByte verifies RecoverSigner works against signatures
-	// using Ethereum's legacy v (27/28), the convention the real attestor
-	// signs with (see SignABI/NormalizeSignature), not just the raw 0/1
-	// recovery id crypto.Sign itself produces.
-	t.Run("acceptsLegacyVByte", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
-		require.NoError(t, err)
-
-		expected := crypto.PubkeyToAddress(key.PublicKey)
-
-		digest := Digest(TagPacketAttestation, []byte("attested data"))
-
-		sig, err := crypto.Sign(digest[:], key)
-		require.NoError(t, err)
-
-		legacySig := make([]byte, 65)
-		copy(legacySig, sig)
-		legacySig[64] += 27
-
-		recovered, err := RecoverSigner(digest, legacySig)
-		require.NoError(t, err)
-		require.Equal(t, expected, recovered)
-	})
-
 	t.Run("interopsWithSignABI", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
+		key, _, rawSig := signed(t)
+
+		sig, err := SignABI(
+			context.Background(),
+			stubSigner{sig: rawSig},
+			TagPacketAttestation,
+			[]byte("attested data"),
+		)
 		require.NoError(t, err)
 
-		expected := crypto.PubkeyToAddress(key.PublicKey)
-
-		digest := Digest(TagStateAttestation, []byte("data"))
-
-		rawSig, err := crypto.Sign(digest[:], key)
+		recovered, err := RecoverSigner(Digest(TagPacketAttestation, []byte("attested data")), sig)
 		require.NoError(t, err)
-
-		signer := stubSigner{sig: rawSig}
-
-		sig, err := SignABI(context.Background(), signer, TagStateAttestation, []byte("data"))
-		require.NoError(t, err)
-
-		recovered, err := RecoverSigner(digest, sig)
-		require.NoError(t, err)
-		require.Equal(t, expected, recovered, "RecoverSigner must accept exactly what SignABI produces")
-	})
-
-	t.Run("acceptsHighSAsSameSigner", func(t *testing.T) {
-		key, digest, sig := signed(t)
-
-		recovered, err := RecoverSigner(digest, malleate(sig))
-		require.NoError(t, err)
-		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
+		require.Equal(
+			t,
+			crypto.PubkeyToAddress(key.PublicKey),
+			recovered,
+			"RecoverSigner must accept exactly what SignABI produces",
+		)
 	})
 
 	// The light client's ecrecover takes only 27/28, so other recovery IDs
@@ -108,19 +68,29 @@ func TestRecoverSigner(t *testing.T) {
 	t.Run("rejectsOtherRecoveryIDs", func(t *testing.T) {
 		_, digest, sig := signed(t)
 
-		for _, v := range []byte{2, 3, 26, 29, 30, 31} {
+		for _, v := range []byte{0, 1, 2, 3, 26, 29, 30, 31} {
 			sig[64] = v
 			_, err := RecoverSigner(digest, sig)
 			require.ErrorContains(t, err, "invalid recovery ID", "v=%d", v)
 		}
 	})
 
+	t.Run("rejectsHighS", func(t *testing.T) {
+		_, digest, sig := signed(t)
+		highS := malleate(sig)
+		highS[64] += 27
+
+		_, err := RecoverSigner(digest, highS)
+		require.ErrorContains(t, err, "not canonical")
+	})
+
 	t.Run("rejectsOutOfRangeS", func(t *testing.T) {
 		_, digest, sig := signed(t)
+		sig[64] += 27
 
 		secp256k1N.FillBytes(sig[32:64])
 		_, err := RecoverSigner(digest, sig)
-		require.ErrorContains(t, err, "out of range")
+		require.ErrorContains(t, err, "not canonical")
 	})
 }
 
@@ -138,13 +108,14 @@ func TestNormalizeSignature(t *testing.T) {
 }
 
 func TestSignABINormalizesHighS(t *testing.T) {
-	key, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	digest := Digest(TagStateAttestation, []byte("data"))
-	rawSig, err := crypto.Sign(digest[:], key)
-	require.NoError(t, err)
+	_, _, rawSig := signed(t)
 
-	sig, err := SignABI(context.Background(), stubSigner{sig: malleate(rawSig)}, TagStateAttestation, []byte("data"))
+	sig, err := SignABI(
+		context.Background(),
+		stubSigner{sig: malleate(rawSig)},
+		TagPacketAttestation,
+		[]byte("attested data"),
+	)
 	require.NoError(t, err)
 	require.Equal(t, rawSig[:64], sig[:64])
 	require.Equal(t, rawSig[64]+27, sig[64])

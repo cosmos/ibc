@@ -81,25 +81,27 @@ func NormalizeSignature(signature []byte) ([]byte, error) {
 	return normalized, nil
 }
 
-// RecoverSigner recovers the address that produced sig over digest, the
-// inverse of SignABI. It accepts exactly the signatures NormalizeSignature
-// turns into ones the light client accepts, so the relayer counts no
-// signature the contract would reject.
+// RecoverSigner recovers the address that produced sig over digest. Like
+// AttestationLightClient.sol, it accepts only v of 27/28 and low s;
+// NormalizeSignature converts other forms of the same signature.
 func RecoverSigner(digest [32]byte, sig []byte) (common.Address, error) {
-	normalized, err := NormalizeSignature(sig)
-	if err != nil {
-		return common.Address{}, err
+	if len(sig) != 65 {
+		return common.Address{}, fmt.Errorf("invalid signature length %d, expected 65", len(sig))
+	}
+	if sig[64] != 27 && sig[64] != 28 {
+		return common.Address{}, fmt.Errorf("invalid recovery ID %d, expected 27 or 28", sig[64])
 	}
 
 	// crypto.SigToPub takes the signer's raw 0/1 recovery ID.
-	normalized[64] -= 27
-	r := new(big.Int).SetBytes(normalized[:32])
-	s := new(big.Int).SetBytes(normalized[32:64])
-	if !crypto.ValidateSignatureValues(normalized[64], r, s, true) {
-		return common.Address{}, errors.New("signature r or s out of range")
+	raw := append([]byte(nil), sig...)
+	raw[64] -= 27
+	r := new(big.Int).SetBytes(raw[:32])
+	s := new(big.Int).SetBytes(raw[32:64])
+	if !crypto.ValidateSignatureValues(raw[64], r, s, true) {
+		return common.Address{}, errors.New("signature not canonical: r or s out of range, or s above n/2")
 	}
 
-	pub, err := crypto.SigToPub(digest[:], normalized)
+	pub, err := crypto.SigToPub(digest[:], raw)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("recovering signer public key: %w", err)
 	}
