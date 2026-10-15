@@ -5,6 +5,7 @@ package txsubmitter
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -68,12 +69,16 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 			return nil, errors.Errorf("unknown signer %q for chain %q", pair.SignerAlias, pair.ChainID)
 		}
 
-		opts := evm.ChainOptions{TxSubmissionDelay: evm.DefaultTxSubmissionDelay}
+		var opts evm.ChainOptions
 		if override, ok := cfg.Relayer.ChainOverride(pair.ChainID); ok {
-			if override.TxSubmissionDelay != nil {
-				opts.TxSubmissionDelay = *override.TxSubmissionDelay
-			}
 			if override.EVM != nil {
+				e := override.EVM
+				if e.MaxFeePerGas != nil {
+					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
+				}
+				if e.PendingTxTimeout != nil {
+					opts.PendingTxTimeout = *e.PendingTxTimeout
+				}
 				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
 				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
 			}

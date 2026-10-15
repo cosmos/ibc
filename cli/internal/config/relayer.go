@@ -50,7 +50,6 @@ type RelayerConfig struct {
 type RelayerChainOverride struct {
 	ChainID            string            `yaml:"chainId"`
 	EVM                *RelayerEVMConfig `yaml:"evm,omitempty"`
-	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
 
@@ -65,6 +64,11 @@ type RelayerChainOverride struct {
 
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
+	// MaxFeePerGas caps each transaction's fee per gas, in wei.
+	MaxFeePerGas *uint64 `yaml:"maxFeePerGas,omitempty"`
+	// PendingTxTimeout sets how long to wait before retrying an unmined transaction or reusing a stalled nonce.
+	PendingTxTimeout *time.Duration `yaml:"pendingTxTimeout,omitempty"`
+
 	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
 	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
 }
@@ -189,8 +193,6 @@ func (c RelayerChainOverride) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errPathf("chainId", "required")
-	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
-		return errPathf("txSubmissionDelay", "must not be negative")
 	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
 		return errPathf("packetBatchSize", "must be positive")
 	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
@@ -210,6 +212,10 @@ func (c RelayerChainOverride) Validate() error {
 
 func (c RelayerEVMConfig) Validate() error {
 	switch {
+	case c.MaxFeePerGas != nil && *c.MaxFeePerGas == 0:
+		return errPathf("maxFeePerGas", "must be positive")
+	case c.PendingTxTimeout != nil && *c.PendingTxTimeout <= 0:
+		return errPathf("pendingTxTimeout", "must be positive")
 	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
 		return errPathf("gasFeeCapMultiplier", "must be positive")
 	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:

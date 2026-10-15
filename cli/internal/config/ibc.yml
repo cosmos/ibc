@@ -35,7 +35,6 @@ relayer:
   # relay specific chain settings
   chainOverrides:
     - chainId: "1"
-      txSubmissionDelay: 5s
       packetBatchSize: 50
 
   # each connection is relayed bidirectionally: clientA's counterparty is

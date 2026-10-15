@@ -68,7 +68,7 @@ func (p RetryRecvPacket) Cancel(tr *Transfer, err error) {
 }
 
 func (p RetryRecvPacket) ShouldProcess(tr *Transfer) bool {
-	return tr.RecvTxHash != nil && tr.RecvTxTime != nil && tr.WriteAckTxHash == nil
+	return tr.RecvTxHash != nil && tr.RecvTxTime != nil
 }
 
 func (p RetryRecvPacket) Status() store.RelayStatus {

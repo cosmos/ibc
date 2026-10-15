@@ -77,8 +77,8 @@ relayer:
     - chainId: "1"
       evm:
         gasFeeCapMultiplier: 1.5
+        pendingTxTimeout: 2m
         gasTipCapMultiplier: 1.5
-      txSubmissionDelay: 2s
       packetBatchSize: 20
       packetBatchTimeout: 10s
       clearInterval: 15m
@@ -258,7 +258,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>}` for `remote`, where it is required. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L74](cli/internal/config/relayer.go#L74) -->
+<!-- [relayer.go:L78](cli/internal/config/relayer.go#L78) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -289,15 +289,16 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
-| `chainOverrides[].txSubmissionDelay` | `duration` | `2s` | Minimum delay between two transaction submissions on the chain. |
 | `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
+| `chainOverrides[].evm.maxFeePerGas` | `uint64` | `20000000000` | Caps each transaction's fee per gas, in wei. |
+| `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L30](cli/internal/txsubmitter/evm/evm.go#L30) --> <!-- [evm.go:L27](cli/internal/txsubmitter/evm/evm.go#L27) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 
@@ -308,7 +309,6 @@ relayer:
   dispatchPollInterval: 5s
   chainOverrides:
     - chainId: "41002"
-      txSubmissionDelay: 3s
       packetBatchSize: 25
       packetBatchTimeout: 15s
       evm:

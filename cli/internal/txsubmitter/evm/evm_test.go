@@ -5,6 +5,7 @@ package evm
 import (
 	"context"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,185 +13,480 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/internal/service/signer"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-const (
-	chainIDEth = "1"
-	toAddress  = "0xe20BccD900Fa1B48f46F5a483d9De063b07eDFCC"
-)
+const chainIDEth = "1"
 
-func newTestTxSubmitter(
-	t *testing.T,
-	opts ChainOptions,
-) (*TxSubmitter, *mocks.MockTxSubmitterETHClient, signer.Signer) {
-	t.Helper()
-
-	eth := mocks.NewMockTxSubmitterETHClient(t)
-
-	chainSigner, err := signer.GenerateLocalSecp256k1Signer()
-	require.NoError(t, err)
-
-	txSubmitter, err := New(chainIDEth, eth, chainSigner, opts)
-	require.NoError(t, err)
-
-	return txSubmitter, eth, chainSigner
+// Submission is serialized by the submitter, including access to this RPC stub.
+type testRPC struct {
+	height         uint64
+	mined, pending uint64
+	sent           []*types.Transaction
+	send           func(*types.Transaction) error
+	gasErr         error
+	nonceErr       error
+	receipt        *types.Receipt
+	receiptErr     error
 }
 
-func TestSubmit(t *testing.T) {
-	ctx := context.Background()
+func (r *testRPC) BalanceAt(context.Context, common.Address, *big.Int) (*big.Int, error) {
+	return big.NewInt(1), nil
+}
 
-	t.Run("signsAndBroadcasts", func(t *testing.T) {
-		feeCapMult := 2.0
-		txSubmitter, eth, chainSigner := newTestTxSubmitter(t, ChainOptions{
-			TxSubmissionDelay:   time.Millisecond,
-			GasFeeCapMultiplier: &feeCapMult,
+func (r *testRPC) HeaderByNumber(context.Context, *big.Int) (*types.Header, error) {
+	return &types.Header{Number: new(big.Int).SetUint64(r.height), BaseFee: big.NewInt(100)}, nil
+}
+func (r *testRPC) SuggestGasTipCap(context.Context) (*big.Int, error) { return big.NewInt(10), nil }
+func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error) {
+	return []byte{1}, nil
+}
+
+func (r *testRPC) EstimateGasAtBlock(_ context.Context, _ ethereum.CallMsg, block *big.Int) (uint64, error) {
+	if block != nil {
+		return 0, errors.New("expected mined state")
+	}
+	return 100_000, r.gasErr
+}
+
+func (r *testRPC) NonceAt(_ context.Context, _ common.Address, block *big.Int) (uint64, error) {
+	if block == nil || block.Uint64() != r.height {
+		return 0, errors.New("nonce query must be pinned to the observed block height")
+	}
+	return r.mined, r.nonceErr
+}
+
+func (r *testRPC) PendingNonceAt(context.Context, common.Address) (uint64, error) {
+	return r.pending, nil
+}
+
+func (r *testRPC) TransactionReceipt(context.Context, common.Hash) (*types.Receipt, error) {
+	if r.receipt != nil || r.receiptErr != nil {
+		return r.receipt, r.receiptErr
+	}
+	return nil, ethereum.NotFound
+}
+
+func (r *testRPC) SendTransaction(_ context.Context, tx *types.Transaction) error {
+	r.sent = append(r.sent, tx)
+	if r.send != nil {
+		return r.send(tx)
+	}
+	r.pending = max(r.pending, tx.Nonce()+1)
+	return nil
+}
+
+func newSubmitter(t *testing.T) (*TxSubmitter, *testRPC) {
+	t.Helper()
+	key, err := signer.GenerateLocalSecp256k1Signer()
+	require.NoError(t, err)
+	rpc := &testRPC{height: 100}
+	c, err := New(chainIDEth, rpc, key, ChainOptions{})
+	require.NoError(t, err)
+	return c, rpc
+}
+
+func testIntent() v2.TxIntent {
+	return v2.TxIntent{To: "0x1111111111111111111111111111111111111111", Data: []byte{1}}
+}
+
+func expireNonce(c *TxSubmitter) {
+	c.lowestUnminedNoncePendingSince = time.Now().Add(-2 * c.opts.PendingTxTimeout)
+}
+
+func submit(t *testing.T, c *TxSubmitter) error {
+	t.Helper()
+	_, err := c.Submit(t.Context(), testIntent())
+	return err
+}
+
+func TestConcurrentSubmissionsAllocateDistinctNonces(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	const count = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, count)
+	for range count {
+		wg.Go(func() { errs <- submit(t, c) })
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+	require.Len(t, rpc.sent, count)
+	for i, tx := range rpc.sent {
+		require.Equal(t, uint64(i), tx.Nonce())
+	}
+	require.ErrorIs(t, submit(t, c), ErrBusy)
+}
+
+func TestStalledNonceRecoveredAtCapacity(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	c.opts.MaxInFlight = 2
+	require.NoError(t, submit(t, c))
+	first := rpc.sent[0]
+	require.NoError(t, submit(t, c))
+	require.ErrorIs(t, submit(t, c), ErrBusy)
+	expireNonce(c)
+	require.NoError(t, submit(t, c))
+	replacement := rpc.sent[2]
+	require.Equal(t, first.Nonce(), replacement.Nonce())
+	require.Positive(t, replacement.GasFeeCap().Cmp(first.GasFeeCap()))
+	require.Positive(t, replacement.GasTipCap().Cmp(first.GasTipCap()))
+	require.ErrorIs(t, submit(t, c), ErrBusy, "give the replacement time to mine")
+	rpc.mined = 2
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(2), rpc.sent[3].Nonce())
+}
+
+func TestRetryBumpsOnUnderpricedAndPreservesProgress(t *testing.T) {
+	for _, message := range []string{
+		"replacement transaction underpriced",
+		"Replacement transaction underpriced",
+		"rpc error: Replacement transaction underpriced",
+	} {
+		t.Run(message, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			rpc.pending = 1
+			rpc.send = func(tx *types.Transaction) error {
+				if tx.GasTipCap().Cmp(big.NewInt(100)) < 0 {
+					return errors.New(message)
+				}
+				return nil
+			}
+			// A fresh process gives the unknown transaction a grace period.
+			_, err := c.selectNonce(t.Context(), time.Now())
+			require.NoError(t, err)
+			expireNonce(c)
+			require.ErrorContains(t, submit(t, c), "still underpriced")
+			require.Len(t, rpc.sent, maxBroadcastAttempts)
+			// The next call continues escalating rather than restarting at the estimate.
+			require.NoError(t, submit(t, c))
+			require.Greater(t, len(rpc.sent), maxBroadcastAttempts)
+			for i, tx := range rpc.sent {
+				require.Zero(t, tx.Nonce())
+				if i > 0 {
+					require.Positive(t, tx.GasFeeCap().Cmp(rpc.sent[i-1].GasFeeCap()))
+					require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
+				}
+			}
 		})
+	}
+}
 
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: big.NewInt(100)}, nil).Once()
-		eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
-		eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return([]byte{0x60}, nil).Once()
-		eth.EXPECT().EstimateGas(ctx, mock.Anything).Return(21000, nil).Once()
-		eth.EXPECT().PendingNonceAt(ctx, mock.Anything).Return(7, nil).Once()
+func TestAcceptedTransactionStillGetsHigherFeesAfterStalling(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	for range 3 {
+		require.NoError(t, submit(t, c))
+		expireNonce(c)
+	}
+	require.Len(t, rpc.sent, 3)
+	for i, tx := range rpc.sent {
+		require.Zero(t, tx.Nonce())
+		if i > 0 {
+			require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
+		}
+	}
+}
 
-		var sent *types.Transaction
-		eth.EXPECT().SendTransaction(ctx, mock.Anything).Run(func(_ context.Context, tx *types.Transaction) {
-			sent = tx
-		}).Return(nil).Once()
+func TestBroadcastErrorDoesNotAdvanceNonce(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		err  error
+	}{
+		{name: "rejected", err: errors.New("transaction pool full")},
+		{name: "underpriced without replacement", err: errors.New("transaction underpriced")},
+		{name: "lost response", err: context.DeadlineExceeded},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			c.opts.MaxInFlight = 1
+			rpc.send = func(*types.Transaction) error { return tt.err }
+			submission, err := c.Submit(t.Context(), testIntent())
+			require.ErrorIs(t, err, tt.err)
+			require.Len(t, rpc.sent, 1)
+			require.Equal(t, rpc.sent[0].Hash().Hex(), submission.TxHash)
+			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
+			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
+			require.Zero(t, c.nextNonce)
 
-		sub, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0xde, 0xad}})
+			rpc.send = nil
+			require.NoError(t, submit(t, c))
+			require.Zero(t, rpc.sent[1].Nonce())
+			require.Equal(t, uint64(1), c.nextNonce)
+		})
+	}
+}
 
+func TestLostResponseUsesObservedPendingNonce(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.send = func(tx *types.Transaction) error {
+		rpc.pending = tx.Nonce() + 1
+		return context.DeadlineExceeded
+	}
+	require.ErrorIs(t, submit(t, c), context.DeadlineExceeded)
+	require.Zero(t, c.nextNonce)
+	rpc.send = nil
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
+}
+
+func TestAlreadyKnownTransactionAdvancesNonce(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.send = func(*types.Transaction) error { return errors.New("already known") }
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), c.nextNonce)
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
+}
+
+func TestRestartRecoversUnknownGap(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.mined, rpc.pending = 7, 9
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(9), rpc.sent[0].Nonce())
+	restarted, err := New(chainIDEth, rpc, c.signer, c.opts)
+	require.NoError(t, err)
+	_, err = restarted.selectNonce(t.Context(), time.Now())
+	require.NoError(t, err)
+	expireNonce(restarted)
+	require.NoError(t, submit(t, restarted))
+	require.Equal(t, uint64(7), rpc.sent[1].Nonce())
+}
+
+func TestPreparationFailureDoesNotAllocateNonce(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.gasErr = errors.New("execution reverted")
+	submission, err := c.Submit(t.Context(), testIntent())
+	require.ErrorIs(t, err, rpc.gasErr)
+	require.Nil(t, submission)
+	require.Empty(t, rpc.sent)
+	require.Zero(t, c.nextNonce)
+	rpc.gasErr = nil
+	require.NoError(t, submit(t, c))
+	require.Zero(t, rpc.sent[0].Nonce())
+}
+
+type stalledSigner struct{ signer.Signer }
+
+func (s stalledSigner) Sign(ctx context.Context, _ []byte) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestSignerDeadlineDoesNotConsumeNonce(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	key := c.signer
+	c.signer = stalledSigner{key}
+	c.opts.RequestTimeout = 10 * time.Millisecond
+	require.ErrorIs(t, submit(t, c), context.DeadlineExceeded)
+	require.Empty(t, rpc.sent)
+	c.signer = key
+	c.opts.RequestTimeout = time.Second
+	require.NoError(t, submit(t, c))
+	require.Zero(t, rpc.sent[0].Nonce())
+}
+
+func TestSubmissionCapsEstimatedFees(t *testing.T) {
+	for _, tt := range []struct {
+		name                         string
+		maxFee                       int64
+		feeMultiplier, tipMultiplier float64
+		wantFee, wantTip             int64
+	}{
+		{name: "below cap", maxFee: 250, feeMultiplier: 1, tipMultiplier: 1, wantFee: 210, wantTip: 10},
+		{name: "estimate exceeds cap", maxFee: 200, feeMultiplier: 1, tipMultiplier: 1, wantFee: 200, wantTip: 10},
+		{name: "multipliers exceed cap", maxFee: 250, feeMultiplier: 2, tipMultiplier: 30, wantFee: 250, wantTip: 250},
+		{name: "tip exceeds fee", maxFee: 500, feeMultiplier: 1, tipMultiplier: 30, wantFee: 210, wantTip: 210},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			c.opts.MaxFeePerGas = big.NewInt(tt.maxFee)
+			c.opts.GasFeeCapMultiplier = &tt.feeMultiplier
+			c.opts.GasTipCapMultiplier = &tt.tipMultiplier
+			require.NoError(t, submit(t, c))
+			require.Len(t, rpc.sent, 1)
+			require.Equal(t, big.NewInt(tt.wantFee), rpc.sent[0].GasFeeCap())
+			require.Equal(t, big.NewInt(tt.wantTip), rpc.sent[0].GasTipCap())
+			require.Equal(t, big.NewInt(tt.maxFee), c.opts.MaxFeePerGas)
+		})
+	}
+}
+
+func TestStalledReplacementUsesFeeCap(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	c.opts.MaxFeePerGas = big.NewInt(250)
+	require.NoError(t, submit(t, c))
+	expireNonce(c)
+	require.NoError(t, submit(t, c))
+	require.Len(t, rpc.sent, 2)
+	require.Equal(t, rpc.sent[0].Nonce(), rpc.sent[1].Nonce())
+	require.Equal(t, big.NewInt(250), rpc.sent[1].GasFeeCap())
+	require.Equal(t, big.NewInt(12), rpc.sent[1].GasTipCap())
+}
+
+func TestUnderpricedRetriesStopAtFeeCap(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	c.opts.MaxFeePerGas = big.NewInt(250)
+	tipMultiplier := 20.0
+	c.opts.GasTipCapMultiplier = &tipMultiplier
+	underpriced := errors.New("replacement transaction underpriced")
+	rpc.send = func(*types.Transaction) error { return underpriced }
+
+	submission, err := c.Submit(t.Context(), testIntent())
+	require.ErrorIs(t, err, underpriced)
+	require.ErrorContains(t, err, "fee cap 250 wei")
+	require.Len(t, rpc.sent, 3)
+	for i, tx := range rpc.sent {
+		require.Zero(t, tx.Nonce())
+		require.LessOrEqual(t, tx.GasFeeCap().Int64(), int64(250))
+		if i > 0 {
+			require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
+		}
+	}
+	last := rpc.sent[2]
+	require.Equal(t, big.NewInt(250), last.GasFeeCap())
+	require.Equal(t, big.NewInt(250), last.GasTipCap())
+	require.Equal(t, last.Hash().Hex(), submission.TxHash)
+
+	// A later submission can still succeed if the conflicting transaction disappears.
+	rpc.send = nil
+	require.NoError(t, submit(t, c))
+	require.Len(t, rpc.sent, 4)
+	require.Equal(t, last.Hash(), rpc.sent[3].Hash())
+}
+
+func TestNonceQueryFailureDoesNotBroadcast(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.nonceErr = errors.New("unavailable")
+	require.ErrorIs(t, submit(t, c), rpc.nonceErr)
+	require.Empty(t, rpc.sent)
+}
+
+func TestLaggingHeadDoesNotResetNonceRecovery(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	c.opts.MaxInFlight = 2
+	rpc.mined, rpc.pending = 7, 7
+	require.NoError(t, submit(t, c))
+	require.NoError(t, submit(t, c))
+	require.ErrorIs(t, submit(t, c), ErrBusy)
+	expireNonce(c)
+	lowestUnminedNoncePendingSince := c.lowestUnminedNoncePendingSince
+	feeCap := new(big.Int).Set(c.lastAttemptedFeeCap)
+	tipCap := new(big.Int).Set(c.lastAttemptedTipCap)
+
+	for range 3 {
+		rpc.height, rpc.mined = 99, 6
+		require.ErrorContains(t, submit(t, c), "behind last nonce observation")
+		require.Equal(t, uint64(7), c.lowestUnminedNonce)
+		require.Equal(t, lowestUnminedNoncePendingSince, c.lowestUnminedNoncePendingSince)
+		require.Equal(t, feeCap, c.lastAttemptedFeeCap)
+		require.Equal(t, tipCap, c.lastAttemptedTipCap)
+
+		rpc.height, rpc.mined = 100, 7
+		nonce, err := c.selectNonce(t.Context(), time.Now())
 		require.NoError(t, err)
-		require.NotNil(t, sent)
+		require.Equal(t, uint64(7), nonce)
+	}
 
-		// nonce and gas parameters
-		assert.Equal(t, uint64(7), sent.Nonce())
-		assert.Equal(t, uint64(21000), sent.Gas())
-		assert.Equal(t, big.NewInt(10), sent.GasTipCap())
-		// feeCap = (tip + 2*baseFee) * multiplier = (10 + 200) * 2
-		assert.Equal(t, big.NewInt(420), sent.GasFeeCap())
+	require.Len(t, rpc.sent, 2)
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(7), rpc.sent[2].Nonce())
+	require.Positive(t, rpc.sent[2].GasFeeCap().Cmp(feeCap))
+}
 
-		// the signature recovers to the signer's address
-		pub, err := crypto.DecompressPubkey(chainSigner.PublicKey())
-		require.NoError(t, err)
-		expectedFrom := crypto.PubkeyToAddress(*pub)
+func TestFailedNonceQueryDoesNotAdvanceObservedHeight(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	require.NoError(t, submit(t, c))
+	rpc.height = 101
+	rpc.nonceErr = errors.New("unavailable")
+	require.ErrorIs(t, submit(t, c), rpc.nonceErr)
+	rpc.height = 100
+	rpc.nonceErr = nil
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(1), rpc.sent[1].Nonce())
+}
 
-		from, err := types.Sender(types.LatestSignerForChainID(big.NewInt(1)), sent)
-		require.NoError(t, err)
-		assert.Equal(t, expectedFrom, from)
-		assert.Equal(t, expectedFrom.String(), sub.RelayerAddress)
-		assert.Equal(t, sent.Hash().String(), sub.TxHash)
-	})
+func TestReorgAllowsLowestNonceReuse(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		height uint64
+	}{
+		{name: "same height", height: 101},
+		{name: "higher height", height: 102},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			rpc.mined, rpc.pending = 7, 7
+			require.NoError(t, submit(t, c))
+			rpc.height, rpc.mined, rpc.pending = 101, 8, 8
+			require.NoError(t, submit(t, c))
+			expireNonce(c)
+			rpc.height, rpc.mined, rpc.pending = tt.height, 7, 7
+			now := time.Now()
+			nonce, err := c.selectNonce(t.Context(), now)
+			require.NoError(t, err)
+			require.Equal(t, uint64(9), nonce)
+			require.Equal(t, now, c.lowestUnminedNoncePendingSince)
+			expireNonce(c)
+			require.NoError(t, submit(t, c))
+			require.Equal(t, uint64(7), rpc.sent[2].Nonce())
+		})
+	}
+}
 
-	t.Run("rejectsAddressWithoutCode", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
-
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: big.NewInt(100)}, nil).Once()
-		eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
-		eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return(nil, nil).Once()
-
-		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
-
-		require.ErrorContains(t, err, "no contract code")
-	})
-
-	t.Run("rejectsChainWithoutBaseFee", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
-
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: nil}, nil).Once()
-
-		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
-
-		require.ErrorContains(t, err, "EIP-1559")
-	})
+func TestDroppedNonceRecoversBelowLocalAllocation(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	rpc.mined, rpc.pending = 7, 7
+	for range 3 {
+		require.NoError(t, submit(t, c))
+	}
+	require.Equal(t, uint64(10), c.nextNonce)
+	rpc.pending = 7
+	nonce, err := c.selectNonce(t.Context(), time.Now())
+	require.NoError(t, err)
+	require.Equal(t, uint64(10), nonce, "allow the existing transactions time to mine")
+	expireNonce(c)
+	require.NoError(t, submit(t, c))
+	require.Equal(t, uint64(7), rpc.sent[3].Nonce())
 }
 
 func TestShouldRetry(t *testing.T) {
-	ctx := context.Background()
-	txHash := "0x60016c34c02278856c81a41ce857ac4bb837a2f4a13c95207e08cbc9e8f2b706"
-
-	t.Run("pendingNotExpired", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().
-			HeaderByNumber(ctx, (*big.Int)(nil)).
-			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).
-			Once()
-
-		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
-
-		require.ErrorIs(t, err, v2.ErrTxNotFound)
-		assert.False(t, retry)
-	})
-
-	t.Run("pendingExpired", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().
-			HeaderByNumber(ctx, (*big.Int)(nil)).
-			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).
-			Once()
-
-		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now().Add(-time.Hour))
-
-		require.NoError(t, err)
-		assert.True(t, retry)
-	})
-
-	t.Run("reverted", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().
-			TransactionReceipt(ctx, mock.Anything).
-			Return(&types.Receipt{
-				TxHash: common.HexToHash(txHash),
-				Status: types.ReceiptStatusFailed,
-			}, nil).
-			Once()
-
-		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
-
-		require.NoError(t, err)
-		assert.True(t, retry)
-	})
-
-	t.Run("confirmed", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().
-			TransactionReceipt(ctx, mock.Anything).
-			Return(&types.Receipt{
-				TxHash: common.HexToHash(txHash),
-				Status: types.ReceiptStatusSuccessful,
-			}, nil).
-			Once()
-
-		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
-
-		require.NoError(t, err)
-		assert.False(t, retry)
-	})
-
-	t.Run("receiptError", func(t *testing.T) {
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, errors.New("rpc down")).Once()
-
-		_, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now())
-
-		require.ErrorContains(t, err, "rpc down")
-	})
+	for _, tt := range []struct {
+		name    string
+		receipt *types.Receipt
+		err     error
+		expired bool
+		retry   bool
+		wantErr error
+	}{
+		{name: "pending", wantErr: v2.ErrTxNotFound},
+		{name: "expired missing receipt", expired: true, retry: true},
+		{name: "mined success", receipt: &types.Receipt{Status: types.ReceiptStatusSuccessful}},
+		{name: "old mined success", receipt: &types.Receipt{Status: types.ReceiptStatusSuccessful}, expired: true},
+		{name: "mined failure", receipt: &types.Receipt{Status: types.ReceiptStatusFailed}, retry: true},
+		{name: "RPC unavailable", err: context.DeadlineExceeded, expired: true, wantErr: context.DeadlineExceeded},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c, rpc := newSubmitter(t)
+			rpc.receipt, rpc.receiptErr = tt.receipt, tt.err
+			sentAt := time.Now()
+			if tt.expired {
+				sentAt = sentAt.Add(-2 * c.opts.PendingTxTimeout)
+			}
+			retry, err := c.ShouldRetry(t.Context(), common.Hash{}.Hex(), sentAt)
+			require.ErrorIs(t, err, tt.wantErr)
+			require.Equal(t, tt.retry, retry)
+		})
+	}
 }
 
 func TestSubmitRejectsContractSimulationRevert(t *testing.T) {
-	submitter, eth, _ := newTestTxSubmitter(t, ChainOptions{})
-	to := common.HexToAddress(toAddress)
-	data := []byte{0xde, 0xad, 0xbe, 0xef}
+	submitter, eth := newSubmitter(t)
 	revert := revertError{
 		code: -32000,
 		data: revertData(
@@ -202,16 +498,11 @@ func TestSubmitRejectsContractSimulationRevert(t *testing.T) {
 			uint64(20),
 		),
 	}
-	eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).
-		Return(&types.Header{BaseFee: big.NewInt(100), GasLimit: 30000000}, nil).Once()
-	eth.EXPECT().SuggestGasTipCap(mock.Anything).Return(big.NewInt(10), nil).Once()
-	eth.EXPECT().PendingCodeAt(mock.Anything, common.HexToAddress(toAddress)).Return([]byte{1}, nil).Once()
-	eth.EXPECT().EstimateGas(mock.Anything, ethereum.CallMsg{From: submitter.address, To: &to, Data: data}).
-		Return(0, revert).Once()
-	result, err := submitter.Submit(t.Context(), v2.TxIntent{To: toAddress, Data: data})
+	eth.gasErr = revert
+	result, err := submitter.Submit(t.Context(), testIntent())
 	require.Nil(t, result)
 	require.ErrorIs(t, err, revert)
-	require.EqualError(t, err, "creating tx: estimating gas: ConsensusStateExpired(100, 121, 20): execution reverted")
-	eth.AssertNotCalled(t, "PendingNonceAt", mock.Anything, mock.Anything)
-	eth.AssertNotCalled(t, "SendTransaction", mock.Anything, mock.Anything)
+	require.EqualError(t, err, "estimating gas: ConsensusStateExpired(100, 121, 20): execution reverted")
+	require.Empty(t, eth.sent)
+	require.Zero(t, submitter.nextNonce)
 }
