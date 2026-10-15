@@ -98,7 +98,7 @@ type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
-// ProverConfig a ProverService endpoint.
+// ProverConfig is a ProverService endpoint.
 type ProverConfig struct {
 	// URL is the ProverService endpoint: an http(s):// URL, or a bare host:port
 	// dialed as http://. Without a query or fragment.
