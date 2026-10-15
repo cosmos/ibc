@@ -87,7 +87,8 @@ type ClientEnd struct {
 
 	// Params is this client type's settings, decoded per Type by ClientParams:
 	// empty for `attestation` and `besu-qbft`, and
-	// `{url: <ProverService endpoint>}` for `remote`, where it is required.
+	// `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it
+	// is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
@@ -110,8 +111,12 @@ type AutoRelayConfig struct {
 
 // RemoteParams is the params block a remote client declares.
 type RemoteParams struct {
-	// URL is the ProverService endpoint.
+	// URL is the ProverService endpoint: an http(s):// URL, or a bare host:port
+	// dialed as http://. Without a query or fragment.
 	URL string `yaml:"url"`
+
+	// TLS settings for an https:// URL, see TLSClientConfig.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // AttestationParams is empty
@@ -288,12 +293,21 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	}
 }
 
+// EndpointURL returns URL as a URL, see endpointURL.
+func (p RemoteParams) EndpointURL() string {
+	return endpointURL(p.URL)
+}
+
 func (p RemoteParams) Validate() error {
 	if p.URL == "" {
 		return errPathf("url", "required")
 	}
 
-	return nil
+	if err := errPath("url", checkHTTPURL(p.EndpointURL(), false)); err != nil {
+		return err
+	}
+
+	return validateEndpointTLS(p.URL, p.TLS)
 }
 
 func (AttestationParams) Validate() error { return nil }

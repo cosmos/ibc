@@ -547,7 +547,7 @@ func verifyPacketTimeout(
 
 func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, bool, error) {
 	return func(receipt *types.Receipt) (uint64, bool, error) {
-		sequences, err := sendPacketSequences(router, receipt)
+		sequences, err := SendPacketSequences(router, receipt)
 		if err != nil {
 			return 0, false, err
 		}
@@ -558,9 +558,9 @@ func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, boo
 	}
 }
 
-// sendPacketSequences returns every SendPacket sequence emitted by the router
+// SendPacketSequences returns every SendPacket sequence emitted by the router
 // in one receipt, in log order
-func sendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
+func SendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
 	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
 	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
 	if err != nil {

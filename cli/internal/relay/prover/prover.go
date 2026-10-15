@@ -169,7 +169,18 @@ func addGenerator(
 			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
 		}
 
-		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, logger)
+		endpoint, err := config.ResolveEndpoint(
+			remoteParams.EndpointURL(),
+			remoteParams.TLS,
+			logger,
+			"connection",
+			connAlias,
+		)
+		if err != nil {
+			return errors.Wrapf(err, "connection %q", connAlias)
+		}
+
+		prover := remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger)
 		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 

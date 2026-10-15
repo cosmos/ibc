@@ -5,8 +5,10 @@ package main
 import (
 	"context"
 	"io"
+	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,6 +314,62 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 
 	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
 	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+}
+
+func TestIFTRateLimit(t *testing.T) {
+	const (
+		deployer = "0x00000000000000000000000000000000000000aA"
+		other    = "0x00000000000000000000000000000000000000bb"
+	)
+	for _, tc := range []struct {
+		name     string
+		owner    string
+		capacity string
+		window   time.Duration // zero means the flag was not given
+		want     *deploy.IFTRateLimit
+		wantErr  string
+	}{
+		{
+			name: "explicit", owner: deployer, capacity: "1000", window: time.Hour,
+			want: &deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 3600},
+		},
+		{
+			name: "default window", owner: deployer, capacity: "1000",
+			want: &deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 86400},
+		},
+		{
+			name: "owner spelled differently", owner: strings.ToLower(deployer[2:]), capacity: "1000",
+			want: &deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 86400},
+		},
+		{name: "capacity required", owner: deployer, wantErr: "--rate-limit-capacity is required"},
+		{name: "other owner", owner: other},
+		{name: "other owner with capacity", owner: other, capacity: "1", wantErr: "only the owner"},
+		{name: "other owner with window", owner: other, window: time.Hour, wantErr: "only the owner"},
+		{name: "zero capacity", owner: deployer, capacity: "0", wantErr: "must be a positive uint208"},
+		{name: "malformed capacity", owner: deployer, capacity: "1e18", wantErr: "must be a positive uint208"},
+		{
+			name: "capacity overflow", owner: deployer, capacity: new(big.Int).Lsh(big.NewInt(1), 208).String(),
+			wantErr: "must be a positive uint208",
+		},
+		{name: "sub-second window", owner: deployer, capacity: "1", window: time.Millisecond, wantErr: "must be at least 1s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oldCapacity, oldWindow := flagDeployIFTCapacity, flagDeployIFTWindow
+			t.Cleanup(func() { flagDeployIFTCapacity, flagDeployIFTWindow = oldCapacity, oldWindow })
+			flagDeployIFTCapacity, flagDeployIFTWindow = tc.capacity, 24*time.Hour
+			if tc.window != 0 {
+				flagDeployIFTWindow = tc.window
+			}
+
+			got, err := iftRateLimit(tc.owner, deployer, tc.window != 0)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
 }
 
 func TestWholeSeconds(t *testing.T) {

@@ -103,13 +103,14 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 	}
 
 	return &Environment{
-		chains:      chains,
-		instances:   instances,
-		connections: connections,
-		attestors:   attestors,
-		effects:     effects,
-		ws:          ws,
-		lease:       lease,
+		chains:        chains,
+		instances:     instances,
+		connections:   connections,
+		attestors:     attestors,
+		effects:       effects,
+		ws:            ws,
+		lease:         lease,
+		observability: ibccli.ObservabilityEnabled(ctx),
 	}, nil
 }
 
