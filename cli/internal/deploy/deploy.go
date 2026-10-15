@@ -15,13 +15,6 @@ import (
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
-// Client types the deploy engine can provision, named as the relayer config
-// does.
-const (
-	ClientTypeAttestation = string(config.ClientTypeAttestation)
-	ClientTypeBesuQBFT    = string(config.ClientTypeBesuQBFT)
-)
-
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under
 // (ICS27Lib.DEFAULT_PORT_ID). ICS27GMP.onRecvPacket requires this exact port,
 // so the app is only reachable when registered here.
@@ -46,7 +39,7 @@ type AttestationParams struct {
 }
 
 // ClientType implements ClientParams.
-func (AttestationParams) ClientType() string { return ClientTypeAttestation }
+func (AttestationParams) ClientType() string { return config.ClientTypeAttestation }
 
 // BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
 // are in seconds.
@@ -59,7 +52,7 @@ type BesuQBFTParams struct {
 }
 
 // ClientType implements ClientParams.
-func (BesuQBFTParams) ClientType() string { return ClientTypeBesuQBFT }
+func (BesuQBFTParams) ClientType() string { return config.ClientTypeBesuQBFT }
 
 // BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
 // serve the consensus state of their head, which a new client tracking them
