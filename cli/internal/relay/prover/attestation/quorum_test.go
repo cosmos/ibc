@@ -177,9 +177,9 @@ func TestQueryQuorum(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 		for _, sig := range result.Signatures {
-			normalized, err := attestorevm.NormalizeSignature(sig)
-			require.NoError(t, err)
-			require.Equal(t, normalized, sig)
+			require.Contains(t, []byte{27, 28}, sig[64])
+			r, s := new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:64])
+			require.True(t, crypto.ValidateSignatureValues(sig[64]-27, r, s, true), "s above n/2")
 		}
 	})
 
