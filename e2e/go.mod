@@ -2,7 +2,7 @@
 
 module github.com/cosmos/ibc/e2e
 
-go 1.26.6
+go 1.26.9
 
 // The bun-managed contracts workspace vendors the eureka repo, which ships Go
 // sources that do not belong to this module.
@@ -355,7 +355,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v3 v3.0.1
