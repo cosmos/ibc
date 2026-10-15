@@ -40,22 +40,25 @@ func TestParseSealedHeaderSortsCommitSeals(t *testing.T) {
 		var header types.Header
 		require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
 
-		var extraItems []rlp.RawValue
-		require.NoError(t, rlp.DecodeBytes(header.Extra, &extraItems))
-		var seals [][]byte
-		require.NoError(t, rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals))
+		extraItems, seals := splitExtra(t, header.Extra)
 		require.Greater(t, len(seals), 1)
 		slices.Reverse(seals)
-		var err error
-		extraItems[extraIdxCommitSeals], err = rlp.EncodeToBytes(seals)
-		require.NoError(t, err)
-		header.Extra, err = rlp.EncodeToBytes(extraItems)
-		require.NoError(t, err)
+		setSeals(t, &header, extraItems, seals)
 
 		parsed, err := ParseSealedHeader(&header)
 		require.NoError(t, err)
 		assert.Equal(t, []byte(update.HeaderRLP), parsed.RLP)
 	}
+}
+
+func TestParseSealedHeaderRejectsRepeatedSigner(t *testing.T) {
+	var header types.Header
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
+	extraItems, seals := splitExtra(t, header.Extra)
+	setSeals(t, &header, extraItems, append(seals, seals[0]))
+
+	_, err := ParseSealedHeader(&header)
+	require.ErrorContains(t, err, "more than one commit seal")
 }
 
 func TestParseSealedHeaderRejectsMalformed(t *testing.T) {
@@ -84,10 +87,7 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 	for _, update := range []besutest.UpdateFixture{fixture.AdjacentUpdate, fixture.NonAdjacentUpdate} {
 		var header types.Header
 		require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
-		var extraItems []rlp.RawValue
-		require.NoError(t, rlp.DecodeBytes(header.Extra, &extraItems))
-		var seals [][]byte
-		require.NoError(t, rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals))
+		extraItems, seals := splitExtra(t, header.Extra)
 		require.NotEmpty(t, seals)
 
 		digest, err := commitSealDigest(&header, extraItems)
@@ -104,4 +104,14 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 			previous = signer
 		}
 	}
+}
+
+func setSeals(t *testing.T, header *types.Header, extraItems []rlp.RawValue, seals [][]byte) {
+	t.Helper()
+
+	var err error
+	extraItems[extraIdxCommitSeals], err = rlp.EncodeToBytes(seals)
+	require.NoError(t, err)
+	header.Extra, err = rlp.EncodeToBytes(extraItems)
+	require.NoError(t, err)
 }

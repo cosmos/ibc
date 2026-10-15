@@ -10,7 +10,7 @@ import (
 )
 
 // FuzzExplainRevert feeds node-supplied revert data to explainRevert, which
-// must never lose the original error.
+// must not panic or drop the original error.
 func FuzzExplainRevert(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		original := revertError{code: 3, data: hexutil.Encode(data)}
