@@ -395,8 +395,8 @@ func TestConnectionConfigSourceEnd(t *testing.T) {
 	}
 }
 
-// A proverUrl relays a light client the IBC CLI does not implement, so it
-// lifts the restriction to built-in types.
+// A prover relays a light client the IBC CLI does not implement, so it lifts
+// the restriction to built-in types.
 func TestClientEndType(t *testing.T) {
 	t.Parallel()
 
@@ -409,10 +409,11 @@ func TestClientEndType(t *testing.T) {
 	}{
 		{name: "attestation", doc: "type: attestation\n"},
 		{name: "besu-qbft", doc: "type: besu-qbft\n"},
-		{name: "built-in type with proverUrl", doc: "type: besu-qbft\nproverUrl: http://prover:9090\n"},
-		{name: "any type with proverUrl", doc: "type: tendermint\nproverUrl: http://prover:9090\n"},
-		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set proverUrl"},
-		{name: "missing type", doc: "proverUrl: http://prover:9090\n", wantErr: "type: required"},
+		{name: "built-in type with prover", doc: "type: besu-qbft\nprover:\n  url: http://prover:9090\n"},
+		{name: "any type with prover", doc: "type: tendermint\nprover:\n  url: http://prover:9090\n"},
+		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set prover"},
+		{name: "missing type", doc: "prover:\n  url: http://prover:9090\n", wantErr: "type: required"},
+		{name: "prover errors carry its path", doc: "type: tendermint\nprover:\n  url: grpc://prover:9090\n", wantErr: "prover.url: must be a bare host:port"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

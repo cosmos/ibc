@@ -381,122 +381,114 @@ func TestSignerConfigTLS(t *testing.T) {
 	})
 }
 
-func TestClientEndProverEndpoint(t *testing.T) {
+func TestProverConfigValidate(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := certs.WriteSelfSigned(t, dir, "test")
 
 	for _, tt := range []struct {
 		name        string
-		end         ClientEnd
+		prover      ProverConfig
 		errContains string
 	}{
 		{
-			name: "https url",
-			end:  ClientEnd{ProverURL: "https://prover.example.com:9090"},
+			name:   "https url",
+			prover: ProverConfig{URL: "https://prover.example.com:9090"},
 		},
 		{
-			name: "http url",
-			end:  ClientEnd{ProverURL: "http://prover.example.com:9090"},
+			name:   "http url",
+			prover: ProverConfig{URL: "http://prover.example.com:9090"},
 		},
 		{
-			name: "bare host:port",
-			end:  ClientEnd{ProverURL: "prover.example.com:9090"},
+			name:   "bare host:port",
+			prover: ProverConfig{URL: "prover.example.com:9090"},
 		},
 		{
 			name: "https url with tls",
-			end: ClientEnd{
-				ProverURL: "https://prover.example.com:9090",
-				ProverTLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
+			prover: ProverConfig{
+				URL: "https://prover.example.com:9090",
+				TLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
 			},
 		},
 		{
-			name: "uppercase https with tls",
-			end:  ClientEnd{ProverURL: "HTTPS://prover.example.com:9090", ProverTLS: &TLSClientConfig{}},
+			name:   "uppercase https with tls",
+			prover: ProverConfig{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
 		},
 		{
 			name:        "non-http scheme",
-			end:         ClientEnd{ProverURL: "grpc://prover.example.com:9090"},
-			errContains: "proverUrl: must be a bare host:port or an http(s):// URL",
+			prover:      ProverConfig{URL: "grpc://prover.example.com:9090"},
+			errContains: "url: must be a bare host:port or an http(s):// URL",
 		},
 		{
-			name:        "tls block without a proverUrl",
-			end:         ClientEnd{Type: ClientTypeAttestation, ProverTLS: &TLSClientConfig{}},
-			errContains: "proverTls: requires an https:// proverUrl",
+			name:        "empty url",
+			prover:      ProverConfig{},
+			errContains: "url: required",
 		},
 		{
-			// tls is a new field, so requiring https rejects nothing that
-			// previously loaded, and catches a block that would otherwise be
-			// read and then silently ignored.
+			// Its settings would be read and then silently ignored.
 			name: "tls block with a plaintext url",
-			end: ClientEnd{
-				ProverURL: "http://prover.example.com:9090",
-				ProverTLS: &TLSClientConfig{},
+			prover: ProverConfig{
+				URL: "http://prover.example.com:9090",
+				TLS: &TLSClientConfig{},
 			},
-			errContains: "proverTls: requires an https:// proverUrl",
+			errContains: "tls: requires an https:// address",
 		},
 		{
 			name: "tls block with a bare host:port",
-			end: ClientEnd{
-				ProverURL: "prover.example.com:9090",
-				ProverTLS: &TLSClientConfig{},
+			prover: ProverConfig{
+				URL: "prover.example.com:9090",
+				TLS: &TLSClientConfig{},
 			},
-			errContains: "proverTls: requires an https:// proverUrl",
+			errContains: "tls: requires an https:// address",
 		},
 		{
 			name:        "query on a url",
-			end:         ClientEnd{ProverURL: "https://prover.example.com/grpc?token=abc"},
-			errContains: "proverUrl: must not have a query or fragment",
+			prover:      ProverConfig{URL: "https://prover.example.com/grpc?token=abc"},
+			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:        "fragment on a url",
-			end:         ClientEnd{ProverURL: "http://prover.example.com#section"},
-			errContains: "proverUrl: must not have a query or fragment",
+			prover:      ProverConfig{URL: "http://prover.example.com#section"},
+			errContains: "url: must not have a query or fragment",
 		},
 		{
-			name: "path on a url",
-			end:  ClientEnd{ProverURL: "https://prover.example.com/grpc"},
+			name:   "path on a url",
+			prover: ProverConfig{URL: "https://prover.example.com/grpc"},
 		},
 		{
-			name: "userinfo on a url",
-			end:  ClientEnd{ProverURL: "https://user:secret@prover.example.com"},
+			name:   "userinfo on a url",
+			prover: ProverConfig{URL: "https://user:secret@prover.example.com"},
 		},
 		{
 			name:        "url without a host",
-			end:         ClientEnd{ProverURL: "https://"},
-			errContains: "proverUrl: must include a host",
+			prover:      ProverConfig{URL: "https://"},
+			errContains: "url: must include a host",
 		},
 		{
 			name:        "bare host:port with a bad port",
-			end:         ClientEnd{ProverURL: "prover.example.com:abc"},
-			errContains: "proverUrl: invalid URL",
+			prover:      ProverConfig{URL: "prover.example.com:abc"},
+			errContains: "url: invalid URL",
 		},
 		{
 			name:        "bare host:port with a query",
-			end:         ClientEnd{ProverURL: "prover.example.com:9090?token=abc"},
-			errContains: "proverUrl: must not have a query or fragment",
+			prover:      ProverConfig{URL: "prover.example.com:9090?token=abc"},
+			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:        "url with a bad port",
-			end:         ClientEnd{ProverURL: "https://prover.example.com:abc"},
-			errContains: "proverUrl: invalid URL",
+			prover:      ProverConfig{URL: "https://prover.example.com:abc"},
+			errContains: "url: invalid URL",
 		},
 		{
 			name: "bad tls block on an https url",
-			end: ClientEnd{
-				ProverURL: "https://prover.example.com:9090",
-				ProverTLS: &TLSClientConfig{CertFile: certFile},
+			prover: ProverConfig{
+				URL: "https://prover.example.com:9090",
+				TLS: &TLSClientConfig{CertFile: certFile},
 			},
-			errContains: "proverTls.keyFile",
+			errContains: "tls.keyFile",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			end := tt.end
-			end.ChainID, end.ClientID, end.Signer = "1", "client-0", "relayer"
-			if end.Type == "" {
-				end.Type = "op-stack"
-			}
-
-			err := end.Validate()
+			err := tt.prover.Validate()
 			if tt.errContains == "" {
 				require.NoError(t, err)
 				return
@@ -517,7 +509,7 @@ func TestEndpointURL(t *testing.T) {
 		"https://svc.example.com/grpc": "https://svc.example.com/grpc",
 	} {
 		require.Equal(t, want, AttestorConfig{GRPC: addr}.EndpointURL(), addr)
-		require.Equal(t, want, ClientEnd{ProverURL: addr}.ProverEndpointURL(), addr)
+		require.Equal(t, want, ProverConfig{URL: addr}.EndpointURL(), addr)
 	}
 }
 

@@ -186,14 +186,17 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 }
 
 func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clientEndFileConfig {
-	return clientEndFileConfig{
+	result := clientEndFileConfig{
 		ChainID:   end.ChainID,
 		ClientID:  end.ClientID,
 		Signer:    signer,
 		Type:      end.ClientType,
-		ProverURL: proverURL,
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
+	if proverURL != "" {
+		result.Prover = &proverFileConfig{URL: proverURL}
+	}
+	return result
 }
 
 // addAttestor declares one explicitly-configured candidate attestor.
@@ -260,8 +263,12 @@ type clientEndFileConfig struct {
 	Signer    string               `yaml:"signer"`
 	ClientID  string               `yaml:"clientId"`
 	Type      clientkind.Kind      `yaml:"type"`
-	ProverURL string               `yaml:"proverUrl,omitempty"`
+	Prover    *proverFileConfig    `yaml:"prover,omitempty"`
 	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
+}
+
+type proverFileConfig struct {
+	URL string `yaml:"url"`
 }
 
 type autoRelayFileConfig struct {
