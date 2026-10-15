@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	DefaultDockerImage = "ghcr.io/foundry-rs/foundry:v1.7.1"
+	DefaultDockerImage = "ghcr.io/foundry-rs/foundry:v1.8.5"
 	DockerImageEnv     = "ANVIL_DOCKER_IMAGE"
 
 	anvilGasLimit     = 50_000_000
