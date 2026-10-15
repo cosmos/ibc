@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
-# Fuzzes main daily, growing the corpus PR fuzzing starts from.
+# Fuzzes main daily, growing the corpus each run starts from. Crashes are
+# reported to code scanning.
 name: ClusterFuzzLite batch fuzzing
 
 on:
@@ -21,9 +22,12 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
+      # Downloads the corpus from earlier runs.
       actions: read
+      security-events: write
     steps:
       - name: Build fuzzers
+        id: build
         uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
         with:
           language: go
@@ -33,3 +37,11 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           mode: batch
           fuzz-seconds: 3600
+          output-sarif: true
+      - name: Upload crashes to code scanning
+        if: always() && steps.build.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4
+        with:
+          sarif_file: cifuzz-sarif/results.sarif
+          checkout_path: cifuzz-sarif
+          category: clusterfuzzlite

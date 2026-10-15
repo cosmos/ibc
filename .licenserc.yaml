@@ -27,6 +27,8 @@ header:
     - "**/*.svg"
     - "**/*.excalidraw"
     - "**/bun.lock"
+    # Go fuzz seeds, which must start with the "go test fuzz v1" line.
+    - "**/testdata/fuzz/**"
 
     # Generated Go without configurable file headers.
     - "cli/internal/store/repository/**"

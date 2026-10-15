@@ -12,6 +12,8 @@ import (
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -130,7 +132,13 @@ func consensusHeader(height uint64, state besumsgs.IBesuLightClientMsgsConsensus
 
 func parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.ParsedHeader {
 	t.Helper()
-	return besutest.ParseHeader(t, update.HeaderRLP)
+
+	var header types.Header
+	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
+	parsed, err := besu.ParseSealedHeader(&header)
+	require.NoError(t, err)
+
+	return parsed
 }
 
 func (e *fixtureEnv) setAnchor(t *testing.T, height uint64, state besumsgs.IBesuLightClientMsgsConsensusState) {
