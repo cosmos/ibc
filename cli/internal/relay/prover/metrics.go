@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/otel"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -91,12 +90,12 @@ type instrumentedProver struct {
 	proverType string
 }
 
-func metricsWrapper(prover Prover, chainID, clientID string, proverType config.ClientType) Prover {
+func metricsWrapper(prover Prover, chainID, clientID, proverType string) Prover {
 	return &instrumentedProver{
 		Prover:     prover,
 		chainID:    chainID,
 		clientID:   clientID,
-		proverType: string(proverType),
+		proverType: proverType,
 	}
 }
 

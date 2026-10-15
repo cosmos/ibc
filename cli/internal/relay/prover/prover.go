@@ -147,7 +147,7 @@ func addGenerator(
 }
 
 // newProver builds the built-in prover for client's type, or a remote one when
-// client sets a ProverURL.
+// client sets a Prover.
 func newProver(
 	ctx context.Context,
 	client, clientCounterparty config.ClientEnd,
@@ -155,10 +155,10 @@ func newProver(
 	attestors []attestor.Attestor,
 	logger *slog.Logger,
 ) (Prover, error) {
-	if client.ProverURL != "" {
-		endpoint, err := config.ResolveEndpoint(client.ProverEndpointURL(), client.ProverTLS, logger)
+	if client.Prover != nil {
+		endpoint, err := config.ResolveEndpoint(client.Prover.EndpointURL(), client.Prover.TLS, logger)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "prover")
 		}
 
 		return remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger), nil

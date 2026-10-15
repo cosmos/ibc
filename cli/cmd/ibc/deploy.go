@@ -645,7 +645,7 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) c
 		ChainID:   m.ChainID,
 		Signer:    signer,
 		ClientID:  c.ClientID,
-		Type:      config.ClientType(c.Type),
+		Type:      c.Type,
 		AutoRelay: config.AutoRelayConfig{Enabled: &autoRelay},
 	}
 }
