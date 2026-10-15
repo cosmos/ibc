@@ -12,7 +12,11 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/cosmos/ibc/cli/besu"
 
 	_ "embed"
 )
@@ -126,4 +130,21 @@ func HashConsensusState(state besumsgs.IBesuLightClientMsgsConsensusState) (comm
 	}
 
 	return crypto.Keccak256Hash(data[4:]), nil
+}
+
+// ParseHeader parses a header RLP the way the relayer parses a node's header.
+func ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
+	tb.Helper()
+
+	var header types.Header
+	if err := rlp.DecodeBytes(headerRLP, &header); err != nil {
+		tb.Fatalf("decode header: %v", err)
+	}
+
+	parsed, err := besu.ParseSealedHeader(&header)
+	if err != nil {
+		tb.Fatalf("parse header: %v", err)
+	}
+
+	return parsed
 }

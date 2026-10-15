@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package besu
+package besu_test
 
 import (
 	"testing"
@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
 )
 
@@ -19,7 +20,7 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 
 	preimage := fixture.InitialConsensusState()
 
-	encoded, err := EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
+	encoded, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 		HeaderRlp:              update.HeaderRLP,
 		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: update.TrustedHeight},
 		ConsensusStatePreimage: preimage,
@@ -43,7 +44,7 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 		accountNodes, err := m.AccountProofNodes()
 		require.NoError(t, err)
 
-		encoded, err := EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
+		encoded, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
 			ConsensusStatePreimage: preimage,
 			AccountProofNodes:      accountNodes,
 			ProofNodes:             nodes,
@@ -56,7 +57,7 @@ func TestMembershipProofRoundTrip(t *testing.T) {
 		assert.Equal(t, accountNodes, decoded.AccountProofNodes)
 		assert.Equal(t, nodes, decoded.ProofNodes)
 
-		cached, err := EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
+		cached, err := besu.EncodeMembershipProof(besumsgs.IBesuLightClientMsgsMembershipProof{
 			ConsensusStatePreimage: preimage,
 			ProofNodes:             nodes,
 		})
@@ -74,6 +75,6 @@ func TestCommitmentSlotMatchesSolidity(t *testing.T) {
 	assert.Equal(
 		t,
 		common.HexToHash("0x79a5307f4993e7eb3894d3aafa592f86bb1b605ca1a506e595f1874343b9a987"),
-		CommitmentSlot(path),
+		besu.CommitmentSlot(path),
 	)
 }
