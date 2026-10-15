@@ -744,9 +744,6 @@ NO_NAMED_DEFAULT = {
     ("RelayerChainOverride", "abandonUnrecoverablePackets"),
 }
 
-# What a reader writes where the Go type says nothing useful.
-OPAQUE_TYPES = {}
-
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
             "bool": "bool", "float64": "float64", "time.Duration": "duration"}
 
@@ -1790,16 +1787,14 @@ def _type_cell(go, field, model):
         return "list"
     if t in model["structs"] or t in model["aliases"]:
         return "block"
-    if (go, field["yaml"]) in OPAQUE_TYPES:
-        return OPAQUE_TYPES[(go, field["yaml"])]
     # Everything else was published as whatever Go calls it, which put
     # `yaml.RawMessage` in a column a reader writes values into. A type this
     # tool cannot describe is one it must not name.
     _problem("unreadable_type",
              f"{go}.{field['go']} has type `{t}`, which is neither a Go type a "
              "reader writes, a block, nor a set of constants -- so the column "
-             "would publish the Go type name. Give it an entry in OPAQUE_TYPES "
-             "saying what a reader writes there.",
+             "would publish the Go type name. Give the field a type "
+             "this tool can describe.",
              struct=go, field=field["yaml"], go_type=t)
     return UNREADABLE
 
@@ -2230,6 +2225,13 @@ def probe_requiredness(model, binary, membership=None):
                         not any(q == path for _i, q, _n, _t, _v in p2)
                         for p2 in elsewhere):
                     condition = _sibling_discriminator(paths, path)
+                # A key required inside a block the file can leave out is
+                # required only once that block is written.
+                block = path.rsplit(".", 1)[0]
+                if (answer and condition is None and block != path
+                        and not block.endswith("]")
+                        and _probe_validate(binary, _yaml_without(text, block)) is None):
+                    condition = ("in", block.rpartition(".")[2])
                 break
             out[(sec["region"], key)] = (answer, condition)
     return out
@@ -2293,6 +2295,8 @@ def _requirement(go, field, model, parent=None, probed=None, variant=None):
         return UNREADABLE, None
     if not probed:
         return "optional", None
+    if isinstance(variant, tuple):
+        return f"**required** in `{variant[1]}`", None
     if variant in ("run", "relay", "attest"):
         # required by a running process, not by the file being well formed
         return ("**required** to run" if variant == "run"

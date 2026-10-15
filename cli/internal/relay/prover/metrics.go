@@ -48,7 +48,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 func (m *instrumentation) record(
 	ctx context.Context,
 	operation, chainID, clientID string,
-	proverType string,
+	clientType string,
 	err error,
 	ts time.Time,
 	attrs ...attribute.KeyValue,
@@ -56,7 +56,7 @@ func (m *instrumentation) record(
 	attrs = append(attrs,
 		otel.AttrChainID.String(chainID),
 		otel.AttrClientID.String(clientID),
-		otel.AttrType.String(proverType),
+		otel.AttrType.String(clientType),
 		otel.AttrResultError(err),
 	)
 	otel.RecordOperation(ctx, m.Operation, operation, ts, attrs...)
@@ -71,14 +71,14 @@ func (m *instrumentation) latestProvableHeight(ctx context.Context, chainID, cli
 
 func (m *instrumentation) packetBatchSize(
 	ctx context.Context,
-	chainID, clientID, typ string,
+	chainID, clientID, clientType string,
 	kind v2.ProofKind,
 	size int,
 ) {
 	m.PacketBatchSize.Record(ctx, int64(size), metric.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrClientID.String(clientID),
-		otel.AttrType.String(typ),
+		otel.AttrType.String(clientType),
 		proofKindAttribute(kind),
 	))
 }
@@ -87,15 +87,15 @@ type instrumentedProver struct {
 	Prover
 	chainID    string
 	clientID   string
-	proverType string
+	clientType string
 }
 
-func metricsWrapper(prover Prover, chainID, clientID, proverType string) Prover {
+func metricsWrapper(prover Prover, chainID, clientID, clientType string) Prover {
 	return &instrumentedProver{
 		Prover:     prover,
 		chainID:    chainID,
 		clientID:   clientID,
-		proverType: proverType,
+		clientType: clientType,
 	}
 }
 
@@ -103,7 +103,7 @@ func (p *instrumentedProver) LatestProvableHeight(ctx context.Context) (uint64, 
 	started := time.Now()
 	height, timestamp, err := p.Prover.LatestProvableHeight(ctx)
 
-	metrics.record(ctx, "latest_provable_height", p.chainID, p.clientID, p.proverType, err, started)
+	metrics.record(ctx, "latest_provable_height", p.chainID, p.clientID, p.clientType, err, started)
 	if err == nil {
 		metrics.latestProvableHeight(ctx, p.chainID, p.clientID, height)
 	}
@@ -115,7 +115,7 @@ func (p *instrumentedProver) ClientUpdatePayloads(ctx context.Context, height ui
 	started := time.Now()
 	payloads, err := p.Prover.ClientUpdatePayloads(ctx, height)
 
-	metrics.record(ctx, "client_update_payloads", p.chainID, p.clientID, p.proverType, err, started)
+	metrics.record(ctx, "client_update_payloads", p.chainID, p.clientID, p.clientType, err, started)
 
 	return payloads, err
 }
@@ -130,8 +130,8 @@ func (p *instrumentedProver) PacketProofs(
 	started := time.Now()
 	proofs, err := p.Prover.PacketProofs(ctx, height, kind, packets, acknowledgements)
 
-	metrics.record(ctx, "packet_proofs", p.chainID, p.clientID, p.proverType, err, started, proofKindAttribute(kind))
-	metrics.packetBatchSize(ctx, p.chainID, p.clientID, p.proverType, kind, len(packets))
+	metrics.record(ctx, "packet_proofs", p.chainID, p.clientID, p.clientType, err, started, proofKindAttribute(kind))
+	metrics.packetBatchSize(ctx, p.chainID, p.clientID, p.clientType, kind, len(packets))
 
 	return proofs, err
 }

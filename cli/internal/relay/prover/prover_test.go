@@ -186,6 +186,6 @@ func TestNewSetFromConfigProver(t *testing.T) {
 		instrumented, ok := prover.(*instrumentedProver)
 		require.True(t, ok)
 		require.IsType(t, &remote.Prover{}, instrumented.Prover)
-		require.Equal(t, end.Type, instrumented.proverType)
+		require.Equal(t, end.Type, instrumented.clientType)
 	}
 }
