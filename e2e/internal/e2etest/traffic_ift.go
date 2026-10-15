@@ -184,7 +184,7 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send IFT batch on route %q: %w", i.routeID, err)
 	}
-	sequences, err := sendPacketSequences(i.sourceRouter, receipt)
+	sequences, err := SendPacketSequences(i.sourceRouter, receipt)
 	if err != nil {
 		return nil, err
 	}
