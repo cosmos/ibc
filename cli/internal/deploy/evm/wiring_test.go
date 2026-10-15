@@ -236,6 +236,16 @@ func TestProvisionIFTAndBridge(t *testing.T) {
 	require.True(t, registered)
 	require.Equal(t, "0x00000000000000000000000000000000000000cp", cp)
 	require.Equal(t, ctor, gotCtor)
+
+	limit, err := d.IFTRateLimit(ctx, token.Address)
+	require.NoError(t, err)
+	require.Zero(t, limit.Capacity.Sign())
+
+	want := deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 3600}
+	require.NoError(t, d.SetIFTRateLimit(ctx, token.Address, want))
+	limit, err = d.IFTRateLimit(ctx, token.Address)
+	require.NoError(t, err)
+	require.True(t, want.Equal(limit))
 }
 
 func TestVerifyGMPAndIFT(t *testing.T) {

@@ -7,6 +7,8 @@ resource:
   attributes:
     - name: service.name
       value: ibc
+    - name: service.runtime
+      value: "${env:OTEL_SERVICE_RUNTIME:-unknown}"
 
 # "every 2s push pending metrics to collector"
 meter_provider:

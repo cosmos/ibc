@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,6 +56,8 @@ var (
 	flagDeployIFTName        string
 	flagDeployIFTSymbol      string
 	flagDeployIFTOwner       string
+	flagDeployIFTCapacity    string
+	flagDeployIFTWindow      time.Duration
 	flagDeployBridgeChainA   string
 	flagDeployBridgeIFTA     string
 	flagDeployBridgeChainB   string
@@ -124,7 +127,11 @@ var (
 	cmdDeployIFT = &cobra.Command{
 		Use:   keyIFT,
 		Short: "Deploy an IFT token on one chain",
-		RunE:  deployIFT,
+		Long: "Deploy an IFT token on one chain and set its rate limit, which IFT requires before any transfer. " +
+			"Rerunning with a different rate limit updates it. " +
+			"With an --owner other than the deployer no limit is set and the rate-limit flags are rejected: " +
+			"the owner must call setIFTRateLimit before any transfer.",
+		RunE: deployIFT,
 	}
 
 	cmdDeployIFTBridge = &cobra.Command{
@@ -828,23 +835,67 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" {
 		return errors.New("--chain is required")
 	}
+	if flagDeployIFTCapacity == "" && flagDeployIFTOwner == "" {
+		return errIFTCapacityRequired
+	}
 	chain, ok := cfg.Chain(flagDeployChain)
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagDeployChain)
 	}
+	deployer, err := deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+	if err != nil {
+		return err
+	}
 	owner := flagDeployIFTOwner
 	if owner == "" {
-		owner, err = deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
-		if err != nil {
-			return err
-		}
+		owner = deployer
+	}
+	if !common.IsHexAddress(owner) {
+		return errors.Errorf("invalid --owner %q", owner)
+	}
+	rateLimit, err := iftRateLimit(owner, deployer, cmd.Flags().Changed("rate-limit-window"))
+	if err != nil {
+		return err
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
-	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol}
+	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol, RateLimit: rateLimit}
 	return planThenRun(cmd.Context(), deploy.IFTSteps(target, flagDeployManifestDir, flagDeployChain, spec))
+}
+
+// maxIFTCapacity is the largest capacity the contract stores (uint208).
+var maxIFTCapacity = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 208), big.NewInt(1))
+
+var errIFTCapacityRequired = errors.New("--rate-limit-capacity is required")
+
+// iftRateLimit resolves the rate limit `deploy ift` sets from its flags. Only
+// the owner can set it, so a token owned by someone other than the deployer
+// gets none.
+func iftRateLimit(owner, deployer string, windowSet bool) (*deploy.IFTRateLimit, error) {
+	if common.HexToAddress(owner) != common.HexToAddress(deployer) {
+		if flagDeployIFTCapacity != "" || windowSet {
+			return nil, errors.Errorf(
+				"--owner %s is not the deployer %s: only the owner can set the rate limit", owner, deployer)
+		}
+		slog.Warn("IFT owner is not the deployer: the owner must call setIFTRateLimit before any transfer succeeds",
+			"owner", owner)
+		return nil, nil
+	}
+	if flagDeployIFTCapacity == "" {
+		return nil, errIFTCapacityRequired
+	}
+
+	window, err := wholeSeconds(flagDeployIFTWindow)
+	if err != nil || window == 0 {
+		return nil, errors.Errorf("invalid --rate-limit-window %s: must be at least 1s", flagDeployIFTWindow)
+	}
+	capacity := parseIFTAmount(flagDeployIFTCapacity)
+	if capacity == nil || capacity.Sign() == 0 || capacity.Cmp(maxIFTCapacity) > 0 {
+		return nil, errors.Errorf("invalid --rate-limit-capacity %q: must be a positive uint208", flagDeployIFTCapacity)
+	}
+	return &deploy.IFTRateLimit{Capacity: capacity, Window: window}, nil
 }
 
 // deployIFTBridge registers both sides of an IFT bridge in one invocation:

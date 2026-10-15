@@ -38,6 +38,33 @@ func TestResolveFromConfig(t *testing.T) {
 		require.Empty(t, remote, "an unreachable remote is skipped, not fatal")
 	})
 
+	t.Run("remoteBadTLSConfigErrorsFatally", func(t *testing.T) {
+		entries := config.Attestors{{
+			Name: "bob",
+			Type: config.AttestorTypeRemote,
+			GRPC: "https://127.0.0.1:0",
+			TLS:  &config.TLSClientConfig{CAFile: "/nonexistent/ca.pem"},
+		}}
+
+		_, _, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet())
+
+		require.ErrorContains(t, err, "attestor bob")
+		require.ErrorContains(t, err, "caFile")
+	})
+
+	t.Run("remoteWithoutGRPCIsSkippedBeforeTLS", func(t *testing.T) {
+		entries := config.Attestors{{
+			Name: "bob",
+			Type: config.AttestorTypeRemote,
+			TLS:  &config.TLSClientConfig{CAFile: "/nonexistent/ca.pem"},
+		}}
+
+		_, remote, err := ResolveFromConfig(ctx, entries, chains.NewClientSet(nil), signer.NewSet())
+
+		require.NoError(t, err)
+		require.Empty(t, remote)
+	})
+
 	t.Run("localMissingClientErrorsFatally", func(t *testing.T) {
 		signers := signer.NewSet()
 		s, err := signer.GenerateLocalSecp256k1Signer()
