@@ -3,7 +3,6 @@
 package besufuzz
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
 	"math/big"
@@ -15,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
@@ -60,14 +60,10 @@ func FuzzParseSealedHeaderSigned(f *testing.F) {
 
 		var err error
 		header.Extra, err = sealedExtra(header, keys)
-		if err != nil {
-			t.Fatalf("building sealed extra: %v", err)
-		}
+		require.NoError(t, err)
 
 		parsed, err := besu.ParseSealedHeader(header)
-		if err != nil {
-			t.Fatalf("parsing validly sealed header: %v", err)
-		}
+		require.NoError(t, err, "parsing validly sealed header")
 
 		checkParsedHeader(t, header, parsed)
 
@@ -75,15 +71,11 @@ func FuzzParseSealedHeaderSigned(f *testing.F) {
 		for i, key := range keys {
 			want[i] = crypto.PubkeyToAddress(key.PublicKey)
 		}
-		if !slices.Equal(parsed.Validators, want) {
-			t.Fatalf("validators %v, want %v", parsed.Validators, want)
-		}
+		require.Equal(t, want, parsed.Validators)
 
 		signers := sealSigners(t, parsed.RLP)
 		for i := 1; i < len(signers); i++ {
-			if signers[i-1].Cmp(signers[i]) >= 0 {
-				t.Fatalf("seal signers not strictly ascending: %v", signers)
-			}
+			require.Negative(t, signers[i-1].Cmp(signers[i]), "seal signers not strictly ascending: %v", signers)
 		}
 	})
 }
@@ -92,48 +84,32 @@ func checkParsedHeader(t *testing.T, header *types.Header, parsed *besu.ParsedHe
 	t.Helper()
 
 	var decoded types.Header
-	if err := rlp.DecodeBytes(parsed.RLP, &decoded); err != nil {
-		t.Fatalf("parsed RLP does not decode: %v", err)
-	}
-	if decoded.Number.Uint64() != parsed.Height || parsed.Height != header.Number.Uint64() {
-		t.Fatalf("height %d, decoded %v, input %v", parsed.Height, decoded.Number, header.Number)
-	}
-	if decoded.Time != parsed.Timestamp || decoded.Root != parsed.StateRoot {
-		t.Fatalf("parsed fields disagree with parsed RLP")
-	}
+	require.NoError(t, rlp.DecodeBytes(parsed.RLP, &decoded), "parsed RLP does not decode")
+	require.Equal(t, header.Number.Uint64(), parsed.Height)
+	require.Equal(t, parsed.Height, decoded.Number.Uint64())
+	require.Equal(t, parsed.Timestamp, decoded.Time)
+	require.Equal(t, parsed.StateRoot, decoded.Root)
 
 	inputItems, inputSeals := splitExtra(t, header.Extra)
 	outputItems, outputSeals := splitExtra(t, decoded.Extra)
-	if sealDigest(t, header, inputItems) != sealDigest(t, &decoded, outputItems) {
-		t.Fatalf("reordering seals changed the commit seal digest")
-	}
-
-	slices.SortFunc(inputSeals, bytes.Compare)
-	slices.SortFunc(outputSeals, bytes.Compare)
-	if !slices.EqualFunc(inputSeals, outputSeals, bytes.Equal) {
-		t.Fatalf("seals were changed, not just reordered")
-	}
+	require.Equal(
+		t, sealDigest(t, header, inputItems), sealDigest(t, &decoded, outputItems),
+		"reordering seals changed the commit seal digest",
+	)
+	require.ElementsMatch(t, inputSeals, outputSeals, "seals were changed, not just reordered")
 
 	reparsed, err := besu.ParseSealedHeader(&decoded)
-	if err != nil {
-		t.Fatalf("reparsing parsed header: %v", err)
-	}
-	if !bytes.Equal(reparsed.RLP, parsed.RLP) {
-		t.Fatalf("parsing is not idempotent")
-	}
+	require.NoError(t, err, "reparsing parsed header")
+	require.Equal(t, parsed.RLP, reparsed.RLP, "parsing is not idempotent")
 }
 
 func splitExtra(t *testing.T, extra []byte) ([]rlp.RawValue, [][]byte) {
 	t.Helper()
 
 	var items []rlp.RawValue
-	if err := rlp.DecodeBytes(extra, &items); err != nil {
-		t.Fatalf("extra data list: %v", err)
-	}
+	require.NoError(t, rlp.DecodeBytes(extra, &items))
 	var seals [][]byte
-	if err := rlp.DecodeBytes(items[extraIdxCommitSeals], &seals); err != nil {
-		t.Fatalf("commit seals: %v", err)
-	}
+	require.NoError(t, rlp.DecodeBytes(items[extraIdxCommitSeals], &seals))
 
 	return items, seals
 }
@@ -146,9 +122,8 @@ func sealDigest(t *testing.T, header *types.Header, items []rlp.RawValue) common
 	items[extraIdxCommitSeals] = emptyRLPList
 	signing := types.CopyHeader(header)
 	var err error
-	if signing.Extra, err = rlp.EncodeToBytes(items); err != nil {
-		t.Fatalf("encoding signing extra: %v", err)
-	}
+	signing.Extra, err = rlp.EncodeToBytes(items)
+	require.NoError(t, err)
 
 	return signing.Hash()
 }
@@ -157,18 +132,14 @@ func sealSigners(t *testing.T, headerRLP []byte) []common.Address {
 	t.Helper()
 
 	var header types.Header
-	if err := rlp.DecodeBytes(headerRLP, &header); err != nil {
-		t.Fatalf("decoding header: %v", err)
-	}
+	require.NoError(t, rlp.DecodeBytes(headerRLP, &header))
 	items, seals := splitExtra(t, header.Extra)
 	digest := sealDigest(t, &header, items)
 
 	signers := make([]common.Address, len(seals))
 	for i, seal := range seals {
 		pubkey, err := crypto.SigToPub(digest[:], seal)
-		if err != nil {
-			t.Fatalf("seal %d: %v", i, err)
-		}
+		require.NoError(t, err, "seal %d", i)
 		signers[i] = crypto.PubkeyToAddress(*pubkey)
 	}
 

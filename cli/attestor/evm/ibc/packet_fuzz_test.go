@@ -3,8 +3,9 @@
 package ibc
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 )
@@ -40,12 +41,9 @@ func FuzzDecodePacket(f *testing.F) {
 		}
 
 		encoded, err := EncodePacket(packet)
-		if err != nil {
-			t.Fatalf("re-encoding decoded packet: %v", err)
-		}
+		require.NoError(t, err)
 		got, err := DecodePacket(encoded)
-		if err != nil || !reflect.DeepEqual(got, packet) {
-			t.Fatalf("round trip gave (%+v, %v), want %+v", got, err, packet)
-		}
+		require.NoError(t, err)
+		require.Equal(t, packet, got)
 	})
 }

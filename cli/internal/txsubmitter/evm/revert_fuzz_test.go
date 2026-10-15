@@ -3,10 +3,10 @@
 package evm
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/stretchr/testify/require"
 )
 
 // FuzzExplainRevert feeds node-supplied revert data to explainRevert, which
@@ -25,8 +25,6 @@ func FuzzExplainRevert(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		original := revertError{code: 3, data: hexutil.Encode(data)}
-		if err := explainRevert(original); !errors.Is(err, original) {
-			t.Fatalf("explained error %v does not wrap the original", err)
-		}
+		require.ErrorIs(t, explainRevert(original), original)
 	})
 }

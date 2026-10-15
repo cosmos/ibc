@@ -4,10 +4,10 @@ package evm
 
 import (
 	"math"
-	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func FuzzDecodeStateAttestation(f *testing.F) {
@@ -26,13 +26,11 @@ func FuzzDecodeStateAttestation(f *testing.F) {
 		}
 
 		encoded, err := EncodeStateAttestation(height, timestamp)
-		if err != nil {
-			t.Fatalf("re-encoding decoded attestation: %v", err)
-		}
+		require.NoError(t, err)
 		gotHeight, gotTimestamp, err := DecodeStateAttestation(encoded)
-		if err != nil || gotHeight != height || gotTimestamp != timestamp {
-			t.Fatalf("round trip gave (%d, %d, %v), want (%d, %d)", gotHeight, gotTimestamp, err, height, timestamp)
-		}
+		require.NoError(t, err)
+		require.Equal(t, height, gotHeight)
+		require.Equal(t, timestamp, gotTimestamp)
 	})
 }
 
@@ -52,13 +50,11 @@ func FuzzDecodePacketAttestation(f *testing.F) {
 		}
 
 		encoded, err := EncodePacketAttestation(height, packets)
-		if err != nil {
-			t.Fatalf("re-encoding decoded attestation: %v", err)
-		}
+		require.NoError(t, err)
 		gotHeight, gotPackets, err := DecodePacketAttestation(encoded)
-		if err != nil || gotHeight != height || !slices.Equal(gotPackets, packets) {
-			t.Fatalf("round trip gave (%d, %v, %v), want (%d, %v)", gotHeight, gotPackets, err, height, packets)
-		}
+		require.NoError(t, err)
+		require.Equal(t, height, gotHeight)
+		require.Equal(t, packets, gotPackets)
 	})
 }
 
@@ -80,18 +76,13 @@ func FuzzRecoverSigner(f *testing.F) {
 		want := crypto.PubkeyToAddress(key.PublicKey)
 
 		sig, err = crypto.Sign(digest[:], key)
-		if err != nil {
-			t.Fatalf("signing: %v", err)
-		}
+		require.NoError(t, err)
 		legacy, err := normalizeSignature(sig)
-		if err != nil {
-			t.Fatalf("normalizing: %v", err)
-		}
+		require.NoError(t, err)
 		for _, form := range [][]byte{sig, legacy} {
 			got, err := RecoverSigner(digest, form)
-			if err != nil || got != want {
-				t.Fatalf("recovered (%s, %v) from v=%d, want %s", got, err, form[64], want)
-			}
+			require.NoError(t, err, "v=%d", form[64])
+			require.Equal(t, want, got, "v=%d", form[64])
 		}
 	})
 }
