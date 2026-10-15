@@ -45,6 +45,11 @@ func RequiredSignerBalance() *big.Int {
 	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
 }
 
+// Coins converts $counts * 10^18 wei
+func Coins(coins int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(coins), big.NewInt(weiPerEther))
+}
+
 // ProtocolAuthorityAddress is the deployer funded for IBC Instance realization.
 // Attached Chains must provision it out of band before Start.
 func ProtocolAuthorityAddress() common.Address {
@@ -375,6 +380,7 @@ func buildConfig(
 	dbPath string,
 ) (ibccli.RelayerConfig, ibccli.RelayerOptions) {
 	t.Helper()
+
 	config := ibccli.RelayerConfig{
 		DBPath:         dbPath,
 		SignerAlias:    relayerSignerAlias,
@@ -382,12 +388,17 @@ func buildConfig(
 		FinalityOffset: ibccli.HarnessFinalityOffset,
 		ClearOnStart:   false,
 		ClearInterval:  5 * time.Second,
+		Observability:  env.ObservabilityEnabled(),
 	}
+
+	chains := env.Chains()
 	options := ibccli.RelayerOptions{
-		ChainIDs:     make(map[string]string, len(env.Chains())),
-		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
+		ChainIDs:      make(map[string]string, len(chains)),
+		WaitPolicies:  make(map[string]ibccli.WaitPolicy, len(routes)),
+		Observability: env.ObservabilityEnabled(),
 	}
-	for _, id := range env.Chains() {
+
+	for _, id := range chains {
 		chain, err := env.Chain(id)
 		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		rpc, err := driver.ChainRPC(string(id))
@@ -429,7 +440,7 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
 		}
-		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
+		options.WaitPolicies[string(route.ID)] = RouteWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
@@ -472,7 +483,9 @@ func mergeRelayerConnection(
 	config.Connections = append(config.Connections, connection)
 }
 
-func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
+// RouteWaitPolicy is the end-to-end packet wait policy for a route between
+// Chains with the given timings.
+func RouteWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
 	return ibccli.WaitPolicy{
 		CompletionBudget: source.CompletionBudget + destination.CompletionBudget,
 		StatusPoll:       max(source.PollInterval, destination.PollInterval),

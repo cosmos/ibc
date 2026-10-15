@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math/big"
 	"testing"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
@@ -18,15 +19,17 @@ import (
 // fakeTarget satisfies Target for engine tests.
 type fakeTarget struct {
 	hasCode    map[string]bool
-	registered map[string]string     // clientID -> address
-	apps       map[string]string     // port -> app address
-	bridges    map[string]fakeBridge // ift|clientID -> bridge
+	registered map[string]string       // clientID -> address
+	apps       map[string]string       // port -> app address
+	bridges    map[string]fakeBridge   // ift|clientID -> bridge
+	rateLimits map[string]IFTRateLimit // ift -> rate limit
 	provisions int
 	registers  int
 
 	gmpProvisions  int
 	iftProvisions  int
 	ctorProvisions int
+	rateLimitSets  int
 }
 
 func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error) {
@@ -71,6 +74,7 @@ func newFakeTarget() *fakeTarget {
 		registered: map[string]string{},
 		apps:       map[string]string{},
 		bridges:    map[string]fakeBridge{},
+		rateLimits: map[string]IFTRateLimit{},
 	}
 }
 
@@ -92,6 +96,19 @@ func (f *fakeTarget) AppRegistered(_ context.Context, _, port string) (string, b
 func (f *fakeTarget) ProvisionIFT(_ context.Context, _ string, spec IFTSpec) (IFTRef, error) {
 	f.iftProvisions++
 	return IFTRef{Address: "0xift-" + spec.Symbol}, nil
+}
+
+func (f *fakeTarget) SetIFTRateLimit(_ context.Context, ift string, limit IFTRateLimit) error {
+	f.rateLimitSets++
+	f.rateLimits[ift] = limit
+	return nil
+}
+
+func (f *fakeTarget) IFTRateLimit(_ context.Context, ift string) (IFTRateLimit, error) {
+	if limit, ok := f.rateLimits[ift]; ok {
+		return limit, nil
+	}
+	return IFTRateLimit{Capacity: new(big.Int)}, nil
 }
 
 func (f *fakeTarget) ProvisionSendCallConstructor(context.Context) (string, error) {
@@ -405,6 +422,48 @@ func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
 	require.Len(t, m.Tokens, 2)
+}
+
+func TestIFTStepsRateLimit(t *testing.T) {
+	dir := t.TempDir()
+	target := newFakeTarget()
+
+	m := manifest.New("1", "test")
+	m.Core.Router = "0xrouter"
+	m.GMP = &manifest.GMP{Address: "0xgmp", Port: GMPPortID}
+	require.NoError(t, m.Save(dir))
+
+	limit := IFTRateLimit{Capacity: big.NewInt(1000), Window: 3600}
+	spec := IFTSpec{Owner: "0xowner", Name: "Foo", Symbol: "FOO", RateLimit: &limit}
+	actions := func(spec IFTSpec) []string {
+		t.Helper()
+		res, err := RunSteps(context.Background(), slog.Default(), false, IFTSteps(target, dir, "1", spec))
+		require.NoError(t, err)
+		out := make([]string, len(res))
+		for i, r := range res {
+			out[i] = r.Action
+		}
+		return out
+	}
+
+	require.Equal(t, []string{"executed", "executed"}, actions(spec))
+	require.Equal(t, limit, target.rateLimits["0xift-FOO"])
+
+	// identical rerun skips both steps
+	target.hasCode["0xift-FOO"] = true
+	require.Equal(t, []string{"skipped", "skipped"}, actions(spec))
+	require.Equal(t, 1, target.rateLimitSets)
+
+	// a changed rate limit updates the existing token
+	raised := IFTRateLimit{Capacity: big.NewInt(2000), Window: 3600}
+	spec.RateLimit = &raised
+	require.Equal(t, []string{"skipped", "executed"}, actions(spec))
+	require.Equal(t, 1, target.iftProvisions)
+	require.Equal(t, raised, target.rateLimits["0xift-FOO"])
+
+	// without a rate limit only the token step runs
+	spec.RateLimit = nil
+	require.Equal(t, []string{"skipped"}, actions(spec))
 }
 
 func TestIFTStepsRequiresGMP(t *testing.T) {

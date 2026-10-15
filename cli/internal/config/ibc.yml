@@ -69,6 +69,11 @@ relayer:
         type: "remote"
         params:
           url: prover.example.com:9090
+#          # TLS needs url: https://prover.example.com; tls only customizes it
+#          tls:
+#            caFile: /etc/ibc/tls/ca.crt
+#            certFile: /etc/ibc/tls/client.crt
+#            keyFile: /etc/ibc/tls/client.key
       clientB:
         chainId: "8453"
         signer: "base-relayer-key"
@@ -81,6 +86,11 @@ attestors:
   - name: "attestor-base"
     type: remote
     grpc: attestor.example.com:3000
+#    # TLS needs grpc: https://attestor.example.com; tls only customizes it
+#    tls:
+#      caFile: /etc/ibc/tls/ca.crt
+#      certFile: /etc/ibc/tls/client.crt
+#      keyFile: /etc/ibc/tls/client.key
   - name: "attestor-ethereum"
     type: remote
     grpc: attestor.example.com:3000
@@ -98,6 +108,11 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "eth-relayer-key-id"
+#    # TLS needs grpc: https://cosmos-kms.example.com; tls only customizes it
+#    tls:
+#      caFile: /etc/ibc/tls/ca.crt
+#      certFile: /etc/ibc/tls/client.crt
+#      keyFile: /etc/ibc/tls/client.key
   - alias: "base-relayer-key"
     type: remote
     grpc: cosmos-kms.example.com:9090
