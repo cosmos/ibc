@@ -28,21 +28,52 @@ func TestDigestMatchesFormula(t *testing.T) {
 }
 
 func TestRecoverSigner(t *testing.T) {
-	t.Run("recoversCanonical", func(t *testing.T) {
+	// The light client's ECDSA.recover takes only v of 27/28 and low s, but
+	// attestors may return any form of the same signature.
+	t.Run("acceptsEveryFormAndReturnsCanonical", func(t *testing.T) {
 		key, digest, sig := signed(t)
-		sig[64] += 27
+		canonical := append([]byte(nil), sig...)
+		canonical[64] += 27
 
-		recovered, err := RecoverSigner(digest, sig)
-		require.NoError(t, err)
-		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
+		for _, form := range [][]byte{sig, malleate(sig)} {
+			for _, v := range []byte{form[64], form[64] + 27} {
+				input := append([]byte(nil), form...)
+				input[64] = v
+				original := append([]byte(nil), input...)
+
+				recovered, normalized, err := RecoverSigner(digest, input)
+				require.NoError(t, err)
+				require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
+				require.Equal(t, canonical, normalized)
+				require.Equal(t, original, input, "input must not be mutated")
+			}
+		}
 	})
 
 	t.Run("rejectsWrongLength", func(t *testing.T) {
-		_, err := RecoverSigner([32]byte{}, []byte{0x01, 0x02})
+		_, _, err := RecoverSigner([32]byte{}, []byte{0x01, 0x02})
 		require.Error(t, err)
 	})
 
-	t.Run("interopsWithSignABI", func(t *testing.T) {
+	t.Run("rejectsOtherRecoveryIDs", func(t *testing.T) {
+		_, digest, sig := signed(t)
+
+		for _, v := range []byte{2, 3, 26, 29, 30, 31} {
+			sig[64] = v
+			_, _, err := RecoverSigner(digest, sig)
+			require.ErrorContains(t, err, "invalid recovery ID", "v=%d", v)
+		}
+	})
+
+	t.Run("rejectsOutOfRangeS", func(t *testing.T) {
+		_, digest, sig := signed(t)
+
+		secp256k1N.FillBytes(sig[32:64])
+		_, _, err := RecoverSigner(digest, sig)
+		require.Error(t, err)
+	})
+
+	t.Run("returnsSignABIOutputUnchanged", func(t *testing.T) {
 		key, _, rawSig := signed(t)
 
 		sig, err := SignABI(
@@ -53,58 +84,11 @@ func TestRecoverSigner(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		recovered, err := RecoverSigner(Digest(TagPacketAttestation, []byte("attested data")), sig)
+		recovered, normalized, err := RecoverSigner(Digest(TagPacketAttestation, []byte("attested data")), sig)
 		require.NoError(t, err)
-		require.Equal(
-			t,
-			crypto.PubkeyToAddress(key.PublicKey),
-			recovered,
-			"RecoverSigner must accept exactly what SignABI produces",
-		)
+		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
+		require.Equal(t, sig, normalized)
 	})
-
-	// The light client's ecrecover takes only 27/28, so other recovery IDs
-	// must not count toward a quorum even when go-ethereum would recover them.
-	t.Run("rejectsOtherRecoveryIDs", func(t *testing.T) {
-		_, digest, sig := signed(t)
-
-		for _, v := range []byte{0, 1, 2, 3, 26, 29, 30, 31} {
-			sig[64] = v
-			_, err := RecoverSigner(digest, sig)
-			require.ErrorContains(t, err, "invalid recovery ID", "v=%d", v)
-		}
-	})
-
-	t.Run("rejectsHighS", func(t *testing.T) {
-		_, digest, sig := signed(t)
-		highS := malleate(sig)
-		highS[64] += 27
-
-		_, err := RecoverSigner(digest, highS)
-		require.ErrorContains(t, err, "not canonical")
-	})
-
-	t.Run("rejectsOutOfRangeS", func(t *testing.T) {
-		_, digest, sig := signed(t)
-		sig[64] += 27
-
-		secp256k1N.FillBytes(sig[32:64])
-		_, err := RecoverSigner(digest, sig)
-		require.ErrorContains(t, err, "not canonical")
-	})
-}
-
-func TestNormalizeSignature(t *testing.T) {
-	_, _, sig := signed(t)
-	original := append([]byte(nil), sig...)
-
-	for _, form := range [][]byte{sig, malleate(sig)} {
-		normalized, err := NormalizeSignature(form)
-		require.NoError(t, err)
-		require.Equal(t, sig[:64], normalized[:64], "s must be the lower of the pair")
-		require.Equal(t, sig[64]+27, normalized[64])
-	}
-	require.Equal(t, original, sig, "input must not be mutated")
 }
 
 func TestSignABINormalizesHighS(t *testing.T) {

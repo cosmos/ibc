@@ -5,7 +5,6 @@ package evm
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"math/big"
 
@@ -36,7 +35,8 @@ func Digest(tag byte, data []byte) [32]byte {
 	return sha256.Sum256(signingInput[:])
 }
 
-// SignABI signs Digest(tag, data).
+// SignABI signs Digest(tag, data) in the form AttestationLightClient.sol
+// accepts.
 func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte, error) {
 	digest := Digest(tag, data)
 
@@ -45,7 +45,7 @@ func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte,
 		return nil, err
 	}
 
-	return NormalizeSignature(signature)
+	return normalizeSignature(signature)
 }
 
 var (
@@ -53,11 +53,11 @@ var (
 	secp256k1HalfN = new(big.Int).Rsh(secp256k1N, 1)
 )
 
-// NormalizeSignature puts a 65-byte r||s||v signature in the only form
+// normalizeSignature puts a 65-byte r||s||v signature in the only form
 // AttestationLightClient.sol's ECDSA.recover accepts: v of 27/28 and s in the
 // lower half of the curve order. It accepts v of 0/1 or 27/28 and either s,
 // which recover to the same signer, and does not mutate the input.
-func NormalizeSignature(signature []byte) ([]byte, error) {
+func normalizeSignature(signature []byte) ([]byte, error) {
 	if len(signature) != 65 {
 		return nil, fmt.Errorf("invalid signature length %d, expected 65", len(signature))
 	}
@@ -81,30 +81,22 @@ func NormalizeSignature(signature []byte) ([]byte, error) {
 	return normalized, nil
 }
 
-// RecoverSigner recovers the address that produced sig over digest. Like
-// AttestationLightClient.sol, it accepts only v of 27/28 and low s;
-// NormalizeSignature converts other forms of the same signature.
-func RecoverSigner(digest [32]byte, sig []byte) (common.Address, error) {
-	if len(sig) != 65 {
-		return common.Address{}, fmt.Errorf("invalid signature length %d, expected 65", len(sig))
-	}
-	if sig[64] != 27 && sig[64] != 28 {
-		return common.Address{}, fmt.Errorf("invalid recovery ID %d, expected 27 or 28", sig[64])
+// RecoverSigner recovers the address that produced sig over digest, and
+// returns sig in the only form AttestationLightClient.sol accepts. sig may use
+// v of 0/1 or 27/28 and either s.
+func RecoverSigner(digest [32]byte, sig []byte) (common.Address, []byte, error) {
+	normalized, err := normalizeSignature(sig)
+	if err != nil {
+		return common.Address{}, nil, err
 	}
 
 	// crypto.SigToPub takes the signer's raw 0/1 recovery ID.
-	raw := append([]byte(nil), sig...)
+	raw := append([]byte(nil), normalized...)
 	raw[64] -= 27
-	r := new(big.Int).SetBytes(raw[:32])
-	s := new(big.Int).SetBytes(raw[32:64])
-	if !crypto.ValidateSignatureValues(raw[64], r, s, true) {
-		return common.Address{}, errors.New("signature not canonical: r or s out of range, or s above n/2")
-	}
-
 	pub, err := crypto.SigToPub(digest[:], raw)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("recovering signer public key: %w", err)
+		return common.Address{}, nil, fmt.Errorf("recovering signer public key: %w", err)
 	}
 
-	return crypto.PubkeyToAddress(*pub), nil
+	return crypto.PubkeyToAddress(*pub), normalized, nil
 }
