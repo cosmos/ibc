@@ -5,27 +5,23 @@ package config
 import (
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 )
 
-// Client types
+// Client types the IBC CLI proves itself.
 const (
-	ClientTypeAttestation ClientType = "attestation"
-	ClientTypeBesu        ClientType = "besu"
+	ClientTypeAttestation = "attestation"
+	ClientTypeBesu        = "besu"
 )
 
 // DefaultClearOnStart whether a clearing pass runs at startup when clearOnStart is unset.
 const DefaultClearOnStart = true
 
 // builtInClientTypes are the types the IBC CLI proves without a ProverService.
-var builtInClientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesu}
+var builtInClientTypes = []string{ClientTypeAttestation, ClientTypeBesu}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
-
-// ClientType the on-chain light client type.
-type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -75,17 +71,13 @@ type ClientEnd struct {
 	Signer   string `yaml:"signer"`
 	ClientID string `yaml:"clientId"`
 
-	// Type is the on-chain light client type. Any value is accepted with a
-	// proverUrl, which serves light clients the IBC CLI does not implement.
-	Type ClientType `yaml:"type"`
+	// Type is the on-chain light client type: `attestation` or `besu`,
+	// or with a prover any type, including ones the IBC CLI does not implement.
+	Type string `yaml:"type"`
 
-	// ProverURL is a ProverService endpoint that generates this client's
-	// proofs instead of the built-in prover for Type: an http(s):// URL, or a
-	// bare host:port dialed as http://. Without a query or fragment.
-	ProverURL string `yaml:"proverUrl,omitempty"`
-
-	// ProverTLS settings for an https:// proverUrl, see TLSClientConfig.
-	ProverTLS *TLSClientConfig `yaml:"proverTls,omitempty"`
+	// Prover is a ProverService that generates this client's proofs instead of
+	// the built-in prover for Type.
+	Prover *ProverConfig `yaml:"prover,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -103,6 +95,16 @@ func (c ClientEnd) identity() clientEndIdentity {
 // AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+// ProverConfig a ProverService endpoint.
+type ProverConfig struct {
+	// URL is the ProverService endpoint: an http(s):// URL, or a bare host:port
+	// dialed as http://. Without a query or fragment.
+	URL string `yaml:"url"`
+
+	// TLS settings for an https:// URL, see TLSClientConfig.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // Validate validates the relayer config. Allows empty blocks.
@@ -239,32 +241,34 @@ func (c ClientEnd) Validate() error {
 		return errPathf("signer", "required")
 	case c.Type == "":
 		return errPathf("type", "required")
-	case c.ProverURL == "" && !slices.Contains(builtInClientTypes, c.Type):
+	case c.Prover == nil && !slices.Contains(builtInClientTypes, c.Type):
 		return errPathf(
-			"type", "unknown client type: %q; set proverUrl for a light client the IBC CLI does not implement", c.Type,
+			"type", "unknown client type: %q; set prover for a light client the IBC CLI does not implement", c.Type,
 		)
 	}
 
-	if c.ProverURL != "" {
-		if strings.Contains(c.ProverURL, "://") && !isHTTPURL(c.ProverURL) {
-			return errPathf("proverUrl", "must be a bare host:port or an http(s):// URL")
-		}
-
-		if err := errPath("proverUrl", checkHTTPURL(c.ProverEndpointURL(), false)); err != nil {
-			return err
-		}
+	if c.Prover == nil {
+		return nil
 	}
 
-	if c.ProverTLS != nil && !usesTLS(c.ProverURL) {
-		return errPathf("proverTls", "requires an https:// proverUrl")
-	}
-
-	return errPath("proverTls", c.ProverTLS.Validate())
+	return errPath("prover", c.Prover.Validate())
 }
 
-// ProverEndpointURL returns ProverURL as a URL, see endpointURL.
-func (c ClientEnd) ProverEndpointURL() string {
-	return endpointURL(c.ProverURL)
+// EndpointURL returns URL as a URL, see endpointURL.
+func (p ProverConfig) EndpointURL() string {
+	return endpointURL(p.URL)
+}
+
+func (p ProverConfig) Validate() error {
+	if p.URL == "" {
+		return errPathf("url", "required")
+	}
+
+	if err := errPath("url", checkEndpointAddr(p.URL)); err != nil {
+		return err
+	}
+
+	return validateEndpointTLS(p.URL, p.TLS)
 }
 
 func (c RelayerConfig) validateChainOverrides() error {

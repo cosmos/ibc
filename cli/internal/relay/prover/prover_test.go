@@ -119,9 +119,11 @@ func TestNewSetFromConfig(t *testing.T) {
 	t.Run("proverBadTLSConfigErrors", func(t *testing.T) {
 		// ARRANGE
 		conn := testConnection()
-		conn.ClientA.ProverURL = "https://127.0.0.1:1"
-		conn.ClientA.ProverTLS = &config.TLSClientConfig{CAFile: "/nonexistent/ca.crt"}
-		conn.ClientB.ProverURL = "http://127.0.0.1:1"
+		conn.ClientA.Prover = &config.ProverConfig{
+			URL: "https://127.0.0.1:1",
+			TLS: &config.TLSClientConfig{CAFile: "/nonexistent/ca.crt"},
+		}
+		conn.ClientB.Prover = &config.ProverConfig{URL: "http://127.0.0.1:1"}
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{
 			conn.ClientA.ChainID: mocks.NewMockClient(t),
@@ -134,7 +136,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
 
 		// ASSERT
-		require.ErrorContains(t, err, "tls.caFile")
+		require.ErrorContains(t, err, "prover: tls.caFile")
 	})
 }
 
@@ -164,14 +166,14 @@ func TestNewSetFromConfigBesu(t *testing.T) {
 	})
 }
 
-// A proverUrl end needs no chain client or attestors, and its type, built-in or
-// not, only labels its metrics.
-func TestNewSetFromConfigProverURL(t *testing.T) {
+// An end with a prover needs no chain client or attestors, and its type,
+// built-in or not, only labels its metrics.
+func TestNewSetFromConfigProver(t *testing.T) {
 	conn := testConnection()
 	conn.ClientA.Type = "op-stack"
-	conn.ClientA.ProverURL = "http://prover:9090"
+	conn.ClientA.Prover = &config.ProverConfig{URL: "http://prover:9090"}
 	conn.ClientB.Type = config.ClientTypeBesu
-	conn.ClientB.ProverURL = "http://prover:9090"
+	conn.ClientB.Prover = &config.ProverConfig{URL: "http://prover:9090"}
 	cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 	set, err := NewSetFromConfig(context.Background(), cfg, chains.NewClientSet(nil), nil, slog.Default())
@@ -184,6 +186,6 @@ func TestNewSetFromConfigProverURL(t *testing.T) {
 		instrumented, ok := prover.(*instrumentedProver)
 		require.True(t, ok)
 		require.IsType(t, &remote.Prover{}, instrumented.Prover)
-		require.Equal(t, string(end.Type), instrumented.proverType)
+		require.Equal(t, end.Type, instrumented.proverType)
 	}
 }

@@ -78,7 +78,7 @@ type TrustLevel struct {
 }
 
 // Type is the client type c records params for, or "" if it records none.
-func (c Client) Type() config.ClientType {
+func (c Client) Type() string {
 	switch {
 	case c.Attestation != nil:
 		return config.ClientTypeAttestation

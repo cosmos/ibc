@@ -187,7 +187,7 @@ func TestReconcileDeploymentRejectsClientTypeChange(t *testing.T) {
 			}
 			// Exercise the transition policy without claiming another on-chain
 			// client type is currently supported by deployment tooling.
-			incoming.Connections[0].ClientA.Type = ClientType("future-client-type")
+			incoming.Connections[0].ClientA.Type = "future-client-type"
 			_, _, err = cfg.ReconcileDeployment(incoming)
 			require.ErrorContains(
 				t,
