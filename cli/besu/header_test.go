@@ -31,41 +31,55 @@ func TestParseSealedHeaderFixture(t *testing.T) {
 	}
 }
 
-// The light client accepts only canonical seals, one per signer, in strictly
-// ascending signer order. Each mutation breaks that without changing the
-// signers, so parsing must restore the sealed header.
+// The light client accepts only canonical seals from validators, one per
+// signer, in strictly ascending signer order. Each mutation breaks that without
+// changing which validators signed, so parsing must restore the sealed header.
 func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
-	highS := func(seals [][]byte) [][]byte {
-		n := crypto.S256().Params().N
-		new(big.Int).Sub(n, new(big.Int).SetBytes(seals[0][32:64])).FillBytes(seals[0][32:64])
-		seals[0][64] ^= 1
-		return seals
-	}
-	legacyV := func(seals [][]byte) [][]byte {
-		seals[0][64] += 27
-		return seals
-	}
-	repeated := func(seals [][]byte) [][]byte { return append(seals, seals[0]) }
-	reversed := func(seals [][]byte) [][]byte {
-		slices.Reverse(seals)
-		return seals
-	}
-	mutations := map[string]func([][]byte) [][]byte{
-		"highS":    highS,
-		"legacyV":  legacyV,
-		"repeated": repeated,
-		"reversed": reversed,
-		"all": func(seals [][]byte) [][]byte {
-			return reversed(append(legacyV(highS(seals)), seals[1]))
-		},
-	}
-
 	fixture := besutest.MustFixture(t)
 	updates := map[string]besutest.UpdateFixture{
 		"adjacent":    fixture.AdjacentUpdate,
 		"nonAdjacent": fixture.NonAdjacentUpdate,
 	}
 	for updateName, update := range updates {
+		var header types.Header
+		require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
+		items, _ := splitExtra(t, header.Extra)
+		digest, err := besu.CommitSealDigest(&header, items)
+		require.NoError(t, err)
+		key, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		outsider, err := crypto.Sign(digest, key)
+		require.NoError(t, err)
+
+		highS := func(seals [][]byte) [][]byte {
+			n := crypto.S256().Params().N
+			new(big.Int).Sub(n, new(big.Int).SetBytes(seals[0][32:64])).FillBytes(seals[0][32:64])
+			seals[0][64] ^= 1
+			return seals
+		}
+		legacyV := func(seals [][]byte) [][]byte {
+			seals[0][64] += 27
+			return seals
+		}
+		repeated := func(seals [][]byte) [][]byte { return append(seals, seals[0]) }
+		nonValidator := func(seals [][]byte) [][]byte { return append(seals, outsider) }
+		invalid := func(seals [][]byte) [][]byte { return append(seals, []byte{0x01}) }
+		reversed := func(seals [][]byte) [][]byte {
+			slices.Reverse(seals)
+			return seals
+		}
+		mutations := map[string]func([][]byte) [][]byte{
+			"highS":        highS,
+			"legacyV":      legacyV,
+			"repeated":     repeated,
+			"nonValidator": nonValidator,
+			"invalid":      invalid,
+			"reversed":     reversed,
+			"all": func(seals [][]byte) [][]byte {
+				return reversed(invalid(nonValidator(append(legacyV(highS(seals)), seals[1]))))
+			},
+		}
+
 		for name, mutate := range mutations {
 			t.Run(updateName+"/"+name, func(t *testing.T) {
 				var header types.Header

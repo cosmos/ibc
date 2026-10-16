@@ -19,9 +19,9 @@ import (
 )
 
 // FuzzParseSealedHeader parses node-supplied headers. Whatever it accepts it
-// must change only the commit seals, to one canonical seal per input signer in
-// strictly ascending signer order, and parsing its own output must give the
-// same bytes.
+// must change only the commit seals, to one canonical seal per validator that
+// signed, in strictly ascending signer order, and parsing its own output must
+// give the same bytes.
 func FuzzParseSealedHeader(f *testing.F) {
 	fixture := besutest.MustFixture(f)
 	f.Add([]byte(fixture.AdjacentUpdate.HeaderRLP))
@@ -50,11 +50,14 @@ func FuzzParseSealedHeader(f *testing.F) {
 
 		digest, err := besu.CommitSealDigest(&header, inputItems)
 		require.NoError(t, err)
+		var validators []common.Address
+		require.NoError(t, rlp.DecodeBytes(inputItems[1], &validators))
 		var want []common.Address
 		for _, seal := range inputSeals {
 			signer, _, sigErr := ecrecover.Recover(digest, seal)
-			require.NoError(t, sigErr)
-			want = append(want, signer)
+			if sigErr == nil && slices.Contains(validators, signer) {
+				want = append(want, signer)
+			}
 		}
 		slices.SortFunc(want, common.Address.Cmp)
 		want = slices.Compact(want)
@@ -67,7 +70,7 @@ func FuzzParseSealedHeader(f *testing.F) {
 			require.NoError(t, sigErr)
 			got = append(got, crypto.PubkeyToAddress(*pubkey))
 		}
-		require.Equal(t, want, got, "not one seal per input signer in signer order")
+		require.Equal(t, want, got, "not one seal per validator that signed, in signer order")
 
 		reparsed, err := besu.ParseSealedHeader(&sorted)
 		require.NoError(t, err)
