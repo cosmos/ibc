@@ -3,30 +3,27 @@ title: "Upgrade the router contract"
 description: "Deploy new ICS26Router logic behind the existing router proxies on the tutorial's two chains, then confirm the router runs it and packets still flow."
 ---
 
-This guide upgrades the router on both chains of the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md)'s deployment to new logic (the implementation contract behind the router's proxy). Each router keeps its address and its state, so the clients, the applications, and the running relayer need no change.
+This guide upgrades the router on a running two-chain IBC deployment to new logic (the implementation contract behind the router's proxy). Each router keeps its address and its state, so the clients, the applications, and the running relayer need no change.
 
 ## Before you begin
 
-This guide starts where the tutorial ends:
+Complete the [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) tutorial first. This guide starts from the state it leaves:
 
 - IBC is deployed on chains 41001 and 41002.
 - One token transfer has been delivered.
 - The relayer is running in its own terminal.
 
-You need:
+You also need:
 
-- The Deploy IBC and send a token tutorial, completed.
 - [Foundry](https://getfoundry.sh/introduction/installation), for `forge` and `cast`.
 - [Bun](https://bun.com/docs/installation), to install the dependencies the contracts import.
-- The access manager's admin key. The tutorial's deployer key holds that role with no execution delay, so each upgrade call runs immediately.
-
-An admin granted the role with an execution delay must schedule each call first, as [the access manager and its roles](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) describes.
+- The access manager's admin key. The tutorial's deployer key holds that role with no [execution delay](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles), so each upgrade call runs immediately.
 
 Run every command from the `cli` directory of your IBC clone.
 
 ## 1. Set your shell variables
 
-Read the addresses and the deployer key that the steps use:
+Read the values the steps use:
 
 ```bash
 ROUTER_A=$(./bin/ibc deploy show 41001 | jq -r '.core.router')
@@ -37,25 +34,31 @@ RELAYER=$(./bin/ibc keys show relayer | jq -r '.evmAddress')
 DEPLOYER_KEY=$(./bin/ibc keys show deployer --private | jq -r '.privateKey')
 ```
 
-The last line prints the deployer's private key, because `forge` and `cast` sign with a raw key.
+The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files.
 
 ## 2. Get the new router source
 
-The new logic comes from the [ibc-contracts](https://github.com/cosmos/ibc-contracts) repository. This guide builds the router from the latest `main` branch. On `main`, the router restricts two functions the tutorial leaves open to every address. They are `addIBCApp(address)` and the `addClient` form that assigns the client ID itself. For your own upgrade, check out the release you are shipping.
+This guide builds the new logic from commit `a99cb151` of [ibc-contracts](https://github.com/cosmos/ibc-contracts). At that commit, two more router functions are `restricted`: `addIBCApp(address)`, and the `addClient` overload in which the router picks the client ID. The CLI assigns them no role, so after the upgrade only the admin can call them. For your own upgrade, check out the release you are shipping.
 
-1. Clone the repository next to your IBC clone. The clone checks out `main`:
+1. Clone the repository next to your IBC clone:
 
 ```bash
 git clone https://github.com/cosmos/ibc-contracts.git ../../ibc-contracts
 ```
 
-2. Install the contracts' dependencies from the repository's lockfile:
+2. Check out the commit:
+
+```bash
+git -C ../../ibc-contracts checkout a99cb151aee41fc768d726d47ef82f61bf46310e
+```
+
+3. Install the contracts' dependencies:
 
 ```bash
 bun install --cwd ../../ibc-contracts/ibc-solidity --frozen-lockfile
 ```
 
-## 3. Check the current behavior
+## 3. Check the router before the upgrade
 
 1. Read which logic the router proxy on 41001 runs:
 
@@ -63,7 +66,7 @@ bun install --cwd ../../ibc-contracts/ibc-solidity --frozen-lockfile
 cast implementation "$ROUTER_A" --rpc-url http://localhost:8545
 ```
 
-It prints the `ics26RouterImplementation` address from `./bin/ibc deploy show 41001`, in lowercase.
+It prints the `targetData.ics26RouterImplementation` address from `./bin/ibc deploy show 41001`, in lowercase.
 
 2. Simulate a call to `addIBCApp(address)` from the relayer's account, which is not an admin:
 
@@ -86,18 +89,18 @@ NEW_IMPL_A=$(forge create --root ../../ibc-contracts/ibc-solidity contracts/ICS2
 ```
 
 <Warning>
-Upgrade only to logic written for the state the proxy already holds. The proxy keeps its storage and runs the new code against it. No on-chain check compares the two storage layouts. Logic that lays out storage differently misreads the router's clients, applications, and packet commitments.
+Upgrade only to logic written for the state the proxy already holds. The proxy keeps its storage and runs the new code against it. No on-chain check compares the two storage layouts. Logic that lays out storage differently reads the wrong values for the router's clients, applications, and packet commitments.
 </Warning>
 
-Between the router the tutorial deploys and `main`, the router gains only access checks, so its storage layout stays the same.
+The router at `a99cb151` differs from the tutorial's only by those two access checks, so its storage layout is the same.
 
-2. Point the 41001 router at it:
+2. Switch the 41001 router to `NEW_IMPL_A`:
 
 ```bash
 cast send "$ROUTER_A" "upgradeToAndCall(address,bytes)" "$NEW_IMPL_A" 0x --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
 ```
 
-The receipt it prints has a `status` line reading `1 (success)`. The `0x` argument is the call data the proxy runs against the new logic after switching. Empty call data runs nothing, and this upgrade needs no migration call.
+The receipt it prints has a `status` line reading `1 (success)`. The final `0x` is empty call data, because this upgrade runs no migration.
 
 3. Build and deploy the new logic on 41002:
 
@@ -105,13 +108,13 @@ The receipt it prints has a `status` line reading `1 (success)`. The `0x` argume
 NEW_IMPL_B=$(forge create --root ../../ibc-contracts/ibc-solidity contracts/ICS26Router.sol:ICS26Router --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY" --broadcast --json | jq -r '.deployedTo') && echo "$NEW_IMPL_B"
 ```
 
-4. Point the 41002 router at it:
+4. Switch the 41002 router to `NEW_IMPL_B`:
 
 ```bash
 cast send "$ROUTER_B" "upgradeToAndCall(address,bytes)" "$NEW_IMPL_B" 0x --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
 ```
 
-The relayer keeps running throughout. It calls each router at its proxy address, which the upgrade leaves unchanged. Packets in flight while only one chain is upgraded are unaffected, because the router's packet functions are the same in both versions.
+Packets in flight while only one chain is upgraded are still delivered, because the router's packet functions are the same in both versions.
 
 ## 5. Verify the upgrade
 
@@ -125,7 +128,7 @@ cast implementation "$ROUTER_A" --rpc-url http://localhost:8545
 cast implementation "$ROUTER_B" --rpc-url http://localhost:8745
 ```
 
-They print the addresses in `NEW_IMPL_A` and `NEW_IMPL_B`, in lowercase. The record from `./bin/ibc deploy show` still lists the original logic under `targetData.ics26RouterImplementation`, so read the proxy for the current address.
+They print the addresses in `NEW_IMPL_A` and `NEW_IMPL_B`, in lowercase. The record from `./bin/ibc deploy show` still lists the original logic, so read the proxy for the current address.
 
 2. Repeat the simulated call from step 3:
 
@@ -139,7 +142,7 @@ Error: server returned an error response: error code -32000: Execution reverted,
 
 The data starts with `0x068ca9d8`, the selector of `AccessManagedUnauthorized(address)`, followed by the relayer's address. The call that succeeded before the upgrade now reverts, so the router runs the new logic.
 
-From here on, only the admin can call these two functions on these chains. The access manager admits only the admin to a `restricted` function with no assigned role. The CLI's `deploy client` and `deploy gmp` commands register through other forms of these functions, which were already admin-only, so they work as before.
+The CLI's `deploy client` and `deploy gmp` commands use other overloads of these functions. Those were already admin-only, so the commands still succeed.
 
 3. Check that both routers still hold their clients and applications:
 
@@ -152,8 +155,6 @@ From here on, only the admin can call these two functions on these chains. The a
   "ok"
 ]
 ```
-
-It checks every recorded client, application, and token bridge on both chains. If one fails, the command exits with an error.
 
 4. Send a token across the upgraded routers:
 
@@ -186,7 +187,3 @@ Sequence 2 is the first packet both upgraded routers handled.
 ```
 
 That is the tutorial's 10 tokens plus this transfer's 10.
-
-## Next steps
-
-[Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#proxies-and-upgrade-authority) lists who may upgrade the other proxied contracts.
