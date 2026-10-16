@@ -63,7 +63,9 @@ func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
 		}
 		repeated := func(seals [][]byte) [][]byte { return append(seals, seals[0]) }
 		nonValidator := func(seals [][]byte) [][]byte { return append(seals, outsider) }
-		invalid := func(seals [][]byte) [][]byte { return append(seals, []byte{0x01}) }
+		invalid := func(seals [][]byte) [][]byte {
+			return append(seals, []byte{0x01}, append(slices.Clone(seals[1][:64]), 2))
+		}
 		reversed := func(seals [][]byte) [][]byte {
 			slices.Reverse(seals)
 			return seals
@@ -98,6 +100,34 @@ func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
 			})
 		}
 	}
+}
+
+// Dropping every seal, as a seal digest mismatch would, must fail clearly. A
+// header without seals, like the genesis block, still parses.
+func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
+	var header types.Header
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
+	items, seals := splitExtra(t, header.Extra)
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	outsider, err := crypto.Sign(crypto.Keccak256([]byte("another digest")), key)
+	require.NoError(t, err)
+
+	withSeals := func(seals [][]byte) *types.Header {
+		encoded, encErr := rlp.EncodeToBytes(seals)
+		require.NoError(t, encErr)
+		items[4] = encoded
+		sealed := types.CopyHeader(&header)
+		sealed.Extra, encErr = rlp.EncodeToBytes(items)
+		require.NoError(t, encErr)
+		return sealed
+	}
+
+	_, err = besu.ParseSealedHeader(withSeals([][]byte{outsider, seals[0][:64]}))
+	require.ErrorContains(t, err, "no commit seal recovers to a header validator")
+
+	_, err = besu.ParseSealedHeader(withSeals([][]byte{}))
+	require.NoError(t, err)
 }
 
 func TestParseSealedHeaderRejectsMalformed(t *testing.T) {

@@ -125,6 +125,10 @@ func normalizeCommitSeals(
 			signed = append(signed, signedSeal{signer: signer, seal: canonical})
 		}
 	}
+	// Seals that all fail point at a digest mismatch, not at missing quorum.
+	if len(seals) > 0 && len(signed) == 0 {
+		return nil, errors.New("no commit seal recovers to a header validator")
+	}
 	slices.SortStableFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
 	signed = slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
 
