@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Runs every native Go fuzz test in cli daily, sharing FUZZ_BUDGET_MINUTES
+# between them and continuing from the corpus the previous runs built. A
+# failing input fails the run and is uploaded in Go's corpus format: add it to
+# the package's testdata/fuzz to reproduce it.
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  FUZZ_BUDGET_MINUTES: 60
+  # Release builds are pure Go, which changes go-ethereum's signature recovery.
+  CGO_ENABLED: "0"
+
+jobs:
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # No Go cache: it would also hold the corpus, which is cached below.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+
+      - name: Locate corpus
+        id: corpus
+        run: echo "dir=$(go env GOCACHE)/fuzz" >> "$GITHUB_OUTPUT"
+        working-directory: cli
+
+      - name: Restore corpus
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.corpus.outputs.dir }}
+          key: fuzz-corpus-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-
+
+      - name: Fuzz
+        working-directory: cli
+        run: |
+          set -euo pipefail
+          failed=0
+          # One "<package> <Fuzz...>" line per fuzz test.
+          targets=$(go test -list '^Fuzz' ./... | awk '/^Fuzz/ { fns[++n] = $1 } /^ok/ { for (i = 1; i <= n; i++) print $2, fns[i]; n = 0 }')
+          fuzztime=$((FUZZ_BUDGET_MINUTES * 60 / $(wc -l <<< "$targets")))s
+          while read -r pkg fn; do
+            echo "::group::$pkg $fn"
+            go test -run '^$' -fuzz "^$fn\$" -fuzztime "$fuzztime" "$pkg" || failed=1
+            echo "::endgroup::"
+          done <<< "$targets"
+          exit "$failed"
+
+      - name: Save corpus
+        if: always() && steps.corpus.outputs.dir != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.corpus.outputs.dir }}
+          key: fuzz-corpus-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Collect failing inputs
+        if: failure()
+        run: |
+          mkdir -p "$RUNNER_TEMP/failing"
+          git ls-files --others --exclude-standard -- 'cli/*/testdata/fuzz/*' |
+            xargs -r cp --parents -t "$RUNNER_TEMP/failing" --
+
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: failing-inputs
+          path: ${{ runner.temp }}/failing
+          if-no-files-found: ignore

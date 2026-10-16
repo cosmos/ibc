@@ -54,6 +54,24 @@ func TestParseSealedHeaderSortsCommitSeals(t *testing.T) {
 	}
 }
 
+func TestParseSealedHeaderRejectsRepeatedSigner(t *testing.T) {
+	var header types.Header
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
+
+	var extraItems []rlp.RawValue
+	require.NoError(t, rlp.DecodeBytes(header.Extra, &extraItems))
+	var seals [][]byte
+	require.NoError(t, rlp.DecodeBytes(extraItems[4], &seals))
+	var err error
+	extraItems[4], err = rlp.EncodeToBytes(append(seals, seals[0]))
+	require.NoError(t, err)
+	header.Extra, err = rlp.EncodeToBytes(extraItems)
+	require.NoError(t, err)
+
+	_, err = besu.ParseSealedHeader(&header)
+	require.ErrorContains(t, err, "more than one commit seal")
+}
+
 func TestParseSealedHeaderRejectsMalformed(t *testing.T) {
 	var header types.Header
 	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
