@@ -28,6 +28,7 @@ One variant is deployed per token, with the abstract base compiled into it. Each
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
 | `IFTBaseUpgradeable` | Abstract base, compiled into `IFTOwnable` and `IFTAccessManaged` | The shared burn, mint, and refund surface | [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol) |
+| `IFTRateLimitUpgradeable` | Abstract base, compiled into `IFTBaseUpgradeable` | The inbound and outbound rate limits | [IFTRateLimitUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTRateLimitUpgradeable.sol) |
 | `IFTOwnable` | Deployed contract, behind an ERC1967 proxy | An IFT whose authority is one owner address | [IFTOwnable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTOwnable.sol) |
 | `IFTAccessManaged` | Deployed contract, behind an ERC1967 proxy | An IFT whose authority is an external AccessManager | [IFTAccessManaged.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTAccessManaged.sol) |
 | `EVMIFTSendCallConstructor` | Encoder contract, stateless | Builds the mint call for an EVM counterparty | [EVMIFTSendCallConstructor.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/EVMIFTSendCallConstructor.sol) |
@@ -57,14 +58,14 @@ flowchart LR
 
 ## Authority
 
-Every IFT deployment has a single authority. Registering and removing bridges, minting local supply, and authorizing upgrades all run through it.
+Every IFT deployment has a single authority. Registering and removing bridges, setting the rate limit, minting local supply, and authorizing upgrades all run through it.
 
 IBC-solidity ships two standard options: a single owner address, or an external access manager.
 
 - **`IFTOwnable`** gives the contract a single owner address. It combines the base with `ERC20BurnableUpgradeable`, `OwnableUpgradeable`, and `UUPSUpgradeable`, and its authority check resolves to `onlyOwner`.
 - **`IFTAccessManaged`** hands authorization to an external OpenZeppelin AccessManager, which permissions each function by role rather than fixing it to one address. It swaps the owner for `AccessManagedUpgradeable`, and its authority check uses the `restricted` modifier, which defers to that manager.
 
-A contract that fits neither variant inherits `IFTBaseUpgradeable` directly. It must implement `_onlyAuthority()` to choose its own governance model. It can also override the ERC20 `_update` hook for behavior such as rate limiting or whitelisting.
+A contract that fits neither variant inherits `IFTBaseUpgradeable` directly. It must implement `_onlyAuthority()` to choose its own governance model. It can also override the ERC20 `_update` hook for behavior such as whitelisting. Rate limiting is built into the base, see [Rate limits](#rate-limits).
 
 ## Initialize the contract
 
@@ -118,6 +119,19 @@ For an EVM counterparty, register the address as `0x`-prefixed EIP-55 checksumme
 
 Registering the same client ID again overwrites the previous entry. Removing a bridge blocks new sends and inbound EVM mints for that client. Outbound transfers already recorded as pending can still settle or refund because callbacks use the pending-transfer mapping rather than the bridge record.
 
+## Rate limits
+
+Every IFT deployment limits how fast tokens can cross the bridge, to bound the damage an IBC exploit can do before operators respond. The authority sets the limit with `setIFTRateLimit(uint208 capacity, uint48 window)`, and `getIFTRateLimit()` returns it. Limits are mandatory: until one is set, every transfer fails.
+
+The limit is a refilling bucket. A bucket holds at most `capacity` tokens and refills at `capacity / window` per second, so an empty bucket is full again after `window` seconds. A full bucket allows a burst of `capacity` at once, which means up to twice the capacity can pass within one window. `getIFTRateLimitAvailable()` returns what each direction can currently take.
+
+Both directions share the capacity and window but track usage separately, across every bridge of the token:
+
+- **Outbound** covers the burn in `iftTransfer`. A send over the limit reverts, so no packet is sent.
+- **Inbound** covers `iftMint` and refunds. A mint over the limit fails the receive and produces an error acknowledgement, which refunds the sender. A refund over the limit reverts and the pending transfer stays recorded, so the relayer can retry once the bucket has refilled.
+
+Flow in one direction never restores allowance in the other, and the authority's local `mint` is not limited. Changing the limit keeps the refill accrued under the old settings and applies the new rate from then on. [The IFT rate limiting ADR](https://github.com/cosmos/ibc-contracts/blob/main/docs/adr/solidity/ift-ratelimit.md) explains these choices.
+
 ## Sending a transfer
 
 A transfer starts on the source IFT contract, when a holder calls `iftTransfer`. The contract burns the amount first, then dispatches an encoded mint call over GMP and stores the record (later this record can be used to refund a failure or timeout). An IFT has no packet type of its own: the transfer travels as an ordinary GMP call, and [ICS27GMP](3-ics27-gmp-and-accounts.md) owns the wire format.
@@ -129,7 +143,7 @@ The send is one atomic EVM transaction. If bridge lookup, payload construction, 
 | `iftTransfer(string clientId, string receiver, uint256 amount, uint64 timeoutTimestamp)` | Burns and sends with a caller-supplied timeout, which must be in the future |
 | `iftTransfer(string clientId, string receiver, uint256 amount)` | Burns and sends with the default timeout of now plus 15 minutes |
 
-Any holder may call either overload, since neither carries an authority check. The call burns before it dispatches, stores the pending transfer under the sequence `sendCall` returns, and ends by emitting `IFTTransferInitiated`.
+Any holder may call either overload, since neither carries an authority check. The call consumes outbound rate limit and burns before it dispatches, stores the pending transfer under the sequence `sendCall` returns, and ends by emitting `IFTTransferInitiated`.
 
 From the dispatch onwards the transfer is out of this contract's hands. Its path to the counterparty:
 
@@ -152,7 +166,7 @@ That caller is an `ICS27Account`, not the GMP contract itself. The destination `
 - The identifier's sender string must equal the registered counterparty address exactly.
 - The identifier's salt must be empty, which leaves each counterparty one account to mint through.
 
-Pass all four and the contract mints to the receiver, emits `IFTMintReceived`, and returns nothing. GMP wraps the call's empty return data in an acknowledgement. A failure carrying revert data becomes the universal error acknowledgement. An empty revert, including an out-of-gas callback, aborts receive processing instead of writing that acknowledgement.
+If all four pass and the amount fits the inbound rate limit, the contract mints to the receiver, emits `IFTMintReceived`, and returns nothing. GMP wraps the call's empty return data in an acknowledgement. A failure carrying revert data becomes the universal error acknowledgement. An empty revert, including an out-of-gas callback, aborts receive processing instead of writing that acknowledgement.
 
 ## Acknowledgement and timeout callbacks
 
@@ -168,6 +182,8 @@ The base contract inherits `IBCCallbackReceiver`, which advertises `IIBCSenderCa
 GMP maps the universal error acknowledgement to `success == false` before invoking `onAckPacket`; IFT does not inspect the acknowledgement bytes. On success the source contract deletes the pending transfer and emits `IFTTransferCompleted`, minting and burning nothing. On failure it refunds instead: it mints the pending amount back to the original sender, deletes the record, and emits `IFTTransferRefunded`.
 
 The timeout callback refunds with no success check, once a relayer submits the timeout proof and GMP routes the callback to the source contract. Its three effects are the same: mint back to the sender, delete the record, emit `IFTTransferRefunded`.
+
+Either refund consumes inbound rate limit. A refund that does not fit reverts the callback and leaves the pending transfer in place, so a later retry can refund it.
 
 ## Send-call constructors
 
@@ -196,7 +212,7 @@ A pending transfer is a `PendingTransfer{sender, amount}` record. It holds only 
 
 ## Events
 
-Six events cover the bridge lifecycle and every transfer outcome, all declared in `IIFT`.
+Six events cover the bridge lifecycle and every transfer outcome, all declared in `IIFT`. `IIFTRateLimit` declares a seventh, for rate limit changes.
 
 | Event | When it fires |
 |---|---|
@@ -206,6 +222,7 @@ Six events cover the bridge lifecycle and every transfer outcome, all declared i
 | `IFTMintReceived` | After a successful `iftMint` |
 | `IFTTransferCompleted` | A successful acknowledgement settles a pending transfer |
 | `IFTTransferRefunded` | Either failure path refunds a pending transfer |
+| `IFTRateLimitSet` | The authority sets the rate limit |
 
 ## Errors
 
@@ -225,6 +242,7 @@ The reverts fall into argument validation, a missing bridge or pending record, a
 | `IFTUnexpectedSalt(salt)` | The calling account's identifier carries a non-empty salt |
 | `IFTOnlyICS27GMP(caller)` | Anyone but the GMP contract calls a callback |
 | `IFTPendingTransferNotFound(clientId, sequence)` | No pending transfer matches the client ID and sequence |
+| `RateLimitExceeded` | A send, mint, or refund needs more than its direction's bucket holds; declared in OpenZeppelin's `RateLimiter` |
 | `IFTInvalidReceiver(receiver)` | Declared in `IIFTErrors`, but unused by the current `IFTBaseUpgradeable` implementation |
 | `EVMIFTInvalidReceiver(receiver)` | The receiver string does not parse as an EVM address |
 | `CosmosIFTInvalidReceiver(receiver)` | The receiver string is neither EVM hex nor bech32-shaped under the constructor's character heuristic |
@@ -237,7 +255,7 @@ The table names the main entry points each kind of caller may call.
 
 | Caller | What it may call | Who that is |
 |---|---|---|
-| The authority | `registerIFTBridge`, `removeIFTBridge`, the local `mint(address, uint256)`, and upgrade authorization | The owner on `IFTOwnable`, an AccessManager role per function on `IFTAccessManaged` |
+| The authority | `registerIFTBridge`, `removeIFTBridge`, `setIFTRateLimit`, the local `mint(address, uint256)`, and upgrade authorization | The owner on `IFTOwnable`, an AccessManager role per function on `IFTAccessManaged` |
 | Any holder | ERC20 transfers, burning an own balance, and `iftTransfer` | Every token holder |
 | The GMP contract | `onAckPacket` and `onTimeoutPacket` | The GMP deployment the contract was initialized with |
 | A counterparty's GMP account | `iftMint` | The `ICS27Account` GMP derived for a registered counterparty contract |
