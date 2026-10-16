@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
 // Besu BFT extraData layout, matching _parseHeader in
@@ -29,7 +31,7 @@ const (
 var emptyRLPList = rlp.RawValue{0xc0}
 
 // ParsedHeader is a Besu header's RLP in the form the light client accepts,
-// with its commit seals sorted by signer, plus the few fields decoded from it
+// with its commit seals normalized, plus the few fields decoded from it
 // that light-client payloads need; consensus validity is checked by the
 // contract.
 type ParsedHeader struct {
@@ -51,10 +53,10 @@ func (h *ParsedHeader) ConsensusState() besumsgs.IBesuLightClientMsgsConsensusSt
 }
 
 // ParseSealedHeader encodes a node-supplied header the way Besu sealed it,
-// with its commit seals ordered by signer as the light client requires, and
-// reads the fields needed for payloads. go-ethereum keeps every optional
-// post-merge field the node returned, so apart from the seal order the
-// encoding reproduces the sealed bytes. Validators come from extraData, not a
+// with its commit seals in the form the light client requires, and reads the
+// fields needed for payloads. go-ethereum keeps every optional post-merge
+// field the node returned, so apart from the commit seals the encoding
+// reproduces the sealed bytes. Validators come from extraData, not a
 // QBFT RPC.
 func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	if h == nil {
@@ -79,7 +81,7 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
-	sorted, err := sortCommitSeals(h, extraItems)
+	sorted, err := normalizeCommitSeals(h, extraItems)
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", header.Height, err)
 	}
@@ -92,11 +94,11 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	return header, nil
 }
 
-// sortCommitSeals returns a copy of h whose commit seals are in strictly
-// ascending order of their recovered signers. Besu does not order them that
-// way, but the contract requires it; reordering is safe because the seal
-// digest excludes the seals.
-func sortCommitSeals(h *types.Header, extraItems []rlp.RawValue) (*types.Header, error) {
+// normalizeCommitSeals returns a copy of h whose commit seals are in the form
+// the contract requires: canonical, one per signer, in strictly ascending order
+// of signer. Besu does not order them that way; changing them is safe because
+// the seal digest excludes the seals.
+func normalizeCommitSeals(h *types.Header, extraItems []rlp.RawValue) (*types.Header, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals); err != nil {
 		return nil, fmt.Errorf("commit seals: %w", err)
@@ -113,19 +115,18 @@ func sortCommitSeals(h *types.Header, extraItems []rlp.RawValue) (*types.Header,
 	}
 	signed := make([]signedSeal, len(seals))
 	for i, seal := range seals {
-		pubkey, sigErr := crypto.SigToPub(digest, seal)
+		signer, canonical, sigErr := ecrecover.Recover(digest, seal)
 		if sigErr != nil {
 			return nil, fmt.Errorf("commit seal %d: %w", i, sigErr)
 		}
-		signed[i] = signedSeal{signer: crypto.PubkeyToAddress(*pubkey), seal: seal}
+		signed[i] = signedSeal{signer: signer, seal: canonical}
 	}
-	slices.SortFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
+	slices.SortStableFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
+	signed = slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
 
-	for i, s := range signed {
-		if i > 0 && s.signer == signed[i-1].signer {
-			return nil, fmt.Errorf("signer %s has more than one commit seal", s.signer)
-		}
-		seals[i] = s.seal
+	seals = seals[:0]
+	for _, s := range signed {
+		seals = append(seals, s.seal)
 	}
 	sortedSeals, err := rlp.EncodeToBytes(seals)
 	if err != nil {
