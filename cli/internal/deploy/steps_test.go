@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
@@ -62,7 +63,7 @@ func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error)
 }
 
 func (f *fakeTarget) SupportedClientTypes() []string {
-	return []string{ClientTypeAttestation, ClientTypeBesuQBFT}
+	return []string{config.ClientTypeAttestation, config.ClientTypeBesuQBFT}
 }
 
 // fakeBridge is the on-chain bridge state a fakeTarget records.
@@ -719,7 +720,7 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	require.NoError(t, err)
 	recorded, ok := m.Client("cli-2")
 	require.True(t, ok)
-	require.Equal(t, ClientTypeBesuQBFT, recorded.Type)
+	require.Equal(t, config.ClientTypeBesuQBFT, recorded.Type)
 
 	// the manifest records the constructor params
 	got, err := json.Marshal(recorded.Params)

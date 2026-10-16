@@ -201,7 +201,7 @@ func TestClientTypesPerEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientB.Type)
-	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
+	require.Nil(t, file.Relayer.Connections[0].ClientA.Prover)
 	require.Empty(t, file.Attestors)
 	require.Equal(t, []signerConfig{
 		{Alias: "tx", Type: RelayerSignerLocal, File: "/tmp/default.key"},
@@ -214,10 +214,13 @@ func TestClientTypesPerEnd(t *testing.T) {
 	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 
-	// a prover URL overrides both ends
+	// a prover URL applies to both ends and keeps their types
 	cfg.Connections[0].ProverURL = "http://prover:9090"
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.Remote, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, clientkind.Remote, file.Relayer.Connections[0].ClientB.Type)
+	for _, end := range []clientEndFileConfig{file.Relayer.Connections[0].ClientA, file.Relayer.Connections[0].ClientB} {
+		require.Equal(t, &proverFileConfig{URL: "http://prover:9090"}, end.Prover)
+	}
+	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 }

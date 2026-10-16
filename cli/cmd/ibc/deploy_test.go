@@ -246,14 +246,14 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		ClientID: "cli-1-2", Type: config.ClientTypeBesuQBFT, Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
+		ClientID: "cli-1-2", Type: config.ClientTypeBesuQBFT, Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
@@ -263,7 +263,6 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	require.Len(t, out.Connections, 1)
 	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
 	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
-	require.Empty(t, out.Connections[0].ClientA.Params)
 	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
 }
 
@@ -487,7 +486,7 @@ func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type: deploy.ClientTypeAttestation,
+			Type: config.ClientTypeAttestation,
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
@@ -531,7 +530,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type:   deploy.ClientTypeAttestation,
+			Type:   config.ClientTypeAttestation,
 			Params: map[string]any{"attestors": []any{attestorAddress}},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
