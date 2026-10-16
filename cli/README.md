@@ -12,7 +12,7 @@ between them.
 
 ## Prerequisites
 
-- [Go](https://go.dev/doc/install) 1.26.6 or later
+- [Go](https://go.dev/doc/install) 1.26.9 or later
 
 ## Support
 
@@ -54,8 +54,8 @@ make build
 ./bin/ibc deploy gmp --chain <chainB> --yes
 
 # deploy an IFT token on each chain, then register the bridge between the two
-./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainA> --yes
-./bin/ibc deploy ift --name <name> --symbol <symbol> --chain <chainB> --yes
+./bin/ibc deploy ift --name <name> --symbol <symbol> --rate-limit-capacity <baseUnits> --chain <chainA> --yes
+./bin/ibc deploy ift --name <name> --symbol <symbol> --rate-limit-capacity <baseUnits> --chain <chainB> --yes
 ./bin/ibc deploy ift-bridge --chain-a <chainA> --ift-a <addressA> --chain-b <chainB> --ift-b <addressB> --yes
 
 # mint the token, then send it across a connection

@@ -52,6 +52,25 @@ OTEL_CONFIG_FILE="$(pwd)/scripts/otel/ibc-otel.yaml" ibc relayer run
 3. Run IBC, then open Grafana at http://localhost:3001 (`admin` / `admin`).
 The stack does not need to be restarted when switching modes.
 
+## Dashboard snapshots
+
+[`dashboard-loadtest.json`](./dashboard-loadtest.json) is a versioned snapshot, not
+continuous provisioning. Edit your dashboard in Grafana to see changes immediately,
+then export when ready to review and commit them.
+
+```bash
+# Create the dashboard on a new instance. Refuses to overwrite an existing one.
+make -C cli/scripts/otel dashboard-import
+
+# Save UI edits to the repository snapshot, stripping instance metadata.
+make -C cli/scripts/otel dashboard-export
+
+# Explicitly replace an existing dashboard with the repository snapshot.
+make -C cli/scripts/otel dashboard-import OVERWRITE=1
+```
+
+No Grafana restart is needed.
+
 ## Ports
 
 | Label                                         | Port              | Note                  |

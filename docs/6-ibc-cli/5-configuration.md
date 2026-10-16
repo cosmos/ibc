@@ -255,7 +255,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
 | `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `besu-qbft` \| `remote` | **required** | Light client type. |
-| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>}` for `remote`, where it is required. |
+| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it is required. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
 <!-- [relayer.go:L74](cli/internal/config/relayer.go#L74) -->
@@ -355,7 +355,12 @@ attestors:
 |---|---|---|---|
 | `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
-| `grpc` | `string` | **required** | Bare host:port. |
+| `grpc` | `string` | **required** | Bare host:port, or an http(s):// URL without a query or fragment. https:// uses TLS. |
+| `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
+| `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
+| `tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
+| `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
+| `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
 <!-- [config.go:L143](cli/internal/config/config.go#L143) -->
 
@@ -381,7 +386,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L168](cli/internal/config/config.go#L168) -->
+<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -403,14 +408,42 @@ signers:
 |---|---|---|---|
 | `alias` | `string` | **required** | Unique name for a signer. |
 | `type` | `remote` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
-| `grpc` | `string` | **required** | Address for a remote signer. |
+| `grpc` | `string` | **required** | Address for a remote signer. An https:// URL uses TLS. |
 | `remoteKeyId` | `string` | **required** | KMS key ID for a remote signer. |
+| `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
+| `tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
+| `tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
+| `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
+| `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L168](cli/internal/config/config.go#L168) -->
+<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
 
 <!-- GEN:config:signers:remote END -->
 
 The remote signer holds the key material and performs signing.
+
+## TLS for remote services
+
+Remote signers, remote attestors, and remote provers all follow one rule: an `https://` address turns TLS on, and anything else connects in plaintext. That address is the signer's `grpc`, the attestor's `grpc`, or the prover's `params.url`. <!-- [cli/internal/config/tls.go: ResolveEndpoint] -->
+
+```yaml
+attestors:
+  - name: attestor-41002
+    type: remote
+    grpc: https://attestor.example.com
+    tls:
+      caFile: /etc/ibc/tls/ca.crt
+      certFile: /etc/ibc/tls/client.crt
+      keyFile: /etc/ibc/tls/client.key
+```
+
+Without a `tls` block, TLS trusts the system's CAs and presents no client certificate. Add a `tls` block, with the keys listed in the remote attestor and remote signer tables, to change that; a remote prover takes it as `params.tls`. A `tls` block on an address that isn't `https://` is rejected, since its settings would be ignored. <!-- [cli/internal/config/tls.go: validateEndpointTLS] -->
+
+An `https://` address without a port uses 443, so `https://attestor.example.com` connects to port 443; write `https://host:port` for any other port. A bare `host:port` connects in plaintext: attestors and provers dial it as `http://host:port`, and signers pass it to gRPC as written. <!-- [cli/internal/config/tls.go: endpointURL] --> An attestor or prover URL may carry a path but not a query or fragment, since the RPC path is appended to it. For a signer, an `http://` or `https://` URL becomes the gRPC target `host:port`, with 80 or 443 when the port is omitted, and must not carry userinfo, a path, a query or a fragment, which a gRPC target can't express; other targets, such as `dns:///host:port`, are passed to gRPC as written. <!-- [cli/internal/network/tls.go: Endpoint.GRPCTarget] -->
+
+Set `certFile` and `keyFile` together for mTLS. The CA bundle and client certificate are read once at startup, so restart the process after rotating either. A client certificate that has expired or is not yet valid fails validation. <!-- [cli/internal/config/tls.go: TLSClientConfig.TLSConfig] -->
+
+TLS here covers outbound connections only. The CLI's own API server on `server.listenAddr` listens without TLS. <!-- [cli/internal/server/server.go: New] -->
 
 ## Split the configuration by process
 

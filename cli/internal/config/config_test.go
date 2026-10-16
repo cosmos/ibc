@@ -728,12 +728,12 @@ func TestAttestorsValidate(t *testing.T) {
 			errContains: ".grpc: required for remote attestors",
 		},
 		{
-			name: "remote grpc includes a scheme",
+			name: "remote grpc has a non-http scheme",
 			attestors: Attestors{{
 				Name: "attestor-a", Type: AttestorTypeRemote,
-				GRPC: "https://attestor-a.example.com:443",
+				GRPC: "ftp://attestor-a.example.com:443",
 			}},
-			errContains: ".grpc: must be a bare host:port, not a URL",
+			errContains: ".grpc: must be a bare host:port or an http(s):// URL",
 		},
 		{
 			name: "remote with chainId set",

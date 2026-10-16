@@ -1644,9 +1644,20 @@ def discover_config_sections(model, membership=None):
                                   (struct, names[0])))
 
         field, values = _discriminator(struct, model)
+
+        def owner(row):
+            """The field of `struct` a row hangs off: itself, or for a
+            flattened row like `tls.caFile`, the block it sits in."""
+            if row[0] == struct:
+                return row[1]
+            top = row[2].split(".", 1)[0]
+            return next((f for f in model["structs"][struct]["fields"]
+                         if f["yaml"] == top), row[1])
+
         if values:
             per_value = {v: [r for r in rows
-                             if _applies(r[0], r[1], model, v, membership)]
+                             if _applies(struct, owner(r), model, v, membership)
+                             and _applies(r[0], r[1], model, v, membership)]
                          for v in values}
             # a two-valued key that gates nothing is not a discriminator: db.type
             # picks a backend, it does not change which keys exist

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
@@ -369,6 +370,36 @@ func (d *Driver) RegisterIFTBridge(ctx context.Context, iftAddr string, spec dep
 		return fmt.Errorf("registerIFTBridge %q: %w", spec.ClientID, err)
 	}
 	return d.awaitMined(ctx, "registerIFTBridge "+spec.ClientID, tx)
+}
+
+// SetIFTRateLimit sets an IFT token's rate limit.
+func (d *Driver) SetIFTRateLimit(ctx context.Context, iftAddr string, limit deploy.IFTRateLimit) error {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return err
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := contract.SetIFTRateLimit(opts, limit.Capacity, new(big.Int).SetUint64(limit.Window))
+	if err != nil {
+		return fmt.Errorf("setIFTRateLimit: %w", err)
+	}
+	return d.awaitMined(ctx, "setIFTRateLimit", tx)
+}
+
+// IFTRateLimit reads an IFT token's configured rate limit.
+func (d *Driver) IFTRateLimit(ctx context.Context, iftAddr string) (deploy.IFTRateLimit, error) {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return deploy.IFTRateLimit{}, err
+	}
+	limit, err := contract.GetIFTRateLimit(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return deploy.IFTRateLimit{}, fmt.Errorf("getIFTRateLimit: %w", err)
+	}
+	return deploy.IFTRateLimit{Capacity: limit.Capacity, Window: limit.Window.Uint64()}, nil
 }
 
 // IFTBridge queries the token for a bridge registered under clientID, returning

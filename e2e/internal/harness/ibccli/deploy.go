@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,10 +35,12 @@ type DeployConfig struct {
 }
 
 // DeployChain is one chain `ibc deploy` can target. ChainID is the decimal
-// EVM chain id; an empty ICS26Router writes a placeholder.
+// EVM chain id; an empty ICS26Router writes a placeholder. WS is only needed
+// once a rendered connection auto-relays from the chain.
 type DeployChain struct {
 	ChainID     string
 	RPC         string
+	WS          string
 	ICS26Router string
 }
 
@@ -71,7 +74,7 @@ func WriteDeployConfig(path string, cfg DeployConfig) error {
 		}
 		file.Chains = append(file.Chains, chainConfig{
 			ChainID:  chain.ChainID,
-			EVM:      evmChainConfig{RPC: chain.RPC, ICS26Router: router},
+			EVM:      evmChainConfig{RPC: chain.RPC, WS: chain.WS, ICS26Router: router},
 			Deployer: cfg.SignerAlias,
 		})
 	}
@@ -98,9 +101,18 @@ func (r *Driver) KeyFilePath(name string) string {
 // Deploy runs `ibc deploy <args...>` against the configured home and returns
 // stdout. A non-zero exit becomes an *ExitError.
 func (r *Driver) Deploy(ctx context.Context, args ...string) ([]byte, error) {
-	full := append([]string{"deploy"}, args...)
-	full = append(full, r.configArgs()...)
-	res, err := r.exec(ctx, r.bin, "deploy", deployCommandTimeout, full...)
+	return r.run(ctx, "deploy", deployCommandTimeout, append([]string{"deploy"}, args...)...)
+}
+
+// Run runs a one-shot `ibc <command> <args...>` against the configured home
+// and returns stdout. A non-zero exit becomes an *ExitError.
+func (r *Driver) Run(ctx context.Context, command string, args ...string) ([]byte, error) {
+	return r.run(ctx, command, defaultCommandTimeout, append([]string{command}, args...)...)
+}
+
+func (r *Driver) run(ctx context.Context, label string, timeout time.Duration, args ...string) ([]byte, error) {
+	full := slices.Concat(args, r.configArgs())
+	res, err := r.exec(ctx, r.bin, label, timeout, full...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,18 +132,4 @@ func headSnippet(s string) string {
 		s = s[:maxStderrSnippet] + "..."
 	}
 	return s
-}
-
-// KeysImportECDSA imports a raw ECDSA private key under name via `ibc keys
-// import ecdsa`, so a DeployConfig signer can reference a funded key.
-func (r *Driver) KeysImportECDSA(ctx context.Context, name, privateKeyHex string) error {
-	args := append([]string{"keys", "import", "ecdsa", name, "--private-key", privateKeyHex}, r.configArgs()...)
-	res, err := r.exec(ctx, r.bin, "keys import ecdsa", defaultCommandTimeout, args...)
-	if err != nil {
-		return err
-	}
-	if res.code != 0 {
-		return &ExitError{Code: res.code, Class: ErrInternal, Stderr: headSnippet(res.stderr)}
-	}
-	return nil
 }
