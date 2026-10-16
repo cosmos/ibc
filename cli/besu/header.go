@@ -81,7 +81,7 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
-	sorted, err := normalizeCommitSeals(h, extraItems)
+	sorted, err := normalizeCommitSeals(h, extraItems, header.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", header.Height, err)
 	}
@@ -94,11 +94,16 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	return header, nil
 }
 
-// normalizeCommitSeals returns a copy of h whose commit seals are in the form
-// the contract requires: canonical, one per signer, in strictly ascending order
-// of signer. Besu does not order them that way; changing them is safe because
-// the seal digest excludes the seals.
-func normalizeCommitSeals(h *types.Header, extraItems []rlp.RawValue) (*types.Header, error) {
+// normalizeCommitSeals returns a copy of h with only the commit seals the
+// contract accepts: canonical, from one of validators, one per signer, in
+// strictly ascending order of signer. The contract rejects the whole header
+// for any other seal. Changing the seals is safe because the seal digest
+// excludes them.
+func normalizeCommitSeals(
+	h *types.Header,
+	extraItems []rlp.RawValue,
+	validators []common.Address,
+) (*types.Header, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals); err != nil {
 		return nil, fmt.Errorf("commit seals: %w", err)
@@ -113,13 +118,12 @@ func normalizeCommitSeals(h *types.Header, extraItems []rlp.RawValue) (*types.He
 		signer common.Address
 		seal   []byte
 	}
-	signed := make([]signedSeal, len(seals))
-	for i, seal := range seals {
+	signed := make([]signedSeal, 0, len(seals))
+	for _, seal := range seals {
 		signer, canonical, sigErr := ecrecover.Recover(digest, seal)
-		if sigErr != nil {
-			return nil, fmt.Errorf("commit seal %d: %w", i, sigErr)
+		if sigErr == nil && slices.Contains(validators, signer) {
+			signed = append(signed, signedSeal{signer: signer, seal: canonical})
 		}
-		signed[i] = signedSeal{signer: signer, seal: canonical}
 	}
 	slices.SortStableFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
 	signed = slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
