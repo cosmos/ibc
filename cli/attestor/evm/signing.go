@@ -58,7 +58,8 @@ func RecoverSigner(digest [32]byte, sig []byte) (common.Address, []byte, error) 
 		return common.Address{}, nil, err
 	}
 
-	// ECDSA.recover takes only v of 27/28.
+	// AttestationLightClient.sol passes the signature to ECDSA.recover unchanged,
+	// which takes only v of 27/28.
 	canonical[64] += 27
 
 	return signer, canonical, nil
