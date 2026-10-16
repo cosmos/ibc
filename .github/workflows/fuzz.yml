@@ -19,6 +19,8 @@ permissions: {}
 
 env:
   FUZZ_BUDGET_MINUTES: 60
+  # Release builds are pure Go, which changes go-ethereum's signature recovery.
+  CGO_ENABLED: "0"
 
 jobs:
   fuzz:
