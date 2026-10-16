@@ -3,6 +3,8 @@
 package besu_test
 
 import (
+	"math/big"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,11 +15,13 @@ import (
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
+	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
 // FuzzParseSealedHeader parses node-supplied headers. Whatever it accepts it
-// must only reorder the commit seals, into strictly ascending signer order,
-// and parsing its own output must give the same bytes.
+// must change only the commit seals, to one canonical seal per validator that
+// signed, in strictly ascending signer order, and parsing its own output must
+// give the same bytes.
 func FuzzParseSealedHeader(f *testing.F) {
 	fixture := besutest.MustFixture(f)
 	f.Add([]byte(fixture.AdjacentUpdate.HeaderRLP))
@@ -43,18 +47,30 @@ func FuzzParseSealedHeader(f *testing.F) {
 		inputItems, inputSeals := splitExtra(t, header.Extra)
 		sortedItems, sortedSeals := splitExtra(t, sorted.Extra)
 		require.Equal(t, inputItems[:4], sortedItems[:4], "extraData changed beyond the commit seals")
-		require.ElementsMatch(t, inputSeals, sortedSeals, "seals were changed, not just reordered")
 
 		digest, err := besu.CommitSealDigest(&header, inputItems)
 		require.NoError(t, err)
-		var previous common.Address
+		var validators []common.Address
+		require.NoError(t, rlp.DecodeBytes(inputItems[1], &validators))
+		var want []common.Address
+		for _, seal := range inputSeals {
+			signer, _, sigErr := ecrecover.Recover(digest, seal)
+			if sigErr == nil && slices.Contains(validators, signer) {
+				want = append(want, signer)
+			}
+		}
+		slices.SortFunc(want, common.Address.Cmp)
+		want = slices.Compact(want)
+
+		var got []common.Address
 		for i, seal := range sortedSeals {
+			r, s := new(big.Int).SetBytes(seal[:32]), new(big.Int).SetBytes(seal[32:64])
+			require.True(t, crypto.ValidateSignatureValues(seal[64], r, s, true), "seal %d not canonical", i)
 			pubkey, sigErr := crypto.SigToPub(digest, seal)
 			require.NoError(t, sigErr)
-			signer := crypto.PubkeyToAddress(*pubkey)
-			require.Positive(t, signer.Cmp(previous), "seal %d out of signer order", i)
-			previous = signer
+			got = append(got, crypto.PubkeyToAddress(*pubkey))
 		}
+		require.Equal(t, want, got, "not one seal per validator that signed, in signer order")
 
 		reparsed, err := besu.ParseSealedHeader(&sorted)
 		require.NoError(t, err)
