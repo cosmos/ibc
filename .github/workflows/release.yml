@@ -1,0 +1,189 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    tags: ["cli-v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: read-all
+
+env:
+  GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  validate-tag:
+    name: Validate tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check tag format
+        run: |
+          if [[ ! "$TAG" =~ ^cli-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag must match cli-vX.Y.Z or cli-vX.Y.Z-<suffix>"
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }} archive
+    needs: [validate-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    env:
+      PLATFORM: ${{ matrix.goos }}-${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+      - name: Build
+        working-directory: cli
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build ${{ env.GO_BUILD_FLAGS }} -o dist/ibc ./cmd/ibc/...
+      - name: Package
+        run: |
+          version="${TAG#cli-}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          mkdir -p out/attestations
+          cp LICENSE NOTICE cli/dist/
+          tar --sort=name --mtime="@$(git log -1 --format=%ct)" \
+            --owner=0 --group=0 --numeric-owner \
+            -C cli/dist -cf - ibc LICENSE NOTICE \
+            | gzip -n > "out/ibc-${version}-${PLATFORM}.tar.gz"
+      - name: Generate SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          file: cli/dist/ibc
+          format: spdx-json
+          output-file: out/ibc-${{ env.VERSION }}-${{ env.PLATFORM }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Attest build provenance
+        id: attest-provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: out/ibc-${{ env.VERSION }}-${{ env.PLATFORM }}.tar.gz
+      - name: Collect provenance bundle
+        env:
+          BUNDLE_PATH: ${{ steps.attest-provenance.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" "out/attestations/${PLATFORM}.provenance.json"
+      - name: Attest SBOM
+        id: attest-sbom
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: out/ibc-${{ env.VERSION }}-${{ env.PLATFORM }}.tar.gz
+          sbom-path: out/ibc-${{ env.VERSION }}-${{ env.PLATFORM }}.spdx.json
+      - name: Collect SBOM bundle
+        env:
+          BUNDLE_PATH: ${{ steps.attest-sbom.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" "out/attestations/${PLATFORM}.sbom.json"
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ibc-${{ env.PLATFORM }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish signed release
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    timeout-minutes: 15
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ibc-*
+          path: out
+          merge-multiple: true
+      - name: Assemble assets
+        run: |
+          version="${TAG#cli-}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          mkdir dist
+          mv out/*.tar.gz out/*.spdx.json dist/
+          jq -c . out/attestations/*.json > "dist/ibc-${version}.intoto.jsonl"
+          cd dist
+          sha256sum -- *.tar.gz *.spdx.json > checksums.txt
+          cat checksums.txt
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign checksums
+        working-directory: dist
+        run: cosign sign-blob --yes --bundle checksums.txt.sigstore.json checksums.txt
+      - name: Create draft release
+        env:
+          CERT_IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
+        run: |
+          if is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null); then
+            if [[ "$is_draft" != "true" ]]; then
+              echo "::error::Release $TAG is already published, refusing to replace its assets"
+              exit 1
+            fi
+            gh release upload "$TAG" dist/* --clobber
+            exit 0
+          fi
+
+          cat > notes.md <<EOF
+          ## Verifying the release
+
+          Verify the build provenance of an archive. Add
+          \`--predicate-type https://spdx.dev/Document/v2.3\` to verify its SBOM instead, or
+          \`--bundle ibc-${VERSION}.intoto.jsonl\` to verify offline:
+
+          \`\`\`sh
+          gh attestation verify ibc-${VERSION}-linux-amd64.tar.gz \\
+            --repo ${GH_REPO} \\
+            --signer-workflow ${GITHUB_WORKFLOW_REF%@*} \\
+            --source-ref ${GITHUB_REF}
+          \`\`\`
+
+          Or verify the signed checksums and then the archives against them:
+
+          \`\`\`sh
+          cosign verify-blob checksums.txt \\
+            --bundle checksums.txt.sigstore.json \\
+            --certificate-identity "${CERT_IDENTITY}" \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          sha256sum --check --ignore-missing checksums.txt
+          # or, on macOS without sha256sum:
+          shasum -a 256 --check --ignore-missing checksums.txt
+          \`\`\`
+          EOF
+
+          gh release create "$TAG" dist/* \
+            --draft \
+            --prerelease \
+            --verify-tag \
+            --title "IBC CLI ${VERSION}" \
+            --notes-file notes.md
