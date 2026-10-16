@@ -27,15 +27,12 @@ type quorumResult struct {
 }
 
 // queryStateQuorum aggregates a StateAttestation claim across attestors.
-func queryStateQuorum(
+func (g *Generator) queryStateQuorum(
 	ctx context.Context,
-	logger *slog.Logger,
-	attestors []attestor.Attestor,
-	threshold int,
 	height uint64,
 	expectedData []byte,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagStateAttestation, expectedData, func(
+	return g.queryQuorum(ctx, attestorevm.TagStateAttestation, expectedData, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -44,17 +41,14 @@ func queryStateQuorum(
 }
 
 // queryPacketQuorum aggregates a PacketAttestation claim across attestors.
-func queryPacketQuorum(
+func (g *Generator) queryPacketQuorum(
 	ctx context.Context,
-	logger *slog.Logger,
-	attestors []attestor.Attestor,
-	threshold int,
 	packets [][]byte,
 	height uint64,
 	kind attestor.CommitmentType,
 	expectedData []byte,
 ) (quorumResult, error) {
-	return queryQuorum(ctx, logger, attestors, threshold, attestorevm.TagPacketAttestation, expectedData, func(
+	return g.queryQuorum(ctx, attestorevm.TagPacketAttestation, expectedData, func(
 		ctx context.Context,
 		a attestor.Attestor,
 	) (attestor.Attestation, error) {
@@ -77,45 +71,41 @@ type quorumResponse struct {
 }
 
 // queryQuorum collects signatures from distinct signers over the expected claim.
-func queryQuorum(
+func (g *Generator) queryQuorum(
 	ctx context.Context,
-	logger *slog.Logger,
-	attestors []attestor.Attestor,
-	threshold int,
 	typeTag byte,
 	expectedData []byte,
 	query attestationQuery,
 ) (quorumResult, error) {
-	if len(attestors) == 0 {
+	if len(g.attestors) == 0 {
 		return quorumResult{}, errors.New("no attestors configured")
 	}
 
-	responses := make([]quorumResponse, len(attestors))
+	responses := make([]quorumResponse, len(g.attestors))
 
 	var wg sync.WaitGroup
 
-	for i, a := range attestors {
+	for i, a := range g.attestors {
 		wg.Add(1)
 
 		go func(i int, a attestor.Attestor) {
 			defer wg.Done()
 
-			responses[i] = queryOne(ctx, logger, a, typeTag, expectedData, query)
+			responses[i] = g.queryOne(ctx, a, typeTag, expectedData, query)
 		}(i, a)
 	}
 
 	wg.Wait()
 
-	signatures, err := reduceQuorum(logger, responses, threshold)
+	signatures, err := reduceQuorum(g.logger, responses, g.threshold)
 	if err != nil {
 		return quorumResult{}, err
 	}
 	return quorumResult{AttestationData: expectedData, Signatures: signatures}, nil
 }
 
-func queryOne(
+func (g *Generator) queryOne(
 	ctx context.Context,
-	logger *slog.Logger,
 	a attestor.Attestor,
 	typeTag byte,
 	expectedData []byte,
@@ -123,12 +113,14 @@ func queryOne(
 ) quorumResponse {
 	attestation, err := query(ctx, a)
 	if err != nil {
-		logger.Warn("Attestor query failed", "attestor", a.Name(), "err", err)
+		g.logger.Warn("Attestor query failed", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
 	data := attestation.AttestedData
-	if !bytes.Equal(data, expectedData) {
+	matches := bytes.Equal(data, expectedData)
+	g.recordDataMatch(ctx, a.Name(), matches)
+	if !matches {
 		return quorumResponse{
 			name: a.Name(),
 			err:  errors.Errorf("attestor %q: attested data does not match expected claim", a.Name()),
@@ -139,7 +131,7 @@ func queryOne(
 
 	signer, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), sig)
 	if err != nil {
-		logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
+		g.logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
