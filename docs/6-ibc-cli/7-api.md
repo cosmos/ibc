@@ -191,6 +191,7 @@ Every field is optional, and a request with none returns everything the relayer 
 | `state` | `PacketState` (optional) | Only packets in this state. |
 | `source_tx_hash` | `string` (optional) | Only packets sent by this transaction. |
 | `sequence_number` | `uint64` (optional) | Only packets with this sequence number. |
+| `min_sequence_number` | `uint64` (optional) | Only packets with at least this sequence. Sequences count per source client, so pair it with `source_client_id`. |
 
 <!-- [relayer.proto:L78](proto/cli/relayer.proto#L78) -->
 
@@ -206,7 +207,7 @@ Every field is optional, and a request with none returns everything the relayer 
 | `has_more` | `bool` | More `packets` match beyond this page. |
 | `next_cursor` | `string` | Cursor for the next page, set only when `has_more`. |
 
-<!-- [relayer.proto:L88](proto/cli/relayer.proto#L88) -->
+<!-- [relayer.proto:L91](proto/cli/relayer.proto#L91) -->
 
 <!-- GEN:api:msg:PacketsResponse END -->
 
@@ -226,7 +227,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `ack_tx` | `TransactionInfo` | The source-chain acknowledgement transaction. Present for succeeded and rejected packets, and may be present while pending. |
 | `timeout_tx` | `TransactionInfo` | The source-chain timeout transaction. Present for timed-out packets, and may be present while pending. |
 
-<!-- [relayer.proto:L119](proto/cli/relayer.proto#L119) -->
+<!-- [relayer.proto:L122](proto/cli/relayer.proto#L122) -->
 
 <!-- GEN:api:msg:PacketStatus END -->
 
@@ -239,7 +240,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `tx_hash` | `string` | The transaction's hash. |
 | `chain_id` | `string` | The chain it was submitted to. |
 
-<!-- [relayer.proto:L114](proto/cli/relayer.proto#L114) -->
+<!-- [relayer.proto:L117](proto/cli/relayer.proto#L117) -->
 
 <!-- GEN:api:msg:TransactionInfo END -->
 
@@ -258,7 +259,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `PACKET_STATE_REJECTED` | The packet completed with an error acknowledgement on the source chain. |
 | `PACKET_STATE_RELAY_FAILED` | A permanent error prevents the relayer from processing the packet. |
 
-<!-- [relayer.proto:L96](proto/cli/relayer.proto#L96) -->
+<!-- [relayer.proto:L99](proto/cli/relayer.proto#L99) -->
 
 <!-- GEN:api:enum:PacketState END -->
 

@@ -565,8 +565,11 @@ type PacketFilter struct {
 	State               *PacketState           `protobuf:"varint,5,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState,oneof" json:"state,omitempty"`
 	SourceTxHash        *string                `protobuf:"bytes,6,opt,name=source_tx_hash,json=sourceTxHash,proto3,oneof" json:"source_tx_hash,omitempty"`
 	SequenceNumber      *uint64                `protobuf:"varint,7,opt,name=sequence_number,json=sequenceNumber,proto3,oneof" json:"sequence_number,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Only packets with at least this sequence. Sequences count per source
+	// client, so pair it with source_client_id.
+	MinSequenceNumber *uint64 `protobuf:"varint,8,opt,name=min_sequence_number,json=minSequenceNumber,proto3,oneof" json:"min_sequence_number,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PacketFilter) Reset() {
@@ -644,6 +647,13 @@ func (x *PacketFilter) GetSourceTxHash() string {
 func (x *PacketFilter) GetSequenceNumber() uint64 {
 	if x != nil && x.SequenceNumber != nil {
 		return *x.SequenceNumber
+	}
+	return 0
+}
+
+func (x *PacketFilter) GetMinSequenceNumber() uint64 {
+	if x != nil && x.MinSequenceNumber != nil {
+		return *x.MinSequenceNumber
 	}
 	return 0
 }
@@ -890,7 +900,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\x0ePacketsRequest\x124\n" +
 	"\x06filter\x18\x01 \x01(\v2\x1c.ibc.v2.relayer.PacketFilterR\x06filter\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit\x12\x16\n" +
-	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xf8\x03\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xc5\x04\n" +
 	"\fPacketFilter\x12+\n" +
 	"\x0fsource_chain_id\x18\x01 \x01(\tH\x00R\rsourceChainId\x88\x01\x01\x125\n" +
 	"\x14destination_chain_id\x18\x02 \x01(\tH\x01R\x12destinationChainId\x88\x01\x01\x12-\n" +
@@ -898,14 +908,16 @@ const file_relayer_proto_rawDesc = "" +
 	"\x15destination_client_id\x18\x04 \x01(\tH\x03R\x13destinationClientId\x88\x01\x01\x126\n" +
 	"\x05state\x18\x05 \x01(\x0e2\x1b.ibc.v2.relayer.PacketStateH\x04R\x05state\x88\x01\x01\x12)\n" +
 	"\x0esource_tx_hash\x18\x06 \x01(\tH\x05R\fsourceTxHash\x88\x01\x01\x12,\n" +
-	"\x0fsequence_number\x18\a \x01(\x04H\x06R\x0esequenceNumber\x88\x01\x01B\x12\n" +
+	"\x0fsequence_number\x18\a \x01(\x04H\x06R\x0esequenceNumber\x88\x01\x01\x123\n" +
+	"\x13min_sequence_number\x18\b \x01(\x04H\aR\x11minSequenceNumber\x88\x01\x01B\x12\n" +
 	"\x10_source_chain_idB\x17\n" +
 	"\x15_destination_chain_idB\x13\n" +
 	"\x11_source_client_idB\x18\n" +
 	"\x16_destination_client_idB\b\n" +
 	"\x06_stateB\x11\n" +
 	"\x0f_source_tx_hashB\x12\n" +
-	"\x10_sequence_number\"\x85\x01\n" +
+	"\x10_sequence_numberB\x16\n" +
+	"\x14_min_sequence_number\"\x85\x01\n" +
 	"\x0fPacketsResponse\x126\n" +
 	"\apackets\x18\x01 \x03(\v2\x1c.ibc.v2.relayer.PacketStatusR\apackets\x12\x19\n" +
 	"\bhas_more\x18\x02 \x01(\bR\ahasMore\x12\x1f\n" +
