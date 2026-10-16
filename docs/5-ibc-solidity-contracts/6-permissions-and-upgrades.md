@@ -83,6 +83,14 @@ Both core contracts mark `_authorizeUpgrade` as `restricted`. The role map regis
 
 A contract deployed without a proxy holds its settings in constructor-set state, so it changes by replacement. Every light client is in that group, along with the Cosmos send-call constructor. The AccessManager is not proxied either, so its code changes by replacement, but its role grants and its selector map stay changeable by an admin.
 
+A UUPS upgrade is one call on the proxy, `upgradeToAndCall(newImplementation, data)`. The proxy writes the new logic's address to the implementation slot, the storage slot ERC1967 reserves for it, and emits `Upgraded`. It then runs `data` through the new logic, against the proxy's storage. A release that needs a migration puts that call there, and empty `data` skips it.
+
+Before it switches, the call checks that the new logic's `proxiableUUID()` returns that same slot. Without the check, an upgrade to a contract with no upgrade function would leave the proxy on that code permanently. Nothing checks the storage layout. The new logic reads the state the old logic wrote, so a release that moves a stored field reads the wrong value for it.
+
+An upgrade can also change who may call what. The access manager admits only the admin to a `restricted` function with no assigned role. So a function that a new release marks `restricted` becomes admin-only until an admin assigns it a role.
+
+[Upgrade the router contract](../6-ibc-cli/8-upgrade-the-router-contract.md) shows a router upgrade on the tutorial's deployment.
+
 ## Replacing a light client
 
 A client changes by replacement, and the replacement takes over the client ID. The router's `migrateClient` function takes a client ID, its counterparty info, and the address of a newly deployed client contract. It then points the registry entry at that contract. Counterparties and applications go on using the same identifier.
