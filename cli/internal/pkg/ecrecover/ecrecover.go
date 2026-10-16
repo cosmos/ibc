@@ -14,8 +14,11 @@ import (
 )
 
 // Recover returns the address that produced sig over digest, and sig with low
-// s and a 0/1 recovery ID, the form OpenZeppelin's ECDSA accepts once 27 is
-// added to v. sig may use v of 0/1 or 27/28 and either s.
+// s and a 0/1 recovery ID. sig may use v of 0/1 or 27/28 and either s.
+//
+// 0/1 is go-ethereum's form and the one Besu commit seals use, which the Besu
+// light client takes as is. Callers whose contract passes the signature
+// straight to OpenZeppelin's ECDSA.recover must add 27 to v.
 func Recover(digest, sig []byte) (common.Address, []byte, error) {
 	if len(sig) != crypto.SignatureLength {
 		return common.Address{}, nil, fmt.Errorf("invalid signature length %d", len(sig))
