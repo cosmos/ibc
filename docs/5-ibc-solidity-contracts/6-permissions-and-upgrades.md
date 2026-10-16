@@ -83,6 +83,19 @@ Both core contracts mark `_authorizeUpgrade` as `restricted`. The role map regis
 
 A contract deployed without a proxy holds its settings in constructor-set state, so it changes by replacement. Every light client is in that group, along with the Cosmos send-call constructor. The AccessManager is not proxied either, so its code changes by replacement, but its role grants and its selector map stay changeable by an admin.
 
+A UUPS upgrade is one call on the proxy, `upgradeToAndCall(newImplementation, data)`. The proxy has no upgrade code. Its current logic runs the call:
+
+1. `_authorizeUpgrade` checks the caller with the access manager.
+2. The call reverts unless the new logic's `proxiableUUID()` returns the ERC1967 implementation slot, where the proxy stores its logic's address. This rejects logic that does not implement UUPS. Such logic has no upgrade function, so the proxy could never upgrade again.
+3. The call writes the new address to that slot and emits `Upgraded`.
+4. If `data` is nonempty, the proxy executes it with the new logic's code, on the proxy's storage. A release puts its migration call in `data`.
+
+The upgrade call does not check the storage layout. The new logic reads the proxy's state by slot position. Inserting, removing, or reordering fields in any of a contract's storage structs moves existing fields to the wrong slots. Appending a field to the end of a struct is safe.
+
+The access manager stores each function-role assignment under the proxy's address and a selector, so assignments survive an upgrade. Only `ADMIN_ROLE` holders may call a selector with no assignment. So after an upgrade, only admins can call a function if the release newly marks it `restricted` or changes its signature, and so its selector. If `recvPacket`'s signature changed, relaying would stop until an admin binds the new selector to the relaying role with `setTargetFunctionRole`.
+
+[Upgrade the router contract](../6-ibc-cli/8-upgrade-the-router-contract.md) shows a router upgrade on the tutorial's deployment.
+
 ## Replacing a light client
 
 A client changes by replacement, and the replacement takes over the client ID. The router's `migrateClient` function takes a client ID, its counterparty info, and the address of a newly deployed client contract. It then points the registry entry at that contract. Counterparties and applications go on using the same identifier.
