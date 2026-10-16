@@ -95,11 +95,18 @@ func relayPackets(
 	}
 
 	packets := make([]channeltypesv2.Packet, len(events))
+	var acknowledgements []channeltypesv2.Acknowledgement
+	if relayKind == v2.RelayKindAck {
+		acknowledgements = make([]channeltypesv2.Acknowledgement, len(events))
+	}
 	for i, event := range events {
 		packets[i] = event.Packet
+		if relayKind == v2.RelayKindAck {
+			acknowledgements[i] = channeltypesv2.NewAcknowledgement(event.Acks...)
+		}
 	}
 
-	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets)
+	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets, acknowledgements)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating packet proofs")
 	}
