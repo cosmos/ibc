@@ -211,18 +211,19 @@ func parseRelayerReadinessLog(line string) (result readyResult, matched bool) {
 }
 
 func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayerv2.ProcessReadiness, error) {
-	timer := time.NewTimer(defaultStartupTimeout)
-	defer timer.Stop()
+	startupCtx, cancel := context.WithTimeout(ctx, defaultStartupTimeout)
+	defer cancel()
 	select {
 	case res := <-readyCh:
 		if res.err != nil {
 			return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: %w", res.err)
 		}
+		if err := awaitHealth(startupCtx, res.readiness.HTTP, d.h.doneCh()); err != nil {
+			return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: %w", err)
+		}
 		return res.readiness, nil
-	case <-timer.C:
-		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: not ready within %s", defaultStartupTimeout)
-	case <-ctx.Done():
-		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: startup canceled: %w", ctx.Err())
+	case <-startupCtx.Done():
+		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: not ready: %w", startupCtx.Err())
 	}
 }
 
