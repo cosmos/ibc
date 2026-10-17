@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +14,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -257,11 +259,10 @@ func runBoundRelayerHelper() error {
 	if err != nil {
 		return err
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-	server := &http.Server{Handler: mux, ReadHeaderTimeout: time.Second}
+	server := grpc.NewServer()
+	healthpb.RegisterHealthServer(server, health.NewServer())
 	go func() { _ = server.Serve(listener) }()
-	defer func() { _ = server.Close() }()
+	defer server.Stop()
 
 	if err := os.WriteFile(os.Getenv("IBC_CLI_BINDING_TEST_STARTED"), nil, 0o600); err != nil {
 		return err
