@@ -26,6 +26,8 @@ Run every command from the `cli` directory of your IBC clone.
 Read the values the steps use:
 
 ```bash
+AM_A=$(./bin/ibc deploy show 41001 | jq -r '.targetData.accessManager')
+AM_B=$(./bin/ibc deploy show 41002 | jq -r '.targetData.accessManager')
 ROUTER_A=$(./bin/ibc deploy show 41001 | jq -r '.core.router')
 ROUTER_B=$(./bin/ibc deploy show 41002 | jq -r '.core.router')
 IFT_A=$(./bin/ibc deploy show 41001 | jq -r '.tokens[0].address')
@@ -38,7 +40,7 @@ The last line reads the deployer's raw private key, because Foundry cannot read 
 
 ## 2. Get the new router source
 
-This guide builds the new logic from commit `a99cb151` of [ibc-contracts](https://github.com/cosmos/ibc-contracts). At that commit, two more router functions are `restricted`: `addIBCApp(address)`, and the `addClient` overload in which the router picks the client ID. The CLI assigns them no role, so after the upgrade only the admin can call them. For your own upgrade, check out the release you are shipping.
+This guide builds the new logic from commit `a99cb151` of [ibc-contracts](https://github.com/cosmos/ibc-contracts). At that commit, two more router functions are `restricted`: `addIBCApp(address)`, and the `addClient` overload in which the router picks the client ID. The release keeps both public: its `DeployAccessManagerWithRoles` script assigns them to `PUBLIC_ROLE`. The CLI's deployment assigns them no role, so after the upgrade only the admin can call them until step 6 assigns them to `PUBLIC_ROLE`. For your own upgrade, check out the release you are shipping. Compare its `IBCRolesLib` and `DeployAccessManagerWithRoles` with your deployment's assignments, and assign any selector the release newly restricts.
 
 1. Clone the repository next to your IBC clone:
 
@@ -140,7 +142,7 @@ cast call "$ROUTER_A" "addIBCApp(address)" "$RELAYER" --from "$RELAYER" --rpc-ur
 Error: server returned an error response: error code -32000: Execution reverted, data: "0x068ca9d8<...>"
 ```
 
-The data starts with `0x068ca9d8`, the selector of `AccessManagedUnauthorized(address)`, followed by the relayer's address. The call that succeeded before the upgrade now reverts, so the router runs the new logic.
+The data starts with `0x068ca9d8`, the selector of `AccessManagedUnauthorized(address)`, followed by the relayer's address. The call that succeeded before the upgrade now reverts, so the router runs the new logic. Step 6 makes it public again, as the release intends.
 
 The CLI's `deploy client` and `deploy gmp` commands use other overloads of these functions. Those were already admin-only, so the commands still succeed.
 
@@ -174,7 +176,7 @@ It reads `PACKET_STATE_PENDING` for up to a minute, then:
 2 PACKET_STATE_SUCCEEDED
 ```
 
-Sequence 2 is the first packet both upgraded routers handled.
+Sequence 2 is the first packet both upgraded routers handled. These values assume the tutorial's transfer is the only one so far. Each earlier transfer, such as the one in [Grant, change, and revoke a role](9-grant-change-and-revoke-a-role.md), raises the sequence by one and the balance below by its amount.
 
 6. Confirm the tokens arrived on 41002:
 
@@ -187,3 +189,37 @@ Sequence 2 is the first packet both upgraded routers handled.
 ```
 
 That is the tutorial's 10 tokens plus this transfer's 10.
+
+## 6. Assign the newly restricted functions to the public role
+
+The release's role map keeps `addIBCApp(address)` and the auto-ID `addClient` open to every address. Assign both selectors to `PUBLIC_ROLE` on each chain, as its `DeployAccessManagerWithRoles` script does.
+
+1. Compute the two selectors:
+
+```bash
+PUBLIC_FNS="[$(cast sig 'addIBCApp(address)'),$(cast sig 'addClient((string,bytes[]),address)')]"
+```
+
+2. Assign them to `PUBLIC_ROLE` on 41001:
+
+```bash
+cast send "$AM_A" "setTargetFunctionRole(address,bytes4[],uint64)" "$ROUTER_A" "$PUBLIC_FNS" 18446744073709551615 --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
+```
+
+3. Do the same on 41002:
+
+```bash
+cast send "$AM_B" "setTargetFunctionRole(address,bytes4[],uint64)" "$ROUTER_B" "$PUBLIC_FNS" 18446744073709551615 --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
+```
+
+4. Repeat the simulated call from step 3:
+
+```bash
+cast call "$ROUTER_A" "addIBCApp(address)" "$RELAYER" --from "$RELAYER" --rpc-url http://localhost:8545
+```
+
+```
+0x
+```
+
+The call succeeds again. The router still runs the new logic, and the access manager now lets any address call the function.
