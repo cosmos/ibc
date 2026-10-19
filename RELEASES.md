@@ -4,7 +4,7 @@
 
 ## Signed release assets
 
-Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. The release notes get a section explaining how to verify the assets.
+Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries. The release notes get a section explaining how to verify the assets.
 
 | Asset | Purpose |
 | --- | --- |
@@ -14,12 +14,12 @@ Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.y
 | `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
 | `ibc-<version>.intoto.jsonl` | Provenance and SBOM attestation bundles, for offline `gh attestation verify --bundle` |
 
-The same release workflow runs in [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts); only the tag patterns and the build differ.
+The same release workflow runs in [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts); only the tag patterns and the build differ. Here the build also pushes the container image, and an extra job publishes its multi-platform tag.
 
 ### Release procedure
 
 1. Tag the release commit and push the tag (e.g. `git tag cli-v0.2.0 origin/main && git push origin cli-v0.2.0`).
-2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached.
+2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. The draft is only created once every build job, including its image push, has passed. If one fails, re-run the failed jobs.
 3. Edit the draft and write the release notes above the generated "Verifying the release" section.
 4. Check the `Set as a pre-release` checkbox if needed. The workflow already checks it for tags with a pre-release suffix such as `-rc.1`.
 5. Publish the release.
@@ -28,7 +28,7 @@ Push the tag with `git` before publishing the release. A release drafted from th
 
 ### Container images
 
-The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:cli-vX.Y.Z` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image is not signed. Verify a release image with:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:cli-vX.Y.Z` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. Verify a release image with:
 
 ```sh
 cosign verify ghcr.io/cosmos/ibc:cli-vX.Y.Z \
