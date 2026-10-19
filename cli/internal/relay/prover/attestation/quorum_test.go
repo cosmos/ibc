@@ -208,7 +208,14 @@ func TestQueryQuorum(t *testing.T) {
 
 		attestors := []attestor.Attestor{signedAttestor(t, "raw-v", data), highSAttestor}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10, data)
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 		for _, sig := range result.Signatures {
