@@ -122,6 +122,9 @@ func sortCommitSeals(h *types.Header, extraItems []rlp.RawValue) (*types.Header,
 	slices.SortFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
 
 	for i, s := range signed {
+		if i > 0 && s.signer == signed[i-1].signer {
+			return nil, fmt.Errorf("signer %s has more than one commit seal", s.signer)
+		}
 		seals[i] = s.seal
 	}
 	sortedSeals, err := rlp.EncodeToBytes(seals)
