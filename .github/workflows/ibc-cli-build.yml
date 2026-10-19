@@ -100,12 +100,13 @@ jobs:
         run: |
           mkdir -p "dist/${{ matrix.artifact }}"
           go build ${{ env.GO_BUILD_FLAGS }} -o "dist/${{ matrix.artifact }}/ibc" ./cmd/ibc/...
+          cp ../LICENSE ../NOTICE "dist/${{ matrix.artifact }}/"
       - name: Checksum
         run: |
           cd "dist/${{ matrix.artifact }}"
           shasum -a 256 ibc > ibc.sha256
       - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.artifact }}
           path: cli/dist/${{ matrix.artifact }}
