@@ -277,7 +277,7 @@ jobs:
 
           Verify the build provenance of a release asset. Add
           \`--predicate-type https://spdx.dev/Document/v2.3\` to verify its SBOM instead, or
-          \`--bundle ${NAME}.sigstore.jsonl\` to verify offline:
+          \`--bundle ${NAME}.sigstore.jsonl\` to verify without the attestations API:
 
           \`\`\`sh
           gh attestation verify ${example} \\

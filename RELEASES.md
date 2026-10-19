@@ -14,7 +14,7 @@ Pushing a `v*` tag runs the [release workflow](./.github/workflows/release.yml).
 | `ibc-<version>-<platform>.spdx.json` | SPDX SBOM of each binary |
 | `checksums.txt` | SHA-256 of the archives and the SBOMs |
 | `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
-| `ibc-<version>.sigstore.jsonl` | Provenance and SBOM attestation bundles, for offline `gh attestation verify --bundle` |
+| `ibc-<version>.sigstore.jsonl` | Provenance and SBOM attestation bundles, for `gh attestation verify --bundle` without the attestations API |
 
 The same release workflow runs in [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts); only the tag patterns and the build differ. Here the build also pushes the container image, and an extra job publishes its multi-platform tag.
 
