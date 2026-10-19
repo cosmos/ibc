@@ -25,7 +25,7 @@ func (e revertError) ErrorCode() int { return e.code }
 func (e revertError) ErrorData() any { return e.data }
 
 // revertData is the hex revert data of the named custom error.
-func revertData(t *testing.T, metadata *bind.MetaData, name string, args ...any) string {
+func revertData(t testing.TB, metadata *bind.MetaData, name string, args ...any) string {
 	t.Helper()
 	contractABI, err := metadata.GetAbi()
 	require.NoError(t, err)
@@ -36,21 +36,24 @@ func revertData(t *testing.T, metadata *bind.MetaData, name string, args ...any)
 	return hexutil.Encode(append(customErr.ID[:4], packed...))
 }
 
+// namedReverts are custom errors explainRevert names.
+var namedReverts = []struct {
+	metadata *bind.MetaData
+	name     string
+	args     []any
+	want     string
+}{
+	{ics26router.ContractMetaData, "IBCClientNotFound", []any{"client-0"}, "IBCClientNotFound(client-0)"},
+	{attestation.ContractMetaData, "ConsensusTimestampNotFound", []any{uint64(7)}, "ConsensusTimestampNotFound(7)"},
+	{
+		besuqbft.ContractMetaData, "ConsensusStateExpired",
+		[]any{uint64(100), big.NewInt(121), uint64(20)},
+		"ConsensusStateExpired(100, 121, 20)",
+	},
+}
+
 func TestExplainRevert(t *testing.T) {
-	for _, tc := range []struct {
-		metadata *bind.MetaData
-		name     string
-		args     []any
-		want     string
-	}{
-		{ics26router.ContractMetaData, "IBCClientNotFound", []any{"client-0"}, "IBCClientNotFound(client-0)"},
-		{attestation.ContractMetaData, "ConsensusTimestampNotFound", []any{uint64(7)}, "ConsensusTimestampNotFound(7)"},
-		{
-			besuqbft.ContractMetaData, "ConsensusStateExpired",
-			[]any{uint64(100), big.NewInt(121), uint64(20)},
-			"ConsensusStateExpired(100, 121, 20)",
-		},
-	} {
+	for _, tc := range namedReverts {
 		t.Run("names "+tc.name, func(t *testing.T) {
 			data := revertData(t, tc.metadata, tc.name, tc.args...)
 			// geth and Besu 26.x use code 3, older Besu -32000
