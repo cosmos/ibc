@@ -4,7 +4,9 @@ package evm
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/sha256"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -26,72 +28,83 @@ func TestDigestMatchesFormula(t *testing.T) {
 }
 
 func TestRecoverSigner(t *testing.T) {
-	t.Run("roundTrip", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
+	// The light client's ECDSA.recover takes only v of 27/28 and low s, but
+	// attestors may return any form of the same signature.
+	t.Run("returnsTheLightClientForm", func(t *testing.T) {
+		key, digest, sig := signed(t)
+
+		recovered, normalized, err := RecoverSigner(digest, malleate(sig))
 		require.NoError(t, err)
-
-		expected := crypto.PubkeyToAddress(key.PublicKey)
-
-		digest := Digest(TagPacketAttestation, []byte("attested data"))
-
-		sig, err := crypto.Sign(digest[:], key)
-		require.NoError(t, err)
-		require.Len(t, sig, 65)
-
-		recovered, err := RecoverSigner(digest, sig)
-		require.NoError(t, err)
-		require.Equal(t, expected, recovered)
+		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
+		require.Equal(t, sig[:64], normalized[:64])
+		require.Equal(t, sig[64]+27, normalized[64])
 	})
 
-	t.Run("rejectsWrongLength", func(t *testing.T) {
-		_, err := RecoverSigner([32]byte{}, []byte{0x01, 0x02})
+	t.Run("rejectsInvalidSignature", func(t *testing.T) {
+		_, digest, sig := signed(t)
+
+		_, _, err := RecoverSigner(digest, sig[:64])
 		require.Error(t, err)
 	})
 
-	// AcceptsLegacyVByte verifies RecoverSigner works against signatures
-	// using Ethereum's legacy v (27/28), the convention the real attestor
-	// signs with (see SignABI/normalizeSignature), not just the raw 0/1
-	// recovery id crypto.Sign itself produces.
-	t.Run("acceptsLegacyVByte", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
+	t.Run("returnsSignABIOutputUnchanged", func(t *testing.T) {
+		key, _, rawSig := signed(t)
+
+		sig, err := SignABI(
+			context.Background(),
+			stubSigner{sig: rawSig},
+			TagPacketAttestation,
+			[]byte("attested data"),
+		)
 		require.NoError(t, err)
 
-		expected := crypto.PubkeyToAddress(key.PublicKey)
-
-		digest := Digest(TagPacketAttestation, []byte("attested data"))
-
-		sig, err := crypto.Sign(digest[:], key)
+		recovered, normalized, err := RecoverSigner(Digest(TagPacketAttestation, []byte("attested data")), sig)
 		require.NoError(t, err)
-
-		legacySig := make([]byte, 65)
-		copy(legacySig, sig)
-		legacySig[64] += 27
-
-		recovered, err := RecoverSigner(digest, legacySig)
-		require.NoError(t, err)
-		require.Equal(t, expected, recovered)
+		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
+		require.Equal(t, sig, normalized)
 	})
+}
 
-	t.Run("interopsWithSignABI", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
-		require.NoError(t, err)
+func TestSignABINormalizesHighS(t *testing.T) {
+	_, _, rawSig := signed(t)
 
-		expected := crypto.PubkeyToAddress(key.PublicKey)
+	sig, err := SignABI(
+		context.Background(),
+		stubSigner{sig: malleate(rawSig)},
+		TagPacketAttestation,
+		[]byte("attested data"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, rawSig[:64], sig[:64])
+	require.Equal(t, rawSig[64]+27, sig[64])
+}
 
-		digest := Digest(TagStateAttestation, []byte("data"))
+func TestSignABIRejectsInvalidSignature(t *testing.T) {
+	_, err := SignABI(context.Background(), stubSigner{sig: []byte{0x01}}, TagPacketAttestation, []byte("data"))
+	require.Error(t, err)
+}
 
-		rawSig, err := crypto.Sign(digest[:], key)
-		require.NoError(t, err)
+// signed returns a fresh key, a digest and the key's raw 0/1 signature over it.
+func signed(t *testing.T) (*ecdsa.PrivateKey, [32]byte, []byte) {
+	t.Helper()
 
-		signer := stubSigner{sig: rawSig}
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	digest := Digest(TagPacketAttestation, []byte("attested data"))
+	sig, err := crypto.Sign(digest[:], key)
+	require.NoError(t, err)
 
-		sig, err := SignABI(context.Background(), signer, TagStateAttestation, []byte("data"))
-		require.NoError(t, err)
+	return key, digest, sig
+}
 
-		recovered, err := RecoverSigner(digest, sig)
-		require.NoError(t, err)
-		require.Equal(t, expected, recovered, "RecoverSigner must accept exactly what SignABI produces")
-	})
+// malleate returns the high-s twin of a raw 0/1 low-s signature, which
+// recovers to the same signer.
+func malleate(sig []byte) []byte {
+	out := append([]byte(nil), sig...)
+	new(big.Int).Sub(crypto.S256().Params().N, new(big.Int).SetBytes(out[32:64])).FillBytes(out[32:64])
+	out[64] ^= 1
+
+	return out
 }
 
 type stubSigner struct {
