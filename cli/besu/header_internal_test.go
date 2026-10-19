@@ -56,3 +56,7 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 		}
 	}
 }
+
+// CommitSealDigest exposes commitSealDigest to FuzzParseSealedHeader, which is
+// in besu_test so it can seed from besutest.
+var CommitSealDigest = commitSealDigest
