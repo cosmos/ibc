@@ -260,7 +260,7 @@ level=INFO msg="Migrated database" module=bootstrap migrations_applied=4
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3000}"
 ```
 
-The readiness line is how you know it is up. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
+The readiness line confirms that startup completed. For ongoing API readiness, use the [gRPC health check](7-api.md#health-checks), which also checks database reachability. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
 
 Leave it running, and go back to your first terminal for the rest of the tutorial.
 

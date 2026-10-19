@@ -22,6 +22,7 @@ type RelayerHandler struct {
 
 // RelayerService defines relayer business logic.
 type RelayerService interface {
+	CheckReady(ctx context.Context) error
 	Relay(ctx context.Context, request relayer.RelayRequest) ([]relayer.ObservedPacket, error)
 	Packets(
 		ctx context.Context,
@@ -48,6 +49,10 @@ func (h *RelayerHandler) Register(opts ...connect.HandlerOption) (string, http.H
 
 func (h *RelayerHandler) Name() string {
 	return proto.RelayerApiServiceName
+}
+
+func (h *RelayerHandler) CheckReady(ctx context.Context) error {
+	return h.srv.CheckReady(ctx)
 }
 
 func (h *RelayerHandler) Relay(
