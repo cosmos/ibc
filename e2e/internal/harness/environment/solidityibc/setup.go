@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
+	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ibcerc20"
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics20transfer"
@@ -451,38 +451,39 @@ func (s *Setup) PrepareAttestationClient(
 		})
 }
 
-// PrepareBesuQBFTClient validates one Besu QBFT Client deployment without
-// submitting a transaction.
-func (s *Setup) PrepareBesuQBFTClient(
+// PrepareBesuClient validates one Besu Client deployment without submitting
+// a transaction.
+func (s *Setup) PrepareBesuClient(
 	ctx context.Context,
 	authority evm.Account,
 	router common.Address,
-	config BesuQBFTClientConfig,
+	config BesuClientConfig,
 ) (*PreparedClient, error) {
 	config = config.snapshot()
+	kind := clientkind.Besu(config.Consensus)
 	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare %s Client: %w", clientkind.BesuQBFT, err)
+		return nil, fmt.Errorf("solidity IBC prepare Besu Client: %w", err)
 	}
-	return s.prepareClient(ctx, authority, router, clientkind.BesuQBFT, config.ID, config.CounterpartyClientID,
+	return s.prepareClient(ctx, authority, router, kind, config.ID, config.CounterpartyClientID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
-			address, transaction, _, deployErr := besuqbft.DeployContract(
+			return besu.DeployLightClient(
 				opts,
 				s.backend,
-				besuqbft.IBesuLightClientMsgsClientState{
+				config.Consensus,
+				besumsgs.IBesuLightClientMsgsClientState{
 					IbcRouter:      config.CounterpartyRouter,
-					LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
+					LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
 					TrustingPeriod: config.TrustingPeriod,
 					MaxClockDrift:  config.MaxClockDrift,
 					TrustLevel:     besu.DefaultTrustLevel,
 				},
-				besuqbft.IBesuLightClientMsgsConsensusState{
+				besumsgs.IBesuLightClientMsgsConsensusState{
 					Timestamp:  config.InitialTimestamp,
 					StateRoot:  config.InitialStateRoot,
 					Validators: config.InitialValidators,
 				},
 				config.RoleManager,
 			)
-			return address, transaction, deployErr
 		})
 }
 
@@ -626,7 +627,7 @@ func (s *Setup) verifyClient(
 		}
 		client.Attestors = slices.Clone(set.AttestorAddresses)
 		client.MinRequiredSignatures = set.MinRequiredSigs
-	case clientkind.BesuQBFT:
+	case clientkind.BesuQBFT, clientkind.BesuIBFT2:
 		if _, err := besu.ReadClientState(ctx, s.backend, registered); err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 		}

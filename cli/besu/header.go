@@ -57,10 +57,14 @@ func (h *ParsedHeader) ConsensusState() besumsgs.IBesuLightClientMsgsConsensusSt
 // fields needed for payloads. go-ethereum keeps every optional post-merge
 // field the node returned, so apart from the commit seals the encoding
 // reproduces the sealed bytes. Validators come from extraData, not a
-// QBFT RPC.
-func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
+// consensus RPC. Commit seals are recovered against consensus's digest.
+func ParseSealedHeader(h *types.Header, consensus Consensus) (*ParsedHeader, error) {
 	if h == nil {
 		return nil, errors.New("nil header")
+	}
+
+	if err := consensus.Validate(); err != nil {
+		return nil, err
 	}
 
 	if h.Number == nil || !h.Number.IsUint64() {
@@ -81,7 +85,7 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
-	sorted, err := normalizeCommitSeals(h, extraItems, header.Validators)
+	sorted, err := normalizeCommitSeals(h, extraItems, header.Validators, consensus)
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", header.Height, err)
 	}
@@ -103,13 +107,14 @@ func normalizeCommitSeals(
 	h *types.Header,
 	extraItems []rlp.RawValue,
 	validators []common.Address,
+	consensus Consensus,
 ) (*types.Header, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals); err != nil {
 		return nil, fmt.Errorf("commit seals: %w", err)
 	}
 
-	digest, err := commitSealDigest(h, extraItems)
+	digest, err := commitSealDigest(h, extraItems, consensus)
 	if err != nil {
 		return nil, err
 	}
@@ -144,13 +149,26 @@ func normalizeCommitSeals(
 	return withCommitSeals(h, extraItems, sortedSeals)
 }
 
-// commitSealDigest is the QBFT digest commit seals sign: the header hash with
-// the commit seals emptied from extraData, matching _commitSealDigest in
-// BesuQBFTLightClient.sol.
-func commitSealDigest(h *types.Header, extraItems []rlp.RawValue) ([]byte, error) {
-	signing, err := withCommitSeals(h, extraItems, emptyRLPList)
-	if err != nil {
-		return nil, err
+// commitSealDigest is the digest commit seals sign under consensus, matching
+// _commitSealDigest in BesuQBFTLightClient.sol and BesuIBFT2LightClient.sol:
+// the header hash with the commit seals emptied from extraData for QBFT, or
+// dropped from it for IBFT2.
+func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Consensus) ([]byte, error) {
+	var signingItems []rlp.RawValue
+	switch consensus {
+	case QBFT:
+		signingItems = slices.Clone(extraItems)
+		signingItems[extraIdxCommitSeals] = emptyRLPList
+	case IBFT2:
+		signingItems = extraItems[:extraIdxCommitSeals]
+	default:
+		return nil, consensus.Validate()
+	}
+
+	signing := types.CopyHeader(h)
+	var err error
+	if signing.Extra, err = rlp.EncodeToBytes(signingItems); err != nil {
+		return nil, fmt.Errorf("encode signing extra data: %w", err)
 	}
 
 	encoded, err := rlp.EncodeToBytes(signing)
@@ -176,9 +194,14 @@ func withCommitSeals(h *types.Header, extraItems []rlp.RawValue, seals rlp.RawVa
 	return out, nil
 }
 
-// ReadSealedHeader reads and parses the Besu QBFT header at number, or the
-// head when number is nil.
-func ReadSealedHeader(ctx context.Context, backend bind.ContractBackend, number *big.Int) (*ParsedHeader, error) {
+// ReadSealedHeader reads and parses the Besu header at number, or the head
+// when number is nil, sealed under consensus.
+func ReadSealedHeader(
+	ctx context.Context,
+	backend bind.ContractBackend,
+	consensus Consensus,
+	number *big.Int,
+) (*ParsedHeader, error) {
 	at := "latest"
 	if number != nil {
 		at = number.String()
@@ -189,7 +212,7 @@ func ReadSealedHeader(ctx context.Context, backend bind.ContractBackend, number 
 		return nil, fmt.Errorf("getting header %s: %w", at, err)
 	}
 
-	parsed, err := ParseSealedHeader(header)
+	parsed, err := ParseSealedHeader(header, consensus)
 	if err != nil {
 		return nil, fmt.Errorf("parse header %s: %w", at, err)
 	}

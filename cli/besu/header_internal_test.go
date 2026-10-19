@@ -15,11 +15,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCommitSealDigestRecoversValidators checks the digest against the
-// header's own validator set: with a wrong digest the fixture's seals would
-// recover to addresses outside it. besutest imports this package, so the
-// fixture is read directly.
+// TestCommitSealDigestRecoversValidators checks each consensus's digest
+// against the header's own validator set: with the other consensus's digest
+// the fixture's seals recover to addresses outside it. besutest imports this
+// package, so the fixtures are read directly.
 func TestCommitSealDigestRecoversValidators(t *testing.T) {
+	for consensus, other := range map[Consensus]Consensus{QBFT: IBFT2, IBFT2: QBFT} {
+		t.Run(string(consensus), func(t *testing.T) {
+			testCommitSealDigestRecoversValidators(t, consensus, other)
+		})
+	}
+}
+
+func testCommitSealDigestRecoversValidators(t *testing.T, consensus, other Consensus) {
 	type update struct {
 		HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
 		ExpectedValidators []common.Address `json:"expectedValidators"`
@@ -28,7 +36,7 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 		AdjacentUpdate    update `json:"adjacentUpdate"`
 		NonAdjacentUpdate update `json:"nonAdjacentUpdate"`
 	}
-	raw, err := os.ReadFile("besutest/testdata/qbft.json")
+	raw, err := os.ReadFile("besutest/testdata/" + string(consensus) + ".json")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &fixture))
 
@@ -41,7 +49,9 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 		require.NoError(t, rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals))
 		require.NotEmpty(t, seals)
 
-		digest, err := commitSealDigest(&header, extraItems)
+		digest, err := commitSealDigest(&header, extraItems, consensus)
+		require.NoError(t, err)
+		otherDigest, err := commitSealDigest(&header, extraItems, other)
 		require.NoError(t, err)
 
 		var previous common.Address
@@ -50,6 +60,9 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 			require.NoError(t, err)
 			signer := crypto.PubkeyToAddress(*pubkey)
 			require.Contains(t, u.ExpectedValidators, signer, "seal %d", i)
+			if otherKey, otherErr := crypto.SigToPub(otherDigest, seal); otherErr == nil {
+				require.NotContains(t, u.ExpectedValidators, crypto.PubkeyToAddress(*otherKey), "seal %d", i)
+			}
 			// The fixture is in the order the contract accepts.
 			require.Positive(t, signer.Cmp(previous), "seal %d out of order", i)
 			previous = signer

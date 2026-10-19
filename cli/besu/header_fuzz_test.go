@@ -18,21 +18,27 @@ import (
 	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
-// FuzzParseSealedHeader parses node-supplied headers. Whatever it accepts it
-// must change only the commit seals, to one canonical seal per validator that
-// signed, in strictly ascending signer order, and parsing its own output must
-// give the same bytes.
+// FuzzParseSealedHeader parses node-supplied headers under either consensus.
+// Whatever it accepts it must change only the commit seals, to one canonical
+// seal per validator that signed, in strictly ascending signer order, and
+// parsing its own output must give the same bytes.
 func FuzzParseSealedHeader(f *testing.F) {
-	fixture := besutest.MustFixture(f)
-	f.Add([]byte(fixture.AdjacentUpdate.HeaderRLP))
-	f.Add([]byte(fixture.NonAdjacentUpdate.HeaderRLP))
+	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
+		fixture := besutest.MustFixture(f, consensus)
+		f.Add([]byte(fixture.AdjacentUpdate.HeaderRLP), consensus == besu.IBFT2)
+		f.Add([]byte(fixture.NonAdjacentUpdate.HeaderRLP), consensus == besu.IBFT2)
+	}
 
-	f.Fuzz(func(t *testing.T, headerRLP []byte) {
+	f.Fuzz(func(t *testing.T, headerRLP []byte, ibft2 bool) {
+		consensus := besu.QBFT
+		if ibft2 {
+			consensus = besu.IBFT2
+		}
 		var header types.Header
 		if rlp.DecodeBytes(headerRLP, &header) != nil {
 			return
 		}
-		parsed, err := besu.ParseSealedHeader(&header)
+		parsed, err := besu.ParseSealedHeader(&header, consensus)
 		if err != nil {
 			return
 		}
@@ -48,7 +54,7 @@ func FuzzParseSealedHeader(f *testing.F) {
 		sortedItems, sortedSeals := splitExtra(t, sorted.Extra)
 		require.Equal(t, inputItems[:4], sortedItems[:4], "extraData changed beyond the commit seals")
 
-		digest, err := besu.CommitSealDigest(&header, inputItems)
+		digest, err := besu.CommitSealDigest(&header, inputItems, consensus)
 		require.NoError(t, err)
 		var validators []common.Address
 		require.NoError(t, rlp.DecodeBytes(inputItems[1], &validators))
@@ -72,7 +78,7 @@ func FuzzParseSealedHeader(f *testing.F) {
 		}
 		require.Equal(t, want, got, "not one seal per validator that signed, in signer order")
 
-		reparsed, err := besu.ParseSealedHeader(&sorted)
+		reparsed, err := besu.ParseSealedHeader(&sorted, consensus)
 		require.NoError(t, err)
 		require.Equal(t, parsed.RLP, reparsed.RLP, "parsing is not idempotent")
 	})

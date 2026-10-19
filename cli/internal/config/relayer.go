@@ -8,12 +8,15 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
+
+	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
 	ClientTypeBesuQBFT    ClientType = "besu-qbft"
+	ClientTypeBesuIBFT2   ClientType = "besu-ibft2"
 	ClientTypeRemote      ClientType = "remote"
 )
 
@@ -21,7 +24,7 @@ const (
 const DefaultClearOnStart = true
 
 // clientTypes are the values ClientEnd.Type accepts.
-var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeBesuIBFT2, ClientTypeRemote}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
@@ -34,6 +37,32 @@ type ClientParams interface {
 
 // ClientType the light client type.
 type ClientType string
+
+// BesuClientType is the client type that verifies a Besu chain running
+// consensus.
+func BesuClientType(consensus besu.Consensus) (ClientType, error) {
+	switch consensus {
+	case besu.QBFT:
+		return ClientTypeBesuQBFT, nil
+	case besu.IBFT2:
+		return ClientTypeBesuIBFT2, nil
+	default:
+		return "", consensus.Validate()
+	}
+}
+
+// BesuConsensus is the consensus a Besu client type verifies, false for any
+// other client type.
+func (t ClientType) BesuConsensus() (besu.Consensus, bool) {
+	switch t {
+	case ClientTypeBesuQBFT:
+		return besu.QBFT, true
+	case ClientTypeBesuIBFT2:
+		return besu.IBFT2, true
+	default:
+		return "", false
+	}
+}
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -86,7 +115,7 @@ type ClientEnd struct {
 	Type     ClientType `yaml:"type"`
 
 	// Params is this client type's settings, decoded per Type by ClientParams:
-	// empty for `attestation` and `besu-qbft`, and
+	// empty for `attestation`, `besu-qbft` and `besu-ibft2`, and
 	// `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it
 	// is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
@@ -122,9 +151,9 @@ type RemoteParams struct {
 // AttestationParams is empty
 type AttestationParams struct{}
 
-// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
-// the two chains and the light client itself.
-type BesuQBFTParams struct{}
+// BesuParams is empty: the Besu provers read everything they need from the
+// two chains and the light client itself.
+type BesuParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -284,8 +313,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		return decodeYAML[AttestationParams](c.Params)
-	case ClientTypeBesuQBFT:
-		return decodeYAML[BesuQBFTParams](c.Params)
+	case ClientTypeBesuQBFT, ClientTypeBesuIBFT2:
+		return decodeYAML[BesuParams](c.Params)
 	case ClientTypeRemote:
 		return decodeYAML[RemoteParams](c.Params)
 	default:
@@ -312,7 +341,7 @@ func (p RemoteParams) Validate() error {
 
 func (AttestationParams) Validate() error { return nil }
 
-func (BesuQBFTParams) Validate() error { return nil }
+func (BesuParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -368,7 +397,7 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 
 func (RemoteParams) isClientParams()      {}
 func (AttestationParams) isClientParams() {}
-func (BesuQBFTParams) isClientParams()    {}
+func (BesuParams) isClientParams()        {}
 
 func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	var params T

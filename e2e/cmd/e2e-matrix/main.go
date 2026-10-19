@@ -261,6 +261,9 @@ func formatRequirement(selection e2etest.MatrixSelection) string {
 	if selection.Requirements.Provider != "" {
 		parts = append(parts, "provider "+string(selection.Requirements.Provider))
 	}
+	if selection.Requirements.BesuConsensus != "" {
+		parts = append(parts, "consensus "+string(selection.Requirements.BesuConsensus))
+	}
 	if selection.Requirements.ControlledMining {
 		parts = append(parts, "controlled mining")
 	}
@@ -306,6 +309,9 @@ func formatSpec(summary e2etest.MatrixSpec) string {
 	)
 	if summary.BesuQBFTClients > 0 {
 		parts = append(parts, count(summary.BesuQBFTClients, "Besu QBFT client"))
+	}
+	if summary.BesuIBFT2Clients > 0 {
+		parts = append(parts, count(summary.BesuIBFT2Clients, "Besu IBFT2 client"))
 	}
 	return strings.Join(parts, "; ")
 }

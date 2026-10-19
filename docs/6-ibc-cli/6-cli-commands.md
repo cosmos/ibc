@@ -176,7 +176,7 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 Deploying a working connection between two chains takes `deploy core` on both, then a `deploy client` subcommand on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
 
-`--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu-qbft`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
+`--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu-ibft2`, `deploy client besu-qbft`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
 `--dry-run` prints the steps a command would take and submits nothing. <!-- [cli/internal/deploy/steps.go: RunSteps] -->
 
@@ -217,6 +217,35 @@ The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` 
 
 Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [cli/internal/deploy/steps.go: clientConflicts] -->
 
+### `ibc deploy client besu-ibft2`
+
+<!-- GEN:cli:cmd:deploy-client-besu-ibft2 START -->
+
+Deploy and register a Besu IBFT 2.0 light client trusting the counterparty head.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
+| `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
+| `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
+| `--max-clock-drift <duration>` | `1m0s` | How far ahead of this chain's block time a counterparty header may be. |
+| `--trusting-period <duration>` | required | Positive trusted state lifetime. |
+| `--chain <string>` |  | Chain ID for the chain being deployed to. |
+| `--deployer <string>` |  | Signer alias override for deployment transactions. |
+| `--dry-run` |  | Print the step plan without submitting transactions. |
+| `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
+| `--yes` |  | Skip confirmation prompts. |
+
+<!-- [main.go:L155](cli/cmd/ibc/main.go#L155) -->
+
+<!-- GEN:cli:cmd:deploy-client-besu-ibft2 END -->
+
+```bash
+ibc deploy client besu-ibft2 --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
+```
+
+Like `besu-qbft`, but for a counterparty running IBFT 2.0: it deploys the IBFT2 light client, whose commit seals sign a different digest, and otherwise behaves the same. The type must match the counterparty's consensus, or none of its headers verify. <!-- [cli/besu/header.go: commitSealDigest] -->
+
 ### `ibc deploy client besu-qbft`
 
 <!-- GEN:cli:cmd:deploy-client-besu-qbft START -->
@@ -236,7 +265,7 @@ Deploy and register a Besu QBFT light client trusting the counterparty head.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
+<!-- [main.go:L155](cli/cmd/ibc/main.go#L155) -->
 
 <!-- GEN:cli:cmd:deploy-client-besu-qbft END -->
 
@@ -301,7 +330,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L195](cli/cmd/ibc/main.go#L195) -->
+<!-- [main.go:L196](cli/cmd/ibc/main.go#L196) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -330,7 +359,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L205](cli/cmd/ibc/main.go#L205) -->
+<!-- [main.go:L206](cli/cmd/ibc/main.go#L206) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -355,7 +384,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L187](cli/cmd/ibc/main.go#L187) -->
+<!-- [main.go:L188](cli/cmd/ibc/main.go#L188) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -543,7 +572,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L231](cli/cmd/ibc/main.go#L231) -->
+<!-- [main.go:L232](cli/cmd/ibc/main.go#L232) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -563,7 +592,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L236](cli/cmd/ibc/main.go#L236) -->
+<!-- [main.go:L237](cli/cmd/ibc/main.go#L237) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

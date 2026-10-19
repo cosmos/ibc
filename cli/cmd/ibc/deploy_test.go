@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
@@ -242,32 +243,40 @@ func captureStdout(t *testing.T, fn func()) string {
 	return string(bz)
 }
 
-func TestRenderRelayConfigBesuQBFT(t *testing.T) {
-	a := manifest.New("1", "evm")
-	a.Core.Router = "0xrouterA"
-	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
-		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
-	})
-	b := manifest.New("2", "evm")
-	b.Core.Router = "0xrouterB"
-	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
-		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
-	})
+func TestRenderRelayConfigBesu(t *testing.T) {
+	for _, clientType := range []config.ClientType{config.ClientTypeBesuQBFT, config.ClientTypeBesuIBFT2} {
+		t.Run(string(clientType), func(t *testing.T) {
+			a := manifest.New("1", "evm")
+			a.Core.Router = "0xrouterA"
+			a.UpsertClient(manifest.Client{
+				ClientID: "cli-1-2", Type: string(clientType), Address: "0xca",
+				CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
+				Params: map[string]any{
+					"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
+				},
+			})
+			b := manifest.New("2", "evm")
+			b.Core.Router = "0xrouterB"
+			b.UpsertClient(manifest.Client{
+				ClientID: "cli-1-2", Type: string(clientType), Address: "0xcb",
+				CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+				Params: map[string]any{
+					"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
+				},
+			})
 
-	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
-	require.NoError(t, err)
-	require.Len(t, out.Connections, 1)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
-	require.Empty(t, out.Connections[0].ClientA.Params)
-	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+			out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
+			require.NoError(t, err)
+			require.Len(t, out.Connections, 1)
+			require.Equal(t, clientType, out.Connections[0].ClientA.Type)
+			require.Equal(t, clientType, out.Connections[0].ClientB.Type)
+			require.Empty(t, out.Connections[0].ClientA.Params)
+			require.Empty(t, out.Attestors, "besu clients need no attestors")
+		})
+	}
 }
 
-func TestBesuQBFTParamsFlags(t *testing.T) {
+func TestBesuParamsFlags(t *testing.T) {
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
 	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
 	const router = "0x00000000000000000000000000000000000000bb"
@@ -294,7 +303,7 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 				flagDeployMaxClockDrift = tc.drift
 			}
 			source := &besuHeadTarget{}
-			params, err := besuQBFTParams(t.Context(), tc.router, source)
+			params, err := besuParams(t.Context(), besu.IBFT2, tc.router, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -302,7 +311,9 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
-			require.Equal(t, deploy.BesuQBFTParams{
+			require.Equal(t, besu.IBFT2, source.consensus)
+			require.Equal(t, deploy.BesuParams{
+				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
@@ -312,8 +323,8 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 		})
 	}
 
-	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
-	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+	_, err := besuParams(t.Context(), besu.QBFT, router, &hostOnlyTarget{})
+	require.ErrorContains(t, err, "cannot serve a besu consensus state")
 }
 
 func TestIFTRateLimit(t *testing.T) {
@@ -401,11 +412,15 @@ const (
 // besuHeadTarget is a Besu chain whose head is besuHeadHeight.
 type besuHeadTarget struct {
 	deploy.Target
-	called bool
+	called    bool
+	consensus besu.Consensus
 }
 
-func (t *besuHeadTarget) BesuQBFTHead(context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	t.called = true
+func (t *besuHeadTarget) BesuHead(
+	_ context.Context,
+	consensus besu.Consensus,
+) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+	t.called, t.consensus = true, consensus
 	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
 }
 

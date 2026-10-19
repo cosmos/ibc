@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 )
@@ -82,10 +83,19 @@ func (c ManagedAnvil) validateChain() error {
 	return nil
 }
 
-// ManagedBesu declares an environment-owned Besu Chain.
+// ManagedBesu declares an environment-owned Besu Chain. An empty Consensus
+// runs QBFT.
 type ManagedBesu struct {
 	ID         ChainID
 	EVMChainID uint64
+	Consensus  besu.Consensus
+}
+
+func (c ManagedBesu) consensus() besu.Consensus {
+	if c.Consensus == "" {
+		return besu.QBFT
+	}
+	return c.Consensus
 }
 
 func (ManagedBesu) chainSpec() {}
@@ -99,6 +109,9 @@ func (c ManagedBesu) validateChain() error {
 	}
 	if c.EVMChainID == 0 {
 		return errorsf("chain %q: EVM chain id must be greater than zero", c.ID)
+	}
+	if err := c.consensus().Validate(); err != nil {
+		return errorsf("chain %q: %v", c.ID, err)
 	}
 	return nil
 }
@@ -245,26 +258,27 @@ func (c NewClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance 
 func (c NewClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
 func (c NewClient) clientAttestors() []AttestorSpec      { return c.Attestors }
 
-// NewBesuQBFTClient declares a Besu QBFT IBC Client to create on its host IBC
-// Instance. It verifies the counterparty end's sealed Besu headers, so it needs
-// no Attestors; the counterparty Chain must run Besu QBFT. Authority follows
-// the same rule as NewClient. Periods are seconds; the contract rejects a zero
-// TrustingPeriod at deploy time.
-// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
-// Besu QBFT clients.
-const BesuQBFTTrustingPeriod = solidityibc.BesuQBFTTrustingPeriod
+// BesuTrustingPeriod is the trusting period, in seconds, e2e tests give Besu
+// clients.
+const BesuTrustingPeriod = solidityibc.BesuTrustingPeriod
 
-type NewBesuQBFTClient struct {
+// NewBesuClient declares a Besu IBC Client to create on its host IBC
+// Instance. It verifies the counterparty end's sealed Besu headers, so it needs
+// no Attestors; the counterparty Chain must run Besu with Consensus. Authority
+// follows the same rule as NewClient. Periods are seconds; the contract
+// rejects a zero TrustingPeriod at deploy time.
+type NewBesuClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID
+	Consensus      besu.Consensus
 	TrustingPeriod uint64
 	MaxClockDrift  uint64
 }
 
-func (NewBesuQBFTClient) clientKind() clientkind.Kind            { return clientkind.BesuQBFT }
-func (c NewBesuQBFTClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
-func (c NewBesuQBFTClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
-func (NewBesuQBFTClient) clientAttestors() []AttestorSpec        { return nil }
+func (c NewBesuClient) clientKind() clientkind.Kind          { return clientkind.Besu(c.Consensus) }
+func (c NewBesuClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
+func (c NewBesuClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
+func (NewBesuClient) clientAttestors() []AttestorSpec        { return nil }
 
 // ExistingClient identifies an already-created IBC Client by its protocol ID
 // and explicit kind. Attestors are only valid for attestation clients.
@@ -353,14 +367,21 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 				clientLabel(connectionID, end),
 			)
 		}
-	case NewBesuQBFTClient:
+	case NewBesuClient:
 		instance = declaration.IBCInstance
 		variantField = "authority"
 		variantValue = string(declaration.Authority)
+		if err := declaration.Consensus.Validate(); err != nil {
+			return "", errorsf("IBC Client %q: %v", clientLabel(connectionID, end), err)
+		}
 	case ExistingClient:
 		instance = declaration.IBCInstance
-		if declaration.Kind == clientkind.BesuQBFT && len(declaration.Attestors) != 0 {
-			return "", errorsf("IBC Client %q: besu-qbft does not use attestors", clientLabel(connectionID, end))
+		if _, isBesu := declaration.Kind.BesuConsensus(); isBesu && len(declaration.Attestors) != 0 {
+			return "", errorsf(
+				"IBC Client %q: %s does not use attestors",
+				clientLabel(connectionID, end),
+				declaration.Kind,
+			)
 		}
 		variantField = "id"
 		variantValue = declaration.ID
@@ -400,6 +421,7 @@ func (s Spec) validate() error {
 	chains := make(map[ChainID]struct{}, len(s.Chains))
 	attachedChains := make(map[ChainID]struct{}, len(s.Chains))
 	anvilChains := make(map[ChainID]struct{}, len(s.Chains))
+	besuChains := make(map[ChainID]besu.Consensus, len(s.Chains))
 	evmChainIDs := make(map[uint64]ChainID, len(s.Chains))
 	for n, chain := range s.Chains {
 		switch chain.(type) {
@@ -424,6 +446,9 @@ func (s Spec) validate() error {
 		}
 		if _, anvil := chain.(ManagedAnvil); anvil {
 			anvilChains[id] = struct{}{}
+		}
+		if managed, ok := chain.(ManagedBesu); ok {
+			besuChains[id] = managed.consensus()
 		}
 		evmChainIDs[evmID] = id
 	}
@@ -505,12 +530,23 @@ func (s Spec) validate() error {
 			}
 			// only Anvil is known not to be Besu; an attached Chain may be either
 			counterpartyChain := instanceChains[ends[1-i].declaration.clientIBCInstance()]
-			if end.declaration.clientKind() == clientkind.BesuQBFT && contains(anvilChains, counterpartyChain) {
-				return errorsf(
-					"Besu QBFT IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
-					label,
-					counterpartyChain,
-				)
+			if consensus, isBesu := end.declaration.clientKind().BesuConsensus(); isBesu {
+				if contains(anvilChains, counterpartyChain) {
+					return errorsf(
+						"Besu IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
+						label,
+						counterpartyChain,
+					)
+				}
+				if running, managed := besuChains[counterpartyChain]; managed && running != consensus {
+					return errorsf(
+						"%s IBC Client %q tracks Chain %q, which runs Besu %s",
+						end.declaration.clientKind(),
+						label,
+						counterpartyChain,
+						running,
+					)
+				}
 			}
 			if _, existing := end.declaration.(ExistingClient); existing && contains(newInstances, instance) {
 				return errorsf(

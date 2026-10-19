@@ -11,6 +11,7 @@ import (
 	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
@@ -20,6 +21,7 @@ import (
 const (
 	ClientTypeAttestation = string(config.ClientTypeAttestation)
 	ClientTypeBesuQBFT    = string(config.ClientTypeBesuQBFT)
+	ClientTypeBesuIBFT2   = string(config.ClientTypeBesuIBFT2)
 )
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under
@@ -48,9 +50,10 @@ type AttestationParams struct {
 // ClientType implements ClientParams.
 func (AttestationParams) ClientType() string { return ClientTypeAttestation }
 
-// BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
-// are in seconds.
-type BesuQBFTParams struct {
+// BesuParams are the constructor inputs for a Besu client verifying a chain
+// that runs Consensus. Periods are in seconds.
+type BesuParams struct {
+	Consensus             besu.Consensus
 	IBCRouter             common.Address
 	InitialHeight         uint64
 	InitialConsensusState besumsgs.IBesuLightClientMsgsConsensusState
@@ -58,14 +61,20 @@ type BesuQBFTParams struct {
 	MaxClockDrift         uint64
 }
 
-// ClientType implements ClientParams.
-func (BesuQBFTParams) ClientType() string { return ClientTypeBesuQBFT }
+// ClientType implements ClientParams. It is empty for an unknown Consensus.
+func (p BesuParams) ClientType() string {
+	clientType, _ := config.BesuClientType(p.Consensus)
+	return string(clientType)
+}
 
-// BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
-// serve the consensus state of their head, which a new client tracking them
-// starts trusting.
-type BesuQBFTSource interface {
-	BesuQBFTHead(ctx context.Context) (height uint64, state besumsgs.IBesuLightClientMsgsConsensusState, err error)
+// BesuSource is implemented by targets whose chain runs Besu and can serve
+// the consensus state of their head, sealed under consensus, which a new
+// client tracking them starts trusting.
+type BesuSource interface {
+	BesuHead(
+		ctx context.Context,
+		consensus besu.Consensus,
+	) (height uint64, state besumsgs.IBesuLightClientMsgsConsensusState, err error)
 }
 
 // ClientSpec describes one light client to provision and register.

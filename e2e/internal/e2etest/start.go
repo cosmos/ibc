@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -55,8 +56,11 @@ const (
 	EVMProviderBesu  EVMProvider = "besu"
 )
 
+// EVMRequirements select the Chains a test runs on. BesuConsensus requires
+// the Besu provider; empty runs QBFT.
 type EVMRequirements struct {
 	Provider         EVMProvider
+	BesuConsensus    besu.Consensus `json:",omitempty"`
 	ControlledMining bool
 	NodeLifecycle    bool
 }
@@ -170,7 +174,7 @@ func resolveEVMChains(
 		if (requirements.ControlledMining || requirements.NodeLifecycle) && provider != EVMProviderAnvil {
 			continue
 		}
-		return evmResolution{chains: evmChainSpecs(provider, ids), provider: provider}, nil
+		return evmResolution{chains: evmChainSpecs(provider, requirements.BesuConsensus, ids), provider: provider}, nil
 	}
 
 	reason := fmt.Sprintf("no EVM provider satisfies requirements %+v in %s mode", requirements, mode)
@@ -183,10 +187,16 @@ func resolveEVMChains(
 func validateEVMRequirements(requirements EVMRequirements) error {
 	switch requirements.Provider {
 	case "", EVMProviderAnvil, EVMProviderBesu:
-		return nil
 	default:
 		return fmt.Errorf("unknown EVM provider %q", requirements.Provider)
 	}
+	if requirements.BesuConsensus == "" {
+		return nil
+	}
+	if requirements.Provider != EVMProviderBesu {
+		return fmt.Errorf("besu consensus %q requires the %s provider", requirements.BesuConsensus, EVMProviderBesu)
+	}
+	return requirements.BesuConsensus.Validate()
 }
 
 func validateChainIDs(ids []environment.ChainID) error {
@@ -206,14 +216,22 @@ func validateChainIDs(ids []environment.ChainID) error {
 	return nil
 }
 
-func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environment.ChainSpec {
+func evmChainSpecs(
+	provider EVMProvider,
+	consensus besu.Consensus,
+	ids []environment.ChainID,
+) []environment.ChainSpec {
 	chains := make([]environment.ChainSpec, len(ids))
 	for i, id := range ids {
 		switch provider {
 		case EVMProviderAnvil:
 			chains[i] = environment.ManagedAnvil{ID: id, EVMChainID: anvilChainIDBase + uint64(i)}
 		case EVMProviderBesu:
-			chains[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
+			chains[i] = environment.ManagedBesu{
+				ID:         id,
+				EVMChainID: besuChainIDBase + uint64(i),
+				Consensus:  consensus,
+			}
 		}
 	}
 	return chains

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -174,10 +175,13 @@ func TestAttestedMeshConnectsEveryChainPair(t *testing.T) {
 	require.NoError(t, environment.Validate(spec, runtime))
 }
 
-// qbftMesh declares a fully connected graph of Besu QBFT Clients over chains:
-// per Chain pair one Connection whose ends verify each other's sealed Besu
-// headers, so it needs no Attestors. Every chain must run Besu QBFT.
-func qbftMesh(chains []environment.ChainSpec) (environment.Spec, environment.Runtime) {
+// besuMesh declares a fully connected graph of Besu Clients over chains: per
+// Chain pair one Connection whose ends verify each other's sealed Besu
+// headers, so it needs no Attestors. Every chain must run Besu with consensus.
+func besuMesh(
+	consensus besu.Consensus,
+	chains []environment.ChainSpec,
+) (environment.Spec, environment.Runtime) {
 	spec := environment.Spec{Chains: slices.Clone(chains)}
 	chainIDs := make([]environment.ChainID, 0, len(chains))
 	for _, chain := range chains {
@@ -194,28 +198,29 @@ func qbftMesh(chains []environment.ChainSpec) (environment.Spec, environment.Run
 		for _, b := range chainIDs[i+1:] {
 			spec.Connections = append(spec.Connections, environment.ConnectionSpec{
 				ID: fixtureConnectionID(a, b),
-				A:  qbftMeshClient(a),
-				B:  qbftMeshClient(b),
+				A:  besuMeshClient(consensus, a),
+				B:  besuMeshClient(consensus, b),
 			})
 		}
 	}
 	return spec, e2etest.RuntimeWithProtocolDeployer(environment.Runtime{})
 }
 
-// qbftMeshClient trusts states for 14 days and tolerates a minute of clock drift.
-func qbftMeshClient(chain environment.ChainID) environment.NewBesuQBFTClient {
-	return environment.NewBesuQBFTClient{
+// besuMeshClient trusts states for 14 days and tolerates a minute of clock drift.
+func besuMeshClient(consensus besu.Consensus, chain environment.ChainID) environment.NewBesuClient {
+	return environment.NewBesuClient{
 		IBCInstance:    fixtureInstanceID(chain),
 		Authority:      e2etest.ProtocolAuthorityID,
-		TrustingPeriod: environment.BesuQBFTTrustingPeriod,
+		Consensus:      consensus,
+		TrustingPeriod: environment.BesuTrustingPeriod,
 		MaxClockDrift:  60,
 	}
 }
 
-func TestQBFTMesh(t *testing.T) {
-	spec, runtime := qbftMesh([]environment.ChainSpec{
-		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2},
-		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
+func TestBesuMesh(t *testing.T) {
+	spec, runtime := besuMesh(besu.IBFT2, []environment.ChainSpec{
+		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.IBFT2},
+		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1, Consensus: besu.IBFT2},
 	})
 
 	require.NoError(t, environment.Validate(spec, runtime))
@@ -227,9 +232,10 @@ func TestQBFTMesh(t *testing.T) {
 		instance, ok := spec.IBCInstances[i].(environment.NewIBCInstance)
 		require.True(t, ok)
 		require.Equal(t, chain, instance.Chain)
-		// QBFT endpoints carry no attestors and follow the sorted host instances.
-		client, ok := ends[i].(environment.NewBesuQBFTClient)
+		// Besu endpoints carry no attestors and follow the sorted host instances.
+		client, ok := ends[i].(environment.NewBesuClient)
 		require.True(t, ok)
 		require.Equal(t, instance.ID, client.IBCInstance)
+		require.Equal(t, besu.IBFT2, client.Consensus)
 	}
 }

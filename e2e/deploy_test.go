@@ -21,7 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -258,15 +260,30 @@ func TestDeployConnection(t *testing.T) {
 	}
 }
 
-// TestDeployBesuQBFTConnection relays an IFT transfer between two Besu chains
-// set up through the CLI alone: deploy a besu-qbft connection and an IFT
-// bridge, render the relayer config from the manifests, then run the relayer.
-// Each client trusts the other chain's head and needs its router, so the
-// config carries the routers core deployed.
+// TestDeployBesuQBFTConnection relays an IFT transfer between two Besu QBFT
+// chains set up through the CLI alone.
 func TestDeployBesuQBFTConnection(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu})
+	requireBesuDeployedConnection(t, besu.QBFT)
+}
+
+// TestDeployBesuIBFT2Connection relays an IFT transfer between two Besu IBFT
+// 2.0 chains set up through the CLI alone.
+func TestDeployBesuIBFT2Connection(t *testing.T) {
+	t.Parallel()
+	requireBesuDeployedConnection(t, besu.IBFT2)
+}
+
+// requireBesuDeployedConnection deploys a Besu connection between two chains
+// running consensus and an IFT bridge, renders the relayer config from the
+// manifests, then relays an IFT transfer. Each client trusts the other
+// chain's head and needs its router, so the config carries the routers core
+// deployed.
+func requireBesuDeployedConnection(t *testing.T, consensus besu.Consensus) {
+	t.Helper()
+	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu, BesuConsensus: consensus})
 	ctx := t.Context()
+	clientType := string(clientkind.Besu(consensus))
 
 	core := [][]string{
 		{"core", "--chain", d.chainAID, "--yes"},
@@ -278,7 +295,7 @@ func TestDeployBesuQBFTConnection(t *testing.T) {
 	perChain := func(chainID, counterparty string) [][]string {
 		return [][]string{
 			{
-				"client", "besu-qbft",
+				"client", clientType,
 				"--chain", chainID,
 				"--counterparty-chain", counterparty,
 				"--trusting-period", "336h",
@@ -320,7 +337,7 @@ func TestDeployBesuQBFTConnection(t *testing.T) {
 	rendered, err := d.driver.Deploy(ctx, "render-config", d.chainAID, d.chainBID,
 		"--signer-a", relayerAlias, "--signer-b", relayerAlias, "--populate-config", "--yes")
 	require.NoError(t, err)
-	require.Equal(t, 2, strings.Count(string(rendered), "type: besu-qbft"))
+	require.Equal(t, 2, strings.Count(string(rendered), "type: "+clientType))
 
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	require.NoError(t, d.driver.ConfigureRelayer(ibccli.RelayerOptions{

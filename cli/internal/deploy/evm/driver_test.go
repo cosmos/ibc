@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
@@ -72,9 +73,9 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 	require.ErrorContains(t, err, "no deployer signer configured")
 }
 
-func TestBesuQBFTHead(t *testing.T) {
+func TestBesuHead(t *testing.T) {
 	ctx := context.Background()
-	update := besutest.MustFixture(t).AdjacentUpdate
+	update := besutest.MustFixture(t, besu.QBFT).AdjacentUpdate
 	var sealed types.Header
 	require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &sealed))
 
@@ -82,7 +83,7 @@ func TestBesuQBFTHead(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&sealed, nil).Once()
 
-		height, state, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		height, state, err := (&Driver{backend: eth}).BesuHead(ctx, besu.QBFT)
 		require.NoError(t, err)
 		require.Equal(t, update.Height, height)
 		require.Equal(t, update.ExpectedConsensusState(), state)
@@ -101,7 +102,7 @@ func TestBesuQBFTHead(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&genesis, nil).Once()
 
-		_, _, err = (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		_, _, err = (&Driver{backend: eth}).BesuHead(ctx, besu.QBFT)
 		require.ErrorContains(t, err, "no block past genesis")
 	})
 
@@ -110,7 +111,7 @@ func TestBesuQBFTHead(t *testing.T) {
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).
 			Return(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}, nil).Once()
 
-		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		_, _, err := (&Driver{backend: eth}).BesuHead(ctx, besu.QBFT)
 		require.ErrorContains(t, err, "parse header latest: extra data list")
 	})
 
@@ -118,7 +119,7 @@ func TestBesuQBFTHead(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(nil, errors.New("boom")).Once()
 
-		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		_, _, err := (&Driver{backend: eth}).BesuHead(ctx, besu.QBFT)
 		require.ErrorContains(t, err, "getting header latest")
 	})
 }

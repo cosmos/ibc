@@ -10,6 +10,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/cli/besu"
 )
 
 func TestRelayerConfig(t *testing.T) {
@@ -430,8 +432,10 @@ func TestClientEndParams(t *testing.T) {
 		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
 		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
 		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuQBFTParams{}},
+		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuParams{}},
 		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "besu-ibft2", doc: "type: besu-ibft2\n", wantParams: &BesuParams{}},
+		{name: "besu-ibft2 takes no params", doc: "type: besu-ibft2\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -458,6 +462,21 @@ func TestClientEndParams(t *testing.T) {
 			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
 		})
 	}
+}
+
+func TestBesuClientTypes(t *testing.T) {
+	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
+		clientType, err := BesuClientType(consensus)
+		require.NoError(t, err)
+		got, ok := clientType.BesuConsensus()
+		require.True(t, ok)
+		require.Equal(t, consensus, got)
+	}
+
+	_, err := BesuClientType("clique")
+	require.ErrorContains(t, err, "clique")
+	_, ok := ClientTypeAttestation.BesuConsensus()
+	require.False(t, ok)
 }
 
 func TestRelayerConfigClearOnStartEnabled(t *testing.T) {

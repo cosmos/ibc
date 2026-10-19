@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -100,7 +101,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
+	spec, runtime := besuMesh(besu.QBFT, e2etest.EVMChains(
 		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
 	))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
@@ -175,9 +176,22 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 // fast mode, so this skips there.
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
-	))
+	requireBesuAutoRelay(t, besu.QBFT)
+}
+
+// Two Besu IBFT 2.0 chains relay through besu-ibft2 light clients, whose
+// commit seals sign a different digest than QBFT's.
+func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
+	t.Parallel()
+	requireBesuAutoRelay(t, besu.IBFT2)
+}
+
+// requireBesuAutoRelay relays a transfer between two Besu chains running
+// consensus through the matching Besu light clients.
+func requireBesuAutoRelay(t *testing.T, consensus besu.Consensus) {
+	t.Helper()
+	requirements := e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu, BesuConsensus: consensus}
+	spec, runtime := besuMesh(consensus, e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -190,7 +204,7 @@ func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
 		Amount: amount,
-		Memo:   "transfer-besu-qbft",
+		Memo:   "transfer-besu-" + string(consensus),
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))

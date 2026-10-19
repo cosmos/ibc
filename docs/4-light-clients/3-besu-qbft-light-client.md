@@ -1,11 +1,11 @@
 ---
-title: The Besu QBFT light client
-description: The Besu QBFT light client verifies sealed Besu headers and Ethereum storage proofs, so a connection between two Besu QBFT chains needs no attestors.
+title: The Besu QBFT and IBFT 2.0 light clients
+description: The Besu light clients verify sealed Besu headers and Ethereum storage proofs, so a connection between two Besu QBFT or IBFT 2.0 chains needs no attestors.
 ---
 
-The Besu QBFT light client verifies the counterparty chain's own consensus. It accepts a Besu block header once enough of the validators it trusts have sealed it, and it then answers questions about packets with Ethereum storage proofs against that header. Trust in a connection using this client rests on the counterparty's validator set, not on off-chain signers.
+The Besu light client verifies the counterparty chain's own consensus. It accepts a Besu block header once enough of the validators it trusts have sealed it, and it then answers questions about packets with Ethereum storage proofs against that header. Trust in a connection using this client rests on the counterparty's validator set, not on off-chain signers.
 
-A connection carries one of these clients on each side when both chains run Besu with the QBFT consensus engine. Each client implements the standard [light client interface](../2-how-ibc-works/4-clients-and-counterparties.md): update the client, verify membership, verify non-membership, and accept misbehaviour evidence. In IBC-solidity it is the `BesuQBFTLightClient` contract.
+A connection carries one of these clients on each side when both chains run Besu with the QBFT or the IBFT 2.0 consensus engine. Each client implements the standard [light client interface](../2-how-ibc-works/4-clients-and-counterparties.md): update the client, verify membership, verify non-membership, and accept misbehaviour evidence. In IBC-solidity it comes as two contracts, `BesuQBFTLightClient` and `BesuIBFT2LightClient`, with the client types `besu-qbft` and `besu-ibft2`. They differ only in the digest commit seals sign, so everything below applies to both; pick the one matching the counterparty's consensus.
 
 ## What the client trusts
 
@@ -42,16 +42,16 @@ Packet proofs are the only reads that need historical state. Besu's default Bons
 
 An update carries a raw Besu header, the height the client already trusts, and that height's consensus state.
 
-Besu validators seal a block by signing a digest of its header, with the seals themselves left out. The client rebuilds that digest, recovers the signer of every seal, and applies two rules:
+Besu validators seal a block by signing a digest of its header, with the seals themselves left out: QBFT replaces them with an empty list, IBFT 2.0 drops them from the header's extra data. The client rebuilds that digest, recovers the signer of every seal, and applies two rules:
 
-- **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client besu-qbft` always uses two thirds.
+- **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client` always uses two thirds.
 - **Quorum.** At least two thirds of the header's own validator set must be among the signers, which is the same threshold Besu needs to produce the block.
 
-The client requires the seals in ascending order of signer address. Besu does not order them that way, so the relayer reorders them before submitting the header; the digest leaves the seals out, so reordering does not change what was signed.
+The client requires the seals in ascending order of signer address. Besu does not order them that way, so the relayer recovers the signers with the digest of the configured client type and reorders the seals before submitting the header; the digest leaves the seals out, so reordering does not change what was signed.
 
 The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. An expired consensus state can no longer anchor an update or be used for packet proofs. Advancing an expired client requires redeployment; packets pending on it stay pending, and the relayer reports the expiry on every attempt until the connection is redeployed. Updates are submitted only alongside packets: keeping the relayer online does not refresh an idle client or prevent its expiry.
 
-The header must be above the trusted height. Heights need not be consecutive. Every QBFT block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state; the light client enforces those rules when the transaction is simulated or mined. If validator turnover prevents a direct update, submission fails; automatic catch-up through intermediate updates is not supported.
+The header must be above the trusted height. Heights need not be consecutive. Every QBFT and IBFT 2.0 block is final, and the relayer submits at most one client update alongside the packets. The target header must satisfy the quorum and overlap rules directly against the trusted state; the light client enforces those rules when the transaction is simulated or mined. If validator turnover prevents a direct update, submission fails; automatic catch-up through intermediate updates is not supported.
 
 ## Misbehaviour
 
@@ -81,13 +81,15 @@ Both take the consensus state for the proof height, the account proof nodes and 
 ibc deploy client besu-qbft --chain 1 --counterparty-chain 2 --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
 ```
 
+For a counterparty running IBFT 2.0, use `ibc deploy client besu-ibft2` with the same flags.
+
 The CLI reads the counterparty's head and deploys the client with that header's timestamp, state root and validators as its first trusted state. The counterparty core stack must already be deployed and its router address set in the counterparty chain's `evm.ics26Router` configuration. A local counterparty deployment manifest is not required. Set `TRUSTING_PERIOD` to a positive duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. `--max-clock-drift` defaults to one minute; both durations are truncated to whole seconds. The relayer proves the counterparty's latest header, which can lead this chain's latest block time by up to about one block time of this chain plus clock skew, so set the drift above that. An update beyond it fails simulation and is retried. The deployment itself applies the same two checks to the counterparty head, so it fails if the head is already older than the trusting period or further ahead than the drift.
 
 The client's role manager is this chain's router, so only calls routed through `ICS26Router` reach it. Rerunning the command with the same trust settings (router, trusting period and clock drift) reports the client as already deployed; different trust settings report a conflict, so use a new client ID to deploy with different settings. If the manifest records the client but the chain no longer has it (for example after a devnet reset), the rerun deploys it again from the counterparty's current head. This needs a working host router: after a full reset, rerun `ibc deploy core` first.
 
 ## Relaying
 
-A client end of type `besu-qbft` takes no parameters:
+A client end of type `besu-qbft` or `besu-ibft2` takes no parameters:
 
 ```yaml
 clientA:

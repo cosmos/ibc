@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package besutest provides the live Besu QBFT fixture captured in
+// Package besutest provides the Besu QBFT and IBFT2 fixtures from
 // ibc-contracts for tests in the cli module.
 package besutest
 
@@ -21,21 +21,31 @@ import (
 	_ "embed"
 )
 
-// qbftFixtureJSON is ibc-solidity/test/besu-bft/fixtures/qbft.json from
+// fixtureJSON holds ibc-solidity/test/besu-bft/fixtures/<consensus>.json from
 // ibc-contracts at the go-abigen commit (make sync-besu-fixture): headers and
-// proofs captured from a four-validator Besu QBFT chain during an e2e
-// transfer, plus synthetic updates for the negative Solidity cases.
+// proofs, plus synthetic updates for the negative Solidity cases.
 //
 //go:embed testdata/qbft.json
 var qbftFixtureJSON []byte
 
+//go:embed testdata/ibft2.json
+var ibft2FixtureJSON []byte
+
+var fixtureJSON = map[besu.Consensus][]byte{
+	besu.QBFT:  qbftFixtureJSON,
+	besu.IBFT2: ibft2FixtureJSON,
+}
+
 var messageBindings = besumsgs.NewBindings()
 
-// Fixture mirrors the qbft.json layout.
+// Fixture mirrors the fixture JSON layout.
 //
 // TODO(FOU-1406): Move fixture generation from ibc-contracts into this repo's
 // e2e flow and share these fixture types with the generator.
 type Fixture struct {
+	// Consensus is the consensus the fixture chain runs.
+	Consensus besu.Consensus `json:"-"`
+
 	RouterAddress            common.Address   `json:"routerAddress"`
 	InitialTrustedHeight     uint64           `json:"initialTrustedHeight"`
 	InitialTrustedTimestamp  uint64           `json:"initialTrustedTimestamp"`
@@ -52,7 +62,7 @@ type Fixture struct {
 }
 
 // UpdateFixture is one header update used by Go tests. The negative Solidity
-// cases remain in qbft.json but are not decoded here.
+// cases remain in the fixture JSON but are not decoded here.
 type UpdateFixture struct {
 	Height             uint64           `json:"height"`
 	HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
@@ -71,21 +81,26 @@ type MembershipFixture struct {
 	Path         hexutil.Bytes `json:"path"`
 }
 
-// LoadFixture decodes the embedded qbft.json.
-func LoadFixture() (Fixture, error) {
-	var fixture Fixture
-	if err := json.Unmarshal(qbftFixtureJSON, &fixture); err != nil {
-		return Fixture{}, fmt.Errorf("decode qbft fixture: %w", err)
+// LoadFixture decodes the embedded fixture of a chain running consensus.
+func LoadFixture(consensus besu.Consensus) (Fixture, error) {
+	raw, ok := fixtureJSON[consensus]
+	if !ok {
+		return Fixture{}, fmt.Errorf("no fixture for besu consensus %q", consensus)
+	}
+
+	fixture := Fixture{Consensus: consensus}
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		return Fixture{}, fmt.Errorf("decode %s fixture: %w", consensus, err)
 	}
 
 	return fixture, nil
 }
 
 // MustFixture is LoadFixture for tests.
-func MustFixture(tb testing.TB) Fixture {
+func MustFixture(tb testing.TB, consensus besu.Consensus) Fixture {
 	tb.Helper()
 
-	fixture, err := LoadFixture()
+	fixture, err := LoadFixture(consensus)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -132,8 +147,9 @@ func HashConsensusState(state besumsgs.IBesuLightClientMsgsConsensusState) (comm
 	return crypto.Keccak256Hash(data[4:]), nil
 }
 
-// ParseHeader parses a header RLP the way the relayer parses a node's header.
-func ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
+// ParseHeader parses a header RLP of the fixture chain the way the relayer
+// parses a node's header.
+func (f Fixture) ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
 	tb.Helper()
 
 	var header types.Header
@@ -141,7 +157,7 @@ func ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
 		tb.Fatalf("decode header: %v", err)
 	}
 
-	parsed, err := besu.ParseSealedHeader(&header)
+	parsed, err := besu.ParseSealedHeader(&header, f.Consensus)
 	if err != nil {
 		tb.Fatalf("parse header: %v", err)
 	}

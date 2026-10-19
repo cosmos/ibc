@@ -15,9 +15,13 @@ import (
 	"github.com/cosmos/ibc/cli/besu"
 )
 
-// SealedHeader returns the Besu QBFT header at height.
-func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
-	header, err := besu.ReadSealedHeader(ctx, c.eth, new(big.Int).SetUint64(height))
+// SealedHeader returns the Besu header at height, sealed under consensus.
+func (c *Client) SealedHeader(
+	ctx context.Context,
+	consensus besu.Consensus,
+	height uint64,
+) (*besu.ParsedHeader, error) {
+	header, err := besu.ReadSealedHeader(ctx, c.eth, consensus, new(big.Int).SetUint64(height))
 	if err != nil {
 		return nil, errors.Wrapf(err, "chain %s", c.chainID)
 	}
@@ -25,8 +29,8 @@ func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedH
 	return header, nil
 }
 
-// BesuQBFTClientState reads clientID's Besu QBFT light client state.
-func (c *Client) BesuQBFTClientState(
+// BesuClientState reads clientID's Besu light client state.
+func (c *Client) BesuClientState(
 	ctx context.Context,
 	clientID string,
 ) (besumsgs.IBesuLightClientMsgsClientState, error) {
@@ -45,14 +49,15 @@ func (c *Client) BesuQBFTClientState(
 	return state, nil
 }
 
-// BesuQBFTConsensusStateHash returns the hash of the consensus state clientID
+// BesuConsensusStateHash returns the hash of the consensus state clientID
 // stores at height. The contract reverts when it stores none.
-func (c *Client) BesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error) {
+func (c *Client) BesuConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error) {
 	lightClientAddr, err := c.lightClientAddress(ctx, clientID)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	// both Besu light clients share this ABI
 	lightClient, err := besuqbft.NewContractCaller(lightClientAddr, c.eth)
 	if err != nil {
 		return common.Hash{}, err

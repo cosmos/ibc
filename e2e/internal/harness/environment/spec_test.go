@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
@@ -406,18 +407,26 @@ func makeChainAAttached(spec *Spec) {
 	}
 }
 
-func TestExistingBesuQBFTClientRejectsAttestors(t *testing.T) {
-	_, err := validateClientSpec("connection", "A", ExistingClient{
-		Kind: clientkind.BesuQBFT, Attestors: []AttestorSpec{{ID: "attestor"}},
-	})
-	require.ErrorContains(t, err, "does not use attestors")
+func TestExistingBesuClientRejectsAttestors(t *testing.T) {
+	for _, kind := range []clientkind.Kind{clientkind.BesuQBFT, clientkind.BesuIBFT2} {
+		_, err := validateClientSpec("connection", "A", ExistingClient{
+			Kind: kind, Attestors: []AttestorSpec{{ID: "attestor"}},
+		})
+		require.ErrorContains(t, err, string(kind)+" does not use attestors")
+	}
 }
 
-// A Besu QBFT client can only track a Chain that runs Besu; Anvil is the one
-// kind the Spec can rule out statically.
-func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
-	besuClient := func(instance IBCInstanceID) NewBesuQBFTClient {
-		return NewBesuQBFTClient{IBCInstance: instance, Authority: "signer", TrustingPeriod: 1}
+func TestNewBesuClientRequiresConsensus(t *testing.T) {
+	_, err := validateClientSpec("connection", "A", NewBesuClient{IBCInstance: "ibc-a", Authority: "signer"})
+	require.ErrorContains(t, err, `unknown besu consensus ""`)
+}
+
+// A Besu client can only track a Chain that runs Besu; Anvil is the one kind
+// the Spec can rule out statically, along with a managed Besu Chain running
+// the other consensus.
+func TestBesuClientCounterpartyChain(t *testing.T) {
+	besuClient := func(instance IBCInstanceID) NewBesuClient {
+		return NewBesuClient{IBCInstance: instance, Authority: "signer", Consensus: besu.QBFT, TrustingPeriod: 1}
 	}
 	spec := Spec{
 		Chains: []ChainSpec{
@@ -432,6 +441,21 @@ func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
 	}
 	require.NoError(t, spec.validate())
 
+	// an empty consensus runs QBFT, so an IBFT2 client cannot track it
+	ibft2 := spec
+	ibft2.Connections = []ConnectionSpec{{ID: "connection-ab", A: besuClient("ibc-a"), B: besuClient("ibc-b")}}
+	a := ibft2.Connections[0].A.(NewBesuClient)
+	a.Consensus = besu.IBFT2
+	ibft2.Connections[0].A = a
+	require.ErrorContains(
+		t, ibft2.validate(), `besu-ibft2 IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Besu qbft`,
+	)
+	ibft2.Chains = []ChainSpec{
+		ManagedBesu{ID: "chain-a", EVMChainID: 1},
+		ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.IBFT2},
+	}
+	require.NoError(t, ibft2.validate())
+
 	// an attached Chain may run Besu, so it is allowed
 	spec.Chains[1] = AttachedEVM{
 		ID: "chain-b", EVMChainID: 2, Endpoint: "chain-b-rpc",
@@ -445,10 +469,10 @@ func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
 	spec.IBCInstances[1] = NewIBCInstance{ID: "ibc-b", Chain: "chain-b", Authority: "deploy-b"}
 	spec.Connections[0].B = besuClient("ibc-b")
 	require.ErrorContains(
-		t, spec.validate(), `Besu QBFT IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
+		t, spec.validate(), `Besu IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
 	)
 
-	// an existing Besu QBFT client is held to the same rule
+	// an existing Besu client is held to the same rule
 	spec.Chains[0] = AttachedEVM{
 		ID: "chain-a", EVMChainID: 1, Endpoint: "chain-a-rpc",
 		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
@@ -456,6 +480,6 @@ func TestBesuQBFTClientCounterpartyChain(t *testing.T) {
 	spec.IBCInstances[0] = ExistingIBCInstance{ID: "ibc-a", Chain: "chain-a", Locator: "0xibc-a"}
 	spec.Connections[0].A = ExistingClient{Kind: clientkind.BesuQBFT, IBCInstance: "ibc-a", ID: "client-a"}
 	require.ErrorContains(
-		t, spec.validate(), `Besu QBFT IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
+		t, spec.validate(), `Besu IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
 	)
 }

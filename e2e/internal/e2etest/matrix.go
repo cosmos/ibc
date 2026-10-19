@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -50,9 +51,10 @@ type MatrixSpec struct {
 	IBCInstances int           `json:"ibc_instances"`
 	Connections  int           `json:"connections"`
 	Attestors    int           `json:"attestors"`
-	// BesuQBFTClients counts client ends that verify Besu QBFT headers instead
-	// of attestations.
-	BesuQBFTClients int `json:"besu_qbft_clients,omitempty"`
+	// BesuQBFTClients and BesuIBFT2Clients count client ends that verify Besu
+	// headers instead of attestations.
+	BesuQBFTClients  int `json:"besu_qbft_clients,omitempty"`
+	BesuIBFT2Clients int `json:"besu_ibft2_clients,omitempty"`
 }
 
 // MatrixRecord is the JSON record exchanged with the matrix generator.
@@ -160,13 +162,17 @@ func (c *matrixCollector) emit(record *MatrixRecord) error {
 func summarizeSpec(spec environment.Spec) MatrixSpec {
 	counts := make(map[string]int)
 	attestors := 0
-	besuQBFTClients := 0
+	besuClients := make(map[clientkind.Kind]int)
 	for _, chain := range spec.Chains {
-		switch chain.(type) {
+		switch chain := chain.(type) {
 		case environment.ManagedAnvil:
 			counts["Anvil"]++
 		case environment.ManagedBesu:
-			counts["Besu"]++
+			if chain.Consensus == besu.IBFT2 {
+				counts["Besu IBFT2"]++
+			} else {
+				counts["Besu"]++
+			}
 		case environment.AttachedEVM:
 			counts["Attached EVM"]++
 		default:
@@ -188,21 +194,22 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 			case environment.NewClient:
 				attestors += len(client.Attestors)
 			case environment.ExistingClient:
-				if client.Kind == clientkind.BesuQBFT {
-					besuQBFTClients++
+				if _, isBesu := client.Kind.BesuConsensus(); isBesu {
+					besuClients[client.Kind]++
 				} else {
 					attestors += len(client.Attestors)
 				}
-			case environment.NewBesuQBFTClient:
-				besuQBFTClients++
+			case environment.NewBesuClient:
+				besuClients[clientkind.Besu(client.Consensus)]++
 			}
 		}
 	}
 	return MatrixSpec{
-		Chains:          chains,
-		IBCInstances:    len(spec.IBCInstances),
-		Connections:     len(spec.Connections),
-		Attestors:       attestors,
-		BesuQBFTClients: besuQBFTClients,
+		Chains:           chains,
+		IBCInstances:     len(spec.IBCInstances),
+		Connections:      len(spec.Connections),
+		Attestors:        attestors,
+		BesuQBFTClients:  besuClients[clientkind.BesuQBFT],
+		BesuIBFT2Clients: besuClients[clientkind.BesuIBFT2],
 	}
 }
