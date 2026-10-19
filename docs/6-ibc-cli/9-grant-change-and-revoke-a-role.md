@@ -3,14 +3,14 @@ title: "Grant, change, and revoke a role"
 description: "Grant the relayer role on the tutorial's two chains, restrict packet relaying to it, confirm the change took effect, then revoke it."
 ---
 
-This guide grants the relayer role on a running two-chain IBC deployment and restricts packet relaying to that role. It then revokes the role and reopens relaying. Every change is a call to the access manager (the OpenZeppelin contract that decides who may call the router's functions), so the router itself needs no change.
+This guide grants the relayer role on a running two-chain IBC deployment and restricts packet relaying to that role. It then reopens relaying and revokes the role. Every change is a call to the access manager (the OpenZeppelin contract that decides who may call the router's functions), so the router itself needs no change.
 
 ## Before you begin
 
 Complete the [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) tutorial first. This guide starts from the state it leaves:
 
 - IBC is deployed on chains 41001 and 41002.
-- One token transfer has been delivered.
+- The deployer holds tokens on 41001 from the tutorial's mint.
 - The relayer is running in its own terminal.
 
 You also need:
@@ -74,7 +74,7 @@ cast call "$AM_A" "getTargetFunctionRole(address,bytes4)(uint64)" "$ROUTER_A" "$
 18446744073709551615 [1.844e19]
 ```
 
-That number is `PUBLIC_ROLE`, which every address holds. `ibc deploy core` assigns the four relaying functions to it, so any address can relay. Only the admin may call the router's other restricted functions.
+That number is `PUBLIC_ROLE`, which every address holds. `ibc deploy core` assigns the relaying functions to it, including the four restricted ones in `RELAY_FNS`, so any address can relay. A restricted function the deployment never assigned is admin-only.
 
 3. Confirm the relayer does not hold the relayer role, role `1`:
 
@@ -187,50 +187,23 @@ TX=$(./bin/ibc tx ift send --chain 41001 --ift "$IFT_A" --client-id cli-41001-41
 
 It reads `PACKET_STATE_PENDING` for up to a minute, then `PACKET_STATE_SUCCEEDED`. The relayer delivered the packet while holding role `1`.
 
-## 6. Revoke the role and reopen relaying
+## 6. Reopen relaying and revoke the role
 
-These steps return the deployment to the tutorial's state. Skip them to keep relaying restricted. To replace a relayer instead, grant the new address the role before you revoke the old one.
+These steps return the deployment to the tutorial's state. Skip them to keep relaying restricted. Reopening relaying first means delivery never stops.
 
-<Warning>
-Revoking the only relayer's role stops delivery. Its deliveries revert with `AccessManagedUnauthorized` until another address holds the role or the functions reopen.
-</Warning>
-
-1. Revoke role `1` from the relayer on 41001:
-
-```bash
-cast send "$AM_A" "revokeRole(uint64,address)" 1 "$RELAYER" --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
-```
-
-2. Revoke it on 41002:
-
-```bash
-cast send "$AM_B" "revokeRole(uint64,address)" 1 "$RELAYER" --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
-```
-
-3. Confirm the relayer no longer holds it:
-
-```bash
-cast call "$AM_A" "hasRole(uint64,address)(bool,uint32)" 1 "$RELAYER" --rpc-url http://localhost:8545
-```
-
-```
-false
-0
-```
-
-4. Reassign the four relaying functions to `PUBLIC_ROLE` on 41001:
+1. Reassign the four relaying functions to `PUBLIC_ROLE` on 41001:
 
 ```bash
 cast send "$AM_A" "setTargetFunctionRole(address,bytes4[],uint64)" "$ROUTER_A" "$RELAY_FNS" 18446744073709551615 --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
 ```
 
-5. Do the same on 41002:
+2. Do the same on 41002:
 
 ```bash
 cast send "$AM_B" "setTargetFunctionRole(address,bytes4[],uint64)" "$ROUTER_B" "$RELAY_FNS" 18446744073709551615 --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
 ```
 
-6. Confirm `recvPacket` is open again:
+3. Confirm `recvPacket` is open again:
 
 ```bash
 cast call "$AM_A" "getTargetFunctionRole(address,bytes4)(uint64)" "$ROUTER_A" "$RECV" --rpc-url http://localhost:8545
@@ -240,4 +213,29 @@ cast call "$AM_A" "getTargetFunctionRole(address,bytes4)(uint64)" "$ROUTER_A" "$
 18446744073709551615 [1.844e19]
 ```
 
-The relayer retries a failed delivery, so any packet that waited is now delivered.
+<Warning>
+Be careful revoking the role from the only relayer while relaying is restricted. Its deliveries revert with `AccessManagedUnauthorized`, and packets wait undelivered until another address holds the role. To replace a relayer, grant the new address the role before you revoke the old one.
+</Warning>
+
+4. Revoke role `1` from the relayer on 41001:
+
+```bash
+cast send "$AM_A" "revokeRole(uint64,address)" 1 "$RELAYER" --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
+```
+
+5. Revoke it on 41002:
+
+```bash
+cast send "$AM_B" "revokeRole(uint64,address)" 1 "$RELAYER" --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
+```
+
+6. Confirm the relayer no longer holds it:
+
+```bash
+cast call "$AM_A" "hasRole(uint64,address)(bool,uint32)" 1 "$RELAYER" --rpc-url http://localhost:8545
+```
+
+```
+false
+0
+```
