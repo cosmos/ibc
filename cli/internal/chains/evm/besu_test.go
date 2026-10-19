@@ -16,7 +16,6 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	"github.com/cosmos/ibc/cli/besu"
 )
 
 func TestSealedHeaderRejectsNonBesu(t *testing.T) {
@@ -26,7 +25,7 @@ func TestSealedHeaderRejectsNonBesu(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(7), Time: 1700000000, Difficulty: big.NewInt(1), Extra: []byte{1, 2, 3}}
 	eth.EXPECT().HeaderByNumber(ctx, big.NewInt(7)).Return(header, nil).Once()
 
-	_, err := client.SealedHeader(ctx, besu.QBFT, 7)
+	_, err := client.SealedHeader(ctx, 7)
 	require.ErrorContains(t, err, "parse header 7: extra data list")
 }
 

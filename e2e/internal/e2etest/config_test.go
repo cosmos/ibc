@@ -165,18 +165,6 @@ func TestResolveEVMChains(t *testing.T) {
 		},
 		{name: "unknown mode", mode: "other", wantErr: true},
 		{name: "unknown provider", mode: ModeFast, requirements: EVMRequirements{Provider: "other"}, wantErr: true},
-		{
-			name:         "besu consensus needs besu",
-			mode:         ModeComplete,
-			requirements: EVMRequirements{BesuConsensus: besu.IBFT2},
-			wantErr:      true,
-		},
-		{
-			name:         "unknown besu consensus",
-			mode:         ModeComplete,
-			requirements: EVMRequirements{Provider: EVMProviderBesu, BesuConsensus: "clique"},
-			wantErr:      true,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -202,26 +190,10 @@ func TestResolveEVMChainsIDs(t *testing.T) {
 		}
 		want := make([]environment.ChainSpec, len(ids))
 		for i, id := range ids {
-			want[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
+			want[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i), Consensus: besu.QBFT}
 		}
 		require.Equal(t, want, got.chains)
 	}
-}
-
-func TestResolveEVMChainsBesuConsensus(t *testing.T) {
-	requirements := EVMRequirements{Provider: EVMProviderBesu, BesuConsensus: besu.IBFT2}
-	got, err := resolveEVMChains(ModeComplete, requirements, []environment.ChainID{ChainA})
-	require.NoError(t, err)
-	require.Equal(t, []environment.ChainSpec{
-		environment.ManagedBesu{ID: ChainA, EVMChainID: besuChainIDBase, Consensus: besu.IBFT2},
-	}, got.chains)
-
-	got, err = resolveEVMChains(ModeFast, requirements, []environment.ChainID{ChainA})
-	require.NoError(t, err)
-	require.Contains(t, got.skipReason, "{Provider:besu BesuConsensus:ibft2 ControlledMining:false")
-	got, err = resolveEVMChains(ModeFast, EVMRequirements{Provider: EVMProviderBesu}, []environment.ChainID{ChainA})
-	require.NoError(t, err)
-	require.Contains(t, got.skipReason, "{Provider:besu ControlledMining:false NodeLifecycle:false}")
 }
 
 func TestResolveEVMChainsInvalidIDs(t *testing.T) {

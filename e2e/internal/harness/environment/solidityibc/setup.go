@@ -460,11 +460,10 @@ func (s *Setup) PrepareBesuClient(
 	config BesuClientConfig,
 ) (*PreparedClient, error) {
 	config = config.snapshot()
-	kind := clientkind.Besu(config.Consensus)
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("solidity IBC prepare Besu Client: %w", err)
 	}
-	return s.prepareClient(ctx, authority, router, kind, config.ID, config.CounterpartyClientID,
+	return s.prepareClient(ctx, authority, router, clientkind.Besu, config.ID, config.CounterpartyClientID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			return besu.DeployLightClient(
 				opts,
@@ -627,7 +626,7 @@ func (s *Setup) verifyClient(
 		}
 		client.Attestors = slices.Clone(set.AttestorAddresses)
 		client.MinRequiredSignatures = set.MinRequiredSigs
-	case clientkind.BesuQBFT, clientkind.BesuIBFT2:
+	case clientkind.Besu:
 		if _, err := besu.ReadClientState(ctx, s.backend, registered); err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 		}

@@ -8,15 +8,12 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
-
-	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
-	ClientTypeBesuQBFT    ClientType = "besu-qbft"
-	ClientTypeBesuIBFT2   ClientType = "besu-ibft2"
+	ClientTypeBesu        ClientType = "besu"
 	ClientTypeRemote      ClientType = "remote"
 )
 
@@ -24,7 +21,7 @@ const (
 const DefaultClearOnStart = true
 
 // clientTypes are the values ClientEnd.Type accepts.
-var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeBesuIBFT2, ClientTypeRemote}
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesu, ClientTypeRemote}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
@@ -37,32 +34,6 @@ type ClientParams interface {
 
 // ClientType the light client type.
 type ClientType string
-
-// BesuClientType is the client type that verifies a Besu chain running
-// consensus.
-func BesuClientType(consensus besu.Consensus) (ClientType, error) {
-	switch consensus {
-	case besu.QBFT:
-		return ClientTypeBesuQBFT, nil
-	case besu.IBFT2:
-		return ClientTypeBesuIBFT2, nil
-	default:
-		return "", consensus.Validate()
-	}
-}
-
-// BesuConsensus is the consensus a Besu client type verifies, false for any
-// other client type.
-func (t ClientType) BesuConsensus() (besu.Consensus, bool) {
-	switch t {
-	case ClientTypeBesuQBFT:
-		return besu.QBFT, true
-	case ClientTypeBesuIBFT2:
-		return besu.IBFT2, true
-	default:
-		return "", false
-	}
-}
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -115,7 +86,7 @@ type ClientEnd struct {
 	Type     ClientType `yaml:"type"`
 
 	// Params is this client type's settings, decoded per Type by ClientParams:
-	// empty for `attestation`, `besu-qbft` and `besu-ibft2`, and
+	// empty for `attestation` and `besu`, and
 	// `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it
 	// is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
@@ -313,7 +284,7 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		return decodeYAML[AttestationParams](c.Params)
-	case ClientTypeBesuQBFT, ClientTypeBesuIBFT2:
+	case ClientTypeBesu:
 		return decodeYAML[BesuParams](c.Params)
 	case ClientTypeRemote:
 		return decodeYAML[RemoteParams](c.Params)

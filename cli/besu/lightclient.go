@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
@@ -67,30 +66,20 @@ func DeployLightClient(
 	consensusState besumsgs.IBesuLightClientMsgsConsensusState,
 	roleManager common.Address,
 ) (common.Address, *types.Transaction, error) {
-	switch consensus {
-	case QBFT:
-		addr, tx, _, err := besuqbft.DeployContract(opts, backend, besuqbft.IBesuLightClientMsgsClientState{
-			IbcRouter:      clientState.IbcRouter,
-			LatestHeight:   besuqbft.IICS02ClientMsgsHeight(clientState.LatestHeight),
-			TrustingPeriod: clientState.TrustingPeriod,
-			MaxClockDrift:  clientState.MaxClockDrift,
-			IsFrozen:       clientState.IsFrozen,
-			TrustLevel:     besuqbft.IBesuLightClientMsgsTrustThreshold(clientState.TrustLevel),
-		}, besuqbft.IBesuLightClientMsgsConsensusState(consensusState), roleManager)
-		return addr, tx, err
-	case IBFT2:
-		addr, tx, _, err := besuibft2.DeployContract(opts, backend, besuibft2.IBesuLightClientMsgsClientState{
-			IbcRouter:      clientState.IbcRouter,
-			LatestHeight:   besuibft2.IICS02ClientMsgsHeight(clientState.LatestHeight),
-			TrustingPeriod: clientState.TrustingPeriod,
-			MaxClockDrift:  clientState.MaxClockDrift,
-			IsFrozen:       clientState.IsFrozen,
-			TrustLevel:     besuibft2.IBesuLightClientMsgsTrustThreshold(clientState.TrustLevel),
-		}, besuibft2.IBesuLightClientMsgsConsensusState(consensusState), roleManager)
-		return addr, tx, err
-	default:
-		return common.Address{}, nil, consensus.Validate()
+	meta, err := consensus.LightClient()
+	if err != nil {
+		return common.Address{}, nil, err
 	}
+	parsed, err := meta.GetAbi()
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+
+	addr, tx, _, err := bind.DeployContract(
+		opts, *parsed, common.FromHex(meta.Bin), backend, clientState, consensusState, roleManager,
+	)
+
+	return addr, tx, err
 }
 
 // ReadClientState reads the state of the Besu light client at address. The

@@ -22,7 +22,7 @@ const deployCommandTimeout = 10 * time.Minute
 // placeholderRouter satisfies chains[].evm.ics26Router's required-non-empty
 // validation before `ibc deploy core` has recorded a real router address.
 // Deploy commands read a chain's own router from its manifest; only
-// `deploy client besu-qbft` reads the counterparty's from config.
+// `deploy client besu` reads the counterparty's from config.
 const placeholderRouter = "0x0000000000000000000000000000000000000001"
 
 // DeployConfig describes the minimal IBC CLI config `ibc deploy` needs: chains

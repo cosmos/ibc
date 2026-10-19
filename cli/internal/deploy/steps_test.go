@@ -63,7 +63,7 @@ func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error)
 }
 
 func (f *fakeTarget) SupportedClientTypes() []string {
-	return []string{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeBesuIBFT2}
+	return []string{ClientTypeAttestation, ClientTypeBesu}
 }
 
 // fakeBridge is the on-chain bridge state a fakeTarget records.
@@ -681,9 +681,9 @@ func besuSpec() ClientSpec {
 	}
 }
 
-// besuRecord is the manifest record of besuSpec's params; the consensus is
-// recorded as the client type.
+// besuRecord is the manifest record of besuSpec's params.
 const besuRecord = `{
+	"consensus": "qbft",
 	"ibcRouter": "0x00000000000000000000000000000000000000cc",
 	"initialHeight": 112,
 	"initialTimestamp": 1788192445,
@@ -722,7 +722,7 @@ func TestClientStepsBesu(t *testing.T) {
 	require.NoError(t, err)
 	recorded, ok := m.Client("cli-2")
 	require.True(t, ok)
-	require.Equal(t, ClientTypeBesuQBFT, recorded.Type)
+	require.Equal(t, ClientTypeBesu, recorded.Type)
 
 	// the manifest records the constructor params
 	got, err := json.Marshal(recorded.Params)
@@ -746,7 +746,7 @@ func TestClientStepsBesu(t *testing.T) {
 		},
 		"trustingPeriod": func(p *BesuParams) { p.TrustingPeriod = 1 },
 		"maxClockDrift":  func(p *BesuParams) { p.MaxClockDrift = 1 },
-		"type":           func(p *BesuParams) { p.Consensus = besu.IBFT2 },
+		"consensus":      func(p *BesuParams) { p.Consensus = besu.IBFT2 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			conflicting := besuSpec()

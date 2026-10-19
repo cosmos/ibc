@@ -85,7 +85,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 }
 
 func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesuQBFT, deploy.ClientTypeBesuIBFT2}
+	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesu}
 }
 
 // requireSigner errors if called on a driver built without a deployer
@@ -246,28 +246,24 @@ func (d *Driver) provisionBesu(
 		common.HexToAddress(router),
 	)
 	if err != nil {
-		return deploy.ClientRef{}, fmt.Errorf("deploy %s client: %w", params.ClientType(), err)
+		return deploy.ClientRef{}, fmt.Errorf("deploy besu %s client: %w", params.Consensus, err)
 	}
-	if err := d.awaitMined(ctx, "deploy "+params.ClientType()+" client", tx); err != nil {
+	if err := d.awaitMined(ctx, "deploy besu "+string(params.Consensus)+" client", tx); err != nil {
 		return deploy.ClientRef{}, err
 	}
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// BesuHead is this driver's chain head and the consensus state its sealed
-// header installs.
-func (d *Driver) BesuHead(
-	ctx context.Context,
-	consensus besu.Consensus,
-) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	header, err := besu.ReadSealedHeader(ctx, d.backend, consensus, nil)
+// BesuHead is this driver's sealed chain head.
+func (d *Driver) BesuHead(ctx context.Context) (*besu.ParsedHeader, error) {
+	header, err := besu.ReadSealedHeader(ctx, d.backend, nil)
 	if err != nil {
-		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, err
+		return nil, err
 	}
 	if header.Height == 0 {
-		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("no block past genesis to trust yet")
+		return nil, fmt.Errorf("no block past genesis to trust yet")
 	}
-	return header.Height, header.ConsensusState(), nil
+	return header, nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

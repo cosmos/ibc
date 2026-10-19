@@ -244,36 +244,32 @@ func captureStdout(t *testing.T, fn func()) string {
 }
 
 func TestRenderRelayConfigBesu(t *testing.T) {
-	for _, clientType := range []config.ClientType{config.ClientTypeBesuQBFT, config.ClientTypeBesuIBFT2} {
-		t.Run(string(clientType), func(t *testing.T) {
-			a := manifest.New("1", "evm")
-			a.Core.Router = "0xrouterA"
-			a.UpsertClient(manifest.Client{
-				ClientID: "cli-1-2", Type: string(clientType), Address: "0xca",
-				CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-				Params: map[string]any{
-					"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
-				},
-			})
-			b := manifest.New("2", "evm")
-			b.Core.Router = "0xrouterB"
-			b.UpsertClient(manifest.Client{
-				ClientID: "cli-1-2", Type: string(clientType), Address: "0xcb",
-				CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-				Params: map[string]any{
-					"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
-				},
-			})
+	a := manifest.New("1", "evm")
+	a.Core.Router = "0xrouterA"
+	a.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xca",
+		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{
+			"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
+		},
+	})
+	b := manifest.New("2", "evm")
+	b.Core.Router = "0xrouterB"
+	b.UpsertClient(manifest.Client{
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xcb",
+		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Params: map[string]any{
+			"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
+		},
+	})
 
-			out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
-			require.NoError(t, err)
-			require.Len(t, out.Connections, 1)
-			require.Equal(t, clientType, out.Connections[0].ClientA.Type)
-			require.Equal(t, clientType, out.Connections[0].ClientB.Type)
-			require.Empty(t, out.Connections[0].ClientA.Params)
-			require.Empty(t, out.Attestors, "besu clients need no attestors")
-		})
-	}
+	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
+	require.NoError(t, err)
+	require.Len(t, out.Connections, 1)
+	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientB.Type)
+	require.Empty(t, out.Connections[0].ClientA.Params)
+	require.Empty(t, out.Attestors, "besu clients need no attestors")
 }
 
 func TestBesuParamsFlags(t *testing.T) {
@@ -303,7 +299,7 @@ func TestBesuParamsFlags(t *testing.T) {
 				flagDeployMaxClockDrift = tc.drift
 			}
 			source := &besuHeadTarget{}
-			params, err := besuParams(t.Context(), besu.IBFT2, tc.router, source)
+			params, err := besuParams(t.Context(), tc.router, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -311,7 +307,6 @@ func TestBesuParamsFlags(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
-			require.Equal(t, besu.IBFT2, source.consensus)
 			require.Equal(t, deploy.BesuParams{
 				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
@@ -323,7 +318,7 @@ func TestBesuParamsFlags(t *testing.T) {
 		})
 	}
 
-	_, err := besuParams(t.Context(), besu.QBFT, router, &hostOnlyTarget{})
+	_, err := besuParams(t.Context(), router, &hostOnlyTarget{})
 	require.ErrorContains(t, err, "cannot serve a besu consensus state")
 }
 
@@ -409,19 +404,15 @@ const (
 	besuHeadTimestamp = 1788200000
 )
 
-// besuHeadTarget is a Besu chain whose head is besuHeadHeight.
+// besuHeadTarget is an IBFT2 Besu chain whose head is besuHeadHeight.
 type besuHeadTarget struct {
 	deploy.Target
-	called    bool
-	consensus besu.Consensus
+	called bool
 }
 
-func (t *besuHeadTarget) BesuHead(
-	_ context.Context,
-	consensus besu.Consensus,
-) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
-	t.called, t.consensus = true, consensus
-	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
+func (t *besuHeadTarget) BesuHead(context.Context) (*besu.ParsedHeader, error) {
+	t.called = true
+	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.IBFT2}, nil
 }
 
 // hostOnlyTarget is a chain that cannot serve Besu consensus states.

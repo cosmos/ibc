@@ -25,7 +25,7 @@ func TestMergeRelayerConnection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, reversed := range []bool{false, true} {
 				a := ibccli.RelayerClientEnd{
-					ChainID: "1", ClientID: "client-0", ClientType: clientkind.BesuQBFT,
+					ChainID: "1", ClientID: "client-0", ClientType: clientkind.Besu,
 				}
 				b := ibccli.RelayerClientEnd{
 					ChainID: "2", ClientID: "client-0", ClientType: clientkind.Attestation,

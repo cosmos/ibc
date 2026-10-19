@@ -56,26 +56,10 @@ const (
 	EVMProviderBesu  EVMProvider = "besu"
 )
 
-// EVMRequirements select the Chains a test runs on. BesuConsensus requires
-// the Besu provider; empty runs QBFT.
 type EVMRequirements struct {
 	Provider         EVMProvider
-	BesuConsensus    besu.Consensus `json:",omitempty"`
 	ControlledMining bool
 	NodeLifecycle    bool
-}
-
-// String prints requirements as %+v would, leaving out an unset
-// BesuConsensus.
-func (r EVMRequirements) String() string {
-	consensus := ""
-	if r.BesuConsensus != "" {
-		consensus = " BesuConsensus:" + string(r.BesuConsensus)
-	}
-	return fmt.Sprintf(
-		"{Provider:%s%s ControlledMining:%t NodeLifecycle:%t}",
-		r.Provider, consensus, r.ControlledMining, r.NodeLifecycle,
-	)
 }
 
 const ProtocolAuthorityID environment.AuthorityID = "protocol-deployer"
@@ -187,7 +171,7 @@ func resolveEVMChains(
 		if (requirements.ControlledMining || requirements.NodeLifecycle) && provider != EVMProviderAnvil {
 			continue
 		}
-		return evmResolution{chains: evmChainSpecs(provider, requirements.BesuConsensus, ids), provider: provider}, nil
+		return evmResolution{chains: evmChainSpecs(provider, ids), provider: provider}, nil
 	}
 
 	reason := fmt.Sprintf("no EVM provider satisfies requirements %+v in %s mode", requirements, mode)
@@ -200,16 +184,10 @@ func resolveEVMChains(
 func validateEVMRequirements(requirements EVMRequirements) error {
 	switch requirements.Provider {
 	case "", EVMProviderAnvil, EVMProviderBesu:
+		return nil
 	default:
 		return fmt.Errorf("unknown EVM provider %q", requirements.Provider)
 	}
-	if requirements.BesuConsensus == "" {
-		return nil
-	}
-	if requirements.Provider != EVMProviderBesu {
-		return fmt.Errorf("besu consensus %q requires the %s provider", requirements.BesuConsensus, EVMProviderBesu)
-	}
-	return requirements.BesuConsensus.Validate()
 }
 
 func validateChainIDs(ids []environment.ChainID) error {
@@ -229,11 +207,9 @@ func validateChainIDs(ids []environment.ChainID) error {
 	return nil
 }
 
-func evmChainSpecs(
-	provider EVMProvider,
-	consensus besu.Consensus,
-	ids []environment.ChainID,
-) []environment.ChainSpec {
+// evmChainSpecs runs Besu Chains on QBFT; tests choosing another consensus
+// set it on the returned Chains.
+func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environment.ChainSpec {
 	chains := make([]environment.ChainSpec, len(ids))
 	for i, id := range ids {
 		switch provider {
@@ -243,7 +219,7 @@ func evmChainSpecs(
 			chains[i] = environment.ManagedBesu{
 				ID:         id,
 				EVMChainID: besuChainIDBase + uint64(i),
-				Consensus:  consensus,
+				Consensus:  besu.QBFT,
 			}
 		}
 	}

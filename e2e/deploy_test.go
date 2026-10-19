@@ -23,7 +23,6 @@ import (
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -51,6 +50,11 @@ type deployManifest struct {
 		Address string `json:"address"`
 	} `json:"tokens"`
 	TargetData map[string]string `json:"targetData"`
+	Clients    []struct {
+		Params struct {
+			Consensus string `json:"consensus"`
+		} `json:"params"`
+	} `json:"clients"`
 }
 
 // token looks up a deployed IFT token's address by symbol.
@@ -82,11 +86,9 @@ type deployCLI struct {
 	deployer           common.Address
 }
 
-func startDeployCLI(t *testing.T, requirements e2etest.EVMRequirements) *deployCLI {
+func startDeployCLI(t *testing.T, chains []environment.ChainSpec) *deployCLI {
 	t.Helper()
-	spec := environment.Spec{
-		Chains: e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB),
-	}
+	spec := environment.Spec{Chains: chains}
 	env := e2etest.Start(t, spec, environment.Runtime{})
 
 	d := &deployCLI{env: env, home: t.TempDir()}
@@ -204,7 +206,7 @@ func (d *deployCLI) renderConfig(t *testing.T) string {
 // the CLI's JSON step output and the manifests it writes.
 func TestDeployConnection(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, e2etest.EVMRequirements{})
+	d := startDeployCLI(t, e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 
 	// the connection is four separate idempotent commands: core on each
 	// chain, then a client on each chain tracking the other. Both client
@@ -260,30 +262,16 @@ func TestDeployConnection(t *testing.T) {
 	}
 }
 
-// TestDeployBesuQBFTConnection relays an IFT transfer between two Besu QBFT
-// chains set up through the CLI alone.
-func TestDeployBesuQBFTConnection(t *testing.T) {
+// TestDeployBesuMixedConnection deploys a Besu connection between a QBFT
+// chain A and an IBFT 2.0 chain B and an IFT bridge through the CLI alone,
+// renders the relayer config from the manifests, then relays an IFT
+// transfer. Each client detects the other chain's consensus from its head
+// and needs its router, so the config carries the routers core deployed.
+func TestDeployBesuMixedConnection(t *testing.T) {
 	t.Parallel()
-	requireBesuDeployedConnection(t, besu.QBFT)
-}
-
-// TestDeployBesuIBFT2Connection relays an IFT transfer between two Besu IBFT
-// 2.0 chains set up through the CLI alone.
-func TestDeployBesuIBFT2Connection(t *testing.T) {
-	t.Parallel()
-	requireBesuDeployedConnection(t, besu.IBFT2)
-}
-
-// requireBesuDeployedConnection deploys a Besu connection between two chains
-// running consensus and an IFT bridge, renders the relayer config from the
-// manifests, then relays an IFT transfer. Each client trusts the other
-// chain's head and needs its router, so the config carries the routers core
-// deployed.
-func requireBesuDeployedConnection(t *testing.T, consensus besu.Consensus) {
-	t.Helper()
-	d := startDeployCLI(t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu, BesuConsensus: consensus})
+	consensusA, consensusB := besu.QBFT, besu.IBFT2
+	d := startDeployCLI(t, besuChains(t, consensusA, consensusB))
 	ctx := t.Context()
-	clientType := string(clientkind.Besu(consensus))
 
 	core := [][]string{
 		{"core", "--chain", d.chainAID, "--yes"},
@@ -295,7 +283,7 @@ func requireBesuDeployedConnection(t *testing.T, consensus besu.Consensus) {
 	perChain := func(chainID, counterparty string) [][]string {
 		return [][]string{
 			{
-				"client", clientType,
+				"client", "besu",
 				"--chain", chainID,
 				"--counterparty-chain", counterparty,
 				"--trusting-period", "336h",
@@ -312,10 +300,16 @@ func requireBesuDeployedConnection(t *testing.T, consensus besu.Consensus) {
 	bringUp := append(perChain(d.chainAID, d.chainBID), perChain(d.chainBID, d.chainAID)...)
 	d.deploy(t, bringUp, "executed")
 
+	// each client verifies the other chain, so records that chain's consensus
 	manifestA := d.manifest(t, d.chainAID)
+	manifestB := d.manifest(t, d.chainBID)
+	require.Len(t, manifestA.Clients, 1)
+	require.Len(t, manifestB.Clients, 1)
+	require.Equal(t, string(consensusB), manifestA.Clients[0].Params.Consensus)
+	require.Equal(t, string(consensusA), manifestB.Clients[0].Params.Consensus)
 	iftA, ok := manifestA.token("FOO")
 	require.True(t, ok)
-	iftB, ok := d.manifest(t, d.chainBID).token("FOO")
+	iftB, ok := manifestB.token("FOO")
 	require.True(t, ok)
 	bridge := []string{
 		"ift-bridge",
@@ -337,7 +331,7 @@ func requireBesuDeployedConnection(t *testing.T, consensus besu.Consensus) {
 	rendered, err := d.driver.Deploy(ctx, "render-config", d.chainAID, d.chainBID,
 		"--signer-a", relayerAlias, "--signer-b", relayerAlias, "--populate-config", "--yes")
 	require.NoError(t, err)
-	require.Equal(t, 2, strings.Count(string(rendered), "type: "+clientType))
+	require.Equal(t, 2, strings.Count(string(rendered), "type: besu"))
 
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	require.NoError(t, d.driver.ConfigureRelayer(ibccli.RelayerOptions{
@@ -392,7 +386,7 @@ func requireBesuDeployedConnection(t *testing.T, consensus besu.Consensus) {
 // status passes.
 func TestDeployIFTBridge(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, e2etest.EVMRequirements{})
+	d := startDeployCLI(t, e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 
 	// per-chain bring-up: core, client, gmp, ift
 	perChain := func(chainID, counterparty string) [][]string {

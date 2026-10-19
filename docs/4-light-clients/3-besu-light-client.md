@@ -5,7 +5,7 @@ description: The Besu light clients verify sealed Besu headers and Ethereum stor
 
 The Besu light client verifies the counterparty chain's own consensus. It accepts a Besu block header once enough of the validators it trusts have sealed it, and it then answers questions about packets with Ethereum storage proofs against that header. Trust in a connection using this client rests on the counterparty's validator set, not on off-chain signers.
 
-A connection carries one of these clients on each side when both chains run Besu with the QBFT or the IBFT 2.0 consensus engine. Each client implements the standard [light client interface](../2-how-ibc-works/4-clients-and-counterparties.md): update the client, verify membership, verify non-membership, and accept misbehaviour evidence. In IBC-solidity it comes as two contracts, `BesuQBFTLightClient` and `BesuIBFT2LightClient`, with the client types `besu-qbft` and `besu-ibft2`. They differ only in the digest commit seals sign, so everything below applies to both; pick the one matching the counterparty's consensus. With the other one, no seal recovers to a validator and the relayer refuses the counterparty's headers.
+A connection carries one of these clients on each side when both chains run Besu with the QBFT or the IBFT 2.0 consensus engine. Each client implements the standard [light client interface](../2-how-ibc-works/4-clients-and-counterparties.md): update the client, verify membership, verify non-membership, and accept misbehaviour evidence. In IBC-solidity it comes as two contracts, `BesuQBFTLightClient` and `BesuIBFT2LightClient`, both with the client type `besu`. They differ only in the digest commit seals sign, so everything below applies to both. Under the wrong digest no seal recovers to a validator, so the counterparty's own sealed headers tell the CLI which contract to deploy and the relayer which digest to use. A client deployed by other means for the wrong consensus rejects every update, because the seals recover to the wrong signers under its digest.
 
 ## What the client trusts
 
@@ -47,7 +47,7 @@ Besu validators seal a block by signing a digest of its header, with the seals t
 - **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client` always uses two thirds.
 - **Quorum.** At least two thirds of the header's own validator set must be among the signers, which is the same threshold Besu needs to produce the block.
 
-The client requires the seals in ascending order of signer address. Besu does not order them that way, so the relayer recovers the signers with the digest of the configured client type and reorders the seals before submitting the header; the digest leaves the seals out, so reordering does not change what was signed.
+The client requires the seals in ascending order of signer address. Besu does not order them that way, so the relayer recovers the signers with the digest under which they recover to the header's validators, which is the chain's consensus, and reorders the seals before submitting the header; the digest leaves the seals out, so reordering does not change what was signed.
 
 The header must also be at most `maxClockDrift` seconds ahead of this chain's clock, and the trusted state it builds on must be younger than `trustingPeriod`. An expired consensus state can no longer anchor an update or be used for packet proofs. Advancing an expired client requires redeployment; packets pending on it stay pending, and the relayer reports the expiry on every attempt until the connection is redeployed. Updates are submitted only alongside packets: keeping the relayer online does not refresh an idle client or prevent its expiry.
 
@@ -78,25 +78,23 @@ Both take the consensus state for the proof height, the account proof nodes and 
 ## Deploying
 
 ```sh
-ibc deploy client besu-qbft --chain 1 --counterparty-chain 2 --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
+ibc deploy client besu --chain 1 --counterparty-chain 2 --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
 ```
 
-For a counterparty running IBFT 2.0, use `ibc deploy client besu-ibft2` with the same flags.
+The CLI reads the counterparty's head and deploys the client with that header's timestamp, state root and validators as its first trusted state. The header's commit seals recover to its validators under only one of the two digests, which tells the CLI whether to deploy the QBFT or the IBFT 2.0 client. The counterparty core stack must already be deployed and its router address set in the counterparty chain's `evm.ics26Router` configuration. A local counterparty deployment manifest is not required. Set `TRUSTING_PERIOD` to a positive duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. `--max-clock-drift` defaults to one minute; both durations are truncated to whole seconds. The relayer proves the counterparty's latest header, which can lead this chain's latest block time by up to about one block time of this chain plus clock skew, so set the drift above that. An update beyond it fails simulation and is retried. The deployment itself applies the same two checks to the counterparty head, so it fails if the head is already older than the trusting period or further ahead than the drift.
 
-The CLI reads the counterparty's head and deploys the client with that header's timestamp, state root and validators as its first trusted state. The counterparty core stack must already be deployed and its router address set in the counterparty chain's `evm.ics26Router` configuration. A local counterparty deployment manifest is not required. Set `TRUSTING_PERIOD` to a positive duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. `--max-clock-drift` defaults to one minute; both durations are truncated to whole seconds. The relayer proves the counterparty's latest header, which can lead this chain's latest block time by up to about one block time of this chain plus clock skew, so set the drift above that. An update beyond it fails simulation and is retried. The deployment itself applies the same two checks to the counterparty head, so it fails if the head is already older than the trusting period or further ahead than the drift.
-
-The client's role manager is this chain's router, so only calls routed through `ICS26Router` reach it. Rerunning the command with the same trust settings (router, trusting period and clock drift) reports the client as already deployed; different trust settings report a conflict, so use a new client ID to deploy with different settings. If the manifest records the client but the chain no longer has it (for example after a devnet reset), the rerun deploys it again from the counterparty's current head. This needs a working host router: after a full reset, rerun `ibc deploy core` first.
+The client's role manager is this chain's router, so only calls routed through `ICS26Router` reach it. Rerunning the command with the same router, trusting period and clock drift reports the client as already deployed. A different router, trusting period or clock drift, or a counterparty whose consensus has changed, reports a conflict, so use a new client ID to deploy with different settings. If the manifest records the client but the chain no longer has it (for example after a devnet reset), the rerun deploys it again from the counterparty's current head. This needs a working host router: after a full reset, rerun `ibc deploy core` first.
 
 ## Relaying
 
-A client end of type `besu-qbft` or `besu-ibft2` takes no parameters:
+A client end of type `besu` takes no parameters, for either consensus:
 
 ```yaml
 clientA:
   chainId: "1"
   signer: "relayer-key"
   clientId: "besu-0"
-  type: "besu-qbft"
+  type: "besu"
 ```
 
 The relayer checks at startup that the router the client proves is the counterparty chain's configured router. It relays at the counterparty's latest height: the prover returns a single update from the client's latest height to that height, or none when that height is not above the client's latest. Relaying runs concurrently, within one relayer as well as across several, so the client may already be past that height when the update is built. The client accepts updates only above its trusted height, so the prover then sends no update if the client stores a consensus state at that height, and otherwise fails the attempt before submitting; the next attempt relays at a newer height. If the validator set changed too much between the two heights, or the client's latest consensus state is older than the trusting period, the update fails simulation. The relayer does not yet chain updates across validator turnover, and an expired client can only be replaced by a new one. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved. Everything the relayer submits is verified by the light client when the transaction is simulated.

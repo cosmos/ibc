@@ -408,30 +408,22 @@ func makeChainAAttached(spec *Spec) {
 }
 
 func TestExistingBesuClientRejectsAttestors(t *testing.T) {
-	for _, kind := range []clientkind.Kind{clientkind.BesuQBFT, clientkind.BesuIBFT2} {
-		_, err := validateClientSpec("connection", "A", ExistingClient{
-			Kind: kind, Attestors: []AttestorSpec{{ID: "attestor"}},
-		})
-		require.ErrorContains(t, err, string(kind)+" does not use attestors")
-	}
-}
-
-func TestNewBesuClientRequiresConsensus(t *testing.T) {
-	_, err := validateClientSpec("connection", "A", NewBesuClient{IBCInstance: "ibc-a", Authority: "signer"})
-	require.ErrorContains(t, err, `unknown besu consensus ""`)
+	_, err := validateClientSpec("connection", "A", ExistingClient{
+		Kind: clientkind.Besu, Attestors: []AttestorSpec{{ID: "attestor"}},
+	})
+	require.ErrorContains(t, err, "does not use attestors")
 }
 
 // A Besu client can only track a Chain that runs Besu; Anvil is the one kind
-// the Spec can rule out statically, along with a managed Besu Chain running
-// the other consensus.
+// the Spec can rule out statically.
 func TestBesuClientCounterpartyChain(t *testing.T) {
 	besuClient := func(instance IBCInstanceID) NewBesuClient {
-		return NewBesuClient{IBCInstance: instance, Authority: "signer", Consensus: besu.QBFT, TrustingPeriod: 1}
+		return NewBesuClient{IBCInstance: instance, Authority: "signer", TrustingPeriod: 1}
 	}
 	spec := Spec{
 		Chains: []ChainSpec{
-			ManagedBesu{ID: "chain-a", EVMChainID: 1},
-			ManagedBesu{ID: "chain-b", EVMChainID: 2},
+			ManagedBesu{ID: "chain-a", EVMChainID: 1, Consensus: besu.QBFT},
+			ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.QBFT},
 		},
 		IBCInstances: []IBCInstanceSpec{
 			NewIBCInstance{ID: "ibc-a", Chain: "chain-a", Authority: "deploy-a"},
@@ -441,28 +433,13 @@ func TestBesuClientCounterpartyChain(t *testing.T) {
 	}
 	require.NoError(t, spec.validate())
 
-	// an empty consensus runs QBFT, so an IBFT2 client cannot track it
-	ibft2 := spec
-	ibft2.Connections = []ConnectionSpec{{ID: "connection-ab", A: besuClient("ibc-a"), B: besuClient("ibc-b")}}
-	a := ibft2.Connections[0].A.(NewBesuClient)
-	a.Consensus = besu.IBFT2
-	ibft2.Connections[0].A = a
-	require.ErrorContains(
-		t, ibft2.validate(), `besu-ibft2 IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Besu qbft`,
-	)
-	ibft2.Chains = []ChainSpec{
-		ManagedBesu{ID: "chain-a", EVMChainID: 1},
-		ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.IBFT2},
-	}
-	require.NoError(t, ibft2.validate())
-
 	// an attached Chain may run Besu, so it is allowed
 	spec.Chains[1] = AttachedEVM{
 		ID: "chain-b", EVMChainID: 2, Endpoint: "chain-b-rpc",
 		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
 	}
 	spec.IBCInstances[1] = ExistingIBCInstance{ID: "ibc-b", Chain: "chain-b", Locator: "0xibc-b"}
-	spec.Connections[0].B = ExistingClient{Kind: clientkind.BesuQBFT, IBCInstance: "ibc-b", ID: "client-b"}
+	spec.Connections[0].B = ExistingClient{Kind: clientkind.Besu, IBCInstance: "ibc-b", ID: "client-b"}
 	require.NoError(t, spec.validate())
 
 	spec.Chains[1] = ManagedAnvil{ID: "chain-b", EVMChainID: 2}
@@ -478,7 +455,7 @@ func TestBesuClientCounterpartyChain(t *testing.T) {
 		Timing: Timing{BlockInterval: time.Second, CompletionBudget: time.Minute, PollInterval: time.Second},
 	}
 	spec.IBCInstances[0] = ExistingIBCInstance{ID: "ibc-a", Chain: "chain-a", Locator: "0xibc-a"}
-	spec.Connections[0].A = ExistingClient{Kind: clientkind.BesuQBFT, IBCInstance: "ibc-a", ID: "client-a"}
+	spec.Connections[0].A = ExistingClient{Kind: clientkind.Besu, IBCInstance: "ibc-a", ID: "client-a"}
 	require.ErrorContains(
 		t, spec.validate(), `Besu IBC Client "connection-ab/A" tracks Chain "chain-b", which runs Anvil`,
 	)

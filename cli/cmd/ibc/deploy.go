@@ -20,7 +20,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/evm"
@@ -92,18 +91,11 @@ var (
 		RunE:  deployAttestationClient,
 	}
 
-	cmdDeployClientBesuQBFT = &cobra.Command{
-		Use:   "besu-qbft",
-		Short: "Deploy and register a Besu QBFT light client trusting the counterparty head",
+	cmdDeployClientBesu = &cobra.Command{
+		Use:   "besu",
+		Short: "Deploy and register a Besu light client for the counterparty's consensus, trusting its head",
 		Args:  cobra.NoArgs,
-		RunE:  deployBesuClient(besu.QBFT),
-	}
-
-	cmdDeployClientBesuIBFT2 = &cobra.Command{
-		Use:   "besu-ibft2",
-		Short: "Deploy and register a Besu IBFT 2.0 light client trusting the counterparty head",
-		Args:  cobra.NoArgs,
-		RunE:  deployBesuClient(besu.IBFT2),
+		RunE:  deployBesuClient,
 	}
 
 	cmdDeployStatus = &cobra.Command{
@@ -362,10 +354,9 @@ func attestationParams(
 }
 
 // besuParams reads the Besu client flags and trusts the counterparty head,
-// sealed under consensus.
+// whose commit seals decide the consensus the client verifies.
 func besuParams(
 	ctx context.Context,
-	consensus besu.Consensus,
 	counterpartyRouter string,
 	counterpartyTarget deploy.Target,
 ) (deploy.BesuParams, error) {
@@ -388,15 +379,15 @@ func besuParams(
 	if !ok {
 		return deploy.BesuParams{}, errors.New("counterparty cannot serve a besu consensus state")
 	}
-	height, state, err := source.BesuHead(ctx, consensus)
+	head, err := source.BesuHead(ctx)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrap(err, "read counterparty head")
 	}
 	return deploy.BesuParams{
-		Consensus:             consensus,
+		Consensus:             head.Consensus,
 		IBCRouter:             router,
-		InitialHeight:         height,
-		InitialConsensusState: state,
+		InitialHeight:         head.Height,
+		InitialConsensusState: head.ConsensusState(),
 		TrustingPeriod:        trustingPeriod,
 		MaxClockDrift:         maxClockDrift,
 	}, nil
@@ -423,18 +414,15 @@ func deployAttestationClient(cmd *cobra.Command, _ []string) error {
 	return deployClient(cmd, attestationParams)
 }
 
-func deployBesuClient(consensus besu.Consensus) func(*cobra.Command, []string) error {
-	clientType, _ := config.BesuClientType(consensus)
-	return func(cmd *cobra.Command, _ []string) error {
-		return deployClient(cmd, func(
-			ctx context.Context, cfg config.Config, counterpartyChainID string, counterpartyTarget deploy.Target,
-		) (deploy.ClientParams, error) {
-			// newTarget already checked that the counterparty is a configured EVM chain
-			counterparty, _ := cfg.Chain(counterpartyChainID)
-			params, err := besuParams(ctx, consensus, counterparty.EVM.ICS26Router, counterpartyTarget)
-			return params, errors.Wrapf(err, "%s client tracking chain %s", clientType, counterpartyChainID)
-		})
-	}
+func deployBesuClient(cmd *cobra.Command, _ []string) error {
+	return deployClient(cmd, func(
+		ctx context.Context, cfg config.Config, counterpartyChainID string, counterpartyTarget deploy.Target,
+	) (deploy.ClientParams, error) {
+		// newTarget already checked that the counterparty is a configured EVM chain
+		counterparty, _ := cfg.Chain(counterpartyChainID)
+		params, err := besuParams(ctx, counterparty.EVM.ICS26Router, counterpartyTarget)
+		return params, errors.Wrapf(err, "besu client tracking chain %s", counterpartyChainID)
+	})
 }
 
 // deployClient deploys a client on --chain whose params read the

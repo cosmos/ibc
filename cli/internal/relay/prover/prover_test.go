@@ -140,30 +140,26 @@ func TestNewSetFromConfig(t *testing.T) {
 
 func TestNewSetFromConfigBesu(t *testing.T) {
 	ctx := context.Background()
-	for _, clientType := range []config.ClientType{config.ClientTypeBesuQBFT, config.ClientTypeBesuIBFT2} {
-		t.Run(string(clientType), func(t *testing.T) {
-			conn := config.ConnectionConfig{
-				Alias:   "besu-a-besu-b",
-				ClientA: config.ClientEnd{ChainID: "1", Signer: "relayer", ClientID: "besu-b", Type: clientType},
-				ClientB: config.ClientEnd{ChainID: "2", Signer: "relayer", ClientID: "besu-a", Type: clientType},
-			}
-			cfg := config.Config{
-				Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
-			}
-
-			t.Run("requires EVM clients", func(t *testing.T) {
-				clientSet := chains.NewClientSet(map[string]chains.Client{
-					"1": mocks.NewMockClient(t),
-					"2": mocks.NewMockClient(t),
-				})
-				_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
-				require.ErrorContains(t, err, "is not an EVM chain")
-			})
-
-			t.Run("missing chain client", func(t *testing.T) {
-				_, err := NewSetFromConfig(ctx, cfg, chains.NewClientSet(nil), nil, slog.Default())
-				require.ErrorContains(t, err, `no client for chain "1"`)
-			})
-		})
+	conn := config.ConnectionConfig{
+		Alias:   "besu-a-besu-b",
+		ClientA: config.ClientEnd{ChainID: "1", Signer: "relayer", ClientID: "besu-b", Type: config.ClientTypeBesu},
+		ClientB: config.ClientEnd{ChainID: "2", Signer: "relayer", ClientID: "besu-a", Type: config.ClientTypeBesu},
 	}
+	cfg := config.Config{
+		Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},
+	}
+
+	t.Run("requires EVM clients", func(t *testing.T) {
+		clientSet := chains.NewClientSet(map[string]chains.Client{
+			"1": mocks.NewMockClient(t),
+			"2": mocks.NewMockClient(t),
+		})
+		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
+		require.ErrorContains(t, err, "is not an EVM chain")
+	})
+
+	t.Run("missing chain client", func(t *testing.T) {
+		_, err := NewSetFromConfig(ctx, cfg, chains.NewClientSet(nil), nil, slog.Default())
+		require.ErrorContains(t, err, `no client for chain "1"`)
+	})
 }

@@ -146,7 +146,7 @@ func addGenerator(
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
-	case config.ClientTypeBesuQBFT, config.ClientTypeBesuIBFT2:
+	case config.ClientTypeBesu:
 		gen, err := besuGenerator(ctx, client, clientCounterparty, clientSet)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)
@@ -197,11 +197,6 @@ func besuGenerator(
 	self, counterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
 ) (*besubft.Generator, error) {
-	consensus, ok := self.Type.BesuConsensus()
-	if !ok {
-		return nil, errors.Errorf("client type %q is not a besu client", self.Type)
-	}
-
 	host, err := evmClient(clientSet, self.ChainID)
 	if err != nil {
 		return nil, err
@@ -212,7 +207,7 @@ func besuGenerator(
 		return nil, err
 	}
 
-	return besubft.NewGenerator(ctx, self.ClientID, consensus, host, counterpartyClient)
+	return besubft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
 }
 
 // evmClient returns chainID's EVM client from clientSet.

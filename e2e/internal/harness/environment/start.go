@@ -392,7 +392,7 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 	adapter, err := besu.Start(ctx, besu.Spec{
 		ID:          string(spec.ID),
 		ChainID:     spec.EVMChainID,
-		Consensus:   spec.consensus(),
+		Consensus:   spec.Consensus,
 		WorkDir:     filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
 		RunID:       ws.runID,
 		BlockPeriod: besuBlockPeriod,

@@ -115,7 +115,7 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 			instance.Router,
 			besuClient.ID,
 			besuClient.CounterpartyClientID,
-			clientkind.Besu(consensus),
+			clientkind.Besu,
 		)
 		require.NoError(t, attachErr)
 		require.Equal(t, besuClient, attached)

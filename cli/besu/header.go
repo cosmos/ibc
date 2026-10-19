@@ -40,6 +40,9 @@ type ParsedHeader struct {
 	Timestamp  uint64
 	StateRoot  common.Hash
 	Validators []common.Address
+	// Consensus is the protocol whose digest the commit seals sign, empty for
+	// a header without seals.
+	Consensus Consensus
 }
 
 // ConsensusState is the consensus state an update to h installs, and the
@@ -57,14 +60,10 @@ func (h *ParsedHeader) ConsensusState() besumsgs.IBesuLightClientMsgsConsensusSt
 // fields needed for payloads. go-ethereum keeps every optional post-merge
 // field the node returned, so apart from the commit seals the encoding
 // reproduces the sealed bytes. Validators come from extraData, not a
-// consensus RPC. Commit seals are recovered against consensus's digest.
-func ParseSealedHeader(h *types.Header, consensus Consensus) (*ParsedHeader, error) {
+// consensus RPC. The consensus is the one whose digest the commit seals sign.
+func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	if h == nil {
 		return nil, errors.New("nil header")
-	}
-
-	if err := consensus.Validate(); err != nil {
-		return nil, err
 	}
 
 	if h.Number == nil || !h.Number.IsUint64() {
@@ -85,10 +84,11 @@ func ParseSealedHeader(h *types.Header, consensus Consensus) (*ParsedHeader, err
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
-	sorted, err := normalizeCommitSeals(h, extraItems, header.Validators, consensus)
+	sorted, consensus, err := normalizeCommitSeals(h, extraItems, header.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", header.Height, err)
 	}
+	header.Consensus = consensus
 
 	header.RLP, err = rlp.EncodeToBytes(sorted)
 	if err != nil {
@@ -98,55 +98,84 @@ func ParseSealedHeader(h *types.Header, consensus Consensus) (*ParsedHeader, err
 	return header, nil
 }
 
-// normalizeCommitSeals returns a copy of h with only the commit seals the
-// contract accepts: canonical, from one of validators, one per signer, in
-// strictly ascending order of signer. The contract rejects the whole header
-// for any other seal. Changing the seals is safe because the seal digest
-// excludes them.
+// normalizeCommitSeals returns h with only the commit seals the contract
+// accepts: canonical, from one of validators, one per signer, in strictly
+// ascending order of signer. The contract rejects the whole header for any
+// other seal. Changing the seals is safe because the seal digest excludes
+// them. It also returns the consensus whose digest the seals sign, which
+// must be the only one under which any of them recovers to a validator.
 func normalizeCommitSeals(
 	h *types.Header,
 	extraItems []rlp.RawValue,
 	validators []common.Address,
-	consensus Consensus,
-) (*types.Header, error) {
+) (*types.Header, Consensus, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals); err != nil {
-		return nil, fmt.Errorf("commit seals: %w", err)
+		return nil, "", fmt.Errorf("commit seals: %w", err)
 	}
 
-	digest, err := commitSealDigest(h, extraItems, consensus)
+	if len(seals) == 0 {
+		return h, "", nil
+	}
+
+	var (
+		detected Consensus
+		kept     [][]byte
+	)
+	for _, consensus := range Consensuses {
+		digest, err := commitSealDigest(h, extraItems, consensus)
+		if err != nil {
+			return nil, "", err
+		}
+		signed := validatorSeals(digest, seals, validators)
+		if len(signed) == 0 {
+			continue
+		}
+		if detected != "" {
+			return nil, "", fmt.Errorf(
+				"commit seals recover to header validators under both %s and %s",
+				detected,
+				consensus,
+			)
+		}
+		detected, kept = consensus, signed
+	}
+	if detected == "" {
+		return nil, "", errors.New("no commit seal recovers to a header validator")
+	}
+
+	sortedSeals, err := rlp.EncodeToBytes(kept)
 	if err != nil {
-		return nil, err
+		return nil, "", fmt.Errorf("encode commit seals: %w", err)
 	}
+	out, err := withCommitSeals(h, extraItems, sortedSeals)
 
+	return out, detected, err
+}
+
+// validatorSeals returns the canonical form of the seals over digest that
+// recover to one of validators, one per signer, in ascending signer order.
+func validatorSeals(digest []byte, seals [][]byte, validators []common.Address) [][]byte {
 	type signedSeal struct {
 		signer common.Address
 		seal   []byte
 	}
 	signed := make([]signedSeal, 0, len(seals))
 	for _, seal := range seals {
-		signer, canonical, sigErr := ecrecover.Recover(digest, seal)
-		if sigErr == nil && slices.Contains(validators, signer) {
+		signer, canonical, err := ecrecover.Recover(digest, seal)
+		if err == nil && slices.Contains(validators, signer) {
 			signed = append(signed, signedSeal{signer: signer, seal: canonical})
 		}
-	}
-	// Seals that all fail point at a digest mismatch, not at missing quorum.
-	if len(seals) > 0 && len(signed) == 0 {
-		return nil, errors.New("no commit seal recovers to a header validator")
 	}
 	slices.SortStableFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
 	signed = slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
 
-	seals = seals[:0]
-	for _, s := range signed {
-		seals = append(seals, s.seal)
-	}
-	sortedSeals, err := rlp.EncodeToBytes(seals)
-	if err != nil {
-		return nil, fmt.Errorf("encode commit seals: %w", err)
+	kept := make([][]byte, len(signed))
+	for i, s := range signed {
+		kept[i] = s.seal
 	}
 
-	return withCommitSeals(h, extraItems, sortedSeals)
+	return kept
 }
 
 // commitSealDigest is the digest commit seals sign under consensus, matching
@@ -162,7 +191,7 @@ func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Cons
 	case IBFT2:
 		signingItems = extraItems[:extraIdxCommitSeals]
 	default:
-		return nil, consensus.Validate()
+		return nil, fmt.Errorf("no commit seal digest for besu consensus %q", consensus)
 	}
 
 	signing := types.CopyHeader(h)
@@ -195,11 +224,10 @@ func withCommitSeals(h *types.Header, extraItems []rlp.RawValue, seals rlp.RawVa
 }
 
 // ReadSealedHeader reads and parses the Besu header at number, or the head
-// when number is nil, sealed under consensus.
+// when number is nil.
 func ReadSealedHeader(
 	ctx context.Context,
 	backend bind.ContractBackend,
-	consensus Consensus,
 	number *big.Int,
 ) (*ParsedHeader, error) {
 	at := "latest"
@@ -212,7 +240,7 @@ func ReadSealedHeader(
 		return nil, fmt.Errorf("getting header %s: %w", at, err)
 	}
 
-	parsed, err := ParseSealedHeader(header, consensus)
+	parsed, err := ParseSealedHeader(header)
 	if err != nil {
 		return nil, fmt.Errorf("parse header %s: %w", at, err)
 	}

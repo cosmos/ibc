@@ -26,7 +26,6 @@ const clientID = "besu-chain-a"
 
 type fakeChain struct {
 	id             string
-	consensus      besu.Consensus
 	router         common.Address
 	latest         *v2.BlockHeader
 	sealed         map[uint64]*besu.ParsedHeader
@@ -50,14 +49,7 @@ func (f *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHe
 	return v2.BlockHeader{}, fmt.Errorf("no block header %d", height)
 }
 
-func (f *fakeChain) SealedHeader(
-	_ context.Context,
-	consensus besu.Consensus,
-	height uint64,
-) (*besu.ParsedHeader, error) {
-	if consensus != f.consensus {
-		return nil, fmt.Errorf("sealed header under %s, chain runs %s", consensus, f.consensus)
-	}
+func (f *fakeChain) SealedHeader(_ context.Context, height uint64) (*besu.ParsedHeader, error) {
 	h, ok := f.sealed[height]
 	if !ok {
 		return nil, fmt.Errorf("no sealed header %d", height)
@@ -97,10 +89,10 @@ func newFixtureEnv(t *testing.T, consensus besu.Consensus) *fixtureEnv {
 	env := &fixtureEnv{
 		fixture:      besutest.MustFixture(t, consensus),
 		host:         &fakeChain{id: "host", sealed: map[uint64]*besu.ParsedHeader{}},
-		counterparty: &fakeChain{id: "besu-b", consensus: consensus, sealed: map[uint64]*besu.ParsedHeader{}},
+		counterparty: &fakeChain{id: "besu-b", sealed: map[uint64]*besu.ParsedHeader{}},
 	}
 	env.counterparty.router = env.fixture.RouterAddress
-	env.gen = &Generator{host: env.host, counterparty: env.counterparty, clientID: clientID, consensus: consensus}
+	env.gen = &Generator{host: env.host, counterparty: env.counterparty, clientID: clientID}
 	return env
 }
 
@@ -138,7 +130,7 @@ func consensusHeader(height uint64, state besumsgs.IBesuLightClientMsgsConsensus
 
 func (e *fixtureEnv) parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.ParsedHeader {
 	t.Helper()
-	return e.fixture.ParseHeader(t, update.HeaderRLP)
+	return besutest.ParseHeader(t, update.HeaderRLP)
 }
 
 func (e *fixtureEnv) setAnchor(t *testing.T, height uint64, state besumsgs.IBesuLightClientMsgsConsensusState) {
@@ -153,7 +145,7 @@ func (e *fixtureEnv) expectInitialAnchor(t *testing.T) {
 }
 
 func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
-	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
+	for _, consensus := range besu.Consensuses {
 		t.Run(string(consensus), func(t *testing.T) {
 			ctx := context.Background()
 			env := newFixtureEnv(t, consensus)
@@ -236,7 +228,7 @@ func (e *fixtureEnv) expectProofAt(
 }
 
 func TestPacketProofs(t *testing.T) {
-	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
+	for _, consensus := range besu.Consensuses {
 		t.Run(string(consensus), func(t *testing.T) {
 			testPacketProofs(t, consensus)
 		})
@@ -360,29 +352,22 @@ func TestNewGeneratorChecksRouter(t *testing.T) {
 		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
 		env.counterparty.router = common.HexToAddress("0x1234")
-		_, err := NewGenerator(ctx, clientID, besu.QBFT, env.host, env.counterparty)
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
 		require.ErrorContains(t, err, "configured with router")
 	})
 
 	t.Run("client state error", func(t *testing.T) {
 		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientStateErr = errors.New("execution reverted")
-		_, err := NewGenerator(ctx, clientID, besu.QBFT, env.host, env.counterparty)
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
 		require.ErrorContains(t, err, "execution reverted")
 	})
 
 	t.Run("matching router", func(t *testing.T) {
 		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
-		_, err := NewGenerator(ctx, clientID, besu.QBFT, env.host, env.counterparty)
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
 		require.NoError(t, err)
-	})
-
-	t.Run("unknown consensus", func(t *testing.T) {
-		env := newFixtureEnv(t, besu.QBFT)
-		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
-		_, err := NewGenerator(ctx, clientID, "clique", env.host, env.counterparty)
-		require.ErrorContains(t, err, `unknown besu consensus "clique"`)
 	})
 }
 

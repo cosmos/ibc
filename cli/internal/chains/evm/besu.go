@@ -15,13 +15,9 @@ import (
 	"github.com/cosmos/ibc/cli/besu"
 )
 
-// SealedHeader returns the Besu header at height, sealed under consensus.
-func (c *Client) SealedHeader(
-	ctx context.Context,
-	consensus besu.Consensus,
-	height uint64,
-) (*besu.ParsedHeader, error) {
-	header, err := besu.ReadSealedHeader(ctx, c.eth, consensus, new(big.Int).SetUint64(height))
+// SealedHeader returns the sealed Besu header at height.
+func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
+	header, err := besu.ReadSealedHeader(ctx, c.eth, new(big.Int).SetUint64(height))
 	if err != nil {
 		return nil, errors.Wrapf(err, "chain %s", c.chainID)
 	}

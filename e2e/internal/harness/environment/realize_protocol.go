@@ -359,7 +359,7 @@ func prepareConnections(
 				authority, _ := runtime.evmAccount(client.Authority)
 				counterparty := dependencies.instances[counterpartyEnd.declaration.clientIBCInstance()]
 				counterpartyRouter := common.HexToAddress(string(counterparty.locator))
-				trusted, err := besuTrustedState(ctx, counterparty.chain, client.Consensus)
+				trusted, err := besuTrustedState(ctx, counterparty.chain)
 				if err != nil {
 					return dependencies, fmt.Errorf(
 						"prepare IBC Client %q counterparty trusted state: %w",
@@ -373,7 +373,7 @@ func prepareConnections(
 					authority,
 					router,
 					solidityibc.BesuClientConfig{
-						Consensus:            client.Consensus,
+						Consensus:            trusted.Consensus,
 						ID:                   clientIDs[end.label],
 						CounterpartyClientID: clientIDs[counterpartyEnd.label],
 						CounterpartyRouter:   counterpartyRouter,
@@ -616,13 +616,13 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 	return header, err
 }
 
-// besuTrustedState is the head of chain, sealed under consensus, which a Besu
-// Client tracking it starts trusting.
-func besuTrustedState(ctx context.Context, chain *Chain, consensus besu.Consensus) (*besu.ParsedHeader, error) {
+// besuTrustedState is the sealed head of chain, which a Besu Client tracking
+// it starts trusting. Its consensus picks the Client's contract.
+func besuTrustedState(ctx context.Context, chain *Chain) (*besu.ParsedHeader, error) {
 	var header *besu.ParsedHeader
 	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
 		var readErr error
-		header, readErr = besu.ReadSealedHeader(ctx, client.Client(), consensus, nil)
+		header, readErr = besu.ReadSealedHeader(ctx, client.Client(), nil)
 		return readErr
 	})
 	if !ok {

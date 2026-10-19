@@ -96,17 +96,12 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	})
 }
 
-// A timeout through besu-qbft light clients proves the receipt's absence with
+// A timeout through Besu QBFT light clients proves the receipt's absence with
 // a non-membership proof. Besu cannot move its clock, so the packet expires as
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := besuMesh(besu.QBFT, e2etest.EVMChains(
-		t,
-		e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu, BesuConsensus: besu.QBFT},
-		e2etest.ChainA,
-		e2etest.ChainB,
-	))
+	spec, runtime := besuMesh(besuChains(t, besu.QBFT, besu.QBFT))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }
 
@@ -174,7 +169,7 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 	return nil
 }
 
-// Two Besu QBFT chains relay through besu-qbft light clients: header, account
+// Two Besu QBFT chains relay through Besu QBFT light clients: header, account
 // and storage proofs instead of attestations. Besu is only available outside
 // fast mode, so this skips there.
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
@@ -182,7 +177,7 @@ func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	requireBesuAutoRelay(t, besu.QBFT)
 }
 
-// Two Besu IBFT 2.0 chains relay through besu-ibft2 light clients, whose
+// Two Besu IBFT 2.0 chains relay through the IBFT 2.0 light client, whose
 // commit seals sign a different digest than QBFT's.
 func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
 	t.Parallel()
@@ -190,11 +185,10 @@ func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
 }
 
 // requireBesuAutoRelay relays a transfer between two Besu chains running
-// consensus through the matching Besu light clients.
+// consensus through the light client for that consensus.
 func requireBesuAutoRelay(t *testing.T, consensus besu.Consensus) {
 	t.Helper()
-	requirements := e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu, BesuConsensus: consensus}
-	spec, runtime := besuMesh(consensus, e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := besuMesh(besuChains(t, consensus, consensus))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

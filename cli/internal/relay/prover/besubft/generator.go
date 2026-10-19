@@ -35,9 +35,8 @@ type Counterparty interface {
 	ChainID() string
 	RouterAddress() common.Address
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
-	// SealedHeader returns the parsed header at height, sealed under
-	// consensus.
-	SealedHeader(ctx context.Context, consensus besu.Consensus, height uint64) (*besu.ParsedHeader, error)
+	// SealedHeader returns the parsed header at height.
+	SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error)
 	GetRouterProof(ctx context.Context, height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
 
@@ -46,23 +45,11 @@ type Generator struct {
 	host         Host
 	counterparty Counterparty
 	clientID     string
-	consensus    besu.Consensus
 }
 
 // NewGenerator builds the prover for clientID on host, tracking counterparty,
-// which runs consensus, and fails fast unless the client proves
-// counterparty's configured router.
-func NewGenerator(
-	ctx context.Context,
-	clientID string,
-	consensus besu.Consensus,
-	host Host,
-	counterparty Counterparty,
-) (*Generator, error) {
-	if err := consensus.Validate(); err != nil {
-		return nil, err
-	}
-
+// and fails fast unless the client proves counterparty's configured router.
+func NewGenerator(ctx context.Context, clientID string, host Host, counterparty Counterparty) (*Generator, error) {
 	state, err := host.BesuClientState(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -75,7 +62,7 @@ func NewGenerator(
 		)
 	}
 
-	return &Generator{host: host, counterparty: counterparty, clientID: clientID, consensus: consensus}, nil
+	return &Generator{host: host, counterparty: counterparty, clientID: clientID}, nil
 }
 
 // LatestProvableHeight returns the counterparty head. The light client
@@ -115,12 +102,12 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 		return nil, nil
 	}
 
-	trusted, err := g.counterparty.SealedHeader(ctx, g.consensus, trustedHeight)
+	trusted, err := g.counterparty.SealedHeader(ctx, trustedHeight)
 	if err != nil {
 		return nil, fmt.Errorf("reading trusted header: %w", err)
 	}
 
-	targetHeader, err := g.counterparty.SealedHeader(ctx, g.consensus, target)
+	targetHeader, err := g.counterparty.SealedHeader(ctx, target)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +143,7 @@ func (g *Generator) PacketProofs(
 		slots[i] = besu.CommitmentSlot(path)
 	}
 
-	header, err := g.counterparty.SealedHeader(ctx, g.consensus, height)
+	header, err := g.counterparty.SealedHeader(ctx, height)
 	if err != nil {
 		return nil, err
 	}

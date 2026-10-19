@@ -175,13 +175,24 @@ func TestAttestedMeshConnectsEveryChainPair(t *testing.T) {
 	require.NoError(t, environment.Validate(spec, runtime))
 }
 
+// besuChains requests Besu Chains A and B running consensusA and consensusB.
+func besuChains(t *testing.T, consensusA, consensusB besu.Consensus) []environment.ChainSpec {
+	t.Helper()
+	requirements := e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}
+	chains := e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB)
+	for i, consensus := range []besu.Consensus{consensusA, consensusB} {
+		chain, ok := chains[i].(environment.ManagedBesu)
+		require.True(t, ok)
+		chain.Consensus = consensus
+		chains[i] = chain
+	}
+	return chains
+}
+
 // besuMesh declares a fully connected graph of Besu Clients over chains: per
 // Chain pair one Connection whose ends verify each other's sealed Besu
-// headers, so it needs no Attestors. Every chain must run Besu with consensus.
-func besuMesh(
-	consensus besu.Consensus,
-	chains []environment.ChainSpec,
-) (environment.Spec, environment.Runtime) {
+// headers, so it needs no Attestors. Every chain must run Besu.
+func besuMesh(chains []environment.ChainSpec) (environment.Spec, environment.Runtime) {
 	spec := environment.Spec{Chains: slices.Clone(chains)}
 	chainIDs := make([]environment.ChainID, 0, len(chains))
 	for _, chain := range chains {
@@ -198,8 +209,8 @@ func besuMesh(
 		for _, b := range chainIDs[i+1:] {
 			spec.Connections = append(spec.Connections, environment.ConnectionSpec{
 				ID: fixtureConnectionID(a, b),
-				A:  besuMeshClient(consensus, a),
-				B:  besuMeshClient(consensus, b),
+				A:  besuMeshClient(a),
+				B:  besuMeshClient(b),
 			})
 		}
 	}
@@ -207,18 +218,17 @@ func besuMesh(
 }
 
 // besuMeshClient trusts states for 14 days and tolerates a minute of clock drift.
-func besuMeshClient(consensus besu.Consensus, chain environment.ChainID) environment.NewBesuClient {
+func besuMeshClient(chain environment.ChainID) environment.NewBesuClient {
 	return environment.NewBesuClient{
 		IBCInstance:    fixtureInstanceID(chain),
 		Authority:      e2etest.ProtocolAuthorityID,
-		Consensus:      consensus,
 		TrustingPeriod: environment.BesuTrustingPeriod,
 		MaxClockDrift:  60,
 	}
 }
 
 func TestBesuMesh(t *testing.T) {
-	spec, runtime := besuMesh(besu.IBFT2, []environment.ChainSpec{
+	spec, runtime := besuMesh([]environment.ChainSpec{
 		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.IBFT2},
 		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1, Consensus: besu.IBFT2},
 	})
@@ -236,6 +246,5 @@ func TestBesuMesh(t *testing.T) {
 		client, ok := ends[i].(environment.NewBesuClient)
 		require.True(t, ok)
 		require.Equal(t, instance.ID, client.IBCInstance)
-		require.Equal(t, besu.IBFT2, client.Consensus)
 	}
 }

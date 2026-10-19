@@ -20,8 +20,7 @@ import (
 // does.
 const (
 	ClientTypeAttestation = string(config.ClientTypeAttestation)
-	ClientTypeBesuQBFT    = string(config.ClientTypeBesuQBFT)
-	ClientTypeBesuIBFT2   = string(config.ClientTypeBesuIBFT2)
+	ClientTypeBesu        = string(config.ClientTypeBesu)
 )
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under
@@ -51,7 +50,7 @@ type AttestationParams struct {
 func (AttestationParams) ClientType() string { return ClientTypeAttestation }
 
 // BesuParams are the constructor inputs for a Besu client verifying a chain
-// that runs Consensus. Periods are in seconds.
+// that runs Consensus, which picks the contract. Periods are in seconds.
 type BesuParams struct {
 	Consensus             besu.Consensus
 	IBCRouter             common.Address
@@ -61,20 +60,13 @@ type BesuParams struct {
 	MaxClockDrift         uint64
 }
 
-// ClientType implements ClientParams. It is empty for an unknown Consensus.
-func (p BesuParams) ClientType() string {
-	clientType, _ := config.BesuClientType(p.Consensus)
-	return string(clientType)
-}
+// ClientType implements ClientParams.
+func (BesuParams) ClientType() string { return ClientTypeBesu }
 
 // BesuSource is implemented by targets whose chain runs Besu and can serve
-// the consensus state of their head, sealed under consensus, which a new
-// client tracking them starts trusting.
+// their sealed head, which a new client tracking them starts trusting.
 type BesuSource interface {
-	BesuHead(
-		ctx context.Context,
-		consensus besu.Consensus,
-	) (height uint64, state besumsgs.IBesuLightClientMsgsConsensusState, err error)
+	BesuHead(ctx context.Context) (*besu.ParsedHeader, error)
 }
 
 // ClientSpec describes one light client to provision and register.

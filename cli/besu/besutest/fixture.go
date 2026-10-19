@@ -5,6 +5,7 @@
 package besutest
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -17,24 +18,14 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc/cli/besu"
-
-	_ "embed"
 )
 
-// fixtureJSON holds ibc-solidity/test/besu-bft/fixtures/<consensus>.json from
+// fixtures holds ibc-solidity/test/besu-bft/fixtures/<consensus>.json from
 // ibc-contracts at the go-abigen commit (make sync-besu-fixture): headers and
 // proofs, plus synthetic updates for the negative Solidity cases.
 //
-//go:embed testdata/qbft.json
-var qbftFixtureJSON []byte
-
-//go:embed testdata/ibft2.json
-var ibft2FixtureJSON []byte
-
-var fixtureJSON = map[besu.Consensus][]byte{
-	besu.QBFT:  qbftFixtureJSON,
-	besu.IBFT2: ibft2FixtureJSON,
-}
+//go:embed testdata/*.json
+var fixtures embed.FS
 
 var messageBindings = besumsgs.NewBindings()
 
@@ -83,9 +74,9 @@ type MembershipFixture struct {
 
 // LoadFixture decodes the embedded fixture of a chain running consensus.
 func LoadFixture(consensus besu.Consensus) (Fixture, error) {
-	raw, ok := fixtureJSON[consensus]
-	if !ok {
-		return Fixture{}, fmt.Errorf("no fixture for besu consensus %q", consensus)
+	raw, err := fixtures.ReadFile("testdata/" + string(consensus) + ".json")
+	if err != nil {
+		return Fixture{}, fmt.Errorf("no fixture for besu consensus %q: %w", consensus, err)
 	}
 
 	fixture := Fixture{Consensus: consensus}
@@ -147,9 +138,8 @@ func HashConsensusState(state besumsgs.IBesuLightClientMsgsConsensusState) (comm
 	return crypto.Keccak256Hash(data[4:]), nil
 }
 
-// ParseHeader parses a header RLP of the fixture chain the way the relayer
-// parses a node's header.
-func (f Fixture) ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
+// ParseHeader parses a header RLP the way the relayer parses a node's header.
+func ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
 	tb.Helper()
 
 	var header types.Header
@@ -157,7 +147,7 @@ func (f Fixture) ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader
 		tb.Fatalf("decode header: %v", err)
 	}
 
-	parsed, err := besu.ParseSealedHeader(&header, f.Consensus)
+	parsed, err := besu.ParseSealedHeader(&header)
 	if err != nil {
 		tb.Fatalf("parse header: %v", err)
 	}
