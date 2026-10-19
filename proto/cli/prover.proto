@@ -71,6 +71,8 @@ message PacketProofsRequest {
   ProofKind kind = 3;
   // The packets to prove, all under the same kind and height.
   repeated Packet packets = 4;
+  // One acknowledgement per packet, in packet order; only for acknowledgement proofs.
+  repeated Acknowledgement acknowledgements = 5;
 }
 
 message PacketProofsResponse {
@@ -101,6 +103,11 @@ message Packet {
   uint64 timeout_timestamp = 4;
   // The packet's application payloads.
   repeated Payload payloads = 5;
+}
+
+message Acknowledgement {
+  // The packet's encoded application acknowledgements.
+  repeated bytes app_acknowledgements = 1;
 }
 
 message Payload {
