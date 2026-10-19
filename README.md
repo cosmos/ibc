@@ -41,12 +41,28 @@ For a high-level explanation of IBC, you can also read [this blog post](https://
 
 ## Releases
 
-| Tag | Artifact | Published to |
-| --- | --- | --- |
-| `cli-vX.Y.Z` | IBC CLI archives with `LICENSE` and `NOTICE`, `ibc-<version>-<platform>.tar.gz` (`darwin-arm64`, `linux-amd64`, `linux-arm64`) | [GitHub release](https://github.com/cosmos/ibc/releases) |
-| Any tag, and pushes to `main` that change the CLI | IBC CLI image (`linux/amd64`, `linux/arm64`), `ghcr.io/cosmos/ibc:<tag or branch>` | [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc) |
+See [`RELEASES.md`](RELEASES.md) for how to cut a release.
 
-Every GitHub release also carries an SPDX SBOM per archive (`ibc-<version>-<platform>.spdx.json`), a `checksums.txt` signed with cosign (`checksums.txt.sigstore.json`), and its build provenance (`ibc-<version>.intoto.jsonl`). The images carry build provenance and SBOM attestations and are signed with cosign. See [`RELEASES.md`](RELEASES.md) for how to cut a release and verify its artifacts.
+### Release artifacts
+
+| Tag | Artifact | Description |
+| --- | --- | --- |
+| `cli-vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
+|  | `ibc-vX.Y.Z-linux-amd64.tar.gz` | IBC CLI binary for linux/amd64, with `LICENSE` and `NOTICE` |
+|  | `ibc-vX.Y.Z-linux-arm64.tar.gz` | IBC CLI binary for linux/arm64, with `LICENSE` and `NOTICE` |
+|  | `ibc-vX.Y.Z-darwin-arm64.spdx.json` | SPDX SBOM of the darwin/arm64 binary |
+|  | `ibc-vX.Y.Z-linux-amd64.spdx.json` | SPDX SBOM of the linux/amd64 binary |
+|  | `ibc-vX.Y.Z-linux-arm64.spdx.json` | SPDX SBOM of the linux/arm64 binary |
+|  | `checksums.txt` | SHA-256 checksums of the release files and the SBOMs |
+|  | `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
+|  | `ibc-vX.Y.Z.intoto.jsonl` | Build provenance and SBOM attestations, for offline verification with `gh attestation verify --bundle` |
+|  | `ghcr.io/cosmos/ibc:cli-vX.Y.Z` | IBC CLI container image (linux/amd64, linux/arm64), signed with cosign and carrying provenance and SBOM attestations |
+
+The files are attached to the tag's [GitHub release](https://github.com/cosmos/ibc/releases) and the image is published to [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc).
+
+The image is also published as `ghcr.io/cosmos/ibc:main` on pushes to `main` that change the CLI.
+
+See [Signed release assets](RELEASES.md#signed-release-assets) for how to verify the artifacts.
 
 ## Interchain Standards
 
