@@ -42,9 +42,13 @@ An admin makes both kinds of change, and both are calls on the manager rather th
 - **To give an address a role**, call `grantRole(roleId, account, executionDelay)`. A nonzero delay means that address cannot call a gated function directly: it must `schedule` the call, wait out the delay, then `execute` it. Zero lets it call immediately. To take it back, call `revokeRole(roleId, account)`.
 - **To change which functions a role gates**, call `setTargetFunctionRole(target, selectors, roleId)`. The target is an argument, so the map is per contract: `ADMIN_ROLE` gates `migrateClient` and the upgrade selectors on the [router](2-ics26-router.md), and a different set on [ICS27GMP](3-ics27-gmp-and-accounts.md).
 
+[Grant, change, and revoke a role](../6-ibc-cli/9-grant-change-and-revoke-a-role.md) shows both changes on the tutorial's deployment.
+
 ## What a deployment assigns
 
-The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, and the relayer role gates nothing.
+The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. Only the first four carry `restricted`, so `multicall` and `submitMisbehaviour` are open to any caller with or without that binding. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, and the relayer role gates nothing.
+
+The manager treats a function it was never told about as gated by `ADMIN_ROLE`. `ibc deploy core` assigns nothing else, so every other `restricted` function answers to the admin alone. That includes `pause` and `unpause` on ICS27GMP, and the custom-identifier forms of `addIBCApp` and `addClient`.
 
 The manager's constructor takes its first admin as an argument. `ibc deploy core` passes the deployer key and leaves it there, and the driver's own comment calls role hardening a follow-up. The rest of the manager's surface is in [OpenZeppelin's reference](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager).
 
@@ -106,4 +110,4 @@ Migration is also how a frozen client is restarted. A frozen client keeps revert
 
 Each client type decides what freezes it. The [attestation light client](5-attestation-light-client.md) freezes on conflicting attested timestamps, and nothing in it clears that flag.
 
-The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys the access manager and sets these roles as it goes.
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys the access manager and leaves the deployer as the only address granted a role. [Grant, change, and revoke a role](../6-ibc-cli/9-grant-change-and-revoke-a-role.md) assigns roles on that deployment.
