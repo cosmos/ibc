@@ -39,6 +39,15 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 <!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of IBC, you can also read [this blog post](https://medium.com/the-interchain-foundation/eli5-what-is-ibc-def44d7b5b4c).
 
+## Releases
+
+| Tag | Artifact | Published to |
+| --- | --- | --- |
+| `cli-vX.Y.Z` | IBC CLI archives with `LICENSE` and `NOTICE`, `ibc-<version>-<platform>.tar.gz` (`darwin-arm64`, `linux-amd64`, `linux-arm64`) | [GitHub release](https://github.com/cosmos/ibc/releases) |
+| Any tag, and pushes to `main` that change the CLI | IBC CLI image (`linux/amd64`, `linux/arm64`), `ghcr.io/cosmos/ibc:<tag or branch>` | [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc) |
+
+Every GitHub release also carries an SPDX SBOM per archive (`ibc-<version>-<platform>.spdx.json`), a `checksums.txt` signed with cosign (`checksums.txt.sigstore.json`), and its build provenance (`ibc-<version>.intoto.jsonl`). The images carry build provenance and SBOM attestations and are signed with cosign. See [`RELEASES.md`](RELEASES.md) for how to cut a release and verify its artifacts.
+
 ## Interchain Standards
 
 All standards at or past the "Draft" stage are listed here in order of their ICS numbers, sorted by category.
