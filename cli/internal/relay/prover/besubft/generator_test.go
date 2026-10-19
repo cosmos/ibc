@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
@@ -236,8 +236,16 @@ func (e *fixtureEnv) expectProofAt(
 }
 
 func TestPacketProofs(t *testing.T) {
+	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
+		t.Run(string(consensus), func(t *testing.T) {
+			testPacketProofs(t, consensus)
+		})
+	}
+}
+
+func testPacketProofs(t *testing.T, consensus besu.Consensus) {
 	ctx := context.Background()
-	fixture := besutest.MustFixture(t, besu.QBFT)
+	fixture := besutest.MustFixture(t, consensus)
 	update := fixture.NonAdjacentUpdate
 	preimage := update.ExpectedConsensusState()
 
@@ -263,7 +271,7 @@ func TestPacketProofs(t *testing.T) {
 	nonMembershipNodes := proofNodes(t, fixture.NonMembership)
 
 	t.Run("membership wraps the storage proof with the proof-height preimage", func(t *testing.T) {
-		env := newFixtureEnv(t, besu.QBFT)
+		env := newFixtureEnv(t, consensus)
 		env.expectProofAt(t, update, func(common.Hash) [][]byte { return membershipNodes })
 
 		proofs, err := env.gen.PacketProofs(
@@ -284,7 +292,7 @@ func TestPacketProofs(t *testing.T) {
 	})
 
 	t.Run("only the first proof carries the account proof", func(t *testing.T) {
-		env := newFixtureEnv(t, besu.QBFT)
+		env := newFixtureEnv(t, consensus)
 		env.expectProofAt(t, update, func(common.Hash) [][]byte { return membershipNodes })
 		next := sent
 		next.Sequence++
@@ -309,7 +317,7 @@ func TestPacketProofs(t *testing.T) {
 	})
 
 	t.Run("receipt absence uses the fixture exclusion proof", func(t *testing.T) {
-		env := newFixtureEnv(t, besu.QBFT)
+		env := newFixtureEnv(t, consensus)
 		env.expectProofAt(t, update, func(slot common.Hash) [][]byte {
 			require.Equal(t, besu.CommitmentSlot(fixture.NonMembership.Path), slot)
 			return nonMembershipNodes

@@ -7,15 +7,15 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/cli/besu"
 )
 

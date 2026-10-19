@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/chains/evm"

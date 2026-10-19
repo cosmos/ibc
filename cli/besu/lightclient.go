@@ -6,14 +6,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuibft2"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 )
 
 // DefaultTrustLevel is the fraction of the validators trusted at the trusted height
