@@ -102,7 +102,10 @@ func TestTransferTimeout_Refund(t *testing.T) {
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
 	spec, runtime := besuMesh(besu.QBFT, e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
+		t,
+		e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu, BesuConsensus: besu.QBFT},
+		e2etest.ChainA,
+		e2etest.ChainB,
 	))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }

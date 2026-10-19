@@ -244,7 +244,7 @@ Deploy and register a Besu IBFT 2.0 light client trusting the counterparty head.
 ibc deploy client besu-ibft2 --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
 ```
 
-Like `besu-qbft`, but for a counterparty running IBFT 2.0: it deploys the IBFT2 light client, whose commit seals sign a different digest, and otherwise behaves the same. The type must match the counterparty's consensus, or none of its headers verify. <!-- [cli/besu/header.go: commitSealDigest] -->
+Like `besu-qbft`, but for a counterparty running IBFT 2.0: it deploys the IBFT2 light client, whose commit seals sign a different digest, and otherwise behaves the same. The type must match the counterparty's consensus: under the other one no commit seal recovers to a validator, so the command and the relayer refuse the counterparty's headers. <!-- [cli/besu/header.go: normalizeCommitSeals] -->
 
 ### `ibc deploy client besu-qbft`
 

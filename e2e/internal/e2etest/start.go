@@ -65,6 +65,19 @@ type EVMRequirements struct {
 	NodeLifecycle    bool
 }
 
+// String prints requirements as %+v would, leaving out an unset
+// BesuConsensus.
+func (r EVMRequirements) String() string {
+	consensus := ""
+	if r.BesuConsensus != "" {
+		consensus = " BesuConsensus:" + string(r.BesuConsensus)
+	}
+	return fmt.Sprintf(
+		"{Provider:%s%s ControlledMining:%t NodeLifecycle:%t}",
+		r.Provider, consensus, r.ControlledMining, r.NodeLifecycle,
+	)
+}
+
 const ProtocolAuthorityID environment.AuthorityID = "protocol-deployer"
 
 // Deterministic deployer key used by test protocol realization; funded by managed Chains.
