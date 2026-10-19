@@ -28,13 +28,13 @@ Push the tag with `git` before publishing the release. A release drafted from th
 
 ### Container images
 
-The [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) attests the build provenance and per-platform SBOMs of every `ghcr.io/cosmos/ibc` image it publishes, and signs it with cosign. Verify an image with:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:cli-vX.Y.Z` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image is not signed. Verify a release image with:
 
 ```sh
-cosign verify ghcr.io/cosmos/ibc:<tag> \
-  --certificate-identity-regexp '^https://github.com/cosmos/ibc/.github/workflows/ibc-cli-build.yml@' \
+cosign verify ghcr.io/cosmos/ibc:cli-vX.Y.Z \
+  --certificate-identity-regexp '^https://github.com/cosmos/ibc/.github/workflows/release.yml@' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/cosmos/ibc:<tag> --repo cosmos/ibc
+gh attestation verify oci://ghcr.io/cosmos/ibc:cli-vX.Y.Z --repo cosmos/ibc
 ```
 
 Image SBOMs are attached to the platform digests, not the multi-platform tag. To check one, pass the platform digest with `--predicate-type https://spdx.dev/Document/v2.3`.

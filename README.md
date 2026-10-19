@@ -61,7 +61,7 @@ See [`RELEASES.md`](RELEASES.md) for how to cut a release.
 
 The files are attached to the tag's [GitHub release](https://github.com/cosmos/ibc/releases) and the image is published to [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc).
 
-The image is also published as `ghcr.io/cosmos/ibc:main` on pushes to `main` that change the CLI.
+The image is also published, unsigned, as `ghcr.io/cosmos/ibc:main` on pushes to `main` that change the CLI.
 
 See [Signed release assets](RELEASES.md#signed-release-assets) for how to verify the artifacts.
 
