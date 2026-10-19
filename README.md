@@ -6,7 +6,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/cosmos/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cosmos/ibc/blob/main/LICENSE)
 [![Discord](https://img.shields.io/discord/669268347736686612?logo=discord&label=Discord)](https://discord.com/invite/interchain)
-[![Version](https://img.shields.io/github/tag/cosmos/ibc.svg)](https://github.com/cosmos/ibc/releases/latest)
+[![Version](https://img.shields.io/github/v/tag/cosmos/ibc?filter=v*&label=version)](https://github.com/cosmos/ibc/releases/latest)
 
 ![banner](./.github/assets/cosmos-ibc-github.svg)
 
@@ -48,7 +48,7 @@ See [`RELEASES.md`](RELEASES.md) for how to cut a release.
 
 | Tag | Artifact | Description |
 | --- | --- | --- |
-| `cli-vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
+| `vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-linux-amd64.tar.gz` | IBC CLI binary for linux/amd64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-linux-arm64.tar.gz` | IBC CLI binary for linux/arm64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-darwin-arm64.spdx.json` | SPDX SBOM of the darwin/arm64 binary |
@@ -57,7 +57,7 @@ See [`RELEASES.md`](RELEASES.md) for how to cut a release.
 |  | `checksums.txt` | SHA-256 checksums of the release files and the SBOMs |
 |  | `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
 |  | `ibc-vX.Y.Z.intoto.jsonl` | Build provenance and SBOM attestations, for offline verification with `gh attestation verify --bundle` |
-|  | `ghcr.io/cosmos/ibc:cli-vX.Y.Z` | IBC CLI container image (linux/amd64, linux/arm64), signed with cosign and carrying provenance and SBOM attestations |
+|  | `ghcr.io/cosmos/ibc:vX.Y.Z` | IBC CLI container image (linux/amd64, linux/arm64), signed with cosign and carrying provenance and SBOM attestations |
 
 The files are attached to the tag's [GitHub release](https://github.com/cosmos/ibc/releases) and the image is published to [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc).
 

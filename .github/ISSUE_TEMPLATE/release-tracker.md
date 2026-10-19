@@ -41,7 +41,7 @@ versions to guarantee that no regression is introduced -->
 <!-- Remove any items that are not applicable. -->
 
 - [ ] Branch off main to create release branch in the form of `release/vx.y.z` and add branch protection rules.
-- [ ] Push the `cli-vX.Y.Z` tag with `git` and confirm the [Release](https://github.com/cosmos/ibc/actions/workflows/release.yml) workflow publishes the signed container image.
+- [ ] Push the `vX.Y.Z` tag with `git` and confirm the [Release](https://github.com/cosmos/ibc/actions/workflows/release.yml) workflow attaches the signed assets to the draft release and publishes the signed container image.
 
 ## Post-release checklist
 

@@ -1,20 +1,24 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: Release
-# Builds the IBC CLI archives for every cli tag, generates an SBOM and build provenance for them,
+# Builds the IBC CLI archives for every version tag, generates an SBOM and build provenance for them,
 # signs a checksums file over them, and attaches everything to a draft release so the signed
 # assets exist before the release is published. It also publishes the signed container image built
 # from the same linux binaries.
 
 on:
   push:
-    tags: ["cli-v*"]
+    tags: ["v*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions: {}
+
+defaults:
+  run:
+    shell: bash
 
 env:
   GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
@@ -34,8 +38,8 @@ jobs:
       - name: Check tag format
         id: tag
         run: |
-          if [[ ! "$TAG" =~ ^cli-(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
-            echo "::error::Tag must match cli-vX.Y.Z or cli-vX.Y.Z-<suffix>"
+          if [[ ! "$TAG" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::Tag must match vX.Y.Z or vX.Y.Z-<suffix>"
             exit 1
           fi
           version="${BASH_REMATCH[1]}"
@@ -58,6 +62,7 @@ jobs:
       artifact-metadata: write
     timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         include:
           - goos: darwin
@@ -123,11 +128,12 @@ jobs:
           BUNDLE_PATH: ${{ steps.attest-sbom.outputs.bundle-path }}
         run: cp "$BUNDLE_PATH" "out/attestations/${PLATFORM}.sbom.json"
       - name: Upload artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-assets-${{ env.PLATFORM }}
           path: out/
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
         if: matrix.goos == 'linux'
