@@ -89,12 +89,19 @@ func TestBesuQBFTHead(t *testing.T) {
 	})
 
 	t.Run("genesis head", func(t *testing.T) {
+		// Genesis carries no commit seals.
 		genesis := sealed
 		genesis.Number = big.NewInt(0)
+		var extra []rlp.RawValue
+		require.NoError(t, rlp.DecodeBytes(sealed.Extra, &extra))
+		extra[4] = rlp.EmptyList
+		var err error
+		genesis.Extra, err = rlp.EncodeToBytes(extra)
+		require.NoError(t, err)
 		eth := mocks.NewMockETHClient(t)
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&genesis, nil).Once()
 
-		_, _, err := (&Driver{backend: eth}).BesuQBFTHead(ctx)
+		_, _, err = (&Driver{backend: eth}).BesuQBFTHead(ctx)
 		require.ErrorContains(t, err, "no block past genesis")
 	})
 
