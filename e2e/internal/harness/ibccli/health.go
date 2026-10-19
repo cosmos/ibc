@@ -24,6 +24,7 @@ func awaitHealth(ctx context.Context, address string, exited <-chan struct{}) er
 	client := healthpb.NewHealthClient(conn)
 
 	var lastProbeErr error
+	var lastStatus string
 	err = poll.Until(ctx, 100*time.Millisecond, func(ctx context.Context) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -40,15 +41,16 @@ func awaitHealth(ctx context.Context, address string, exited <-chan struct{}) er
 			lastProbeErr = probeErr
 			return false, nil
 		}
-		if response.GetStatus() != healthpb.HealthCheckResponse_SERVING {
-			lastProbeErr = fmt.Errorf("status is %s", response.GetStatus())
-			return false, nil
-		}
-		return true, nil
+		lastProbeErr = nil
+		lastStatus = response.GetStatus().String()
+		return response.GetStatus() == healthpb.HealthCheckResponse_SERVING, nil
 	})
 	if err != nil {
 		if lastProbeErr != nil {
 			err = fmt.Errorf("%w (last probe: %w)", err, lastProbeErr)
+		}
+		if lastStatus != "" {
+			err = fmt.Errorf("%w (last status: %s)", err, lastStatus)
 		}
 		return fmt.Errorf("health check at %s: %w", address, err)
 	}

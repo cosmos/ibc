@@ -80,6 +80,29 @@ func TestAwaitHealthReportsDeadlineAndLastStatus(t *testing.T) {
 	require.ErrorContains(t, err, "NOT_SERVING")
 }
 
+func TestAwaitHealthPreservesLastStatusAfterRPCError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var calls atomic.Int32
+	address := startTestHealthServer(t, testHealthService{check: func(
+		probeCtx context.Context, _ *healthpb.HealthCheckRequest,
+	) (*healthpb.HealthCheckResponse, error) {
+		switch calls.Add(1) {
+		case 1:
+			return &healthpb.HealthCheckResponse{Status: healthpb.HealthCheckResponse_NOT_SERVING}, nil
+		case 2:
+			return nil, status.Error(codes.DeadlineExceeded, "probe timed out")
+		}
+		cancel()
+		<-probeCtx.Done()
+		return nil, probeCtx.Err()
+	}})
+	err := awaitHealth(ctx, address, nil)
+	require.ErrorIs(t, err, context.Canceled)
+	require.ErrorContains(t, err, "NOT_SERVING")
+	require.Equal(t, int32(3), calls.Load())
+}
+
 func TestAwaitHealthCancelsBlockedRPC(t *testing.T) {
 	started := make(chan struct{})
 	address := startTestHealthServer(t, testHealthService{check: func(
