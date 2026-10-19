@@ -22,6 +22,7 @@ import (
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -61,8 +62,9 @@ func (m deployManifest) token(symbol string) (string, bool) {
 	return "", false
 }
 
-// renderedConfig is the subset of the config `ibc deploy render-config`
-// prints that tests assert against.
+// renderedConfig mirrors the subset of cli/internal/config.Config, which e2e
+// cannot import directly (module boundary), that `ibc deploy render-config`
+// prints and tests assert against.
 type renderedConfig struct {
 	Relayer struct {
 		Connections []renderedConnection `yaml:"connections"`
@@ -77,10 +79,10 @@ type renderedConnection struct {
 }
 
 type renderedClientEnd struct {
-	ChainID  string `yaml:"chainId"`
-	ClientID string `yaml:"clientId"`
-	Type     string `yaml:"type"`
-	Signer   string `yaml:"signer"`
+	ChainID  string          `yaml:"chainId"`
+	ClientID string          `yaml:"clientId"`
+	Type     clientkind.Kind `yaml:"type"`
+	Signer   string          `yaml:"signer"`
 }
 
 type renderedAttestor struct {
@@ -94,6 +96,10 @@ const (
 	relayerAlias  = "relayer"
 	attestorAlias = "attestor"
 )
+
+// e18 scales whole tokens to base units, so the minted amount and the
+// sender's remaining balance exceed 64 bits on their way through the CLI.
+const e18 = "000000000000000000"
 
 var (
 	routeAtoB = e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
@@ -286,7 +292,7 @@ func (d *deployCLI) deployIFTConnection(t *testing.T, clientA, clientB []string)
 			[]string{"gmp", "--chain", c.chainID, "--yes"},
 			[]string{
 				"ift", "--chain", c.chainID, "--name", "Foo", "--symbol", "FOO",
-				"--rate-limit-capacity", "1000", "--yes",
+				"--rate-limit-capacity", "1000" + e18, "--yes",
 			},
 		)
 	}
@@ -320,7 +326,7 @@ func (d *deployCLI) populateRelayConfig(t *testing.T) renderedConfig {
 
 // wantConnection is the one connection render-config pairs the two clients
 // into, relayed with the relayer key.
-func (d *deployCLI) wantConnection(typeA, typeB string) []renderedConnection {
+func (d *deployCLI) wantConnection(typeA, typeB clientkind.Kind) []renderedConnection {
 	return []renderedConnection{{
 		Alias:   d.chainAID + "-" + d.chainBID,
 		ClientA: renderedClientEnd{ChainID: d.chainAID, ClientID: d.clientID(), Type: typeA, Signer: relayerAlias},
@@ -439,10 +445,10 @@ func TestDeployConnection(t *testing.T) {
 	// entry, and each attestation end gets the deployer as a local attestor
 	// watching the chain it tracks
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection("attestation", "attestation"), cfg.Relayer.Connections)
+	require.Equal(t, d.wantConnection(clientkind.Attestation, clientkind.Attestation), cfg.Relayer.Connections)
 	require.ElementsMatch(t, []renderedAttestor{
-		{ChainID: d.chainAID, Type: "local", Signer: deployerAlias},
-		{ChainID: d.chainBID, Type: "local", Signer: deployerAlias},
+		{ChainID: d.chainAID, Type: ibccli.RelayerAttestorLocal, Signer: deployerAlias},
+		{ChainID: d.chainBID, Type: ibccli.RelayerAttestorLocal, Signer: deployerAlias},
 	}, cfg.Attestors)
 }
 
@@ -466,22 +472,22 @@ func TestDeployBesuQBFTConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection("besu-qbft", "besu-qbft"), cfg.Relayer.Connections)
+	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.BesuQBFT), cfg.Relayer.Connections)
 	require.Empty(t, cfg.Attestors)
 	relayer := d.startRelayer(t)
 
 	_, err = d.driver.Run(ctx, "tx", "ift", "mint", "--chain", d.chainAID, "--ift", iftA,
-		"--to", deployerAlias, "--from", deployerAlias, "--amount", "100")
+		"--to", deployerAlias, "--from", deployerAlias, "--amount", "100"+e18)
 	require.NoError(t, err)
 
 	recipient, err := e2etest.NewAddress()
 	require.NoError(t, err)
-	packet := d.sendIFT(t, routeAtoB, iftA, recipient.Hex(), "10")
+	packet := d.sendIFT(t, routeAtoB, iftA, recipient.Hex(), "10"+e18)
 	_, err = e2etest.AwaitState(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
 
-	require.Equal(t, "90", d.iftBalance(t, d.chainAID, iftA, deployerAlias))
-	require.Equal(t, "10", d.iftBalance(t, d.chainBID, iftB, recipient.Hex()))
+	require.Equal(t, "90"+e18, d.iftBalance(t, d.chainAID, iftA, deployerAlias))
+	require.Equal(t, "10"+e18, d.iftBalance(t, d.chainBID, iftB, recipient.Hex()))
 }
 
 // TestDeployMixedBesuQBFTAttestationConnection relays an IFT round trip over
@@ -512,31 +518,33 @@ func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 
 	// only the attestation end gets an attestor, watching the chain it tracks
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection("besu-qbft", "attestation"), cfg.Relayer.Connections)
-	require.Equal(t, []renderedAttestor{{ChainID: d.chainAID, Type: "local", Signer: attestorAlias}}, cfg.Attestors)
+	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.Attestation), cfg.Relayer.Connections)
+	require.Equal(t, []renderedAttestor{
+		{ChainID: d.chainAID, Type: ibccli.RelayerAttestorLocal, Signer: attestorAlias},
+	}, cfg.Attestors)
 	relayer := d.startRelayer(t)
 
 	_, err = d.driver.Run(ctx, "tx", "ift", "mint", "--chain", d.chainAID, "--ift", iftA,
-		"--to", deployerAlias, "--from", deployerAlias, "--amount", "100")
+		"--to", deployerAlias, "--from", deployerAlias, "--amount", "100"+e18)
 	require.NoError(t, err)
 
 	// A -> B: the attestor proves the receive on B, the besu-qbft client the
 	// ack on A
-	packet := d.sendIFT(t, routeAtoB, iftA, d.deployer.Hex(), "10")
+	packet := d.sendIFT(t, routeAtoB, iftA, d.deployer.Hex(), "10"+e18)
 	_, err = e2etest.AwaitState(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
-	require.Equal(t, "90", d.iftBalance(t, d.chainAID, iftA, deployerAlias))
-	require.Equal(t, "10", d.iftBalance(t, d.chainBID, iftB, deployerAlias))
+	require.Equal(t, "90"+e18, d.iftBalance(t, d.chainAID, iftA, deployerAlias))
+	require.Equal(t, "10"+e18, d.iftBalance(t, d.chainBID, iftB, deployerAlias))
 
 	// B -> A: the besu-qbft client proves the receive on A, the attestor the
 	// ack on B
 	recipient, err := e2etest.NewAddress()
 	require.NoError(t, err)
-	packet = d.sendIFT(t, routeBtoA, iftB, recipient.Hex(), "4")
+	packet = d.sendIFT(t, routeBtoA, iftB, recipient.Hex(), "4"+e18)
 	_, err = e2etest.AwaitState(ctx, relayer, packet, relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
 	require.NoError(t, err)
-	require.Equal(t, "6", d.iftBalance(t, d.chainBID, iftB, deployerAlias))
-	require.Equal(t, "4", d.iftBalance(t, d.chainAID, iftA, recipient.Hex()))
+	require.Equal(t, "6"+e18, d.iftBalance(t, d.chainBID, iftB, deployerAlias))
+	require.Equal(t, "4"+e18, d.iftBalance(t, d.chainAID, iftA, recipient.Hex()))
 }
 
 func decodeStepResults(t testing.TB, stdout []byte) []deployStepResult {
