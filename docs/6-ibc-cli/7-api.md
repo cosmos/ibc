@@ -577,6 +577,7 @@ PacketProofs proves each packet's membership or non-membership at a height, one 
 | `height` | `uint64` | The counterparty height to prove at. |
 | `kind` | `ProofKind` | Which commitment to prove for every packet in this request. |
 | `packets` | `Packet[]` | The packets to prove, all under the same `kind` and `height`. |
+| `acknowledgements` | `Acknowledgement[]` | One acknowledgement per packet, in packet order; only for acknowledgement proofs. |
 
 <!-- [prover.proto:L65](proto/cli/prover.proto#L65) -->
 
@@ -588,7 +589,7 @@ PacketProofs proves each packet's membership or non-membership at a height, one 
 |---|---|---|
 | `proofs` | `bytes[]` | One proof per requested packet, in request order. The proofs of one response are submitted together in one transaction, in this order, so a prover may carry material the batch shares only in the first proof. |
 
-<!-- [prover.proto:L76](proto/cli/prover.proto#L76) -->
+<!-- [prover.proto:L78](proto/cli/prover.proto#L78) -->
 
 <!-- GEN:api:msg:PacketProofsResponse END -->
 
@@ -605,7 +606,7 @@ material the whole batch shares (such as an account proof) only in the first pro
 | `PROOF_KIND_ACKNOWLEDGEMENT` | The packet was received and acknowledged. Proven to acknowledge it. |
 | `PROOF_KIND_RECEIPT_ABSENCE` | The packet was never received. Proven to time it out. |
 
-<!-- [prover.proto:L83](proto/cli/prover.proto#L83) -->
+<!-- [prover.proto:L85](proto/cli/prover.proto#L85) -->
 
 <!-- GEN:api:enum:ProofKind END -->
 
@@ -623,7 +624,7 @@ The packet a proof is requested for.
 | `timeout_timestamp` | `uint64` | When the packet stops being receivable, in seconds. |
 | `payloads` | `Payload[]` | The packet's application payloads. |
 
-<!-- [prover.proto:L93](proto/cli/prover.proto#L93) -->
+<!-- [prover.proto:L95](proto/cli/prover.proto#L95) -->
 
 <!-- GEN:api:msg:Packet END -->
 
@@ -637,9 +638,23 @@ The packet a proof is requested for.
 | `encoding` | `string` | How `value` is encoded. |
 | `value` | `bytes` | The application data. |
 
-<!-- [prover.proto:L106](proto/cli/prover.proto#L106) -->
+<!-- [prover.proto:L113](proto/cli/prover.proto#L113) -->
 
 <!-- GEN:api:msg:Payload END -->
+
+### `Acknowledgement`
+
+The acknowledgement supplied for a packet when requesting an acknowledgement proof.
+
+<!-- GEN:api:msg:Acknowledgement START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `app_acknowledgements` | `bytes[]` | The packet's encoded application acknowledgements. |
+
+<!-- [prover.proto:L108](proto/cli/prover.proto#L108) -->
+
+<!-- GEN:api:msg:Acknowledgement END -->
 
 ## Next steps
 
