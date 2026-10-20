@@ -22,7 +22,6 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
@@ -43,8 +42,8 @@ type backend interface {
 }
 
 var (
-	_ deploy.Target         = (*Driver)(nil)
-	_ deploy.BesuQBFTSource = (*Driver)(nil)
+	_ deploy.Target     = (*Driver)(nil)
+	_ deploy.BesuSource = (*Driver)(nil)
 )
 
 // Driver implements deploy.Target for EVM chains.
@@ -87,7 +86,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 }
 
 func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesuQBFT}
+	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesu}
 }
 
 // requireSigner errors if called on a driver built without a deployer
@@ -221,8 +220,8 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 	switch params := spec.Params.(type) {
 	case deploy.AttestationParams:
 		return d.provisionAttestation(ctx, router, spec.ClientID, params)
-	case deploy.BesuQBFTParams:
-		return d.provisionBesuQBFT(ctx, router, params)
+	case deploy.BesuParams:
+		return d.provisionBesu(ctx, router, params)
 	default:
 		return deploy.ClientRef{}, fmt.Errorf(
 			"client params %T not supported (supported types: %v)",
@@ -261,48 +260,48 @@ func (d *Driver) provisionAttestation(
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// provisionBesuQBFT deploys a Besu QBFT light client with this chain's router
-// as its role manager, so only router calls may update or query it.
-func (d *Driver) provisionBesuQBFT(
-	ctx context.Context, router string, params deploy.BesuQBFTParams,
+// provisionBesu deploys a Besu light client with this chain's router as its
+// role manager, so only router calls may update or query it.
+func (d *Driver) provisionBesu(
+	ctx context.Context, router string, params deploy.BesuParams,
 ) (deploy.ClientRef, error) {
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
 		return deploy.ClientRef{}, err
 	}
-	addr, tx, _, err := besuqbft.DeployContract(
+	addr, tx, err := besu.DeployLightClient(
 		opts,
 		d.backend,
-		besuqbft.IBesuLightClientMsgsClientState{
+		params.Consensus,
+		besumsgs.IBesuLightClientMsgsClientState{
 			IbcRouter:      params.IBCRouter,
-			LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
+			LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
 			TrustingPeriod: params.TrustingPeriod,
 			MaxClockDrift:  params.MaxClockDrift,
 			TrustLevel:     besu.DefaultTrustLevel,
 		},
-		besuqbft.IBesuLightClientMsgsConsensusState(params.InitialConsensusState),
+		params.InitialConsensusState,
 		common.HexToAddress(router),
 	)
 	if err != nil {
-		return deploy.ClientRef{}, fmt.Errorf("deploy besu-qbft client: %w", err)
+		return deploy.ClientRef{}, fmt.Errorf("deploy besu %s client: %w", params.Consensus, err)
 	}
-	if err := d.awaitMined(ctx, "deploy besu-qbft client", tx); err != nil {
+	if err := d.awaitMined(ctx, "deploy besu "+string(params.Consensus)+" client", tx); err != nil {
 		return deploy.ClientRef{}, err
 	}
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// BesuQBFTHead is this driver's chain head and the consensus state its sealed
-// header installs.
-func (d *Driver) BesuQBFTHead(ctx context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+// BesuHead is this driver's sealed chain head.
+func (d *Driver) BesuHead(ctx context.Context) (*besu.ParsedHeader, error) {
 	header, err := besu.ReadSealedHeader(ctx, d.backend, nil)
 	if err != nil {
-		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, err
+		return nil, err
 	}
 	if header.Height == 0 {
-		return 0, besumsgs.IBesuLightClientMsgsConsensusState{}, fmt.Errorf("no block past genesis to trust yet")
+		return nil, fmt.Errorf("no block past genesis to trust yet")
 	}
-	return header.Height, header.ConsensusState(), nil
+	return header, nil
 }
 
 // attestationArgs validates attestation params and converts the attestor

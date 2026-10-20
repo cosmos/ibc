@@ -498,12 +498,13 @@ func specToClient(spec ClientSpec, address string) manifest.Client {
 			"initialHeight":    p.InitialHeight,
 			"initialTimestamp": p.InitialTimestamp,
 		}
-	case BesuQBFTParams:
+	case BesuParams:
 		validators := make([]string, len(p.InitialConsensusState.Validators))
 		for i, v := range p.InitialConsensusState.Validators {
 			validators[i] = v.Hex()
 		}
 		client.Params = map[string]any{
+			"consensus":         p.Consensus,
 			"ibcRouter":         p.IBCRouter.Hex(),
 			"initialHeight":     p.InitialHeight,
 			"initialTimestamp":  p.InitialConsensusState.Timestamp,
@@ -536,7 +537,8 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 	case AttestationParams:
 		conflict("attestors", existing.Params["attestors"], p.Attestors)
 		conflict("threshold", existing.Params["threshold"], p.Threshold)
-	case BesuQBFTParams:
+	case BesuParams:
+		conflict("consensus", existing.Params["consensus"], p.Consensus)
 		conflict("ibcRouter", existing.Params["ibcRouter"], p.IBCRouter.Hex())
 		conflict("trustingPeriod", existing.Params["trustingPeriod"], p.TrustingPeriod)
 		conflict("maxClockDrift", existing.Params["maxClockDrift"], p.MaxClockDrift)

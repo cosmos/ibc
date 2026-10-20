@@ -57,7 +57,7 @@ func New(router common.Address) *TxBuilder {
 // entry into a single ICS26Router.multicall transaction. EVM router calldata
 // has no meaningful size limit for the batch sizes the relayer forms, so this
 // always returns exactly one tx. Provers rely on that: a batch's proofs are
-// built to be verified together in one transaction, in order (the Besu QBFT
+// built to be verified together in one transaction, in order (the Besu
 // prover carries the router account proof only in the first one, and the
 // light client caches the proven storage root for the rest of the transaction).
 func (c *TxBuilder) BuildRelayTxs(

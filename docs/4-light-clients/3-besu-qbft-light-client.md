@@ -44,7 +44,7 @@ An update carries a raw Besu header, the height the client already trusts, and t
 
 Besu validators seal a block by signing a digest of its header, with the seals themselves left out. The client rebuilds that digest, recovers the signer of every seal, and applies two rules:
 
-- **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client besu-qbft` always uses two thirds.
+- **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client besu` always uses two thirds.
 - **Quorum.** At least two thirds of the header's own validator set must be among the signers, which is the same threshold Besu needs to produce the block.
 
 The client requires the seals in ascending order of signer address. Besu does not order them that way, so the relayer reorders them before submitting the header; the digest leaves the seals out, so reordering does not change what was signed.
@@ -78,7 +78,7 @@ Both take the consensus state for the proof height, the account proof nodes and 
 ## Deploying
 
 ```sh
-ibc deploy client besu-qbft --chain 1 --counterparty-chain 2 --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
+ibc deploy client besu --chain 1 --counterparty-chain 2 --trusting-period "$TRUSTING_PERIOD" [--max-clock-drift 60s]
 ```
 
 The CLI reads the counterparty's head and deploys the client with that header's timestamp, state root and validators as its first trusted state. The counterparty core stack must already be deployed and its router address set in the counterparty chain's `evm.ics26Router` configuration. A local counterparty deployment manifest is not required. Set `TRUSTING_PERIOD` to a positive duration chosen for the counterparty's validator governance and key-retirement policy: the client relies on historical validators remaining trustworthy for that period. There is no universally safe finite default. `--max-clock-drift` defaults to one minute; both durations are truncated to whole seconds. The relayer proves the counterparty's latest header, which can lead this chain's latest block time by up to about one block time of this chain plus clock skew, so set the drift above that. An update beyond it fails simulation and is retried. The deployment itself applies the same two checks to the counterparty head, so it fails if the head is already older than the trusting period or further ahead than the drift.
@@ -87,14 +87,14 @@ The client's role manager is this chain's router, so only calls routed through `
 
 ## Relaying
 
-A client end of type `besu-qbft` takes no parameters:
+A client end of type `besu` takes no parameters:
 
 ```yaml
 clientA:
   chainId: "1"
   signer: "relayer-key"
   clientId: "besu-0"
-  type: "besu-qbft"
+  type: "besu"
 ```
 
 The relayer checks at startup that the router the client proves is the counterparty chain's configured router. It relays at the counterparty's latest height: the prover returns a single update from the client's latest height to that height, or none when that height is not above the client's latest. Relaying runs concurrently, within one relayer as well as across several, so the client may already be past that height when the update is built. The client accepts updates only above its trusted height, so the prover then sends no update if the client stores a consensus state at that height, and otherwise fails the attempt before submitting; the next attempt relays at a newer height. If the validator set changed too much between the two heights, or the client's latest consensus state is older than the trusting period, the update fails simulation. The relayer does not yet chain updates across validator turnover, and an expired client can only be replaced by a new one. Packet proofs share one `eth_getProof` response across packets at the same height. No attestors are involved. Everything the relayer submits is verified by the light client when the transaction is simulated.

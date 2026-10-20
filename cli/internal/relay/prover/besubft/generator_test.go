@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package besuqbft
+package besubft
 
 import (
 	"context"
@@ -64,11 +64,11 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots []com
 	return f.proof(height, slots)
 }
 
-func (f *fakeChain) BesuQBFTClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
+func (f *fakeChain) BesuClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
 	return f.clientState, f.clientStateErr
 }
 
-func (f *fakeChain) BesuQBFTConsensusStateHash(_ context.Context, _ string, height uint64) (common.Hash, error) {
+func (f *fakeChain) BesuConsensusStateHash(_ context.Context, _ string, height uint64) (common.Hash, error) {
 	hash, ok := f.stored[height]
 	if !ok {
 		return common.Hash{}, fmt.Errorf("execution reverted: ConsensusStateNotFound(%d)", height)
@@ -83,11 +83,11 @@ type fixtureEnv struct {
 	gen          *Generator
 }
 
-func newFixtureEnv(t *testing.T) *fixtureEnv {
+func newFixtureEnv(t *testing.T, consensus besu.Consensus) *fixtureEnv {
 	t.Helper()
 
 	env := &fixtureEnv{
-		fixture:      besutest.MustFixture(t),
+		fixture:      besutest.MustFixture(t, consensus),
 		host:         &fakeChain{id: "host", sealed: map[uint64]*besu.ParsedHeader{}},
 		counterparty: &fakeChain{id: "besu-b", sealed: map[uint64]*besu.ParsedHeader{}},
 	}
@@ -128,7 +128,7 @@ func consensusHeader(height uint64, state besumsgs.IBesuLightClientMsgsConsensus
 	}
 }
 
-func parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.ParsedHeader {
+func (e *fixtureEnv) parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.ParsedHeader {
 	t.Helper()
 	return besutest.ParseHeader(t, update.HeaderRLP)
 }
@@ -145,32 +145,36 @@ func (e *fixtureEnv) expectInitialAnchor(t *testing.T) {
 }
 
 func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
-	ctx := context.Background()
-	env := newFixtureEnv(t)
-	update := env.fixture.NonAdjacentUpdate
-	env.expectInitialAnchor(t)
-	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
+	for _, consensus := range besu.Consensuses {
+		t.Run(string(consensus), func(t *testing.T) {
+			ctx := context.Background()
+			env := newFixtureEnv(t, consensus)
+			update := env.fixture.NonAdjacentUpdate
+			env.expectInitialAnchor(t)
+			env.counterparty.sealed[update.Height] = env.parsedUpdate(t, update)
 
-	payloads, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
-	require.NoError(t, err)
-	require.Len(t, payloads, 1)
+			payloads, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
+			require.NoError(t, err)
+			require.Len(t, payloads, 1)
 
-	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
-	require.NoError(t, err)
-	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
-	assert.Equal(
-		t,
-		besumsgs.IICS02ClientMsgsHeight{RevisionHeight: env.fixture.InitialTrustedHeight},
-		decoded.TrustedHeight,
-	)
-	assert.Equal(t, env.fixture.InitialConsensusState(), decoded.ConsensusStatePreimage)
+			decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
+			require.NoError(t, err)
+			assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
+			assert.Equal(
+				t,
+				besumsgs.IICS02ClientMsgsHeight{RevisionHeight: env.fixture.InitialTrustedHeight},
+				decoded.TrustedHeight,
+			)
+			assert.Equal(t, env.fixture.InitialConsensusState(), decoded.ConsensusStatePreimage)
+		})
+	}
 }
 
 func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
-	env := newFixtureEnv(t)
+	env := newFixtureEnv(t, besu.QBFT)
 	update := env.fixture.NonAdjacentUpdate
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
-	env.counterparty.sealed[update.Height] = parsedUpdate(t, update)
+	env.counterparty.sealed[update.Height] = env.parsedUpdate(t, update)
 
 	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
@@ -181,7 +185,7 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 // contract only accepts headers above the trusted height, so no update is
 // sent when the client already stores the target.
 func TestClientUpdatePayloadBelowLatestStored(t *testing.T) {
-	env := newFixtureEnv(t)
+	env := newFixtureEnv(t, besu.QBFT)
 	update := env.fixture.NonAdjacentUpdate
 	env.setAnchor(t, update.Height+5, env.fixture.InitialConsensusState())
 	env.host.stored = map[uint64]common.Hash{update.Height: common.HexToHash("0x01")}
@@ -194,7 +198,7 @@ func TestClientUpdatePayloadBelowLatestStored(t *testing.T) {
 // When the client does not store a target below its latest height, proofs at
 // target would revert, so the update fails with the reason instead.
 func TestClientUpdatePayloadBelowLatestNotStored(t *testing.T) {
-	env := newFixtureEnv(t)
+	env := newFixtureEnv(t, besu.QBFT)
 	update := env.fixture.NonAdjacentUpdate
 	latest := update.Height + 5
 	env.setAnchor(t, latest, env.fixture.InitialConsensusState())
@@ -210,7 +214,7 @@ func (e *fixtureEnv) expectProofAt(
 	nodesFor func(slot common.Hash) [][]byte,
 ) {
 	t.Helper()
-	e.counterparty.sealed[update.Height] = parsedUpdate(t, update)
+	e.counterparty.sealed[update.Height] = e.parsedUpdate(t, update)
 	e.counterparty.proof = func(height uint64, slots []common.Hash) (evm.RouterProof, error) {
 		if height != update.Height {
 			return evm.RouterProof{}, fmt.Errorf("router proof at %d, want %d", height, update.Height)
@@ -224,8 +228,16 @@ func (e *fixtureEnv) expectProofAt(
 }
 
 func TestPacketProofs(t *testing.T) {
+	for _, consensus := range besu.Consensuses {
+		t.Run(string(consensus), func(t *testing.T) {
+			testPacketProofs(t, consensus)
+		})
+	}
+}
+
+func testPacketProofs(t *testing.T, consensus besu.Consensus) {
 	ctx := context.Background()
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, consensus)
 	update := fixture.NonAdjacentUpdate
 	preimage := update.ExpectedConsensusState()
 
@@ -251,7 +263,7 @@ func TestPacketProofs(t *testing.T) {
 	nonMembershipNodes := proofNodes(t, fixture.NonMembership)
 
 	t.Run("membership wraps the storage proof with the proof-height preimage", func(t *testing.T) {
-		env := newFixtureEnv(t)
+		env := newFixtureEnv(t, consensus)
 		env.expectProofAt(t, update, func(common.Hash) [][]byte { return membershipNodes })
 
 		proofs, err := env.gen.PacketProofs(
@@ -272,7 +284,7 @@ func TestPacketProofs(t *testing.T) {
 	})
 
 	t.Run("only the first proof carries the account proof", func(t *testing.T) {
-		env := newFixtureEnv(t)
+		env := newFixtureEnv(t, consensus)
 		env.expectProofAt(t, update, func(common.Hash) [][]byte { return membershipNodes })
 		next := sent
 		next.Sequence++
@@ -297,7 +309,7 @@ func TestPacketProofs(t *testing.T) {
 	})
 
 	t.Run("receipt absence uses the fixture exclusion proof", func(t *testing.T) {
-		env := newFixtureEnv(t)
+		env := newFixtureEnv(t, consensus)
 		env.expectProofAt(t, update, func(slot common.Hash) [][]byte {
 			require.Equal(t, besu.CommitmentSlot(fixture.NonMembership.Path), slot)
 			return nonMembershipNodes
@@ -323,7 +335,7 @@ func TestPacketProofs(t *testing.T) {
 // The head is returned even when it is ahead of the host clock: the contract
 // rejects a header beyond maxClockDrift at simulation.
 func TestLatestProvableHeightReturnsHead(t *testing.T) {
-	env := newFixtureEnv(t)
+	env := newFixtureEnv(t, besu.QBFT)
 	head := time.Now().Add(time.Hour).Truncate(time.Second).UTC()
 	env.counterparty.latest = &v2.BlockHeader{Height: env.fixture.InitialTrustedHeight + 50, Timestamp: head}
 
@@ -337,7 +349,7 @@ func TestNewGeneratorChecksRouter(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("router mismatch", func(t *testing.T) {
-		env := newFixtureEnv(t)
+		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
 		env.counterparty.router = common.HexToAddress("0x1234")
 		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
@@ -345,14 +357,14 @@ func TestNewGeneratorChecksRouter(t *testing.T) {
 	})
 
 	t.Run("client state error", func(t *testing.T) {
-		env := newFixtureEnv(t)
+		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientStateErr = errors.New("execution reverted")
 		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
 		require.ErrorContains(t, err, "execution reverted")
 	})
 
 	t.Run("matching router", func(t *testing.T) {
-		env := newFixtureEnv(t)
+		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
 		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
 		require.NoError(t, err)
