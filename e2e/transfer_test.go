@@ -20,7 +20,9 @@ import (
 
 func TestTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -51,7 +53,9 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 func TestTransfer_ManualRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -87,7 +91,7 @@ const (
 
 func TestTransferTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	requireTimeoutRefund(t, spec, runtime, advanceDestinationPastTimeout)
 }
@@ -97,7 +101,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := besuMesh(besuChains(t, besu.QBFT, besu.QBFT))
+	spec, runtime := e2etest.BesuMesh(e2etest.BesuChains(t, besu.QBFT, besu.QBFT))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }
 
@@ -217,12 +221,12 @@ func TestTransferBesuIBFT2_ValidatorTurnover(t *testing.T) {
 
 func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	t.Helper()
-	chains := besuChains(t, consensus, consensus)
+	chains := e2etest.BesuChains(t, consensus, consensus)
 	chainB, ok := chains[1].(environment.ManagedBesu)
 	require.True(t, ok)
 	chainB.Followers = 3
 	chains[1] = chainB
-	spec, runtime := besuMesh(chains)
+	spec, runtime := e2etest.BesuMesh(chains)
 	// At the default two thirds, a client cannot follow a removal sealed by a
 	// bare quorum of the remaining validators; one half follows every single
 	// validator change.
@@ -274,7 +278,7 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 // consensus through the light client for that consensus.
 func requireBesuAutoRelay(t *testing.T, consensus besu.Consensus) {
 	t.Helper()
-	spec, runtime := besuMesh(besuChains(t, consensus, consensus))
+	spec, runtime := e2etest.BesuMesh(e2etest.BesuChains(t, consensus, consensus))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

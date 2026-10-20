@@ -62,7 +62,7 @@ The setup sequence is deliberately explicit:
 ```go
 func TestTransfer_AutoRelay(t *testing.T) {
     t.Parallel()
-    spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+    spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
     env := e2etest.Start(t, spec, runtime)
     sender := e2etest.NewSigner(t)
     relayerSigner := e2etest.NewSigner(t)
@@ -92,7 +92,7 @@ Declare capabilities instead of naming a provider. For example, a controlled-min
 ```go
 chains := e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true},
     e2etest.ChainA, e2etest.ChainB)
-spec, runtime := attestedMesh(chains)
+spec, runtime := e2etest.AttestedMesh(chains)
 env := e2etest.Start(t, spec, runtime)
 
 chainB, err := env.Chain(e2etest.ChainB)
@@ -136,9 +136,28 @@ make -C e2e check-matrix
 Regenerate the matrix after changing test requirements or topology. The check compares generated
 output without modifying the committed file.
 
+## Besu light-client fixtures
+
+`cli/besu/besutest/testdata/{qbft,ibft2}.json` are the fixtures the Besu light-client tests read,
+here and in ibc-contracts' `ibc-solidity/test/besu-bft`. The harness generates them, so they come
+from the Besu image it boots (`DefaultDockerImage` in `chain/evm/besu`, or `BESU_DOCKER_IMAGE`):
+
+```sh
+make -C e2e generate-besu-fixtures
+make -C e2e generate-besu-fixtures IBC_CONTRACTS=<ibc-contracts checkout>  # also copies them there
+```
+
+`TestGenerateBesuFixtures`, in `besufixtures/` outside the acceptance package and matrix, boots
+two chains per consensus, sends a transfer and captures from the sending chain the trusted
+header two blocks below the send, an adjacent and a non-adjacent update to the send, and
+membership and non-membership proofs at the send. It reseals headers with the validator keys
+for the updates the client must reject: the send's header sealed short of quorum, the send's
+header with another state root, and the next header with validators mostly new. It skips
+unless `BESU_FIXTURES_DIR` names the directory to write to.
+
 ## Extending the graph
 
-`attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains; `besuMesh` builds the same graph over Besu chains with Besu Clients and no Attestors; each Client detects its counterparty's consensus, and `besuChains` sets each chain's consensus. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+`e2etest.AttestedMesh` builds a fully connected attested mesh over the given chains; `e2etest.BesuMesh` builds the same graph over Besu chains with Besu Clients and no Attestors; each Client detects its counterparty's consensus, and `e2etest.BesuChains` sets each chain's consensus. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
 
 ## Load Testing
 

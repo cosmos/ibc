@@ -89,7 +89,7 @@ type besuMisbehaviour struct {
 // the client to reject updates and the next transfer to stay pending.
 func requireBesuMisbehaviourFreeze(t *testing.T, submit func(besuMisbehaviour)) {
 	t.Helper()
-	spec, runtime := besuMesh(besuChains(t, besu.QBFT, besu.QBFT))
+	spec, runtime := e2etest.BesuMesh(e2etest.BesuChains(t, besu.QBFT, besu.QBFT))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -150,7 +150,7 @@ func besuClientOn(
 	tracked, host environment.ChainID,
 ) *environment.IBCClient {
 	t.Helper()
-	connection, err := env.Connection(fixtureConnectionID(tracked, host))
+	connection, err := env.Connection(e2etest.MeshConnectionID(tracked, host))
 	require.NoError(t, err)
 	for _, client := range []*environment.IBCClient{connection.A(), connection.B()} {
 		if client.IBCInstance().Chain().ID() == host {
