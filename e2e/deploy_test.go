@@ -117,7 +117,15 @@ func startDeployCLI(t *testing.T, requirements e2etest.EVMRequirements) *deployC
 	require.NoError(t, err)
 	d.wsB, err = d.driver.ChainWS(string(e2etest.ChainB))
 	require.NoError(t, err)
-	d.writeConfig(t, "", "")
+	require.NoError(t, ibccli.WriteDeployConfig(d.configPath, ibccli.DeployConfig{
+		DBPath:        filepath.Join(d.home, "relayer.db"),
+		SignerAlias:   deployerAlias,
+		SignerKeyFile: d.driver.KeyFilePath(deployerAlias),
+		Chains: []ibccli.DeployChain{
+			{ChainID: d.chainAID, RPC: d.rpcA, WS: d.wsA},
+			{ChainID: d.chainBID, RPC: d.rpcB, WS: d.wsB},
+		},
+	}))
 	d.deployer = d.importFundedKey(t, deployerAlias)
 	return d
 }
@@ -128,21 +136,6 @@ func (d *deployCLI) chain(t *testing.T, id environment.ChainID) (string, *enviro
 	chain, err := d.env.Chain(id)
 	require.NoError(t, err)
 	return strconv.FormatUint(chain.EVMChainID(), 10), chain
-}
-
-// writeConfig declares both chains with the given routers, or placeholders
-// before they are deployed.
-func (d *deployCLI) writeConfig(t *testing.T, routerA, routerB string) {
-	t.Helper()
-	require.NoError(t, ibccli.WriteDeployConfig(d.configPath, ibccli.DeployConfig{
-		DBPath:        filepath.Join(d.home, "relayer.db"),
-		SignerAlias:   deployerAlias,
-		SignerKeyFile: d.driver.KeyFilePath(deployerAlias),
-		Chains: []ibccli.DeployChain{
-			{ChainID: d.chainAID, RPC: d.rpcA, WS: d.wsA, ICS26Router: routerA},
-			{ChainID: d.chainBID, RPC: d.rpcB, WS: d.wsB, ICS26Router: routerB},
-		},
-	}))
 }
 
 // deploy runs each command, requires every step it reports to have executed,
@@ -240,13 +233,16 @@ func (d *deployCLI) deployCore(t *testing.T) {
 	)
 }
 
-// configureRouters points the config at the routers core deployed, which
-// `deploy client besu-qbft` reads for its counterparty. Every other deploy
-// command reads a chain's own router from its manifest. The rewrite drops
-// signers imported since startDeployCLI.
+// configureRouters points the config at the routers core deployed, as an
+// operator does before `deploy client besu-qbft`, which reads its
+// counterparty's router from config. Every other deploy command reads a
+// chain's own router from its manifest.
 func (d *deployCLI) configureRouters(t *testing.T) {
 	t.Helper()
-	d.writeConfig(t, d.manifest(t, d.chainAID).Core.Router, d.manifest(t, d.chainBID).Core.Router)
+	require.NoError(t, ibccli.WriteICS26Routers(d.configPath, map[string]string{
+		d.chainAID: d.manifest(t, d.chainAID).Core.Router,
+		d.chainBID: d.manifest(t, d.chainBID).Core.Router,
+	}))
 }
 
 // deployIFTConnection deploys clientA and clientB, GMP and a FOO IFT on each
@@ -417,8 +413,8 @@ func TestDeployConnection(t *testing.T) {
 	d := startDeployCLI(t, e2etest.EVMRequirements{})
 	ctx := t.Context()
 
-	// the config keeps its placeholder routers: no command here may read a
-	// router from config
+	// the config declares no routers: no command here may read a router from
+	// config
 	d.deployCore(t)
 	d.deployIFTConnection(t,
 		attestationClient(d.chainAID, d.chainBID, d.deployer.Hex()),
@@ -504,8 +500,7 @@ func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 
 	// the attestor only signs, so it needs no funds. Importing it into the
 	// config lets --attestors resolve the alias and render-config bind it as
-	// the attestor's signer; it goes after configureRouters, which drops other
-	// signers.
+	// the attestor's signer.
 	attestor := d.importKey(t, attestorAlias, "--populate-config")
 	iftA, iftB := d.deployIFTConnection(t,
 		besuQBFTClient(d.chainAID, d.chainBID), attestationClient(d.chainBID, d.chainAID, attestorAlias))
