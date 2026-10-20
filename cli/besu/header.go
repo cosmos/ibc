@@ -4,6 +4,7 @@ package besu
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -73,17 +74,13 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 		return nil, fmt.Errorf("invalid number %v", h.Number)
 	}
 
-	var extraItems []rlp.RawValue
-	if err := rlp.DecodeBytes(h.Extra, &extraItems); err != nil {
-		return nil, fmt.Errorf("extra data list: %w", err)
-	}
-
-	if len(extraItems) != extraDataItemCount {
-		return nil, fmt.Errorf("%d extra data items, want %d", len(extraItems), extraDataItemCount)
+	extraItems, err := decodeExtra(h)
+	if err != nil {
+		return nil, err
 	}
 
 	header := &ParsedHeader{Height: h.Number.Uint64(), Timestamp: h.Time, StateRoot: h.Root}
-	if err := rlp.DecodeBytes(extraItems[extraIdxValidators], &header.Validators); err != nil {
+	if err = rlp.DecodeBytes(extraItems[extraIdxValidators], &header.Validators); err != nil {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
@@ -99,6 +96,78 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	}
 
 	return header, nil
+}
+
+// SealHeader sets h's validators and replaces its commit seals with seals
+// by signers under consensus, then parses the result. It seals headers a
+// chain never produced, such as misbehavior evidence. Every signer must be a
+// distinct one of validators.
+func SealHeader(
+	h *types.Header,
+	consensus Consensus,
+	validators []common.Address,
+	signers []*ecdsa.PrivateKey,
+) (*ParsedHeader, error) {
+	if h == nil {
+		return nil, errors.New("nil header")
+	}
+
+	extraItems, err := decodeExtra(h)
+	if err != nil {
+		return nil, err
+	}
+
+	// The contract requires validators in ascending order.
+	sorted := slices.SortedFunc(slices.Values(validators), common.Address.Cmp)
+	if extraItems[extraIdxValidators], err = rlp.EncodeToBytes(sorted); err != nil {
+		return nil, fmt.Errorf("encode validators: %w", err)
+	}
+
+	// The digest covers the validators, so it follows them.
+	digest, err := commitSealDigest(h, extraItems, consensus)
+	if err != nil {
+		return nil, err
+	}
+
+	seals := make([][]byte, len(signers))
+	signed := make([]common.Address, 0, len(signers))
+	for i, key := range signers {
+		signer := crypto.PubkeyToAddress(key.PublicKey)
+		if !slices.Contains(sorted, signer) {
+			return nil, fmt.Errorf("signer %s is not a validator", signer)
+		}
+		if slices.Contains(signed, signer) {
+			return nil, fmt.Errorf("signer %s repeats", signer)
+		}
+		signed = append(signed, signer)
+		if seals[i], err = crypto.Sign(digest, key); err != nil {
+			return nil, fmt.Errorf("sign commit seal %d: %w", i, err)
+		}
+	}
+
+	if extraItems[extraIdxCommitSeals], err = rlp.EncodeToBytes(seals); err != nil {
+		return nil, fmt.Errorf("encode commit seals: %w", err)
+	}
+
+	sealed, err := withExtraData(h, extraItems)
+	if err != nil {
+		return nil, err
+	}
+
+	return ParseSealedHeader(sealed)
+}
+
+func decodeExtra(h *types.Header) ([]rlp.RawValue, error) {
+	var extraItems []rlp.RawValue
+	if err := rlp.DecodeBytes(h.Extra, &extraItems); err != nil {
+		return nil, fmt.Errorf("extra data list: %w", err)
+	}
+
+	if len(extraItems) != extraDataItemCount {
+		return nil, fmt.Errorf("%d extra data items, want %d", len(extraItems), extraDataItemCount)
+	}
+
+	return extraItems, nil
 }
 
 // normalizeCommitSeals returns h with only the commit seals the contract
