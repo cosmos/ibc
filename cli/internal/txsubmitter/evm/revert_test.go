@@ -7,12 +7,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 )
 
 type revertError struct {

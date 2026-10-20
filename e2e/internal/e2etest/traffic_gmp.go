@@ -8,11 +8,11 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 )
