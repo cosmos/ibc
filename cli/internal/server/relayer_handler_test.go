@@ -20,6 +20,8 @@ type relayerServiceStub struct {
 	status      []relayerservice.PacketStatus
 }
 
+func (s *relayerServiceStub) CheckReady(ctx context.Context) error { return ctx.Err() }
+
 func (s *relayerServiceStub) Relay(
 	_ context.Context,
 	request relayerservice.RelayRequest,

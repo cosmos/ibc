@@ -96,7 +96,7 @@ func (db *PostgresDB) Ping(ctx context.Context) error {
 		return errors.Wrap(err, "unable to ping database")
 	}
 
-	db.logger.Info("Ping", "elapsed", time.Since(start).String())
+	db.logger.Debug("Ping", "elapsed", time.Since(start).String())
 
 	return nil
 }
