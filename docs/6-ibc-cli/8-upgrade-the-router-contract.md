@@ -1,6 +1,6 @@
 ---
 title: "Upgrade the router contract"
-description: "Deploy new ICS26Router logic behind the existing router proxies on the tutorial's two chains, then confirm the router runs it and packets still flow."
+description: "Deploy new ICS26Router logic behind the existing router proxies on the tutorial's two chains, confirm the router runs it and packets still flow, then reopen the two functions the new logic restricts."
 ---
 
 This guide upgrades the router on a running two-chain IBC deployment to new logic (the implementation contract behind the router's proxy). Each router keeps its address and its state, so the clients, the applications, and the running relayer need no change.
@@ -10,7 +10,7 @@ This guide upgrades the router on a running two-chain IBC deployment to new logi
 Complete the [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) tutorial first. This guide starts from the state it leaves:
 
 - IBC is deployed on chains 41001 and 41002.
-- One token transfer has been delivered.
+- At least one token transfer has been delivered.
 - The relayer is running in its own terminal.
 
 You also need:
@@ -36,7 +36,7 @@ RELAYER=$(./bin/ibc keys show relayer | jq -r '.evmAddress')
 DEPLOYER_KEY=$(./bin/ibc keys show deployer --private | jq -r '.privateKey')
 ```
 
-The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files.
+The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files. Run `unset DEPLOYER_KEY` when you finish, so the key does not stay in your shell.
 
 ## 2. Get the new router source
 
@@ -193,6 +193,8 @@ That is the tutorial's 10 tokens plus this transfer's 10.
 ## 6. Assign the newly restricted functions to the public role
 
 The release's role map keeps `addIBCApp(address)` and the auto-ID `addClient` open to every address. Assign both selectors to `PUBLIC_ROLE` on each chain, as its `DeployAccessManagerWithRoles` script does.
+
+This guide upgrades first to show the effect, so registration is admin-only until this step. On a live network, assign the selectors before you call `upgradeToAndCall`. The old logic does not consult the access manager for these two functions, so the early assignment changes nothing until the upgrade, and registration never closes.
 
 1. Compute the two selectors:
 
