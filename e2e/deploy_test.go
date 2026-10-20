@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -60,35 +59,6 @@ func (m deployManifest) token(symbol string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// renderedConfig mirrors the subset of cli/internal/config.Config, which e2e
-// cannot import directly (module boundary), that `ibc deploy render-config`
-// prints and tests assert against.
-type renderedConfig struct {
-	Relayer struct {
-		Connections []renderedConnection `yaml:"connections"`
-	} `yaml:"relayer"`
-	Attestors []renderedAttestor `yaml:"attestors"`
-}
-
-type renderedConnection struct {
-	Alias   string            `yaml:"alias"`
-	ClientA renderedClientEnd `yaml:"clientA"`
-	ClientB renderedClientEnd `yaml:"clientB"`
-}
-
-type renderedClientEnd struct {
-	ChainID  string          `yaml:"chainId"`
-	ClientID string          `yaml:"clientId"`
-	Type     clientkind.Kind `yaml:"type"`
-	Signer   string          `yaml:"signer"`
-}
-
-type renderedAttestor struct {
-	ChainID string `yaml:"chainId"`
-	Type    string `yaml:"type"`
-	Signer  string `yaml:"signer"`
 }
 
 const (
@@ -313,25 +283,46 @@ func (d *deployCLI) deployIFTConnection(t *testing.T, clientA, clientB []string)
 // populateRelayConfig renders the relayer config for the two chains into the
 // CLI config and returns what render-config printed. The relayer signs with
 // its own key so its nonces never race the deployer's sends.
-func (d *deployCLI) populateRelayConfig(t *testing.T) renderedConfig {
+func (d *deployCLI) populateRelayConfig(t *testing.T) ibccli.RenderedConfig {
 	t.Helper()
 	d.importFundedKey(t, relayerAlias, "--populate-config")
 	stdout, err := d.driver.Deploy(t.Context(), "render-config", d.chainAID, d.chainBID,
 		"--signer-a", relayerAlias, "--signer-b", relayerAlias, "--populate-config", "--yes")
 	require.NoError(t, err)
-	var cfg renderedConfig
-	require.NoErrorf(t, yaml.Unmarshal(stdout, &cfg), "render-config stdout: %s", stdout)
+	cfg, err := ibccli.ParseRenderedConfig(stdout)
+	require.NoErrorf(t, err, "render-config stdout: %s", stdout)
 	return cfg
 }
 
 // wantConnection is the one connection render-config pairs the two clients
-// into, relayed with the relayer key.
-func (d *deployCLI) wantConnection(typeA, typeB clientkind.Kind) []renderedConnection {
-	return []renderedConnection{{
+// into, auto-relayed with the relayer key.
+func (d *deployCLI) wantConnection(typeA, typeB clientkind.Kind) []ibccli.ConnectionFileConfig {
+	end := func(chainID string, typ clientkind.Kind) ibccli.ClientEndFileConfig {
+		return ibccli.ClientEndFileConfig{
+			ChainID:   chainID,
+			Signer:    relayerAlias,
+			ClientID:  d.clientID(),
+			Type:      typ,
+			AutoRelay: &ibccli.AutoRelayFileConfig{Enabled: true},
+		}
+	}
+	return []ibccli.ConnectionFileConfig{{
 		Alias:   d.chainAID + "-" + d.chainBID,
-		ClientA: renderedClientEnd{ChainID: d.chainAID, ClientID: d.clientID(), Type: typeA, Signer: relayerAlias},
-		ClientB: renderedClientEnd{ChainID: d.chainBID, ClientID: d.clientID(), Type: typeB, Signer: relayerAlias},
+		ClientA: end(d.chainAID, typeA),
+		ClientB: end(d.chainBID, typeB),
 	}}
+}
+
+// wantAttestor is the local attestor render-config binds to the signer alias
+// holding address, watching chainID.
+func wantAttestor(chainID, signer string, address common.Address) ibccli.AttestorFileConfig {
+	return ibccli.AttestorFileConfig{
+		Name:           "attestor-" + chainID + "-" + address.Hex(),
+		ChainID:        chainID,
+		Type:           ibccli.RelayerAttestorLocal,
+		Signer:         signer,
+		FinalityOffset: 1,
+	}
 }
 
 // startRelayer starts the relayer on the populated config with wait policies
@@ -445,10 +436,10 @@ func TestDeployConnection(t *testing.T) {
 	// entry, and each attestation end gets the deployer as a local attestor
 	// watching the chain it tracks
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection(clientkind.Attestation, clientkind.Attestation), cfg.Relayer.Connections)
-	require.ElementsMatch(t, []renderedAttestor{
-		{ChainID: d.chainAID, Type: ibccli.RelayerAttestorLocal, Signer: deployerAlias},
-		{ChainID: d.chainBID, Type: ibccli.RelayerAttestorLocal, Signer: deployerAlias},
+	require.Equal(t, d.wantConnection(clientkind.Attestation, clientkind.Attestation), cfg.Connections)
+	require.ElementsMatch(t, []ibccli.AttestorFileConfig{
+		wantAttestor(d.chainAID, deployerAlias, d.deployer),
+		wantAttestor(d.chainBID, deployerAlias, d.deployer),
 	}, cfg.Attestors)
 }
 
@@ -472,7 +463,7 @@ func TestDeployBesuQBFTConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.BesuQBFT), cfg.Relayer.Connections)
+	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.BesuQBFT), cfg.Connections)
 	require.Empty(t, cfg.Attestors)
 	relayer := d.startRelayer(t)
 
@@ -508,7 +499,7 @@ func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 	// config lets --attestors resolve the alias and render-config bind it as
 	// the attestor's signer; it goes after configureRouters, which drops other
 	// signers.
-	d.importKey(t, attestorAlias, "--populate-config")
+	attestor := d.importKey(t, attestorAlias, "--populate-config")
 	iftA, iftB := d.deployIFTConnection(t,
 		besuQBFTClient(d.chainAID, d.chainBID), attestationClient(d.chainBID, d.chainAID, attestorAlias))
 	d.requireRerunSkipped(t)
@@ -518,10 +509,8 @@ func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 
 	// only the attestation end gets an attestor, watching the chain it tracks
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.Attestation), cfg.Relayer.Connections)
-	require.Equal(t, []renderedAttestor{
-		{ChainID: d.chainAID, Type: ibccli.RelayerAttestorLocal, Signer: attestorAlias},
-	}, cfg.Attestors)
+	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.Attestation), cfg.Connections)
+	require.Equal(t, []ibccli.AttestorFileConfig{wantAttestor(d.chainAID, attestorAlias, attestor)}, cfg.Attestors)
 	relayer := d.startRelayer(t)
 
 	_, err = d.driver.Run(ctx, "tx", "ift", "mint", "--chain", d.chainAID, "--ift", iftA,

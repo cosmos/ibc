@@ -424,7 +424,7 @@ func prepareAttestorWorkspace(
 				ICS26Router: spec.ICS26Router,
 			},
 		}},
-		Attestors: []attestorFileConfig{{
+		Attestors: []AttestorFileConfig{{
 			Name:           spec.Name,
 			ChainID:        spec.ChainID,
 			Type:           RelayerAttestorLocal,
@@ -559,7 +559,7 @@ type fileConfig struct {
 	Observability observabilityConfig  `yaml:"observability,omitempty"`
 	Chains        []chainConfig        `yaml:"chains"`
 	Relayer       *relayerFileConfig   `yaml:"relayer,omitempty"`
-	Attestors     []attestorFileConfig `yaml:"attestors"`
+	Attestors     []AttestorFileConfig `yaml:"attestors"`
 	Signers       []signerConfig       `yaml:"signers"`
 }
 
@@ -584,7 +584,7 @@ type dbConfig struct {
 	URL  string `yaml:"url"`
 }
 
-type attestorFileConfig struct {
+type AttestorFileConfig struct {
 	Name    string `yaml:"name"`
 	ChainID string `yaml:"chainId"`
 	Type    string `yaml:"type"`
