@@ -3,12 +3,15 @@
 package besu
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
+
+	clibesu "github.com/cosmos/ibc/cli/besu"
 )
 
 const expectedTreasuryBalanceHex = "0xc9f2c9cd04674edea40000000"
@@ -18,10 +21,11 @@ func TestBesuOperatorConfigEnvironmentInvariants(t *testing.T) {
 	const blockPeriodSecs = 2
 
 	treasury := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	cfg := newBesuOperatorConfig(chainID, blockPeriodSecs, treasury)
+	cfg := newBesuOperatorConfig(clibesu.QBFT, chainID, blockPeriodSecs, treasury)
 
 	require.Equal(t, uint64(chainID), cfg.Genesis.Config.ChainID)
 	require.Equal(t, 1, cfg.Blockchain.Nodes.Count)
+	require.Nil(t, cfg.Genesis.Config.IBFT2)
 	require.Equal(t, blockPeriodSecs, cfg.Genesis.Config.QBFT.BlockPeriodSeconds)
 	require.Equal(t, 2*blockPeriodSecs, cfg.Genesis.Config.QBFT.RequestTimeoutSeconds)
 	require.True(t, cfg.Genesis.Config.ZeroBaseFee)
@@ -32,6 +36,21 @@ func TestBesuOperatorConfigEnvironmentInvariants(t *testing.T) {
 	require.Equal(t, map[string]besuFund{
 		besuAllocKey(treasury): {Balance: expectedTreasuryBalanceHex},
 	}, cfg.Genesis.Alloc)
+}
+
+// Besu reads the consensus from the genesis config key, so an IBFT2 chain
+// carries an ibft2 block in place of the qbft one.
+func TestBesuOperatorConfigIBFT2(t *testing.T) {
+	cfg := newBesuOperatorConfig(clibesu.IBFT2, 32337, 2, common.Address{})
+	require.Nil(t, cfg.Genesis.Config.QBFT)
+	require.Equal(t, 2, cfg.Genesis.Config.IBFT2.BlockPeriodSeconds)
+
+	data, err := json.Marshal(cfg.Genesis.Config)
+	require.NoError(t, err)
+	var keys map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &keys))
+	require.Contains(t, keys, "ibft2")
+	require.NotContains(t, keys, "qbft")
 }
 
 func TestPrepareBesuNodeDir(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -33,7 +34,7 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	}
 	summary := summarizeSpec(environment.Spec{
 		Chains: []environment.ChainSpec{
-			environment.ManagedBesu{ID: "a", EVMChainID: 1},
+			environment.ManagedBesu{ID: "a", EVMChainID: 1, Consensus: besu.QBFT},
 			environment.AttachedEVM{ID: "b", EVMChainID: 2},
 		},
 		IBCInstances: make([]environment.IBCInstanceSpec, 2),
@@ -49,12 +50,13 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	if len(record.Selections) != 2 || record.Spec == nil || record.Spec.Attestors != 3 {
 		t.Fatalf("joined record = %#v", record)
 	}
-	if got := record.Spec.Chains; len(got) != 2 || got[0].Type != "Attached EVM" || got[1].Type != "Besu" {
+	if got := record.Spec.Chains; len(got) != 2 || got[0].Type != "Attached EVM" || got[1].Type != "Besu QBFT" {
 		t.Fatalf("sorted chain summary = %#v", got)
 	}
 
 	// new and existing Besu clients count alike, and never as attestors
 	besuSummary := summarizeSpec(environment.Spec{
+		Chains: []environment.ChainSpec{environment.ManagedBesu{Consensus: besu.IBFT2}},
 		Connections: []environment.ConnectionSpec{{
 			A: environment.NewBesuClient{},
 			B: environment.ExistingClient{Kind: clientkind.Besu},
@@ -62,6 +64,9 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	})
 	if besuSummary.BesuClients != 2 || besuSummary.Attestors != 0 {
 		t.Fatalf("besu summary = %#v", besuSummary)
+	}
+	if got := besuSummary.Chains; len(got) != 1 || got[0].Type != "Besu IBFT2" {
+		t.Fatalf("besu ibft2 chain summary = %#v", got)
 	}
 }
 

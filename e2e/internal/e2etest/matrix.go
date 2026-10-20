@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -162,11 +163,11 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 	attestors := 0
 	besuClients := 0
 	for _, chain := range spec.Chains {
-		switch chain.(type) {
+		switch chain := chain.(type) {
 		case environment.ManagedAnvil:
 			counts["Anvil"]++
 		case environment.ManagedBesu:
-			counts["Besu"]++
+			counts["Besu "+strings.ToUpper(string(chain.Consensus))]++
 		case environment.AttachedEVM:
 			counts["Attached EVM"]++
 		default:

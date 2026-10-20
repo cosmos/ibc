@@ -316,7 +316,7 @@ func TestBesuParamsFlags(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, source.called)
 			require.Equal(t, deploy.BesuParams{
-				Consensus:             besu.QBFT,
+				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
@@ -412,7 +412,7 @@ const (
 	besuHeadTimestamp = 1788200000
 )
 
-// besuHeadTarget is a QBFT Besu chain whose head is besuHeadHeight.
+// besuHeadTarget is an IBFT2 Besu chain whose head is besuHeadHeight.
 type besuHeadTarget struct {
 	deploy.Target
 	called bool
@@ -420,7 +420,7 @@ type besuHeadTarget struct {
 
 func (t *besuHeadTarget) BesuHead(context.Context) (*besu.ParsedHeader, error) {
 	t.called = true
-	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.QBFT}, nil
+	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.IBFT2}, nil
 }
 
 // hostOnlyTarget is a chain that cannot serve Besu consensus states.

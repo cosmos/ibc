@@ -101,7 +101,7 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	// the constructor rejects an expired initial state, so trust the current head
 	head, err := backend.Client().HeaderByNumber(ctx, nil)
 	require.NoError(t, err)
-	for _, consensus := range []besu.Consensus{besu.QBFT} {
+	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
 		prepared, prepareErr := setup.PrepareBesuClient(ctx, clientAuthority, instance.Router, BesuClientConfig{
 			Consensus: consensus, ID: string(consensus) + "-b", CounterpartyClientID: string(consensus) + "-a",
 			CounterpartyRouter: instance.Router, InitialHeight: 1, InitialTimestamp: head.Time,

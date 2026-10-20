@@ -23,6 +23,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	clibesu "github.com/cosmos/ibc/cli/besu"
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
@@ -39,14 +40,16 @@ const (
 	besuLogTimeout          = 10 * time.Second
 	besuStartupLogTailBytes = 4096
 	besuTreasuryBalanceHex  = "0xc9f2c9cd04674edea40000000"
+	besuOperatorConfigFile  = "operatorConfigFile.json"
 )
 
 type Spec struct {
-	ID      string
-	ChainID uint64
-	WorkDir string
-	RunID   string
-	Image   string
+	ID        string
+	ChainID   uint64
+	Consensus clibesu.Consensus
+	WorkDir   string
+	RunID     string
+	Image     string
 	// BlockPeriod is rounded to whole seconds and rejected if it rounds to zero.
 	BlockPeriod time.Duration
 }
@@ -80,12 +83,15 @@ func DockerImage() string {
 	return DefaultDockerImage
 }
 
-func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
+func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 	if spec.ID == "" {
 		return nil, errors.New("besu chain id is empty")
 	}
 	if spec.ChainID == 0 {
 		return nil, fmt.Errorf("besu chain %s: EVM chain id is required", spec.ID)
+	}
+	if consensusErr := spec.Consensus.Validate(); consensusErr != nil {
+		return nil, fmt.Errorf("besu chain %s: %w", spec.ID, consensusErr)
 	}
 	if spec.Image == "" {
 		spec.Image = DockerImage()
@@ -103,7 +109,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 	periodSecs := int(math.Round(spec.BlockPeriod.Seconds()))
 	if periodSecs <= 0 {
 		return nil, fmt.Errorf(
-			"besu chain %s: block period %v is below the 1s granularity of QBFT blockperiodseconds",
+			"besu chain %s: block period %v is below the 1s granularity of BFT blockperiodseconds",
 			spec.ID,
 			spec.BlockPeriod,
 		)
@@ -118,8 +124,9 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 	}
 	_ = os.Chmod(chainDir, 0o777)
 
-	configPath := filepath.Join(chainDir, "qbftConfigFile.json")
-	if writeErr := writeBesuOperatorConfig(configPath, spec.ChainID, periodSecs, treasury.Address()); writeErr != nil {
+	configPath := filepath.Join(chainDir, besuOperatorConfigFile)
+	writeErr := writeBesuOperatorConfig(configPath, spec.Consensus, spec.ChainID, periodSecs, treasury.Address())
+	if writeErr != nil {
 		return nil, writeErr
 	}
 	networkFilesDir := filepath.Join(chainDir, "networkFiles")
@@ -153,7 +160,7 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 			},
 			Cmd: []string{
 				"operator", "generate-blockchain-config",
-				"--config-file=qbftConfigFile.json",
+				"--config-file=" + besuOperatorConfigFile,
 				"--to=networkFiles",
 				"--private-key-file-name=key",
 			},
@@ -169,11 +176,11 @@ func StartQBFT(ctx context.Context, spec Spec) (result *Chain, err error) {
 	if err != nil {
 		if genErr != nil {
 			return nil, errors.Join(
-				fmt.Errorf("generate besu QBFT config: %w", genErr),
-				fmt.Errorf("validate generated besu QBFT artifacts: %w", err),
+				fmt.Errorf("generate besu %s config: %w", spec.Consensus, genErr),
+				fmt.Errorf("validate generated besu %s artifacts: %w", spec.Consensus, err),
 			)
 		}
-		return nil, fmt.Errorf("validate generated besu QBFT artifacts: %w", err)
+		return nil, fmt.Errorf("validate generated besu %s artifacts: %w", spec.Consensus, err)
 	}
 	if generator != nil {
 		if cleanupErr := container.Terminate(generator); cleanupErr != nil {
@@ -395,10 +402,12 @@ type besuGenesisConfig struct {
 	CancunTime        uint64         `json:"cancunTime"`
 	ZeroBaseFee       bool           `json:"zeroBaseFee"`
 	ContractSizeLimit int            `json:"contractSizeLimit"`
-	QBFT              besuQBFTConfig `json:"qbft"`
+	QBFT              *besuBFTConfig `json:"qbft,omitempty"`
+	IBFT2             *besuBFTConfig `json:"ibft2,omitempty"`
 }
 
-type besuQBFTConfig struct {
+// besuBFTConfig is the genesis config QBFT and IBFT2 share.
+type besuBFTConfig struct {
 	BlockPeriodSeconds    int `json:"blockperiodseconds"`
 	EpochLength           int `json:"epochlength"`
 	RequestTimeoutSeconds int `json:"requesttimeoutseconds"`
@@ -417,23 +426,40 @@ type besuNodes struct {
 	Count    int  `json:"count"`
 }
 
-func writeBesuOperatorConfig(path string, chainID uint64, blockPeriodSecs int, treasury common.Address) error {
-	data, err := json.MarshalIndent(newBesuOperatorConfig(chainID, blockPeriodSecs, treasury), "", "  ")
+func writeBesuOperatorConfig(
+	path string,
+	consensus clibesu.Consensus,
+	chainID uint64,
+	blockPeriodSecs int,
+	treasury common.Address,
+) error {
+	data, err := json.MarshalIndent(newBesuOperatorConfig(consensus, chainID, blockPeriodSecs, treasury), "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal besu QBFT config: %w", err)
+		return fmt.Errorf("marshal besu %s config: %w", consensus, err)
 	}
 	data = append(data, '\n')
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("write besu QBFT config %s: %w", path, err)
+		return fmt.Errorf("write besu %s config %s: %w", consensus, path, err)
 	}
 	return nil
 }
 
-func newBesuOperatorConfig(chainID uint64, blockPeriodSecs int, treasury common.Address) besuOperatorConfig {
+func newBesuOperatorConfig(
+	consensus clibesu.Consensus,
+	chainID uint64,
+	blockPeriodSecs int,
+	treasury common.Address,
+) besuOperatorConfig {
 	alloc := map[string]besuFund{
 		besuAllocKey(treasury): {Balance: besuTreasuryBalanceHex},
 	}
-	return besuOperatorConfig{
+	bft := &besuBFTConfig{
+		BlockPeriodSeconds: blockPeriodSecs,
+		EpochLength:        besuEpochLength,
+		// The round timeout must exceed one block period.
+		RequestTimeoutSeconds: 2 * blockPeriodSecs,
+	}
+	config := besuOperatorConfig{
 		Genesis: besuGenesis{
 			Config: besuGenesisConfig{
 				ChainID:           chainID,
@@ -443,12 +469,6 @@ func newBesuOperatorConfig(chainID uint64, blockPeriodSecs int, treasury common.
 				CancunTime:        0,
 				ZeroBaseFee:       true,
 				ContractSizeLimit: 2147483647,
-				QBFT: besuQBFTConfig{
-					BlockPeriodSeconds: blockPeriodSecs,
-					EpochLength:        besuEpochLength,
-					// QBFT requires the round timeout to exceed one block period.
-					RequestTimeoutSeconds: 2 * blockPeriodSecs,
-				},
 			},
 			Nonce:      "0x0",
 			Timestamp:  "0x58ee40ba",
@@ -462,6 +482,12 @@ func newBesuOperatorConfig(chainID uint64, blockPeriodSecs int, treasury common.
 			Nodes: besuNodes{Generate: true, Count: 1},
 		},
 	}
+	if consensus == clibesu.IBFT2 {
+		config.Genesis.Config.IBFT2 = bft
+	} else {
+		config.Genesis.Config.QBFT = bft
+	}
+	return config
 }
 
 func besuAllocKey(addr common.Address) string {

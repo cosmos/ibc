@@ -53,6 +53,7 @@ func (c *Client) BesuConsensusStateHash(ctx context.Context, clientID string, he
 		return common.Hash{}, err
 	}
 
+	// both Besu light clients share this ABI
 	lightClient, err := besuqbft.NewContractCaller(lightClientAddr, c.eth)
 	if err != nil {
 		return common.Hash{}, err

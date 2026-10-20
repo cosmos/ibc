@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
@@ -324,7 +325,7 @@ func TestStartRealizesSolidityIBCConnectionAcrossAnvilAndBesu(t *testing.T) {
 	spec := environment.Spec{
 		Chains: []environment.ChainSpec{
 			environment.ManagedAnvil{ID: "anvil", EVMChainID: 43337},
-			environment.ManagedBesu{ID: "besu", EVMChainID: 43338},
+			environment.ManagedBesu{ID: "besu", EVMChainID: 43338, Consensus: besu.QBFT},
 		},
 		IBCInstances: []environment.IBCInstanceSpec{
 			environment.NewIBCInstance{ID: "anvil-ibc", Chain: "anvil", Authority: deployer},
@@ -492,7 +493,7 @@ func TestStartManagedBesu(t *testing.T) {
 
 	const chainID environment.ChainID = "besu"
 	env, err := environment.Start(t.Context(), environment.Spec{Chains: []environment.ChainSpec{
-		environment.ManagedBesu{ID: chainID, EVMChainID: 32357},
+		environment.ManagedBesu{ID: chainID, EVMChainID: 32357, Consensus: besu.QBFT},
 	}}, environment.Runtime{})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, env.Close(context.Background())) })

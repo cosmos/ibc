@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 )
@@ -82,10 +83,11 @@ func (c ManagedAnvil) validateChain() error {
 	return nil
 }
 
-// ManagedBesu declares an environment-owned Besu Chain.
+// ManagedBesu declares an environment-owned Besu Chain running Consensus.
 type ManagedBesu struct {
 	ID         ChainID
 	EVMChainID uint64
+	Consensus  besu.Consensus
 }
 
 func (ManagedBesu) chainSpec() {}
@@ -99,6 +101,9 @@ func (c ManagedBesu) validateChain() error {
 	}
 	if c.EVMChainID == 0 {
 		return errorsf("chain %q: EVM chain id must be greater than zero", c.ID)
+	}
+	if err := c.Consensus.Validate(); err != nil {
+		return errorsf("chain %q: %v", c.ID, err)
 	}
 	return nil
 }

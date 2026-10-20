@@ -180,14 +180,17 @@ func validatorSeals(digest []byte, seals [][]byte, validators []common.Address) 
 }
 
 // commitSealDigest is the digest commit seals sign under consensus, matching
-// _commitSealDigest in BesuQBFTLightClient.sol: the header hash with the
-// commit seals emptied from extraData for QBFT.
+// _commitSealDigest in BesuQBFTLightClient.sol and BesuIBFT2LightClient.sol:
+// the header hash with the commit seals emptied from extraData for QBFT, or
+// dropped from it for IBFT2.
 func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Consensus) ([]byte, error) {
 	var signingItems []rlp.RawValue
 	switch consensus {
 	case QBFT:
 		signingItems = slices.Clone(extraItems)
 		signingItems[extraIdxCommitSeals] = emptyRLPList
+	case IBFT2:
+		signingItems = extraItems[:extraIdxCommitSeals]
 	default:
 		return nil, fmt.Errorf("no commit seal digest for besu consensus %q", consensus)
 	}

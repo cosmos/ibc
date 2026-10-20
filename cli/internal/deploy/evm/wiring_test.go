@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
@@ -358,7 +359,8 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 // reads the prover relies on.
 func TestProvisionRegisterVerifyBesu(t *testing.T) {
 	for consensus, metadata := range map[besu.Consensus]*bind.MetaData{
-		besu.QBFT: besuqbft.ContractMetaData,
+		besu.QBFT:  besuqbft.ContractMetaData,
+		besu.IBFT2: besuibft2.ContractMetaData,
 	} {
 		t.Run(string(consensus), func(t *testing.T) {
 			d, sim, _ := newSimDriver(t)
