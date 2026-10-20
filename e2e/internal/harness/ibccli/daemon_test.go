@@ -13,12 +13,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/iotest"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 )
@@ -236,7 +239,21 @@ func TestWaitPoliciesSurviveDriverAndRelayerStartup(t *testing.T) {
 	mux := http.NewServeMux()
 	path, handler := relayerv2.NewRelayerApiServiceHandler(api)
 	mux.Handle(path, handler)
-	server := httptest.NewServer(mux)
+	var healthChecks atomic.Int32
+	healthServer := grpc.NewServer()
+	t.Cleanup(healthServer.Stop)
+	healthpb.RegisterHealthServer(healthServer, testHealthService{check: func(
+		context.Context, *healthpb.HealthCheckRequest,
+	) (*healthpb.HealthCheckResponse, error) {
+		healthChecks.Add(1)
+		return &healthpb.HealthCheckResponse{Status: healthpb.HealthCheckResponse_SERVING}, nil
+	}})
+	mux.Handle("/grpc.health.v1.Health/", healthServer)
+	server := httptest.NewUnstartedServer(mux)
+	server.Config.Protocols = new(http.Protocols)
+	server.Config.Protocols.SetHTTP1(true)
+	server.Config.Protocols.SetUnencryptedHTTP2(true)
+	server.Start()
 	t.Cleanup(server.Close)
 
 	script := filepath.Join(t.TempDir(), "ibc-ready")
@@ -262,6 +279,7 @@ func TestWaitPoliciesSurviveDriverAndRelayerStartup(t *testing.T) {
 	relayer, err := driver.StartRelayer(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, relayer.Stop(context.Background())) })
+	require.Positive(t, healthChecks.Load())
 
 	got, ok := relayer.WaitPolicy("route-a")
 	require.True(t, ok)

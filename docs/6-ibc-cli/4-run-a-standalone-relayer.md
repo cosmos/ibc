@@ -107,7 +107,7 @@ level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3002}"
 ```
 
-The relayer is running and waiting for packets. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
+The relayer is running and waiting for packets. The readiness log confirms startup; use the [gRPC health check](7-api.md#health-checks) to monitor ongoing API and database availability. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
 
 2. Back in your first terminal, send a transfer and keep the hash:
 
