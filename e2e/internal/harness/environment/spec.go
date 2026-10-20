@@ -89,10 +89,10 @@ type ManagedBesu struct {
 	ID         ChainID
 	EVMChainID uint64
 	Consensus  besu.Consensus
-	// Nodes is how many Besu nodes run the Chain, one when zero. Only the
-	// first validates from genesis; the others follow it and can be voted in
-	// through Chain.Validators.
-	Nodes int
+	// Followers is how many Besu nodes beyond the four genesis validators run
+	// the Chain. They sync from genesis and can be voted in through
+	// Chain.Validators.
+	Followers int
 }
 
 func (ManagedBesu) chainSpec() {}
@@ -110,8 +110,8 @@ func (c ManagedBesu) validateChain() error {
 	if err := c.Consensus.Validate(); err != nil {
 		return errorsf("chain %q: %v", c.ID, err)
 	}
-	if c.Nodes < 0 {
-		return errorsf("chain %q: node count must not be negative", c.ID)
+	if c.Followers < 0 {
+		return errorsf("chain %q: follower count must not be negative", c.ID)
 	}
 	return nil
 }

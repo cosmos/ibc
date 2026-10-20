@@ -58,7 +58,7 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	besuSummary := summarizeSpec(environment.Spec{
 		Chains: []environment.ChainSpec{
 			environment.ManagedBesu{Consensus: besu.IBFT2},
-			environment.ManagedBesu{Consensus: besu.IBFT2, Nodes: 2},
+			environment.ManagedBesu{Consensus: besu.IBFT2, Followers: 3},
 		},
 		Connections: []environment.ConnectionSpec{{
 			A: environment.NewBesuClient{},
@@ -69,7 +69,7 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 		t.Fatalf("besu summary = %#v", besuSummary)
 	}
 	got := besuSummary.Chains
-	if len(got) != 2 || got[0].Type != "Besu IBFT2" || got[1].Type != "Besu IBFT2 (2 nodes)" {
+	if len(got) != 2 || got[0].Type != "Besu IBFT2" || got[1].Type != "Besu IBFT2 (+3 followers)" {
 		t.Fatalf("besu ibft2 chain summary = %#v", got)
 	}
 }

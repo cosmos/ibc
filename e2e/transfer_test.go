@@ -88,13 +88,7 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	t.Parallel()
 	spec, runtime := attestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
-	requireTimeoutRefund(t, spec, runtime, func(ctx context.Context, destination *environment.Chain) error {
-		mining, err := destination.Mining()
-		if err != nil {
-			return err
-		}
-		return mining.AdvanceTime(ctx, packetTimeoutAdvance)
-	})
+	requireTimeoutRefund(t, spec, runtime, advanceDestinationPastTimeout)
 }
 
 // A timeout through Besu QBFT light clients proves the receipt's absence with
@@ -107,13 +101,13 @@ func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 }
 
 // requireTimeoutRefund sends a transfer with the relayer stopped, lets expire
-// move the destination past its timeout, and requires the restarted relayer
-// to time it out and refund the sender.
+// move the destination past the packet's timeout, and requires the restarted
+// relayer to time it out and refund the sender.
 func requireTimeoutRefund(
 	t *testing.T,
 	spec environment.Spec,
 	runtime environment.Runtime,
-	expire func(ctx context.Context, destination *environment.Chain) error,
+	expire func(ctx context.Context, destination *environment.Chain, timeout uint64) error,
 ) {
 	t.Helper()
 	env := e2etest.Start(t, spec, runtime)
@@ -125,16 +119,18 @@ func requireTimeoutRefund(
 	relayer := e2etest.StartRelayer(t, driver, env)
 	ctx := t.Context()
 
-	require.NoError(t, relayer.Stop(ctx))
-	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
-		Amount:  big.NewInt(3_000_000),
-		Timeout: packetTimeout,
-	})
-	require.NoError(t, err)
-
 	destination, err := env.Chain(route.Destination)
 	require.NoError(t, err)
-	require.NoError(t, expire(ctx, destination))
+	require.NoError(t, relayer.Stop(ctx))
+	// The timeout counts from the destination head, which may be a block old,
+	// and must outlast the approval and the send landing on the source, each
+	// one block plus a possible BFT round change of two.
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+		Amount:  big.NewInt(3_000_000),
+		Timeout: 10 * destination.Timing().BlockInterval,
+	})
+	require.NoError(t, err)
+	require.NoError(t, expire(ctx, destination, transfer.TimeoutTimestamp()))
 	relayer = e2etest.StartRelayer(t, driver, env)
 
 	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
@@ -145,29 +141,44 @@ func requireTimeoutRefund(
 	require.NoError(t, transfer.VerifyCommitmentCleared(ctx))
 }
 
-// awaitDestinationPastTimeout waits until the destination head is more than
-// packetTimeout past its head now, which is past any timeout set before.
-func awaitDestinationPastTimeout(ctx context.Context, destination *environment.Chain) error {
-	evm, err := destination.EVM()
+// advanceDestinationPastTimeout moves the destination clock past timeout.
+func advanceDestinationPastTimeout(ctx context.Context, destination *environment.Chain, timeout uint64) error {
+	mining, err := destination.Mining()
 	if err != nil {
 		return err
 	}
-	head, err := evm.HeaderByNumber(ctx, nil)
-	if err != nil {
+	head, err := destinationHead(ctx, destination)
+	if err != nil || head > timeout {
 		return err
 	}
-	deadline := head.Time + uint64(packetTimeout/time.Second)
-	for head.Time <= deadline {
+	return mining.AdvanceTime(ctx, time.Duration(timeout-head+1)*time.Second)
+}
+
+// awaitDestinationPastTimeout waits for a destination head past timeout.
+func awaitDestinationPastTimeout(ctx context.Context, destination *environment.Chain, timeout uint64) error {
+	for {
+		head, err := destinationHead(ctx, destination)
+		if err != nil || head > timeout {
+			return err
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-		if head, err = evm.HeaderByNumber(ctx, nil); err != nil {
-			return err
+		case <-time.After(destination.Timing().PollInterval):
 		}
 	}
-	return nil
+}
+
+func destinationHead(ctx context.Context, destination *environment.Chain) (uint64, error) {
+	evm, err := destination.EVM()
+	if err != nil {
+		return 0, err
+	}
+	head, err := evm.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	return head.Time, nil
 }
 
 // Two Besu QBFT chains relay through Besu QBFT light clients: header, account
@@ -185,10 +196,11 @@ func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
 	requireBesuAutoRelay(t, besu.IBFT2)
 }
 
-// Header voting brings in a second validator on chain B and votes its first
-// out before any packet is relayed, so no header at B's head is sealed by the
-// validator chain A's client trusts. The relayer steps the client across each
-// change in the transaction relaying the transfer.
+// Header voting brings three followers in as validators on chain B and votes
+// three of its four genesis validators out before any packet is relayed, so
+// only one validator chain A's client trusts seals B's head, short of the two
+// its one-half trust level needs. The relayer steps the client across the
+// changes in the transaction relaying the transfer.
 func TestTransferBesuQBFT_ValidatorTurnover(t *testing.T) {
 	t.Parallel()
 	requireBesuValidatorTurnover(t, besu.QBFT)
@@ -206,12 +218,12 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	chains := besuChains(t, consensus, consensus)
 	chainB, ok := chains[1].(environment.ManagedBesu)
 	require.True(t, ok)
-	chainB.Nodes = 2
+	chainB.Followers = 3
 	chains[1] = chainB
 	spec, runtime := besuMesh(chains)
-	// At the default two thirds, a client trusting both of B's validators
-	// cannot follow the vote that leaves one of them to seal alone; one half
-	// follows every single validator change.
+	// At the default two thirds, a client trusting B's four genesis
+	// validators cannot follow a removal sealed by a bare quorum of the rest;
+	// one half follows every single validator change.
 	connection := &spec.Connections[0]
 	for _, end := range []*environment.ClientSpec{&connection.A, &connection.B} {
 		client, ok := (*end).(environment.NewBesuClient)
@@ -232,11 +244,15 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	validators, err := source.Validators()
 	require.NoError(t, err)
 	nodes := validators.Nodes()
-	require.NoError(t, validators.Add(ctx, nodes[1]))
-	require.NoError(t, validators.Remove(ctx, nodes[0]))
+	for _, follower := range nodes[4:] {
+		require.NoError(t, validators.Add(ctx, follower))
+	}
+	for _, genesis := range nodes[:3] {
+		require.NoError(t, validators.Remove(ctx, genesis))
+	}
 	current, err := validators.Current(ctx)
 	require.NoError(t, err)
-	require.Equal(t, nodes[1:], current)
+	require.ElementsMatch(t, nodes[3:], current)
 
 	relayer := e2etest.StartRelayer(t, driver, env)
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{

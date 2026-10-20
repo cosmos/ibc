@@ -168,8 +168,8 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 			counts["Anvil"]++
 		case environment.ManagedBesu:
 			typ := "Besu " + strings.ToUpper(string(chain.Consensus))
-			if chain.Nodes > 1 {
-				typ += fmt.Sprintf(" (%d nodes)", chain.Nodes)
+			if chain.Followers > 0 {
+				typ += fmt.Sprintf(" (+%d followers)", chain.Followers)
 			}
 			counts[typ]++
 		case environment.AttachedEVM:
