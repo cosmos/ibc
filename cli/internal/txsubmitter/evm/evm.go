@@ -74,9 +74,7 @@ type TxSubmitter struct {
 var ErrBusy = errors.New("transaction submission capacity reached")
 
 func NewFromRPC(chainID, rpcURL string, chainSigner signer.Signer, opts ChainOptions) (*TxSubmitter, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultRequestTimeout)
-	defer cancel()
-	eth, err := chainsevm.DialContext(ctx, chainID, rpcURL)
+	eth, err := chainsevm.Dial(chainID, rpcURL)
 	if err != nil {
 		return nil, err
 	}

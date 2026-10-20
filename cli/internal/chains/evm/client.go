@@ -89,13 +89,8 @@ var nodeTransport = func() *http.Transport {
 
 // Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	return DialContext(context.Background(), chainID, rpcURL)
-}
-
-// DialContext connects to a metered RPC endpoint within ctx's deadline.
-func DialContext(ctx context.Context, chainID, rpcURL string) (ETHClient, error) {
 	rpcClient, err := rpc.DialOptions(
-		ctx,
+		context.Background(),
 		rpcURL,
 		rpc.WithHTTPClient(&http.Client{Transport: nodeTransport}),
 	)
