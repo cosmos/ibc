@@ -83,6 +83,8 @@ func WriteDeployConfig(path string, cfg DeployConfig) error {
 
 // WriteICS26Routers writes routers[chainId] into chains[].evm.ics26Router of
 // the existing IBC CLI config at path, leaving the rest of the file as it is.
+// Each router value is replaced along with its line comment, such as the
+// "TODO: fill in" the CLI leaves on an empty router.
 func WriteICS26Routers(path string, routers map[string]string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
