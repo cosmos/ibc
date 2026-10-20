@@ -35,7 +35,7 @@ RELAYER=$(./bin/ibc keys show relayer | jq -r '.evmAddress')
 DEPLOYER_KEY=$(./bin/ibc keys show deployer --private | jq -r '.privateKey')
 ```
 
-The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files.
+The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files. Run `unset DEPLOYER_KEY` when you finish, so the key does not stay in your shell.
 
 2. Compute the selectors of the router's four relaying functions:
 
