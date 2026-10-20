@@ -85,10 +85,6 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 	return &Driver{chainID: chainID, key: key, backend: client}, nil
 }
 
-func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesu}
-}
-
 // requireSigner errors if called on a driver built without a deployer
 // signer; every mutating operation must call it first.
 func (d *Driver) requireSigner() error {
@@ -223,11 +219,7 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 	case deploy.BesuParams:
 		return d.provisionBesu(ctx, router, params)
 	default:
-		return deploy.ClientRef{}, fmt.Errorf(
-			"client params %T not supported (supported types: %v)",
-			spec.Params,
-			d.SupportedClientTypes(),
-		)
+		return deploy.ClientRef{}, fmt.Errorf("client params %T not supported", spec.Params)
 	}
 }
 

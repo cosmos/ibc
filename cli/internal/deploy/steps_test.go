@@ -68,10 +68,6 @@ func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error)
 	return Report{}, nil
 }
 
-func (f *fakeTarget) SupportedClientTypes() []string {
-	return []string{ClientTypeAttestation, ClientTypeBesu}
-}
-
 // fakeBridge is the on-chain bridge state a fakeTarget records.
 type fakeBridge struct{ cp, ctor string }
 
@@ -289,13 +285,20 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	require.ErrorContains(t, err, "already deployed with different values")
 	require.ErrorContains(t, err, "attestors")
 	require.ErrorContains(t, err, `["0xb","0xc"]`)
+	require.ErrorContains(t, err, "threshold: deployed 1, requested 2")
 	require.ErrorContains(t, err, "--client-id")
+
+	// a different client type conflicts without comparing params
+	retyped := spec
+	retyped.Params = besuSpec().Params
+	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", retyped))
+	require.ErrorContains(t, err, `type: deployed "attestation", requested "besu"`)
 
 	// manifest must still describe the deployed contract
 	m, loadErr := manifest.Load(dir, "1")
 	require.NoError(t, loadErr)
 	c, _ := m.Client("cli-1-2")
-	require.Equal(t, []any{"0xa"}, c.Params["attestors"].([]any))
+	require.Equal(t, []string{"0xa"}, c.Attestation.Attestors)
 }
 
 // initialHeight/initialTimestamp default from the live counterparty head and
@@ -393,8 +396,8 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
 	c, _ := m.Client("cli-1-2")
-	require.InDelta(t, 5, c.Params["initialHeight"], 0)
-	require.InDelta(t, 500, c.Params["initialTimestamp"], 0)
+	require.Equal(t, uint64(5), c.Attestation.InitialHeight)
+	require.Equal(t, uint64(500), c.Attestation.InitialTimestamp)
 }
 
 func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
@@ -706,16 +709,6 @@ const besuRecord = `{
 	"maxClockDrift": 15
 }`
 
-// heights must not round through float64 before saving
-func TestSpecToClientBesuParams(t *testing.T) {
-	spec := besuSpec()
-	params := spec.Params.(BesuParams)
-	params.InitialHeight = 1<<53 + 1
-	spec.Params = params
-	client := specToClient(spec, "0xclient")
-	require.Equal(t, params.InitialHeight, client.Params["initialHeight"])
-}
-
 func TestClientStepsBesu(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -735,10 +728,9 @@ func TestClientStepsBesu(t *testing.T) {
 	require.NoError(t, err)
 	recorded, ok := m.Client("cli-2")
 	require.True(t, ok)
-	require.Equal(t, ClientTypeBesu, recorded.Type)
 
 	// the manifest records the constructor params
-	got, err := json.Marshal(recorded.Params)
+	got, err := json.Marshal(recorded.Besu)
 	require.NoError(t, err)
 	require.JSONEq(t, besuRecord, string(got))
 
