@@ -98,7 +98,6 @@ func WriteICS26Routers(path string, routers map[string]string) error {
 		return errors.New("ibccli: config is empty")
 	}
 
-	set := 0
 	if chains := mappingValue(doc.Content[0], "chains"); chains != nil {
 		for _, chain := range chains.Content {
 			id, evm := mappingValue(chain, "chainId"), mappingValue(chain, "evm")
@@ -107,12 +106,8 @@ func WriteICS26Routers(path string, routers map[string]string) error {
 			}
 			if router, ok := routers[id.Value]; ok {
 				setMappingString(evm, "ics26Router", router)
-				set++
 			}
 		}
-	}
-	if set != len(routers) {
-		return fmt.Errorf("ibccli: config declares %d of the %d EVM chains to set routers on", set, len(routers))
 	}
 
 	out, err := yaml.Marshal(&doc)

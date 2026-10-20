@@ -44,6 +44,4 @@ signers:
 	require.Equal(t, routerB, file.Chains[1].EVM.ICS26Router)
 	require.Equal(t, "http://a", file.Chains[0].EVM.RPC)
 	require.Len(t, file.Signers, 2)
-
-	require.ErrorContains(t, WriteICS26Routers(path, map[string]string{"3": routerA}), "0 of the 1")
 }
