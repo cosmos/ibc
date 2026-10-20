@@ -3,6 +3,7 @@
 package solidityibc
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
@@ -534,7 +535,7 @@ func (s *Setup) PrepareBesuClient(
 					LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
 					TrustingPeriod: config.TrustingPeriod,
 					MaxClockDrift:  config.MaxClockDrift,
-					TrustLevel:     besu.DefaultTrustLevel,
+					TrustLevel:     cmp.Or(config.TrustLevel, besu.DefaultTrustLevel),
 				},
 				besumsgs.IBesuLightClientMsgsConsensusState{
 					Timestamp:  config.InitialTimestamp,

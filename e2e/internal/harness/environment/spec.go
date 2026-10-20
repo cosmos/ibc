@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
@@ -88,6 +89,10 @@ type ManagedBesu struct {
 	ID         ChainID
 	EVMChainID uint64
 	Consensus  besu.Consensus
+	// Nodes is how many Besu nodes run the Chain, one when zero. Only the
+	// first validates from genesis; the others follow it and can be voted in
+	// through Chain.Validators.
+	Nodes int
 }
 
 func (ManagedBesu) chainSpec() {}
@@ -104,6 +109,9 @@ func (c ManagedBesu) validateChain() error {
 	}
 	if err := c.Consensus.Validate(); err != nil {
 		return errorsf("chain %q: %v", c.ID, err)
+	}
+	if c.Nodes < 0 {
+		return errorsf("chain %q: node count must not be negative", c.ID)
 	}
 	return nil
 }
@@ -259,11 +267,13 @@ const BesuTrustingPeriod = solidityibc.BesuTrustingPeriod
 // no Attestors; the counterparty Chain must run Besu, and its consensus picks
 // the contract. Authority follows the same rule as NewClient. Periods are
 // seconds; the contract rejects a zero TrustingPeriod at deploy time.
+// TrustLevel is besu.DefaultTrustLevel when zero.
 type NewBesuClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID
 	TrustingPeriod uint64
 	MaxClockDrift  uint64
+	TrustLevel     besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
 func (NewBesuClient) clientKind() clientkind.Kind            { return clientkind.Besu }

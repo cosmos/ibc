@@ -396,20 +396,25 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 		WorkDir:     filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
 		RunID:       ws.runID,
 		BlockPeriod: besuBlockPeriod,
+		Nodes:       spec.Nodes,
 	})
 	if err != nil {
 		return chainAcquisition{}, err
 	}
+	resolved := &Chain{
+		id:         spec.ID,
+		evmChainID: spec.EVMChainID,
+		rpcURL:     adapter.RPCURL(),
+		wsURL:      adapter.WSURL(),
+		timing:     blockTiming(besuBlockPeriod),
+		impl:       adapter,
+		funding:    &Funding{controller: adapter},
+	}
+	if spec.Nodes > 1 {
+		resolved.validators = &Validators{controller: adapter}
+	}
 	return chainAcquisition{
-		chain: &Chain{
-			id:         spec.ID,
-			evmChainID: spec.EVMChainID,
-			rpcURL:     adapter.RPCURL(),
-			wsURL:      adapter.WSURL(),
-			timing:     blockTiming(besuBlockPeriod),
-			impl:       adapter,
-			funding:    &Funding{controller: adapter},
-		},
+		chain:       resolved,
 		description: fmt.Sprintf("stop Chain %q", spec.ID),
 		release:     func(context.Context) error { return adapter.Stop() },
 	}, nil

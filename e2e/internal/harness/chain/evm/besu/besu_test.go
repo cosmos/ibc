@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
 	clibesu "github.com/cosmos/ibc/cli/besu"
@@ -88,4 +89,20 @@ func writeGeneratedBesuFile(t *testing.T, chainDir, relativePath, contents strin
 	path := filepath.Join(chainDir, "networkFiles", relativePath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+}
+
+// Followers dial the validator node by its public key, without the leading
+// uncompressed-point byte, at its bridge IP.
+func TestEnode(t *testing.T) {
+	key, err := crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
+	require.NoError(t, err)
+	require.Equal(t,
+		"enode://79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"+
+			"483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8@172.17.0.2:30303",
+		enode(key, "172.17.0.2"))
+}
+
+func TestVotingAPI(t *testing.T) {
+	require.Equal(t, "qbft", votingAPI(clibesu.QBFT))
+	require.Equal(t, "ibft", votingAPI(clibesu.IBFT2))
 }

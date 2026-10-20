@@ -56,7 +56,10 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 
 	// new and existing Besu clients count alike, and never as attestors
 	besuSummary := summarizeSpec(environment.Spec{
-		Chains: []environment.ChainSpec{environment.ManagedBesu{Consensus: besu.IBFT2}},
+		Chains: []environment.ChainSpec{
+			environment.ManagedBesu{Consensus: besu.IBFT2},
+			environment.ManagedBesu{Consensus: besu.IBFT2, Nodes: 2},
+		},
 		Connections: []environment.ConnectionSpec{{
 			A: environment.NewBesuClient{},
 			B: environment.ExistingClient{Kind: clientkind.Besu},
@@ -65,7 +68,8 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 	if besuSummary.BesuClients != 2 || besuSummary.Attestors != 0 {
 		t.Fatalf("besu summary = %#v", besuSummary)
 	}
-	if got := besuSummary.Chains; len(got) != 1 || got[0].Type != "Besu IBFT2" {
+	got := besuSummary.Chains
+	if len(got) != 2 || got[0].Type != "Besu IBFT2" || got[1].Type != "Besu IBFT2 (2 nodes)" {
 		t.Fatalf("besu ibft2 chain summary = %#v", got)
 	}
 }

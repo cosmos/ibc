@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -182,6 +183,72 @@ func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
 	t.Parallel()
 	requireBesuAutoRelay(t, besu.IBFT2)
+}
+
+// Header voting brings in a second validator on chain B and votes its first
+// out before any packet is relayed, so no header at B's head is sealed by the
+// validator chain A's client trusts. The relayer steps the client across each
+// change in the transaction relaying the transfer.
+func TestTransferBesuQBFT_ValidatorTurnover(t *testing.T) {
+	t.Parallel()
+	requireBesuValidatorTurnover(t, besu.QBFT)
+}
+
+// IBFT 2.0 votes on validators through its own RPC namespace and seals over
+// its own digest.
+func TestTransferBesuIBFT2_ValidatorTurnover(t *testing.T) {
+	t.Parallel()
+	requireBesuValidatorTurnover(t, besu.IBFT2)
+}
+
+func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
+	t.Helper()
+	chains := besuChains(t, consensus, consensus)
+	chainB, ok := chains[1].(environment.ManagedBesu)
+	require.True(t, ok)
+	chainB.Nodes = 2
+	chains[1] = chainB
+	spec, runtime := besuMesh(chains)
+	// At the default two thirds, a client trusting both of B's validators
+	// cannot follow the vote that leaves one of them to seal alone; one half
+	// follows every single validator change.
+	connection := &spec.Connections[0]
+	for _, end := range []*environment.ClientSpec{&connection.A, &connection.B} {
+		client, ok := (*end).(environment.NewBesuClient)
+		require.True(t, ok)
+		client.TrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}
+		*end = client
+	}
+	env := e2etest.Start(t, spec, runtime)
+	sender := e2etest.NewSigner(t)
+	relayerSigner := e2etest.NewSigner(t)
+	route := e2etest.BtoA(e2etest.ChainB, e2etest.ChainA)
+	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
+	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
+	ctx := t.Context()
+
+	source, err := env.Chain(route.Source)
+	require.NoError(t, err)
+	validators, err := source.Validators()
+	require.NoError(t, err)
+	nodes := validators.Nodes()
+	require.NoError(t, validators.Add(ctx, nodes[1]))
+	require.NoError(t, validators.Remove(ctx, nodes[0]))
+	current, err := validators.Current(ctx)
+	require.NoError(t, err)
+	require.Equal(t, nodes[1:], current)
+
+	relayer := e2etest.StartRelayer(t, driver, env)
+	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
+		Amount: big.NewInt(2_000_000),
+		Memo:   "turnover-besu-" + string(consensus),
+	})
+	require.NoError(t, err)
+	status, err := e2etest.AwaitState(ctx, relayer, transfer.PacketTx(),
+		relayerv2.PacketState_PACKET_STATE_SUCCEEDED)
+	require.NoError(t, err)
+	require.NoError(t, transfer.VerifyDelivered(ctx))
+	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
 }
 
 // requireBesuAutoRelay relays a transfer between two Besu chains running

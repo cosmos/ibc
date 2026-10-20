@@ -4,20 +4,26 @@ package besu
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/testcontainers/testcontainers-go"
@@ -52,17 +58,22 @@ type Spec struct {
 	Image     string
 	// BlockPeriod is rounded to whole seconds and rejected if it rounds to zero.
 	BlockPeriod time.Duration
+	// Nodes is how many nodes run the chain, one when zero. Only the first
+	// validates from genesis; the others follow it and can be voted in.
+	Nodes int
 }
 
 type Chain struct {
 	*evm.EVMClient
 	evm.Identity
 
-	container testcontainers.Container
-	logID     string
-	wsURL     string
-	treasury  evm.Account
-	wait      evm.TransactionWait
+	// nodes run the chain; the first validates from genesis and serves its RPC.
+	nodes    []*node
+	api      string
+	logID    string
+	wsURL    string
+	treasury evm.Account
+	wait     evm.TransactionWait
 
 	mu      sync.Mutex
 	stopped bool
@@ -71,9 +82,17 @@ type Chain struct {
 	fundingMu sync.Mutex
 }
 
+// node is one Besu container running the chain.
+type node struct {
+	container testcontainers.Container
+	address   common.Address
+	rpc       *rpc.Client
+}
+
 var (
-	_ chainpkg.Chain     = (*Chain)(nil)
-	_ chainpkg.EOAFunder = (*Chain)(nil)
+	_ chainpkg.Chain          = (*Chain)(nil)
+	_ chainpkg.EOAFunder      = (*Chain)(nil)
+	_ chainpkg.ValidatorVoter = (*Chain)(nil)
 )
 
 func DockerImage() string {
@@ -102,6 +121,10 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 	if spec.WorkDir == "" {
 		return nil, fmt.Errorf("besu chain %s: work dir is empty", spec.ID)
 	}
+	if spec.Nodes < 0 {
+		return nil, fmt.Errorf("besu chain %s: %d nodes", spec.ID, spec.Nodes)
+	}
+	spec.Nodes = max(spec.Nodes, 1)
 	treasury, err := evm.NewAccount()
 	if err != nil {
 		return nil, fmt.Errorf("besu chain %s: create funding treasury: %w", spec.ID, err)
@@ -190,6 +213,7 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 	}
 
 	bc := &Chain{
+		api:      votingAPI(spec.Consensus),
 		logID:    spec.ID,
 		treasury: treasury,
 		wait: evm.TransactionWait{
@@ -205,51 +229,25 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 		}
 	}()
 
-	request := testcontainers.ContainerRequest{
-		Name:         namePrefix,
-		Image:        spec.Image,
-		Labels:       labels,
-		ExposedPorts: []string{"8545/tcp", "8546/tcp"},
-		ConfigModifier: func(config *containertypes.Config) {
-			config.User = hostUser
-		},
-		HostConfigModifier: func(config *containertypes.HostConfig) {
-			container.BindPortsToLoopback(config, "8545/tcp", "8546/tcp")
-			config.Mounts = append(
-				config.Mounts,
-				mount.Mount{
-					Type:     mount.TypeBind,
-					Source:   filepath.Join(chainDir, "genesis.json"),
-					Target:   "/config/genesis.json",
-					ReadOnly: true,
-				},
-				mount.Mount{Type: mount.TypeBind, Source: dataDir, Target: "/var/lib/besu"},
-			)
-		},
-		Cmd: []string{
-			"--data-path=/var/lib/besu",
-			"--genesis-file=/config/genesis.json",
-			"--min-gas-price=0",
-			"--rpc-http-enabled",
-			"--rpc-http-host=0.0.0.0",
-			"--rpc-http-api=ETH,NET,WEB3",
-			"--rpc-ws-enabled",
-			"--rpc-ws-host=0.0.0.0",
-			"--rpc-ws-api=ETH,NET,WEB3",
-			"--host-allowlist=*",
-		},
+	nodes := nodeLauncher{
+		image:    spec.Image,
+		labels:   labels,
+		hostUser: hostUser,
+		genesis:  filepath.Join(chainDir, "genesis.json"),
+		api:      bc.api,
 	}
-	bc.container, err = container.Start(ctx, request)
+	validator, err := nodes.start(ctx, namePrefix, dataDir, nil, "8545/tcp", "8546/tcp")
 	if err != nil {
-		return nil, fmt.Errorf("start besu container %s: %w", namePrefix, err)
+		return nil, err
 	}
-	rpcURL, err := bc.container.PortEndpoint(ctx, "8545/tcp", "http")
+	bc.nodes = append(bc.nodes, validator)
+	rpcURL, err := validator.container.PortEndpoint(ctx, "8545/tcp", "http")
 	if err != nil {
 		return nil, fmt.Errorf("resolve besu RPC endpoint: %w", err)
 	}
 	bc.Identity = evm.NewIdentity(spec.ID, rpcURL)
 
-	bc.wsURL, err = bc.container.PortEndpoint(ctx, "8546/tcp", "ws")
+	bc.wsURL, err = validator.container.PortEndpoint(ctx, "8546/tcp", "ws")
 	if err != nil {
 		return nil, fmt.Errorf("resolve besu websocket endpoint: %w", err)
 	}
@@ -267,9 +265,247 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 		client.Close()
 		return nil, besuStartupError(bc, fmt.Errorf("connect besu chain %s: %w", spec.ID, err))
 	}
-
 	bc.EVMClient = ec
+
+	if spec.Nodes > 1 {
+		if followErr := bc.startFollowers(ctx, nodes, spec, chainDir, namePrefix); followErr != nil {
+			return nil, besuStartupError(bc, followErr)
+		}
+	}
 	return bc, nil
+}
+
+// votingAPI is the RPC namespace of the consensus's validator votes.
+func votingAPI(consensus clibesu.Consensus) string {
+	if consensus == clibesu.IBFT2 {
+		return "ibft"
+	}
+	return "qbft"
+}
+
+// startFollowers starts the nodes after the first, peered with it over the
+// Docker bridge, and waits until each has synced to its head.
+func (bc *Chain) startFollowers(
+	ctx context.Context,
+	nodes nodeLauncher,
+	spec Spec,
+	chainDir, namePrefix string,
+) error {
+	validator := bc.nodes[0]
+	ip, err := validator.container.ContainerIP(ctx)
+	if err != nil || ip == "" {
+		return errors.Join(fmt.Errorf("besu chain %s: no bridge IP for the validator node", spec.ID), err)
+	}
+	key, err := readNodeKey(filepath.Join(chainDir, "node", "data", "key"))
+	if err != nil {
+		return err
+	}
+	staticNodes, err := json.Marshal([]string{enode(key, ip)})
+	if err != nil {
+		return fmt.Errorf("marshal besu static nodes: %w", err)
+	}
+
+	for i := 1; i < spec.Nodes; i++ {
+		dataDir := filepath.Join(chainDir, fmt.Sprintf("node-%d", i), "data")
+		if mkdirErr := os.MkdirAll(dataDir, 0o777); mkdirErr != nil {
+			return fmt.Errorf("create besu node data dir: %w", mkdirErr)
+		}
+		_ = os.Chmod(dataDir, 0o777)
+		followerKey, keyErr := crypto.GenerateKey()
+		if keyErr != nil {
+			return fmt.Errorf("generate besu node key: %w", keyErr)
+		}
+		keyHex := hexutil.Encode(crypto.FromECDSA(followerKey))
+		if writeErr := os.WriteFile(filepath.Join(dataDir, "key"), []byte(keyHex), 0o644); writeErr != nil {
+			return fmt.Errorf("write besu node key: %w", writeErr)
+		}
+		if writeErr := os.WriteFile(filepath.Join(dataDir, "static-nodes.json"), staticNodes, 0o644); writeErr != nil {
+			return fmt.Errorf("write besu static nodes: %w", writeErr)
+		}
+
+		follower, startErr := nodes.start(ctx, fmt.Sprintf("%s-node-%d", namePrefix, i), dataDir, []string{
+			"--static-nodes-file=/var/lib/besu/static-nodes.json",
+			"--sync-mode=FULL",
+		}, "8545/tcp")
+		if startErr != nil {
+			return startErr
+		}
+		bc.nodes = append(bc.nodes, follower)
+		if syncErr := bc.waitSynced(ctx, follower); syncErr != nil {
+			return fmt.Errorf("besu chain %s node %d: %w", spec.ID, i, syncErr)
+		}
+	}
+	return nil
+}
+
+// waitSynced waits until n has the validator node's head.
+func (bc *Chain) waitSynced(ctx context.Context, n *node) error {
+	head, err := bc.Height(ctx)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, besuReadyTimeout)
+	defer cancel()
+	client := ethclient.NewClient(n.rpc)
+	return poll.Until(ctx, bc.wait.PollInterval, func(ctx context.Context) (bool, error) {
+		height, err := client.BlockNumber(ctx)
+		return err == nil && height >= head, nil
+	})
+}
+
+// Nodes is the validator address of each node, the genesis validator first.
+func (bc *Chain) Nodes() []common.Address {
+	addresses := make([]common.Address, len(bc.nodes))
+	for i, n := range bc.nodes {
+		addresses[i] = n.address
+	}
+	return addresses
+}
+
+// Validators is the validator set at the head.
+func (bc *Chain) Validators(ctx context.Context) ([]common.Address, error) {
+	var validators []common.Address
+	err := bc.nodes[0].rpc.CallContext(ctx, &validators, bc.api+"_getValidatorsByBlockNumber", "latest")
+	if err != nil {
+		return nil, fmt.Errorf("besu chain %s validators: %w", bc.logID, err)
+	}
+	return validators, nil
+}
+
+// VoteValidator has every node in the validator set vote validator in or out,
+// waits until the head's set reflects it, then discards the votes. Only a node
+// of this chain can be voted in: a validator with no node halts the chain.
+func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, add bool) error {
+	if add && !slices.Contains(bc.Nodes(), validator) {
+		return fmt.Errorf("besu chain %s: %s runs no node of the chain", bc.logID, validator)
+	}
+	current, err := bc.Validators(ctx)
+	if err != nil {
+		return err
+	}
+	var voters []*node
+	for _, n := range bc.nodes {
+		if slices.Contains(current, n.address) {
+			voters = append(voters, n)
+		}
+	}
+
+	for _, n := range voters {
+		if voteErr := n.rpc.CallContext(ctx, nil, bc.api+"_proposeValidatorVote", validator, add); voteErr != nil {
+			return fmt.Errorf("besu chain %s: %s votes on %s: %w", bc.logID, n.address, validator, voteErr)
+		}
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, bc.wait.Timeout)
+	defer cancel()
+	err = poll.Until(waitCtx, bc.wait.PollInterval, func(ctx context.Context) (bool, error) {
+		current, err = bc.Validators(ctx)
+		return err == nil && slices.Contains(current, validator) == add, nil
+	})
+	if err != nil {
+		return fmt.Errorf(
+			"besu chain %s: vote on %s did not pass, validators %v: %w", bc.logID, validator, current, err,
+		)
+	}
+	for _, n := range voters {
+		if discardErr := n.rpc.CallContext(ctx, nil, bc.api+"_discardValidatorVote", validator); discardErr != nil {
+			return fmt.Errorf(
+				"besu chain %s: %s discards its vote on %s: %w",
+				bc.logID,
+				n.address,
+				validator,
+				discardErr,
+			)
+		}
+	}
+	return nil
+}
+
+// nodeLauncher starts the nodes of one chain.
+type nodeLauncher struct {
+	image    string
+	labels   map[string]string
+	hostUser string
+	genesis  string
+	api      string
+}
+
+// start runs a node on the key in dataDir, publishing ports on loopback.
+func (l nodeLauncher) start(
+	ctx context.Context,
+	name, dataDir string,
+	args []string,
+	ports ...string,
+) (*node, error) {
+	key, err := readNodeKey(filepath.Join(dataDir, "key"))
+	if err != nil {
+		return nil, err
+	}
+	apis := "ETH,NET,WEB3," + strings.ToUpper(l.api)
+	request := testcontainers.ContainerRequest{
+		Name:         name,
+		Image:        l.image,
+		Labels:       l.labels,
+		ExposedPorts: ports,
+		ConfigModifier: func(config *containertypes.Config) {
+			config.User = l.hostUser
+		},
+		HostConfigModifier: func(config *containertypes.HostConfig) {
+			container.BindPortsToLoopback(config, ports...)
+			config.Mounts = append(
+				config.Mounts,
+				mount.Mount{
+					Type:     mount.TypeBind,
+					Source:   l.genesis,
+					Target:   "/config/genesis.json",
+					ReadOnly: true,
+				},
+				mount.Mount{Type: mount.TypeBind, Source: dataDir, Target: "/var/lib/besu"},
+			)
+		},
+		Cmd: append([]string{
+			"--data-path=/var/lib/besu",
+			"--genesis-file=/config/genesis.json",
+			"--min-gas-price=0",
+			"--discovery-enabled=false",
+			"--rpc-http-enabled",
+			"--rpc-http-host=0.0.0.0",
+			"--rpc-http-api=" + apis,
+			"--rpc-ws-enabled",
+			"--rpc-ws-host=0.0.0.0",
+			"--rpc-ws-api=" + apis,
+			"--host-allowlist=*",
+		}, args...),
+	}
+	c, err := container.Start(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("start besu container %s: %w", name, err)
+	}
+	n := &node{container: c, address: crypto.PubkeyToAddress(key.PublicKey)}
+	url, err := c.PortEndpoint(ctx, "8545/tcp", "http")
+	if err == nil {
+		n.rpc, err = rpc.DialContext(ctx, url)
+	}
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("connect besu node %s: %w", name, err), container.Terminate(c))
+	}
+	return n, nil
+}
+
+func readNodeKey(path string) (*ecdsa.PrivateKey, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read besu node key: %w", err)
+	}
+	key, err := crypto.HexToECDSA(strings.TrimPrefix(strings.TrimSpace(string(data)), "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("parse besu node key %s: %w", path, err)
+	}
+	return key, nil
+}
+
+// enode is the address peers dial key's node at.
+func enode(key *ecdsa.PrivateKey, ip string) string {
+	return fmt.Sprintf("enode://%x@%s:30303", crypto.FromECDSAPub(&key.PublicKey)[1:], ip)
 }
 
 func (bc *Chain) WSURL() string { return bc.wsURL }
@@ -320,19 +556,33 @@ func (bc *Chain) CollectLogs(ctx context.Context) map[string]string {
 	ctx, cancel := context.WithTimeout(ctx, besuLogTimeout)
 	defer cancel()
 
-	if bc.container == nil {
+	logs := map[string]string{}
+	for i, n := range bc.nodes {
+		id := bc.logID
+		if i > 0 {
+			id = fmt.Sprintf("%s-node-%d", bc.logID, i)
+		}
+		if data := containerLogs(ctx, n.container); data != "" {
+			logs[id] = data
+		}
+	}
+	if len(logs) == 0 {
 		return nil
 	}
-	reader, err := bc.container.Logs(ctx)
+	return logs
+}
+
+func containerLogs(ctx context.Context, c testcontainers.Container) string {
+	reader, err := c.Logs(ctx)
 	if err != nil {
-		return nil
+		return ""
 	}
 	defer reader.Close() //nolint:errcheck
 	data, err := io.ReadAll(reader)
-	if err != nil || len(data) == 0 {
-		return nil
+	if err != nil {
+		return ""
 	}
-	return map[string]string{bc.logID: string(data)}
+	return string(data)
 }
 
 func besuStartupError(bc *Chain, err error) error {
@@ -344,11 +594,12 @@ func besuStartupError(bc *Chain, err error) error {
 }
 
 func besuStartupLogs(bc *Chain) string {
-	data := bc.CollectLogs(context.Background())[bc.logID]
-	if data == "" {
-		return ""
+	logs := bc.CollectLogs(context.Background())
+	var out strings.Builder
+	for _, id := range slices.Sorted(maps.Keys(logs)) {
+		fmt.Fprintf(&out, "--- %s ---\n%s", id, evm.Tail(logs[id], besuStartupLogTailBytes))
 	}
-	return fmt.Sprintf("--- %s ---\n%s", bc.logID, evm.Tail(data, besuStartupLogTailBytes))
+	return out.String()
 }
 
 func (bc *Chain) Stop() error {
@@ -361,16 +612,19 @@ func (bc *Chain) Stop() error {
 		bc.Close()
 		bc.closed = true
 	}
-	container := bc.container
+	nodes := bc.nodes
 	bc.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), besuStopTimeout)
 	defer cancel()
 
-	if container != nil {
-		if err := container.Terminate(ctx); err != nil {
-			return err
-		}
+	var err error
+	for _, n := range nodes {
+		n.rpc.Close()
+		err = errors.Join(err, n.container.Terminate(ctx))
+	}
+	if err != nil {
+		return err
 	}
 	bc.mu.Lock()
 	bc.stopped = true

@@ -28,3 +28,11 @@ type FaultInjector interface {
 type EOAFunder interface {
 	EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error
 }
+
+// ValidatorVoter changes a BFT chain's validator set through header voting,
+// across nodes the managed Chain runs.
+type ValidatorVoter interface {
+	Nodes() []common.Address
+	Validators(ctx context.Context) ([]common.Address, error)
+	VoteValidator(ctx context.Context, validator common.Address, add bool) error
+}
