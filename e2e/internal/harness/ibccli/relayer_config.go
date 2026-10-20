@@ -177,7 +177,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	for _, connection := range cfg.Connections {
 		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
 		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
-		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
+		file.Relayer.Connections = append(file.Relayer.Connections, ConnectionFileConfig{
 			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
 			ClientA: a,
 			ClientB: b,
@@ -186,8 +186,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clientEndFileConfig {
-	result := clientEndFileConfig{
+func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) ClientEndFileConfig {
+	result := ClientEndFileConfig{
 		ChainID:   end.ChainID,
 		ClientID:  end.ClientID,
 		Signer:    signer,
@@ -206,7 +206,7 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clie
 func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
 	case RelayerAttestorRemote:
-		file.Attestors = append(file.Attestors, attestorFileConfig{
+		file.Attestors = append(file.Attestors, AttestorFileConfig{
 			Name: attestor.Name, Type: RelayerAttestorRemote, GRPC: attestor.GRPC,
 		})
 		return nil
@@ -222,7 +222,7 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 		file.Signers = append(file.Signers, signerConfig{
 			Alias: signerAlias, Type: RelayerSignerLocal, File: attestor.KeyFile,
 		})
-		file.Attestors = append(file.Attestors, attestorFileConfig{
+		file.Attestors = append(file.Attestors, AttestorFileConfig{
 			Name: attestor.Name, ChainID: attestor.ChainID, Type: RelayerAttestorLocal,
 			Signer: signerAlias, FinalityOffset: uint(finalityOffset),
 		})
@@ -244,7 +244,7 @@ type relayerFileConfig struct {
 	ClearOnStart         bool                      `yaml:"clearOnStart,omitempty"`
 	ClearInterval        string                    `yaml:"clearInterval,omitempty"`
 	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
-	Connections          []connectionFileConfig    `yaml:"connections"`
+	Connections          []ConnectionFileConfig    `yaml:"connections"`
 }
 
 type chainOverrideFileConfig struct {
@@ -254,22 +254,22 @@ type chainOverrideFileConfig struct {
 	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
 }
 
-type connectionFileConfig struct {
+type ConnectionFileConfig struct {
 	Alias   string              `yaml:"alias"`
-	ClientA clientEndFileConfig `yaml:"clientA"`
-	ClientB clientEndFileConfig `yaml:"clientB"`
+	ClientA ClientEndFileConfig `yaml:"clientA"`
+	ClientB ClientEndFileConfig `yaml:"clientB"`
 }
 
-type clientEndFileConfig struct {
+type ClientEndFileConfig struct {
 	ChainID   string               `yaml:"chainId"`
 	Signer    string               `yaml:"signer"`
 	ClientID  string               `yaml:"clientId"`
 	Type      clientkind.Kind      `yaml:"type"`
 	Params    map[string]any       `yaml:"params,omitempty"`
-	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
+	AutoRelay *AutoRelayFileConfig `yaml:"autoRelay,omitempty"`
 }
 
-type autoRelayFileConfig struct {
+type AutoRelayFileConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
@@ -280,10 +280,10 @@ func durationYAML(d time.Duration) string {
 	return d.String()
 }
 
-func autoRelay(enabled bool) *autoRelayFileConfig {
+func autoRelay(enabled bool) *AutoRelayFileConfig {
 	if !enabled {
 		return nil
 	}
 
-	return &autoRelayFileConfig{Enabled: true}
+	return &AutoRelayFileConfig{Enabled: true}
 }
