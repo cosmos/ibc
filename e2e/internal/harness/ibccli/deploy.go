@@ -92,8 +92,9 @@ func WriteDeployConfig(path string, cfg DeployConfig) error {
 	return nil
 }
 
-// RenderedConfig is the relaying setup `ibc deploy render-config` prints:
-// the connections it pairs and the attestors their attestation clients use.
+// RenderedConfig holds the relayer connections and attestors in the config
+// `ibc deploy render-config` prints: the existing config merged with what it
+// rendered.
 type RenderedConfig struct {
 	Connections []ConnectionFileConfig
 	Attestors   []AttestorFileConfig

@@ -280,27 +280,34 @@ func (d *deployCLI) deployIFTConnection(t *testing.T, clientA, clientB []string)
 	return iftA, iftB
 }
 
-// populateRelayConfig renders the relayer config for the two chains into the
-// CLI config and returns what render-config printed. The relayer signs with
-// its own key so its nonces never race the deployer's sends.
-func (d *deployCLI) populateRelayConfig(t *testing.T) ibccli.RenderedConfig {
+// renderConfig runs render-config for the two chains with signer relaying to
+// both ends, plus extra flags, and returns what it printed.
+func (d *deployCLI) renderConfig(t *testing.T, signer string, extra ...string) ibccli.RenderedConfig {
 	t.Helper()
-	d.importFundedKey(t, relayerAlias, "--populate-config")
-	stdout, err := d.driver.Deploy(t.Context(), "render-config", d.chainAID, d.chainBID,
-		"--signer-a", relayerAlias, "--signer-b", relayerAlias, "--populate-config", "--yes")
+	args := []string{"render-config", d.chainAID, d.chainBID, "--signer-a", signer, "--signer-b", signer}
+	stdout, err := d.driver.Deploy(t.Context(), append(args, extra...)...)
 	require.NoError(t, err)
 	cfg, err := ibccli.ParseRenderedConfig(stdout)
 	require.NoErrorf(t, err, "render-config stdout: %s", stdout)
 	return cfg
 }
 
+// populateRelayConfig renders the relayer config for the two chains into the
+// CLI config and returns what render-config printed. The relayer signs with
+// its own key so its nonces never race the deployer's sends.
+func (d *deployCLI) populateRelayConfig(t *testing.T) ibccli.RenderedConfig {
+	t.Helper()
+	d.importFundedKey(t, relayerAlias, "--populate-config")
+	return d.renderConfig(t, relayerAlias, "--populate-config", "--yes")
+}
+
 // wantConnection is the one connection render-config pairs the two clients
-// into, auto-relayed with the relayer key.
-func (d *deployCLI) wantConnection(typeA, typeB clientkind.Kind) []ibccli.ConnectionFileConfig {
+// into, auto-relayed with the signer key.
+func (d *deployCLI) wantConnection(signer string, typeA, typeB clientkind.Kind) []ibccli.ConnectionFileConfig {
 	end := func(chainID string, typ clientkind.Kind) ibccli.ClientEndFileConfig {
 		return ibccli.ClientEndFileConfig{
 			ChainID:   chainID,
-			Signer:    relayerAlias,
+			Signer:    signer,
 			ClientID:  d.clientID(),
 			Type:      typ,
 			AutoRelay: &ibccli.AutoRelayFileConfig{Enabled: true},
@@ -435,8 +442,8 @@ func TestDeployConnection(t *testing.T) {
 	// render-config pairs the two manifests into one relayer.connections[]
 	// entry, and each attestation end gets the deployer as a local attestor
 	// watching the chain it tracks
-	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection(clientkind.Attestation, clientkind.Attestation), cfg.Connections)
+	cfg := d.renderConfig(t, deployerAlias)
+	require.Equal(t, d.wantConnection(deployerAlias, clientkind.Attestation, clientkind.Attestation), cfg.Connections)
 	require.ElementsMatch(t, []ibccli.AttestorFileConfig{
 		wantAttestor(d.chainAID, deployerAlias, d.deployer),
 		wantAttestor(d.chainBID, deployerAlias, d.deployer),
@@ -463,7 +470,7 @@ func TestDeployBesuQBFTConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.BesuQBFT), cfg.Connections)
+	require.Equal(t, d.wantConnection(relayerAlias, clientkind.BesuQBFT, clientkind.BesuQBFT), cfg.Connections)
 	require.Empty(t, cfg.Attestors)
 	relayer := d.startRelayer(t)
 
@@ -509,7 +516,7 @@ func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 
 	// only the attestation end gets an attestor, watching the chain it tracks
 	cfg := d.populateRelayConfig(t)
-	require.Equal(t, d.wantConnection(clientkind.BesuQBFT, clientkind.Attestation), cfg.Connections)
+	require.Equal(t, d.wantConnection(relayerAlias, clientkind.BesuQBFT, clientkind.Attestation), cfg.Connections)
 	require.Equal(t, []ibccli.AttestorFileConfig{wantAttestor(d.chainAID, attestorAlias, attestor)}, cfg.Attestors)
 	relayer := d.startRelayer(t)
 
