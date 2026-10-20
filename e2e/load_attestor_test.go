@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
 	attestoribc "github.com/cosmos/ibc/cli/attestor/evm/ibc"
