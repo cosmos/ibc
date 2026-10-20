@@ -27,6 +27,8 @@ header:
     - "**/*.svg"
     - "**/*.excalidraw"
     - "**/bun.lock"
+    # Failing inputs Go fuzzing records, which must start with "go test fuzz v1".
+    - "**/testdata/fuzz/**"
 
     # Generated Go without configurable file headers.
     - "cli/internal/store/repository/**"
