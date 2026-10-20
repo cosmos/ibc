@@ -32,14 +32,6 @@ const (
 
 var txHash = common.HexToHash("0x60016c34c02278856c81a41ce857ac4bb837a2f4a13c95207e08cbc9e8f2b706")
 
-func TestTxHeightMissingReceipt(t *testing.T) {
-	rpc := mocks.NewMockETHClient(t)
-	rpc.EXPECT().TransactionReceipt(mock.Anything, txHash).Return(nil, ethereum.NotFound)
-	client := &Client{eth: rpc, chainID: chainIDEth}
-	_, err := client.TxHeight(t.Context(), txHash.Bytes())
-	require.ErrorIs(t, err, v2.ErrTxNotFound)
-}
-
 func testPacket() ics26router.IICS26RouterMsgsPacket {
 	return ics26router.IICS26RouterMsgsPacket{
 		Sequence:         42,

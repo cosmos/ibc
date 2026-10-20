@@ -250,9 +250,6 @@ func (c *Client) TxHeight(ctx context.Context, rawTxHash []byte) (uint64, error)
 	txHash := common.BytesToHash(rawTxHash)
 
 	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
-	if errors.Is(err, ethereum.NotFound) {
-		return 0, v2.ErrTxNotFound
-	}
 	if err != nil {
 		return 0, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
 	}
