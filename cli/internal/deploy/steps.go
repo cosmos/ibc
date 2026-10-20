@@ -500,6 +500,7 @@ func specToClient(spec ClientSpec, address string) manifest.Client {
 			InitialValidators: validators,
 			TrustingPeriod:    p.TrustingPeriod,
 			MaxClockDrift:     p.MaxClockDrift,
+			TrustLevel:        manifest.TrustLevel(p.TrustLevel),
 		}
 	}
 	return client
@@ -528,6 +529,7 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 		diffs = conflict(diffs, "ibcRouter", d.IBCRouter, r.IBCRouter)
 		diffs = conflict(diffs, "trustingPeriod", d.TrustingPeriod, r.TrustingPeriod)
 		diffs = conflict(diffs, "maxClockDrift", d.MaxClockDrift, r.MaxClockDrift)
+		diffs = conflict(diffs, "trustLevel", d.TrustLevel, r.TrustLevel)
 	}
 	return diffs
 }

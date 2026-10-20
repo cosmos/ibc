@@ -10,6 +10,8 @@ package besubft
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,8 +36,8 @@ type Host interface {
 type Counterparty interface {
 	ChainID() string
 	RouterAddress() common.Address
-	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
-	// SealedHeader returns the parsed header at height.
+	// SealedHeader returns the parsed header at height, or the head at
+	// v2.LatestBlock.
 	SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error)
 	GetRouterProof(ctx context.Context, height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
@@ -45,11 +47,24 @@ type Generator struct {
 	host         Host
 	counterparty Counterparty
 	clientID     string
+	logger       *slog.Logger
+
+	// trusted is the client's latest trusted header last read. A header at a
+	// height never changes.
+	trusted atomic.Pointer[besu.ParsedHeader]
+	// reported is the height last logged as the furthest the client reaches.
+	reported atomic.Uint64
 }
 
 // NewGenerator builds the prover for clientID on host, tracking counterparty,
 // and fails fast unless the client proves counterparty's configured router.
-func NewGenerator(ctx context.Context, clientID string, host Host, counterparty Counterparty) (*Generator, error) {
+func NewGenerator(
+	ctx context.Context,
+	clientID string,
+	host Host,
+	counterparty Counterparty,
+	logger *slog.Logger,
+) (*Generator, error) {
 	state, err := host.BesuClientState(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -62,26 +77,75 @@ func NewGenerator(ctx context.Context, clientID string, host Host, counterparty 
 		)
 	}
 
-	return &Generator{host: host, counterparty: counterparty, clientID: clientID}, nil
+	return &Generator{host: host, counterparty: counterparty, clientID: clientID, logger: logger}, nil
 }
 
-// LatestProvableHeight returns the counterparty head. The light client
-// rejects an update it cannot verify when the relay is simulated.
+// LatestProvableHeight returns the counterparty head, or the furthest header
+// the prover finds the client can reach when a validator set change it cannot
+// follow comes first. The light client rejects an update it cannot verify when
+// the relay is simulated.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	head, err := g.counterparty.GetBlockHeader(ctx, v2.LatestBlock)
+	head, err := g.counterparty.SealedHeader(ctx, v2.LatestBlock)
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("reading counterparty chain head: %w", err)
 	}
 
-	return head.Height, head.Timestamp, nil
+	state, err := g.host.BesuClientState(ctx, g.clientID)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	if head.Height <= state.LatestHeight.RevisionHeight {
+		return head.Height, blockTime(head), nil
+	}
+
+	trusted, err := g.trustedHeader(ctx, state.LatestHeight.RevisionHeight)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	_, stuck, err := g.path(ctx, trusted, head, state.TrustLevel)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	if stuck == nil {
+		return head.Height, blockTime(head), nil
+	}
+
+	// Which headers the search finds depends on its target, so a height is
+	// reported only once the search ClientUpdatePayloads repeats towards it
+	// succeeds. Each retry stops lower, ending at the trusted height at worst.
+	reached := stuck.reached
+	for reached.Height > trusted.Height {
+		_, again, errAgain := g.path(ctx, trusted, reached, state.TrustLevel)
+		if errAgain != nil {
+			return 0, time.Time{}, errAgain
+		}
+		if again == nil {
+			break
+		}
+		reached = again.reached
+	}
+
+	if g.reported.Swap(stuck.reached.Height) != stuck.reached.Height {
+		g.logger.Error(
+			"Client cannot follow a validator set change; relaying only up to the furthest height it reaches",
+			"reachedHeight", reached.Height,
+			"headHeight", head.Height,
+			"err", stuck,
+		)
+	}
+	return reached.Height, blockTime(reached), nil
 }
 
-// ClientUpdatePayloads returns one updateMsg from the client's latest
-// consensus state to target, or none when target is not above it. The
-// contract only accepts headers above the trusted height, so a target a
-// concurrent update left behind cannot be installed from the latest state; it
-// fails here unless the client already stores it, since the packet proofs at
-// target would revert.
+func blockTime(header *besu.ParsedHeader) time.Time {
+	return time.Unix(int64(header.Timestamp), 0).UTC() //nolint:gosec // block times fit in int64
+}
+
+// ClientUpdatePayloads returns the updateMsgs from the client's latest
+// consensus state to target, each verifiable from the one before, or none when
+// target is not above it. The contract only accepts
+// headers above the trusted height, so a target a concurrent update left
+// behind cannot be installed from the latest state; it fails here unless the
+// client already stores it, since the packet proofs at target would revert.
 func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, error) {
 	state, err := g.host.BesuClientState(ctx, g.clientID)
 	if err != nil {
@@ -102,25 +166,48 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 		return nil, nil
 	}
 
-	trusted, err := g.counterparty.SealedHeader(ctx, trustedHeight)
+	trusted, err := g.trustedHeader(ctx, trustedHeight)
 	if err != nil {
-		return nil, fmt.Errorf("reading trusted header: %w", err)
+		return nil, err
 	}
-
-	targetHeader, err := g.counterparty.SealedHeader(ctx, target)
+	targetHeader, err := g.sealedHeader(ctx, target)
 	if err != nil {
 		return nil, err
 	}
 
-	update, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
-		HeaderRlp:              targetHeader.RLP,
-		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trustedHeight},
-		ConsensusStatePreimage: trusted.ConsensusState(),
-	})
+	headers, stuck, err := g.path(ctx, trusted, targetHeader, state.TrustLevel)
 	if err != nil {
-		return nil, fmt.Errorf("encoding update to height %d: %w", target, err)
+		return nil, err
 	}
-	return [][]byte{update}, nil
+	if stuck != nil {
+		return nil, stuck
+	}
+
+	updates := make([][]byte, len(headers))
+	for i, header := range headers {
+		updates[i], err = besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
+			HeaderRlp:              header.RLP,
+			TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trusted.Height},
+			ConsensusStatePreimage: trusted.ConsensusState(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("encoding update to height %d: %w", header.Height, err)
+		}
+		trusted = header
+	}
+	return updates, nil
+}
+
+func (g *Generator) trustedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
+	if header := g.trusted.Load(); header != nil && header.Height == height {
+		return header, nil
+	}
+	header, err := g.counterparty.SealedHeader(ctx, height)
+	if err != nil {
+		return nil, fmt.Errorf("reading trusted header: %w", err)
+	}
+	g.trusted.Store(header)
+	return header, nil
 }
 
 // PacketProofs proves each packet's claim against the router storage at

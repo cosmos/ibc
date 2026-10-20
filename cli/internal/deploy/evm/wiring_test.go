@@ -385,6 +385,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				InitialConsensusState: consensusState,
 				TrustingPeriod:        fixture.TrustingPeriod,
 				MaxClockDrift:         fixture.MaxClockDrift,
+				TrustLevel:            besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
 			}
 			spec := deploy.ClientSpec{
 				ClientID:             "besu-2",
@@ -423,7 +424,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
 				TrustingPeriod: fixture.TrustingPeriod,
 				MaxClockDrift:  fixture.MaxClockDrift,
-				TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
+				TrustLevel:     params.TrustLevel,
 			}, state)
 
 			lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())

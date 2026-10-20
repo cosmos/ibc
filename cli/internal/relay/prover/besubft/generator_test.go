@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -27,8 +28,9 @@ const clientID = "besu-chain-a"
 type fakeChain struct {
 	id             string
 	router         common.Address
-	latest         *v2.BlockHeader
+	head           uint64
 	sealed         map[uint64]*besu.ParsedHeader
+	reads          []uint64
 	clientState    besumsgs.IBesuLightClientMsgsClientState
 	clientStateErr error
 	stored         map[uint64]common.Hash
@@ -39,17 +41,11 @@ func (f *fakeChain) ChainID() string { return f.id }
 
 func (f *fakeChain) RouterAddress() common.Address { return f.router }
 
-func (f *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHeader, error) {
-	if height == v2.LatestBlock {
-		if f.latest != nil {
-			return *f.latest, nil
-		}
-		return v2.BlockHeader{}, errors.New("no latest header")
-	}
-	return v2.BlockHeader{}, fmt.Errorf("no block header %d", height)
-}
-
 func (f *fakeChain) SealedHeader(_ context.Context, height uint64) (*besu.ParsedHeader, error) {
+	if height == v2.LatestBlock {
+		height = f.head
+	}
+	f.reads = append(f.reads, height)
 	h, ok := f.sealed[height]
 	if !ok {
 		return nil, fmt.Errorf("no sealed header %d", height)
@@ -92,7 +88,12 @@ func newFixtureEnv(t *testing.T, consensus besu.Consensus) *fixtureEnv {
 		counterparty: &fakeChain{id: "besu-b", sealed: map[uint64]*besu.ParsedHeader{}},
 	}
 	env.counterparty.router = env.fixture.RouterAddress
-	env.gen = &Generator{host: env.host, counterparty: env.counterparty, clientID: clientID}
+	env.gen = &Generator{
+		host:         env.host,
+		counterparty: env.counterparty,
+		clientID:     clientID,
+		logger:       slog.New(slog.DiscardHandler),
+	}
 	return env
 }
 
@@ -102,6 +103,7 @@ func (e *fixtureEnv) clientState(latest uint64) besumsgs.IBesuLightClientMsgsCli
 		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: latest},
 		TrustingPeriod: e.fixture.TrustingPeriod,
 		MaxClockDrift:  e.fixture.MaxClockDrift,
+		TrustLevel:     besu.DefaultTrustLevel,
 	}
 }
 
@@ -331,13 +333,17 @@ func testPacketProofs(t *testing.T, consensus besu.Consensus) {
 // rejects a header beyond maxClockDrift at simulation.
 func TestLatestProvableHeightReturnsHead(t *testing.T) {
 	env := newFixtureEnv(t, besu.QBFT)
-	head := time.Now().Add(time.Hour).Truncate(time.Second).UTC()
-	env.counterparty.latest = &v2.BlockHeader{Height: env.fixture.InitialTrustedHeight + 50, Timestamp: head}
+	update := env.fixture.NonAdjacentUpdate
+	env.expectInitialAnchor(t)
+	head := besutest.ParseHeader(t, update.HeaderRLP)
+	head.Timestamp = uint64(time.Now().Add(time.Hour).Unix()) //nolint:gosec // test clock is positive
+	env.counterparty.sealed[update.Height] = head
+	env.counterparty.head = update.Height
 
 	height, ts, err := env.gen.LatestProvableHeight(t.Context())
 	require.NoError(t, err)
-	assert.Equal(t, env.fixture.InitialTrustedHeight+50, height)
-	assert.Equal(t, head, ts)
+	assert.Equal(t, update.Height, height)
+	assert.Equal(t, time.Unix(int64(head.Timestamp), 0).UTC(), ts) //nolint:gosec // test clock is positive
 }
 
 func TestNewGeneratorChecksRouter(t *testing.T) {
@@ -347,21 +353,21 @@ func TestNewGeneratorChecksRouter(t *testing.T) {
 		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
 		env.counterparty.router = common.HexToAddress("0x1234")
-		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty, slog.New(slog.DiscardHandler))
 		require.ErrorContains(t, err, "configured with router")
 	})
 
 	t.Run("client state error", func(t *testing.T) {
 		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientStateErr = errors.New("execution reverted")
-		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty, slog.New(slog.DiscardHandler))
 		require.ErrorContains(t, err, "execution reverted")
 	})
 
 	t.Run("matching router", func(t *testing.T) {
 		env := newFixtureEnv(t, besu.QBFT)
 		env.host.clientState = env.clientState(env.fixture.InitialTrustedHeight)
-		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty)
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty, slog.New(slog.DiscardHandler))
 		require.NoError(t, err)
 	})
 }

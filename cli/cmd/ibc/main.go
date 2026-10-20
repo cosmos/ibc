@@ -183,6 +183,8 @@ func init() {
 	_ = cmdDeployClientBesu.MarkFlagRequired(flagNameTrustingPeriod)
 	dbf.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, 60*time.Second,
 		"how far ahead of this chain's block time a counterparty header may be")
+	dbf.StringVar(&flagDeployTrustLevel, flagNameTrustLevel, defaultTrustLevel,
+		"fraction n/d of the trusted validators that must seal an update, from 1/3 to 1")
 
 	cmdDeployRenderConfig.Flags().
 		StringVar(&flagDeployRenderSignerA, "signer-a", "", "Override the relay signer on chainA; omitted preserves existing settings")
