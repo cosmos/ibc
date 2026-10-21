@@ -146,12 +146,10 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 			RelayerAddress: c.address.Hex(),
 		}
 		err = broadcast(ctx, c.eth, tx)
-		if nonce == c.lowestUnminedNonce {
-			c.lastAttemptedFeeCap, c.lastAttemptedTipCap = fee, tip
-		}
 		if err == nil {
 			c.nextNonce = max(c.nextNonce, nonce+1)
 			if nonce == c.lowestUnminedNonce {
+				c.lastAttemptedFeeCap, c.lastAttemptedTipCap = fee, tip
 				c.lowestUnminedNoncePendingSince = time.Now()
 			}
 			metrics.startTx(c.chainID, c.address.Hex(), tx.Hash().Hex())
@@ -160,6 +158,9 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		}
 		if !isReplacementUnderpriced(err) {
 			return submission, errors.Wrapf(err, "broadcasting transaction %s at nonce %d", tx.Hash(), nonce)
+		}
+		if nonce == c.lowestUnminedNonce {
+			c.lastAttemptedFeeCap, c.lastAttemptedTipCap = fee, tip
 		}
 		nextFee, nextTip := capFees(bump(fee), bump(tip), c.opts.MaxFeePerGas)
 		if nextFee.Cmp(fee) == 0 && nextTip.Cmp(tip) == 0 {

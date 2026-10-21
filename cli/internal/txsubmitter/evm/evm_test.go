@@ -193,12 +193,13 @@ func TestAcceptedTransactionStillGetsHigherFeesAfterStalling(t *testing.T) {
 	}
 }
 
-func TestBroadcastErrorDoesNotAdvanceNonce(t *testing.T) {
+func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		err  error
 	}{
 		{name: "rejected", err: errors.New("transaction pool full")},
+		{name: "insufficient funds", err: errors.New("insufficient funds for gas * price + value")},
 		{name: "underpriced without replacement", err: errors.New("transaction underpriced")},
 		{name: "lost response", err: context.DeadlineExceeded},
 	} {
@@ -214,11 +215,43 @@ func TestBroadcastErrorDoesNotAdvanceNonce(t *testing.T) {
 			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
 			require.Zero(t, c.nextNonce)
 
+			for range 2 {
+				require.ErrorIs(t, submit(t, c), tt.err)
+				require.Zero(t, c.nextNonce)
+			}
 			rpc.send = nil
 			require.NoError(t, submit(t, c))
-			require.Zero(t, rpc.sent[1].Nonce())
+			require.Len(t, rpc.sent, 4)
+			for _, tx := range rpc.sent {
+				require.Zero(t, tx.Nonce())
+				require.Equal(t, rpc.sent[0].GasFeeCap(), tx.GasFeeCap())
+				require.Equal(t, rpc.sent[0].GasTipCap(), tx.GasTipCap())
+			}
 			require.Equal(t, uint64(1), c.nextNonce)
 		})
+	}
+}
+
+func TestRejectedReplacementPreservesAcceptedFees(t *testing.T) {
+	c, rpc := newSubmitter(t)
+	require.NoError(t, submit(t, c))
+	original := rpc.sent[0]
+	expireNonce(c)
+	rejected := errors.New("transaction pool full")
+	rpc.send = func(*types.Transaction) error { return rejected }
+	for range 3 {
+		require.ErrorIs(t, submit(t, c), rejected)
+	}
+	rpc.send = nil
+	require.NoError(t, submit(t, c))
+	require.Len(t, rpc.sent, 5)
+	firstReplacement := rpc.sent[1]
+	require.Positive(t, firstReplacement.GasFeeCap().Cmp(original.GasFeeCap()))
+	require.Positive(t, firstReplacement.GasTipCap().Cmp(original.GasTipCap()))
+	for _, tx := range rpc.sent[1:] {
+		require.Equal(t, original.Nonce(), tx.Nonce())
+		require.Equal(t, firstReplacement.GasFeeCap(), tx.GasFeeCap())
+		require.Equal(t, firstReplacement.GasTipCap(), tx.GasTipCap())
 	}
 }
 
