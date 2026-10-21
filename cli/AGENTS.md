@@ -4,13 +4,11 @@
 
 - Run the relevant tests from this directory. Run `make lint` here when changing Go code or inputs
   that affect linting.
-- From the repository root, keep `make -C e2e test` green when changing the CLI transport contract
-  exercised by the repository-wide black-box tests.
+- When changing the CLI transport contract, run affected black-box tests from the repository root
+  with `make -C e2e test`, using `E2E_FLAGS` to select tests. Run the full suite for shared transport
+  changes that can affect multiple flows.
 
 ## Documentation generated from this code
 
 When changing commands or flags, configuration, cited behavior, or build inputs represented in the
 CLI reference pages, follow [`docs/6-ibc-cli/tools/AGENTS.md`](../docs/6-ibc-cli/tools/AGENTS.md).
-
-Never hand-edit between a `<!-- GEN:... START -->` marker and its `END`: the
-next run overwrites it.

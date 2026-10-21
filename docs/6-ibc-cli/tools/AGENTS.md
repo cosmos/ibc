@@ -26,8 +26,9 @@ python3 docs/6-ibc-cli/tools/refgen.py all --check
 python3 docs/6-ibc-cli/tools/refgen.py all --plan
 ```
 
-Both commands build and run the CLI. The plan names anything that requires a decision. Read
-[REFERENCE.md](REFERENCE.md) for the reported plan kinds and exit codes.
+Both commands run the CLI, building it when needed. Resolve `--check` errors as well as plan entries:
+`--plan` and `--report` omit notice-placement and prose-citation checks. Read
+[REFERENCE.md](REFERENCE.md) for the reported kinds and exit codes.
 
 ## 2. Resolve decisions
 
@@ -63,8 +64,9 @@ python3 docs/6-ibc-cli/tools/test-refgen-e2e.py
 
 When preparing a pull request, generate its documentation report with
 `python3 docs/6-ibc-cli/tools/refgen.py all --report` and identify any prose written by hand or work
-handed back. The documentation work is complete when `--check` is clean or every outstanding item is
-reported as blocked.
+handed back. The documentation work is complete when affected prose has been reviewed and `--check`
+is clean. If unresolved blockers remain, report the work as incomplete and list them using the
+hand-back format in [REFERENCE.md](REFERENCE.md).
 
 Read [AUDIT.md](AUDIT.md) only when the task is to establish whether the generated pages are true,
 rather than whether they are current.
