@@ -122,11 +122,11 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 	defer c.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
 	defer cancel()
-	nonce, err := c.selectNonce(ctx, time.Now())
+	nonce, head, err := c.selectNonce(ctx, time.Now())
 	if err != nil {
 		return nil, err
 	}
-	fee, tip, err := estimateFees(ctx, c.eth, &c.opts)
+	fee, tip, err := estimateFees(ctx, c.eth, head.BaseFee, &c.opts)
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +134,14 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		fee, tip = maxBig(fee, bump(c.lastAttemptedFeeCap)), maxBig(tip, bump(c.lastAttemptedTipCap))
 		fee, tip = capFees(fee, tip, c.opts.MaxFeePerGas)
 	}
+	txData, err := c.prepareTransaction(ctx, intent.To, intent.Data, nonce, fee, tip)
+	if err != nil {
+		return nil, err
+	}
 	var submission *v2.Submission
 	for range maxBroadcastAttempts {
-		tx, err := c.buildAndSignTransaction(ctx, intent.To, intent.Data, nonce, fee, tip)
+		txData.GasFeeCap, txData.GasTipCap = fee, tip
+		tx, err := signTransaction(ctx, types.NewTx(txData), c.signer, c.ethSigner, c.address)
 		if err != nil {
 			return submission, err
 		}
@@ -175,14 +180,14 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 	)
 }
 
-func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, error) {
+func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, *types.Header, error) {
 	head, err := c.eth.HeaderByNumber(ctx, nil)
 	if err != nil {
-		return 0, errors.Wrap(err, "getting latest header for nonce selection")
+		return 0, nil, errors.Wrap(err, "getting latest header for nonce selection")
 	}
 	height := head.Number.Uint64()
 	if height < c.lowestUnminedNonceHeight {
-		return 0, errors.Errorf(
+		return 0, nil, errors.Errorf(
 			"RPC block height %d is behind last nonce observation at %d",
 			height,
 			c.lowestUnminedNonceHeight,
@@ -190,11 +195,11 @@ func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, e
 	}
 	mined, err := c.eth.NonceAt(ctx, c.address, head.Number)
 	if err != nil {
-		return 0, errors.Wrapf(err, "getting mined nonce for %s at block %s", c.address, head.Number)
+		return 0, nil, errors.Wrapf(err, "getting mined nonce for %s at block %s", c.address, head.Number)
 	}
 	pending, err := c.eth.PendingNonceAt(ctx, c.address)
 	if err != nil {
-		return 0, errors.Wrapf(err, "getting pending nonce for %s", c.address)
+		return 0, nil, errors.Wrapf(err, "getting pending nonce for %s", c.address)
 	}
 	c.lowestUnminedNonceHeight = height
 	if mined != c.lowestUnminedNonce {
@@ -207,13 +212,13 @@ func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, e
 			c.lowestUnminedNoncePendingSince = now
 		}
 		if now.Sub(c.lowestUnminedNoncePendingSince) >= c.opts.PendingTxTimeout {
-			return mined, nil
+			return mined, head, nil
 		}
 	}
 	if c.nextNonce-mined >= uint64(c.opts.MaxInFlight) {
-		return 0, ErrBusy
+		return 0, nil, ErrBusy
 	}
-	return c.nextNonce, nil
+	return c.nextNonce, head, nil
 }
 
 // ShouldRetry leaves missing transactions pending until the retry interval expires.

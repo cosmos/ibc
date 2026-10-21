@@ -28,6 +28,10 @@ type testRPC struct {
 	mined, pending uint64
 	sent           []*types.Transaction
 	send           func(*types.Transaction) error
+	headerCalls    int
+	codeCalls      int
+	gasCalls       int
+	gas            uint64
 	gasErr         error
 	nonceErr       error
 	receipt        *types.Receipt
@@ -39,18 +43,21 @@ func (r *testRPC) BalanceAt(context.Context, common.Address, *big.Int) (*big.Int
 }
 
 func (r *testRPC) HeaderByNumber(context.Context, *big.Int) (*types.Header, error) {
+	r.headerCalls++
 	return &types.Header{Number: new(big.Int).SetUint64(r.height), BaseFee: big.NewInt(100)}, nil
 }
 func (r *testRPC) SuggestGasTipCap(context.Context) (*big.Int, error) { return big.NewInt(10), nil }
 func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error) {
+	r.codeCalls++
 	return []byte{1}, nil
 }
 
 func (r *testRPC) EstimateGasAtBlock(_ context.Context, _ ethereum.CallMsg, block *big.Int) (uint64, error) {
+	r.gasCalls++
 	if block != nil {
 		return 0, errors.New("expected mined state")
 	}
-	return 100_000, r.gasErr
+	return r.gas, r.gasErr
 }
 
 func (r *testRPC) NonceAt(_ context.Context, _ common.Address, block *big.Int) (uint64, error) {
@@ -84,7 +91,7 @@ func newSubmitter(t *testing.T) (*TxSubmitter, *testRPC) {
 	t.Helper()
 	key, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)
-	rpc := &testRPC{height: 100}
+	rpc := &testRPC{height: 100, gas: 100_000}
 	c, err := New(chainIDEth, rpc, key, ChainOptions{})
 	require.NoError(t, err)
 	return c, rpc
@@ -159,16 +166,28 @@ func TestRetryBumpsOnUnderpricedAndPreservesProgress(t *testing.T) {
 				return nil
 			}
 			// A fresh process gives the unknown transaction a grace period.
-			_, err := c.selectNonce(t.Context(), time.Now())
+			_, _, err := c.selectNonce(t.Context(), time.Now())
 			require.NoError(t, err)
 			expireNonce(c)
 			require.ErrorContains(t, submit(t, c), "still underpriced")
 			require.Len(t, rpc.sent, maxBroadcastAttempts)
+			require.Equal(t, 1, rpc.codeCalls)
+			require.Equal(t, 1, rpc.gasCalls)
+			require.Equal(t, 2, rpc.headerCalls, "one initial observation and one submission")
 			// The next call continues escalating rather than restarting at the estimate.
+			rpc.gas = 150_000
 			require.NoError(t, submit(t, c))
 			require.Greater(t, len(rpc.sent), maxBroadcastAttempts)
+			require.Equal(t, 2, rpc.codeCalls)
+			require.Equal(t, 2, rpc.gasCalls)
+			require.Equal(t, 3, rpc.headerCalls)
 			for i, tx := range rpc.sent {
 				require.Zero(t, tx.Nonce())
+				if i < maxBroadcastAttempts {
+					require.Equal(t, uint64(100_000), tx.Gas())
+				} else {
+					require.Equal(t, uint64(150_000), tx.Gas())
+				}
 				if i > 0 {
 					require.Positive(t, tx.GasFeeCap().Cmp(rpc.sent[i-1].GasFeeCap()))
 					require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
@@ -284,7 +303,7 @@ func TestRestartRecoversUnknownGap(t *testing.T) {
 	require.Equal(t, uint64(9), rpc.sent[0].Nonce())
 	restarted, err := New(chainIDEth, rpc, c.signer, c.opts)
 	require.NoError(t, err)
-	_, err = restarted.selectNonce(t.Context(), time.Now())
+	_, _, err = restarted.selectNonce(t.Context(), time.Now())
 	require.NoError(t, err)
 	expireNonce(restarted)
 	require.NoError(t, submit(t, restarted))
@@ -421,7 +440,7 @@ func TestLaggingHeadDoesNotResetNonceRecovery(t *testing.T) {
 		require.Equal(t, tipCap, c.lastAttemptedTipCap)
 
 		rpc.height, rpc.mined = 100, 7
-		nonce, err := c.selectNonce(t.Context(), time.Now())
+		nonce, _, err := c.selectNonce(t.Context(), time.Now())
 		require.NoError(t, err)
 		require.Equal(t, uint64(7), nonce)
 	}
@@ -461,7 +480,7 @@ func TestReorgAllowsLowestNonceReuse(t *testing.T) {
 			expireNonce(c)
 			rpc.height, rpc.mined, rpc.pending = tt.height, 7, 7
 			now := time.Now()
-			nonce, err := c.selectNonce(t.Context(), now)
+			nonce, _, err := c.selectNonce(t.Context(), now)
 			require.NoError(t, err)
 			require.Equal(t, uint64(9), nonce)
 			require.Equal(t, now, c.lowestUnminedNoncePendingSince)
@@ -480,7 +499,7 @@ func TestDroppedNonceRecoversBelowLocalAllocation(t *testing.T) {
 	}
 	require.Equal(t, uint64(10), c.nextNonce)
 	rpc.pending = 7
-	nonce, err := c.selectNonce(t.Context(), time.Now())
+	nonce, _, err := c.selectNonce(t.Context(), time.Now())
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), nonce, "allow the existing transactions time to mine")
 	expireNonce(c)

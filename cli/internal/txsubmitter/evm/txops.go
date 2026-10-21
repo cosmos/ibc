@@ -16,19 +16,20 @@ import (
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
 
-func estimateFees(ctx context.Context, eth ETHClient, opts *ChainOptions) (fee, tip *big.Int, err error) {
-	head, err := eth.HeaderByNumber(ctx, nil)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "getting latest header for fee estimation")
-	}
-	if head.BaseFee == nil {
+func estimateFees(
+	ctx context.Context,
+	eth ETHClient,
+	baseFee *big.Int,
+	opts *ChainOptions,
+) (fee, tip *big.Int, err error) {
+	if baseFee == nil {
 		return nil, nil, errors.New("chain must support EIP-1559")
 	}
 	tip, err = eth.SuggestGasTipCap(ctx)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "getting suggested gas tip cap")
 	}
-	fee = new(big.Int).Add(tip, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
+	fee = new(big.Int).Add(tip, new(big.Int).Mul(baseFee, big.NewInt(2)))
 	fee, tip = capFees(
 		applyMultiplier(fee, opts.GasFeeCapMultiplier),
 		applyMultiplier(tip, opts.GasTipCapMultiplier),
@@ -98,13 +99,13 @@ func applyMultiplier(v *big.Int, m *float64) *big.Int {
 	return out
 }
 
-func (c *TxSubmitter) buildAndSignTransaction(
+func (c *TxSubmitter) prepareTransaction(
 	ctx context.Context,
 	destination string,
 	data []byte,
 	nonce uint64,
 	fee, tip *big.Int,
-) (*types.Transaction, error) {
+) (*types.DynamicFeeTx, error) {
 	if !common.IsHexAddress(destination) {
 		return nil, errors.New("invalid transaction destination")
 	}
@@ -125,17 +126,15 @@ func (c *TxSubmitter) buildAndSignTransaction(
 	if err != nil {
 		return nil, errors.Wrap(explainRevert(err), "estimating gas")
 	}
-	return signTransaction(ctx, types.NewTx(
-		&types.DynamicFeeTx{
-			ChainID:   c.ethSigner.ChainID(),
-			Nonce:     nonce,
-			To:        &to,
-			Data:      data,
-			Gas:       gas,
-			GasFeeCap: fee,
-			GasTipCap: tip,
-		},
-	), c.signer, c.ethSigner, c.address)
+	return &types.DynamicFeeTx{
+		ChainID:   c.ethSigner.ChainID(),
+		Nonce:     nonce,
+		To:        &to,
+		Data:      data,
+		Gas:       gas,
+		GasFeeCap: fee,
+		GasTipCap: tip,
+	}, nil
 }
 
 // Round up by 20%, including when the previous tip was zero.
