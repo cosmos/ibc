@@ -794,7 +794,7 @@ func prepareBesuNodeDirs(chainDir string, followers int) ([]*node, error) {
 		)
 	}
 
-	nodes := make([]*node, 0, len(entries)+followers)
+	keys := make([]*ecdsa.PrivateKey, 0, len(entries)+followers)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			return nil, fmt.Errorf("besu validator key entry %s is not a directory", entry.Name())
@@ -807,39 +807,31 @@ func prepareBesuNodeDirs(chainDir string, followers int) ([]*node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse validator key %s: %w", entry.Name(), err)
 		}
-		n, err := stageNode(chainDir, len(nodes), key)
-		if err != nil {
-			return nil, err
-		}
-		nodes = append(nodes, n)
+		keys = append(keys, key)
 	}
 	for range followers {
 		key, err := crypto.GenerateKey()
 		if err != nil {
 			return nil, fmt.Errorf("generate besu follower key: %w", err)
 		}
-		n, err := stageNode(chainDir, len(nodes), key)
-		if err != nil {
-			return nil, err
+		keys = append(keys, key)
+	}
+
+	nodes := make([]*node, len(keys))
+	for i, key := range keys {
+		dataDir := filepath.Join(chainDir, fmt.Sprintf("node-%d", i), "data")
+		if err := os.MkdirAll(dataDir, 0o777); err != nil {
+			return nil, fmt.Errorf("create besu node data dir: %w", err)
 		}
-		nodes = append(nodes, n)
+		_ = os.Chmod(dataDir, 0o777)
+		// The bind-mounted key must be readable by Besu's uid 1000 on native Linux.
+		keyHex := []byte(hexutil.Encode(crypto.FromECDSA(key)))
+		if err := os.WriteFile(filepath.Join(dataDir, "key"), keyHex, 0o644); err != nil {
+			return nil, fmt.Errorf("write besu node key: %w", err)
+		}
+		nodes[i] = &node{key: key, dataDir: dataDir}
 	}
 	return nodes, nil
-}
-
-// stageNode writes key into the data dir of node i.
-func stageNode(chainDir string, i int, key *ecdsa.PrivateKey) (*node, error) {
-	dataDir := filepath.Join(chainDir, fmt.Sprintf("node-%d", i), "data")
-	if err := os.MkdirAll(dataDir, 0o777); err != nil {
-		return nil, fmt.Errorf("create besu node data dir: %w", err)
-	}
-	_ = os.Chmod(dataDir, 0o777)
-	// The bind-mounted key must be readable by Besu's uid 1000 on native Linux.
-	keyHex := []byte(hexutil.Encode(crypto.FromECDSA(key)))
-	if err := os.WriteFile(filepath.Join(dataDir, "key"), keyHex, 0o644); err != nil {
-		return nil, fmt.Errorf("write besu node key: %w", err)
-	}
-	return &node{key: key, dataDir: dataDir}, nil
 }
 
 func copyFile(src, dst string, mode os.FileMode) error {

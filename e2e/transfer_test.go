@@ -147,18 +147,18 @@ func advanceDestinationPastTimeout(ctx context.Context, destination *environment
 	if err != nil {
 		return err
 	}
-	head, err := destinationHead(ctx, destination)
-	if err != nil || head > timeout {
+	now, err := destinationTime(ctx, destination)
+	if err != nil || now > timeout {
 		return err
 	}
-	return mining.AdvanceTime(ctx, time.Duration(timeout-head+1)*time.Second)
+	return mining.AdvanceTime(ctx, time.Duration(timeout-now+1)*time.Second)
 }
 
 // awaitDestinationPastTimeout waits for a destination head past timeout.
 func awaitDestinationPastTimeout(ctx context.Context, destination *environment.Chain, timeout uint64) error {
 	for {
-		head, err := destinationHead(ctx, destination)
-		if err != nil || head > timeout {
+		now, err := destinationTime(ctx, destination)
+		if err != nil || now > timeout {
 			return err
 		}
 		select {
@@ -169,7 +169,8 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 	}
 }
 
-func destinationHead(ctx context.Context, destination *environment.Chain) (uint64, error) {
+// destinationTime is the destination head's timestamp.
+func destinationTime(ctx context.Context, destination *environment.Chain) (uint64, error) {
 	evm, err := destination.EVM()
 	if err != nil {
 		return 0, err
