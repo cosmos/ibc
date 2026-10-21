@@ -6,5 +6,4 @@ Keep this package as a transport adapter: convert ConnectRPC/proto types to serv
 service interface, and map domain errors to `connect.Code*`.
 
 When an RPC schema changes, update `proto/cli/`, run `make -C cli codegen-proto` from the repository
-root, and include the updated bindings in `cli/api/v2/` before updating the handler. Run
-`make -C cli codegen-mocks` from the repository root when an affected mocked interface changes.
+root, and include the updated bindings in `cli/api/v2/` before updating the handler.

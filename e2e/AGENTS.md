@@ -17,6 +17,8 @@ or topology, and [Debugging](README.md#debugging) for environment or cleanup beh
   e2e-only bindings that interpret those effects.
 - Exercise CLI commands through the binary's public input/output contracts. Use generated RPC clients
   and `cli/keyfile` for RPC and signer provisioning.
-- Declare test requirements and regenerate and check the matrix after changing requirements or topology.
+- Declare test requirements in `e2etest.EVMRequirements`, naming a provider only when the test
+  depends on it. After changing requirements or topology, run `make -C e2e generate-matrix` and
+  `make -C e2e check-matrix`; `make -C e2e test` does not check the matrix.
 - Preserve inner quotes in `E2E_FLAGS`, because Make expands it into a shell command:
   `make -C e2e test E2E_FLAGS="-run '^(TestA|TestB)' -count=1"`.
