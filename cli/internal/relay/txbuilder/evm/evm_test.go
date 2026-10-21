@@ -3,8 +3,10 @@
 package evm
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"math/big"
 	"testing"
 
@@ -15,6 +17,7 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -235,6 +238,84 @@ func TestBuildRelayTxsUsesSenderPerCall(t *testing.T) {
 		require.NoError(t, err)
 	}
 	require.Equal(t, []common.Address{common.HexToAddress(senders[0]), common.HexToAddress(senders[1])}, got)
+}
+
+func TestBuildRelayTxsFailureDetails(t *testing.T) {
+	contractABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	iftABI, err := ift.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	updateError := routerABI.Errors["IBCClientNotFound"]
+	args, err := updateError.Inputs.Pack("client-0")
+	require.NoError(t, err)
+	limitError := iftABI.Errors["RateLimitExceeded"].ID
+	for _, tc := range []struct {
+		name    string
+		success bool
+	}{
+		{"all packets fail", false},
+		{"partial success", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// ARRANGE
+			var logs bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+			output, err := contractABI.Methods["multicall"].Outputs.Pack([]ibcmulticall.IIBCMulticallMsgsResult{
+				{ReturnData: append(updateError.ID[:4], args...)},
+				{Success: true},
+				{Success: tc.success},
+				{ReturnData: limitError[:4]},
+				{ReturnData: []byte{0xde, 0xad, 0xbe, 0xef}},
+			})
+			require.NoError(t, err)
+			caller := contractCallFunc(func(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error) {
+				return output, nil
+			})
+			builder := New(common.HexToAddress("0x1111"), common.HexToAddress("0x2222"), caller)
+
+			// ACT
+			txs, err := builder.BuildRelayTxs(t.Context(), testSender,
+				v2.ClientUpdate{ClientID: "client-0", Payloads: [][]byte{{1}, {2}}}, simulationPackets(3))
+
+			// ASSERT
+			var details string
+			if tc.success {
+				require.NoError(t, err)
+				require.Len(t, txs, 1)
+				details = logs.String()
+			} else {
+				require.ErrorContains(t, err, "no packet calls can currently succeed")
+				require.Empty(t, txs)
+				details = err.Error()
+			}
+			require.Contains(t, details, "call[0]: IBCClientNotFound(client-0)")
+			require.Contains(t, details, "call[3]: RateLimitExceeded()")
+			require.Contains(t, details, "call[4]: 0xdeadbeef")
+			require.NotContains(t, details, "call[1]:")
+		})
+	}
+}
+
+func TestMulticallFailureDetailsBounded(t *testing.T) {
+	contractABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	results := make([]ibcmulticall.IIBCMulticallMsgsResult, 8)
+	for i := range results {
+		results[i].ReturnData = bytes.Repeat([]byte{0xff}, 1024)
+	}
+	output, err := contractABI.Methods["multicall"].Outputs.Pack(results)
+	require.NoError(t, err)
+	caller := contractCallFunc(func(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error) {
+		return output, nil
+	})
+	builder := New(common.HexToAddress("0x1111"), common.HexToAddress("0x2222"), caller)
+	err = builder.checkMulticall(t.Context(), common.HexToAddress(testSender), nil, 1, 7)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "...;")
+	require.NotContains(t, err.Error(), "call[5]:")
+	require.Less(t, len(err.Error()), 1500)
 }
 
 type contractCallFunc func(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error)

@@ -7,7 +7,10 @@ package evm
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"math/big"
+	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -164,15 +167,30 @@ func (c *TxBuilder) checkMulticall(ctx context.Context, from common.Address, dat
 	if len(results) != updates+packets {
 		return errors.New("multicall result count does not match call count")
 	}
-	if packets > 0 {
-		results = results[updates:]
-	}
-	for _, result := range results {
+	var failures []string
+	canSucceed := false
+	for i, result := range results {
 		if result.Success {
-			return nil
+			canSucceed = canSucceed || packets == 0 || i >= updates
+			continue
+		}
+		if len(failures) < 5 {
+			reason := chainsevm.ExplainRevertData(result.ReturnData)
+			if len(reason) > 256 {
+				reason = reason[:256] + "..."
+			}
+			failures = append(failures, fmt.Sprintf("call[%d]: %s", i, reason))
 		}
 	}
-	return errors.New("no packet calls can currently succeed in multicall")
+	details := strings.Join(failures, "; ")
+	if canSucceed {
+		if len(failures) > 0 {
+			slog.DebugContext(ctx, "Multicall simulation has failed calls",
+				"multicall", c.multicall.Hex(), "failures", details)
+		}
+		return nil
+	}
+	return errors.Errorf("no packet calls can currently succeed in multicall: %s", details)
 }
 
 func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
