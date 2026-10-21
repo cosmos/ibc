@@ -52,6 +52,7 @@ type RelayerChain struct {
 	// WS is required by the relayer for chains sourcing auto-relayed routes.
 	WS                 string
 	ICS26Router        string
+	IBCMulticall       string
 	PacketBatchSize    int
 	PacketBatchTimeout time.Duration
 }
@@ -150,9 +151,10 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		file.Chains = append(file.Chains, chainConfig{
 			ChainID: chain.ChainID,
 			EVM: evmChainConfig{
-				RPC:         chain.RPC,
-				WS:          chain.WS,
-				ICS26Router: chain.ICS26Router,
+				RPC:          chain.RPC,
+				WS:           chain.WS,
+				ICS26Router:  chain.ICS26Router,
+				IBCMulticall: chain.IBCMulticall,
 			},
 		})
 		// The relayer's batching and pacing defaults are mainnet-shaped. A

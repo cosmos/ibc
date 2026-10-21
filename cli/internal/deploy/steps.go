@@ -95,7 +95,33 @@ func CoreSteps(t Target, dir, chainID string) []Step {
 				m = manifest.New(chainID, "evm")
 			}
 			m.Core.Router = ref.Router
+			m.Core.Multicall = ""
 			m.TargetData = ref.TargetData
+			return m.Save(dir)
+		},
+	}, {
+		Name: fmt.Sprintf("multicall on chain %s", chainID),
+		Done: func(ctx context.Context) (bool, error) {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil || m == nil || m.Core.Multicall == "" {
+				return false, err
+			}
+			return t.HasCode(ctx, m.Core.Multicall)
+		},
+		Run: func(ctx context.Context) error {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil {
+				return err
+			}
+			if m == nil || m.Core.Router == "" || m.TargetData["accessManager"] == "" {
+				return fmt.Errorf("core manifest for chain %s has no router or accessManager recorded", chainID)
+			}
+			ref, err := t.ProvisionMulticall(ctx, m.TargetData["accessManager"])
+			if err != nil {
+				return err
+			}
+			m.Core.Multicall = ref.Address
+			m.TargetData["ibcMulticallImplementation"] = ref.Implementation
 			return m.Save(dir)
 		},
 	}}

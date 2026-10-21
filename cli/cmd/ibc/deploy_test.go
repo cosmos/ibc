@@ -79,6 +79,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	// connection share the same sorted "cli-<a>-<b>" name.
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
+	a.Core.Multicall = "0xmulticallA"
 	a.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: "attestation", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
@@ -105,6 +106,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
+	b.Core.Multicall = "0xmulticallB"
 	b.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: "attestation", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
@@ -120,7 +122,14 @@ func TestRenderRelayConfig(t *testing.T) {
 	unreferencedSigner, _ := newLocalSignerConfig(t, "unused-signer")
 	cfg := config.Config{
 		Chains: []config.ChainConfig{
-			{ChainID: "1", EVM: &config.EVMChainConfig{RPC: "http://a", ICS26Router: "0xstale"}},
+			{
+				ChainID: "1",
+				EVM: &config.EVMChainConfig{
+					RPC:          "http://a",
+					ICS26Router:  "0xstale",
+					IBCMulticall: "0xstaleMulticall",
+				},
+			},
 		},
 		Signers: config.Signers{watcherSigner, unreferencedSigner},
 	}
@@ -131,11 +140,18 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Len(t, out.Chains, 2)
 	require.Equal(t, "1", out.Chains[0].ChainID)
 	require.Equal(t, "0xrouterA", out.Chains[0].EVM.ICS26Router)
+	require.Equal(t, "0xmulticallA", out.Chains[0].EVM.IBCMulticall)
 	require.Equal(t, "http://a", out.Chains[0].EVM.RPC)
-	// chain 2 is undeclared: minimal entry with just the router
+	// chain 2 is undeclared: minimal entry with the deployed addresses
 	require.Equal(t, "2", out.Chains[1].ChainID)
 	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
+	require.Equal(t, "0xmulticallB", out.Chains[1].EVM.IBCMulticall)
 	require.Empty(t, out.Chains[1].EVM.RPC)
+
+	// An incomplete manifest must not retain a stale configured address.
+	incomplete := *a
+	incomplete.Core.Multicall = ""
+	require.Empty(t, renderedChain(cfg, &incomplete).EVM.IBCMulticall)
 
 	require.Len(t, out.Connections, 2)
 	conn := out.Connections[0]
@@ -221,6 +237,7 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainB`)
 	require.Contains(t, rendered, `ics26Router: "" # TODO: fill in`)
+	require.Contains(t, rendered, `ibcMulticall: "" # TODO: fill in`)
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias backing this attestor's key`)
 }
 

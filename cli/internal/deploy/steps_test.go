@@ -26,15 +26,21 @@ type fakeTarget struct {
 	provisions int
 	registers  int
 
-	gmpProvisions  int
-	iftProvisions  int
-	ctorProvisions int
-	rateLimitSets  int
+	gmpProvisions       int
+	multicallProvisions int
+	iftProvisions       int
+	ctorProvisions      int
+	rateLimitSets       int
 }
 
 func (f *fakeTarget) ProvisionCore(context.Context, CoreParams) (CoreRef, error) {
 	f.provisions++
 	return CoreRef{Router: "0xrouter", TargetData: map[string]string{"accessManager": "0xam"}}, nil
+}
+
+func (f *fakeTarget) ProvisionMulticall(context.Context, string) (MulticallRef, error) {
+	f.multicallProvisions++
+	return MulticallRef{Address: "0xmulticall", Implementation: "0xmulticallImpl"}, nil
 }
 
 func (f *fakeTarget) ProvisionClient(context.Context, string, ClientSpec) (ClientRef, error) {
@@ -143,19 +149,26 @@ func TestCoreStepsIdempotent(t *testing.T) {
 	res, err := RunSteps(context.Background(), slog.Default(), false, CoreSteps(target, dir, "1"))
 	require.NoError(t, err)
 	require.Equal(t, "executed", res[0].Action)
+	require.Equal(t, "executed", res[1].Action)
 	require.Equal(t, 1, target.provisions)
+	require.Equal(t, 1, target.multicallProvisions)
 
 	m, err := manifest.Load(dir, "1")
 	require.NoError(t, err)
 	require.Equal(t, "0xrouter", m.Core.Router)
 	require.Equal(t, "0xam", m.TargetData["accessManager"])
+	require.Equal(t, "0xmulticall", m.Core.Multicall)
+	require.Equal(t, "0xmulticallImpl", m.TargetData["ibcMulticallImplementation"])
 
 	// second run skips: manifest has the router and the chain has its code
 	target.hasCode["0xrouter"] = true
+	target.hasCode["0xmulticall"] = true
 	res, err = RunSteps(context.Background(), slog.Default(), false, CoreSteps(target, dir, "1"))
 	require.NoError(t, err)
 	require.Equal(t, "skipped", res[0].Action)
+	require.Equal(t, "skipped", res[1].Action)
 	require.Equal(t, 1, target.provisions)
+	require.Equal(t, 1, target.multicallProvisions)
 }
 
 func TestClientStepsIdempotent(t *testing.T) {

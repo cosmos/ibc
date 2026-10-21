@@ -57,6 +57,8 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 	d := &Driver{chainID: big.NewInt(1)}
 	_, err := d.ProvisionCore(context.Background(), deploy.CoreParams{})
 	require.ErrorContains(t, err, "no deployer signer configured")
+	_, err = d.ProvisionMulticall(context.Background(), common.Address{}.Hex())
+	require.ErrorContains(t, err, "no deployer signer configured")
 	_, err = d.ProvisionClient(
 		context.Background(),
 		common.Address{}.Hex(),

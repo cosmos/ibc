@@ -14,7 +14,7 @@ You need:
 - **A chain with IBC deployed, and a light client tracking it.** This guide continues from the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md).
 - **Your signing address already in that client's attestation set.**
 - **Your signing key.**
-- **The chain's RPC endpoint and its router address.** Configuration validation treats the router address as optional, but the process cannot start without it.
+- **The chain's RPC endpoint and router address.** General configuration validation permits a missing router address, but attestor startup requires it.
 - [Go](https://go.dev/doc/install) 1.26.9 or later and a [build of the binary](2-tutorial-deploy-ibc-and-send-a-token.md).
 
 The commands below continue from the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md). They move the attestor keys it generated into processes of their own, reading values from your own deployment rather than asking you to copy one.
@@ -35,7 +35,7 @@ It shares the tutorial's keystore, so the attestor key generated there is alread
 
 ## 2. Write its configuration
 
-Write the attestor's configuration file, reading the router address and your own signing address from the deployment:
+Write the attestor's configuration file, reading the router address from the deployment:
 
 ```bash
 cat > ~/.ibc/ibc-attestor-41002.yml <<EOF

@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/internal/deploy"
@@ -204,6 +205,29 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 	if !hasCode {
 		return report, nil
 	}
+
+	if m.Core.Multicall == "" {
+		check("core multicall recorded", false, "manifest has no multicall")
+		return report, nil
+	}
+	multicallCode, err := d.HasCode(ctx, m.Core.Multicall)
+	if err != nil {
+		return report, err
+	}
+	check("multicall code present", multicallCode, "no contract code at "+m.Core.Multicall)
+	if !multicallCode {
+		return report, nil
+	}
+	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), d.backend)
+	if err != nil {
+		return report, err
+	}
+	authority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return report, err
+	}
+	check("multicall authority matches", strings.EqualFold(authority.Hex(), m.TargetData["accessManager"]),
+		fmt.Sprintf("multicall has %s, manifest has %s", authority, m.TargetData["accessManager"]))
 
 	contract, err := ics26router.NewContract(common.HexToAddress(m.Core.Router), d.backend)
 	if err != nil {

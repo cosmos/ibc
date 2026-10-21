@@ -65,10 +65,12 @@ chains:
       rpc: https://ethereum-rpc.example.com
       ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
 relayer:
   dispatchPollInterval: 3s
   clearOnStart: false
@@ -231,12 +233,13 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | **required** to run | Address of the ICS26 router on the chain. |
+| `evm.ibcMulticall` | `string` | optional | The batching contract address. |
 
 <!-- [config.go:L119](cli/internal/config/config.go#L119) -->
 
 <!-- GEN:config:chains END -->
 
-`ibc deploy core` deploys the router. <!-- [cli/internal/deploy/steps.go: RunSteps] --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
+`ibc deploy core` deploys the router and multicall. <!-- [cli/internal/deploy/steps.go: CoreSteps] --> Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
 The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: resolveDeployerAlias] -->
 
@@ -334,7 +337,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L143](cli/internal/config/config.go#L143) -->
+<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -362,7 +365,7 @@ attestors:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L143](cli/internal/config/config.go#L143) -->
+<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -386,7 +389,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -416,7 +419,7 @@ signers:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
 
 <!-- GEN:config:signers:remote END -->
 

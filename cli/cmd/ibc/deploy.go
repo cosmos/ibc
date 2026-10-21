@@ -621,7 +621,7 @@ func signerAliasForAddress(cfg config.Config, address string) (string, bool) {
 }
 
 // renderedChain copies the operated-on chain's config (if declared) and sets
-// its router to the deployed address, so the emitted chains[] entry is
+// its router and multicall to the deployed addresses, so the emitted chains[] entry is
 // ready to relay against.
 func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	chain, _ := cfg.Chain(m.ChainID)
@@ -633,6 +633,7 @@ func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	}
 
 	evm.ICS26Router = m.Core.Router
+	evm.IBCMulticall = m.Core.Multicall
 	chain.EVM = &evm
 
 	return chain
