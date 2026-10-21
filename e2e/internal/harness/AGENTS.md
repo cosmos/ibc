@@ -2,11 +2,10 @@
 
 # E2E harness
 
-- Chain transaction and application-effect wait budgets derive from the resolved Chain's
+- Chain transaction wait budgets derive from the resolved Chain's
   `environment.Timing`, never from a literal tuned to instant Anvil. Provider and process startup
   and shutdown use separate lifecycle deadlines. Launch-side readiness uses
-  `chain/evm/poll.Until`; test-application effect and stability observation lives with the e2e-only
-  bindings that interpret those effects.
+  `chain/evm/poll.Until`.
 - **Docker discipline.** Containers/networks carry the `ibc-cli-e2e=true` and
   `ibc-cli-run=<runid>` labels and the `ibc-cli-e2e-` name prefix, with pinned images. Anvil runs
   with `--entrypoint anvil` (PID 1, so `docker stop`'s SIGTERM reaches it and shutdown is prompt
