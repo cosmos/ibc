@@ -54,6 +54,7 @@ type RelayerChain struct {
 	ICS26Router        string
 	PacketBatchSize    int
 	PacketBatchTimeout time.Duration
+	PendingTxTimeout   time.Duration
 }
 
 // RelayerClientEnd is a registered client and its endpoint relay policy.
@@ -155,17 +156,15 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 				ICS26Router: chain.ICS26Router,
 			},
 		})
-		// The relayer's batching and pacing defaults are mainnet-shaped. A
-		// batch size of one flushes each harness packet on arrival, and the
-		// submission delay paces only consecutive transactions on one chain
-		// (retries and multi-route traffic); it must stay non-zero because
-		// zero is coerced back to the mainnet default.
-		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
+		override := chainOverrideFileConfig{
 			ChainID:            chain.ChainID,
-			TxSubmissionDelay:  "10ms",
 			PacketBatchSize:    batchSize,
 			PacketBatchTimeout: chain.PacketBatchTimeout,
-		})
+		}
+		if chain.PendingTxTimeout != 0 {
+			override.EVM = &relayerEVMFileConfig{PendingTxTimeout: chain.PendingTxTimeout}
+		}
+		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, override)
 	}
 
 	for _, attestor := range cfg.Attestors {
@@ -248,10 +247,14 @@ type relayerFileConfig struct {
 }
 
 type chainOverrideFileConfig struct {
-	ChainID            string        `yaml:"chainId"`
-	TxSubmissionDelay  string        `yaml:"txSubmissionDelay"`
-	PacketBatchSize    int           `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
+	ChainID            string                `yaml:"chainId"`
+	PacketBatchSize    int                   `yaml:"packetBatchSize"`
+	PacketBatchTimeout time.Duration         `yaml:"packetBatchTimeout,omitempty"`
+	EVM                *relayerEVMFileConfig `yaml:"evm,omitempty"`
+}
+
+type relayerEVMFileConfig struct {
+	PendingTxTimeout time.Duration `yaml:"pendingTxTimeout,omitempty"`
 }
 
 type ConnectionFileConfig struct {
