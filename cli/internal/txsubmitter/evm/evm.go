@@ -24,14 +24,19 @@ import (
 // Transaction limits.
 const (
 	DefaultPendingTxTimeout = 2 * time.Minute
-	requestTimeout          = 10 * time.Second
-	maxInFlight             = 16
-	maxBroadcastAttempts    = 8
-	feeCeilingMultiplier    = 4
+	// requestTimeout bounds Submit and ShouldRetry.
+	requestTimeout = 10 * time.Second
+	// maxInFlight limits outstanding nonces per chain; stalled nonces can still be reused.
+	maxInFlight = 16
+	// maxBroadcastAttempts limits broadcasts per Submit, including fee replacements.
+	maxBroadcastAttempts = 8
+	// feeCeilingMultiplier caps fees relative to the fresh estimate for each Submit.
+	feeCeilingMultiplier = 4
 )
 
 // ChainOptions controls transaction retry timing.
 type ChainOptions struct {
+	// PendingTxTimeout sets the wait before retrying a missing transaction or reusing a stalled nonce.
 	PendingTxTimeout time.Duration
 }
 
