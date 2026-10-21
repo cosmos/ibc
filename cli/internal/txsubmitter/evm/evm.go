@@ -21,20 +21,18 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// Default transaction limits.
+// Transaction limits.
 const (
 	DefaultPendingTxTimeout = 2 * time.Minute
-	DefaultRequestTimeout   = 10 * time.Second
-	DefaultMaxInFlight      = 16
+	requestTimeout          = 10 * time.Second
+	maxInFlight             = 16
 	maxBroadcastAttempts    = 8
 	feeCeilingMultiplier    = 4
 )
 
-// ChainOptions controls submission limits and nonce recovery.
+// ChainOptions controls transaction retry timing.
 type ChainOptions struct {
 	PendingTxTimeout time.Duration
-	RequestTimeout   time.Duration
-	MaxInFlight      int
 }
 
 // ETHClient go-ethereum methods used by the EVM tx submitter.
@@ -82,14 +80,8 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	if opts.PendingTxTimeout == 0 {
 		opts.PendingTxTimeout = DefaultPendingTxTimeout
 	}
-	if opts.RequestTimeout == 0 {
-		opts.RequestTimeout = DefaultRequestTimeout
-	}
-	if opts.MaxInFlight == 0 {
-		opts.MaxInFlight = DefaultMaxInFlight
-	}
-	if opts.PendingTxTimeout <= 0 || opts.RequestTimeout <= 0 || opts.MaxInFlight <= 0 {
-		return nil, errors.New("invalid transaction limits")
+	if opts.PendingTxTimeout <= 0 {
+		return nil, errors.New("invalid pending transaction timeout")
 	}
 	id, ok := new(big.Int).SetString(chainID, 10)
 	if !ok || id.Sign() <= 0 {
@@ -113,7 +105,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	nonce, head, err := c.selectNonce(ctx, time.Now())
 	if err != nil {
@@ -211,7 +203,7 @@ func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, *
 			return mined, head, nil
 		}
 	}
-	if c.nextNonce-mined >= uint64(c.opts.MaxInFlight) {
+	if c.nextNonce-mined >= maxInFlight {
 		return 0, nil, ErrBusy
 	}
 	return c.nextNonce, head, nil
@@ -219,7 +211,7 @@ func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, *
 
 // ShouldRetry leaves missing transactions pending until the retry interval expires.
 func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.opts.RequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
 	switch {

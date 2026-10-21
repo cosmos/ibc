@@ -120,7 +120,7 @@ func submit(t *testing.T, c *TxSubmitter) error {
 
 func TestConcurrentSubmissionsAllocateDistinctNonces(t *testing.T) {
 	c, rpc := newSubmitter(t)
-	const count = 16
+	const count = maxInFlight
 	var wg sync.WaitGroup
 	errs := make(chan error, count)
 	for range count {
@@ -140,21 +140,21 @@ func TestConcurrentSubmissionsAllocateDistinctNonces(t *testing.T) {
 
 func TestStalledNonceRecoveredAtCapacity(t *testing.T) {
 	c, rpc := newSubmitter(t)
-	c.opts.MaxInFlight = 2
-	require.NoError(t, submit(t, c))
+	for range maxInFlight {
+		require.NoError(t, submit(t, c))
+	}
 	first := rpc.sent[0]
-	require.NoError(t, submit(t, c))
 	require.ErrorIs(t, submit(t, c), ErrBusy)
 	expireNonce(c)
 	require.NoError(t, submit(t, c))
-	replacement := rpc.sent[2]
+	replacement := rpc.sent[maxInFlight]
 	require.Equal(t, first.Nonce(), replacement.Nonce())
 	require.Positive(t, replacement.GasFeeCap().Cmp(first.GasFeeCap()))
 	require.Positive(t, replacement.GasTipCap().Cmp(first.GasTipCap()))
 	require.ErrorIs(t, submit(t, c), ErrBusy, "give the replacement time to mine")
-	rpc.mined = 2
+	rpc.mined = maxInFlight
 	require.NoError(t, submit(t, c))
-	require.Equal(t, uint64(2), rpc.sent[3].Nonce())
+	require.Equal(t, uint64(maxInFlight), rpc.sent[maxInFlight+1].Nonce())
 }
 
 func TestRetryBumpsOnUnderpricedAndPreservesProgress(t *testing.T) {
@@ -234,7 +234,6 @@ func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c, rpc := newSubmitter(t)
-			c.opts.MaxInFlight = 1
 			rpc.send = func(*types.Transaction) error { return tt.err }
 			submission, err := c.Submit(t.Context(), testIntent())
 			require.ErrorIs(t, err, tt.err)
@@ -344,11 +343,12 @@ func TestSignerDeadlineDoesNotConsumeNonce(t *testing.T) {
 	c, rpc := newSubmitter(t)
 	key := c.signer
 	c.signer = stalledSigner{key}
-	c.opts.RequestTimeout = 10 * time.Millisecond
-	require.ErrorIs(t, submit(t, c), context.DeadlineExceeded)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+	_, err := c.Submit(ctx, testIntent())
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Empty(t, rpc.sent)
 	c.signer = key
-	c.opts.RequestTimeout = time.Second
 	require.NoError(t, submit(t, c))
 	require.Zero(t, rpc.sent[0].Nonce())
 }
@@ -446,10 +446,10 @@ func TestNonceQueryFailureDoesNotBroadcast(t *testing.T) {
 
 func TestLaggingHeadDoesNotResetNonceRecovery(t *testing.T) {
 	c, rpc := newSubmitter(t)
-	c.opts.MaxInFlight = 2
 	rpc.mined, rpc.pending = 7, 7
-	require.NoError(t, submit(t, c))
-	require.NoError(t, submit(t, c))
+	for range maxInFlight {
+		require.NoError(t, submit(t, c))
+	}
 	require.ErrorIs(t, submit(t, c), ErrBusy)
 	expireNonce(c)
 	lowestUnminedNoncePendingSince := c.lowestUnminedNoncePendingSince
@@ -470,10 +470,10 @@ func TestLaggingHeadDoesNotResetNonceRecovery(t *testing.T) {
 		require.Equal(t, uint64(7), nonce)
 	}
 
-	require.Len(t, rpc.sent, 2)
+	require.Len(t, rpc.sent, maxInFlight)
 	require.NoError(t, submit(t, c))
-	require.Equal(t, uint64(7), rpc.sent[2].Nonce())
-	require.Positive(t, rpc.sent[2].GasFeeCap().Cmp(feeCap))
+	require.Equal(t, uint64(7), rpc.sent[maxInFlight].Nonce())
+	require.Positive(t, rpc.sent[maxInFlight].GasFeeCap().Cmp(feeCap))
 }
 
 func TestFailedNonceQueryDoesNotAdvanceObservedHeight(t *testing.T) {
