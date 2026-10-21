@@ -26,7 +26,6 @@ type IBCInstance struct {
 	accessManager EVMAddress
 	ics20Transfer EVMAddress
 	ics27GMP      EVMAddress
-	ibcMulticall  EVMAddress
 }
 
 func (i *IBCInstance) ID() IBCInstanceID           { return i.id }
@@ -46,11 +45,6 @@ func (i *IBCInstance) ICS20TransferAddress() EVMAddress {
 // instances, which resolve only the router and access manager.
 func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
 	return i.ics27GMP
-}
-
-// IBCMulticallAddress returns the deployed batching proxy.
-func (i *IBCInstance) IBCMulticallAddress() EVMAddress {
-	return i.ibcMulticall
 }
 
 // IBCClient is one resolved end of an IBC Connection. ID is the protocol

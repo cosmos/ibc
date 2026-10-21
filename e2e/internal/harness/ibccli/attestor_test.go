@@ -83,7 +83,6 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	require.NoError(t, err)
 	var config fileConfig
 	require.NoError(t, yaml.Unmarshal(configData, &config))
-	require.NotContains(t, string(configData), "ibcMulticall:")
 	require.Equal(t, observabilityConfig{
 		Metrics:  true,
 		Type:     observabilityTypeOTEL,
