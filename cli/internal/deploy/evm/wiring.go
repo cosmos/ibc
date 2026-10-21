@@ -206,37 +206,14 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 		return report, nil
 	}
 
-	if m.Core.Multicall == "" {
-		check("core multicall recorded", false, "manifest has no multicall")
-		return report, nil
-	}
-	multicallCode, err := d.HasCode(ctx, m.Core.Multicall)
-	if err != nil {
-		return report, err
-	}
-	check("multicall code present", multicallCode, "no contract code at "+m.Core.Multicall)
-	if !multicallCode {
-		return report, nil
-	}
-	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), d.backend)
-	if err != nil {
-		return report, err
-	}
-	authority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
-	if err != nil {
-		return report, err
-	}
-	check("multicall authority matches", strings.EqualFold(authority.Hex(), m.TargetData["accessManager"]),
-		fmt.Sprintf("multicall has %s, manifest has %s", authority, m.TargetData["accessManager"]))
-
 	contract, err := ics26router.NewContract(common.HexToAddress(m.Core.Router), d.backend)
 	if err != nil {
 		return report, err
 	}
 	for _, c := range m.Clients {
-		registered, isRegistered, err := d.ClientRegistered(ctx, m.Core.Router, c.ClientID)
-		if err != nil {
-			return report, err
+		registered, isRegistered, clientErr := d.ClientRegistered(ctx, m.Core.Router, c.ClientID)
+		if clientErr != nil {
+			return report, clientErr
 		}
 		check("client "+c.ClientID+" registered", isRegistered, "not registered on router")
 		if !isRegistered {
@@ -247,9 +224,9 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			strings.EqualFold(registered, c.Address),
 			fmt.Sprintf("router has %s, manifest has %s", registered, c.Address),
 		)
-		cp, err := contract.GetCounterparty(&bind.CallOpts{Context: ctx}, c.ClientID)
-		if err != nil {
-			return report, err
+		cp, clientErr := contract.GetCounterparty(&bind.CallOpts{Context: ctx}, c.ClientID)
+		if clientErr != nil {
+			return report, clientErr
 		}
 		check(
 			"client "+c.ClientID+" counterparty matches",
@@ -298,6 +275,29 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			)
 		}
 	}
+
+	if m.Core.Multicall == "" {
+		check("core multicall recorded", false, "manifest has no multicall")
+		return report, nil
+	}
+	multicallCode, err := d.HasCode(ctx, m.Core.Multicall)
+	if err != nil {
+		return report, err
+	}
+	check("multicall code present", multicallCode, "no contract code at "+m.Core.Multicall)
+	if !multicallCode {
+		return report, nil
+	}
+	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), d.backend)
+	if err != nil {
+		return report, err
+	}
+	authority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return report, err
+	}
+	check("multicall authority matches", strings.EqualFold(authority.Hex(), m.TargetData["accessManager"]),
+		fmt.Sprintf("multicall has %s, manifest has %s", authority, m.TargetData["accessManager"]))
 	return report, nil
 }
 

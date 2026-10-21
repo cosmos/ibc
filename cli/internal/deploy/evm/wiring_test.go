@@ -173,8 +173,12 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	t.Run("missing multicall", func(t *testing.T) {
 		broken := *m
 		broken.Core.Multicall = ""
+		broken.Clients = []manifest.Client{m.Clients[0]}
+		broken.Clients[0].Address = common.HexToAddress("0x1234").Hex()
 		result, verifyErr := d.Verify(ctx, &broken)
 		require.NoError(t, verifyErr)
+		require.Len(t, result.Failed(), 2)
+		require.Equal(t, "client cli-2 address matches", result.Failed()[0].Name)
 		require.Contains(t, result.Failed(), deploy.Check{
 			Name: "core multicall recorded", Status: deploy.CheckFailed, Detail: "manifest has no multicall",
 		})
@@ -183,8 +187,12 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	t.Run("multicall without code", func(t *testing.T) {
 		broken := *m
 		broken.Core.Multicall = common.HexToAddress("0x1234").Hex()
+		broken.Clients = []manifest.Client{m.Clients[0]}
+		broken.Clients[0].Address = common.HexToAddress("0x1234").Hex()
 		result, verifyErr := d.Verify(ctx, &broken)
 		require.NoError(t, verifyErr)
+		require.Len(t, result.Failed(), 2)
+		require.Equal(t, "client cli-2 address matches", result.Failed()[0].Name)
 		require.Contains(t, result.Failed(), deploy.Check{
 			Name:   "multicall code present",
 			Status: deploy.CheckFailed,
