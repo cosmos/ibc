@@ -2,7 +2,7 @@
 
 module github.com/cosmos/ibc/cli
 
-go 1.26.9
+go 1.26.10
 
 require (
 	connectrpc.com/connect v1.20.0
