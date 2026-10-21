@@ -44,13 +44,8 @@ jobs:
             echo "::error::Release images are published by release.yml"
             exit 1
           fi
-          if [[ "$REF_TYPE" == "branch" ]]; then
-            tag="$REF_NAME"
-          else
-            tag="${BUILD_SHA:0:8}"
-          fi
-
-          tag=$(printf '%s' "$tag" | tr '[:upper:]/' '[:lower:]-' | tr -c '[:alnum:]_.-' '-')
+          # The only triggers are pushes to main and workflow_dispatch, so the ref is a branch here.
+          tag=$(printf '%s' "$REF_NAME" | tr '[:upper:]/' '[:lower:]-' | tr -c '[:alnum:]_.-' '-')
           echo "image_tag=${tag:0:128}" >> "$GITHUB_OUTPUT"
 
   # Build binaries, and publish a Docker image for each linux platform

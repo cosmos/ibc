@@ -6,16 +6,16 @@
 
 | Tag | Artifact | Description |
 | --- | --- | --- |
-| `vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
+| `vX.Y.Z` or `cli-vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-linux-amd64.tar.gz` | IBC CLI binary for linux/amd64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-linux-arm64.tar.gz` | IBC CLI binary for linux/arm64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-darwin-arm64.spdx.json` | SPDX SBOM of the darwin/arm64 binary |
 |  | `ibc-vX.Y.Z-linux-amd64.spdx.json` | SPDX SBOM of the linux/amd64 binary |
 |  | `ibc-vX.Y.Z-linux-arm64.spdx.json` | SPDX SBOM of the linux/arm64 binary |
-|  | `checksums.txt` | SHA-256 checksums of the release files and the SBOMs |
+|  | `checksums.txt` | SHA-256 checksums of the release files, the SBOMs and the attestation bundle |
 |  | `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
-|  | `ibc-vX.Y.Z.sigstore.jsonl` | Build provenance and SBOM attestations, for verification without the attestations API with `gh attestation verify --bundle` |
-|  | `ghcr.io/cosmos/ibc:vX.Y.Z` | IBC CLI container image (linux/amd64, linux/arm64), signed with cosign and carrying provenance and SBOM attestations |
+|  | `ibc-vX.Y.Z.intoto.jsonl` | Build provenance and SBOM attestations, for verification without the attestations API with `gh attestation verify --bundle` |
+|  | `ghcr.io/cosmos/ibc:<tag>` | IBC CLI container image (linux/amd64, linux/arm64), signed with cosign and carrying provenance and SBOM attestations |
 
 The files are attached to the tag's [GitHub release](https://github.com/cosmos/ibc/releases) and the image is published to [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc).
 
@@ -25,17 +25,10 @@ See [Signed release assets](#signed-release-assets) for how to verify the artifa
 
 ## Signed release assets
 
-Pushing a `v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries. The release notes get a section explaining how to verify the assets.
+Pushing a `v*` or `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries. The release notes get a section explaining how to verify the assets.
 
-`v*` tags are reserved for IBC CLI releases, and pushing any `v*` tag runs the release workflow. The existing `v1.0.0-rc2` to `v1.0.0-rc6` tags are 2019–2020 spec release candidates; the spec is no longer released under `v*` tags.
+`v*` and `cli-v*` tags are reserved for IBC CLI releases, and pushing either runs the release workflow. Both forms produce the same `ibc-vX.Y.Z` assets and "IBC CLI vX.Y.Z" title; the image is tagged with the pushed tag. The existing `v1.0.0-rc2` to `v1.0.0-rc6` tags are 2019–2020 spec release candidates; the spec is no longer released under `v*` tags.
 
-| Asset | Purpose |
-| --- | --- |
-| `ibc-<version>-<platform>.tar.gz` | Binary with `LICENSE` and `NOTICE` (`darwin-arm64`, `linux-amd64`, `linux-arm64`) |
-| `ibc-<version>-<platform>.spdx.json` | SPDX SBOM of each binary |
-| `checksums.txt` | SHA-256 of the archives and the SBOMs |
-| `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
-| `ibc-<version>.sigstore.jsonl` | Provenance and SBOM attestation bundles, for `gh attestation verify --bundle` without the attestations API |
 
 The attesting, signing and publishing steps are the [shared release actions](./.github/actions/README.md), which [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts) use too; each repository only defines its tag patterns and its build. Here the build also pushes the container image, and an extra job publishes its multi-platform tag.
 
@@ -51,14 +44,15 @@ Push the tag with `git` before publishing the release. A release drafted from th
 
 ### Container images
 
-The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:vX.Y.Z` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. Verify a release image with:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. Verify a release image with:
 
 ```sh
-cosign verify ghcr.io/cosmos/ibc:vX.Y.Z \
-  --certificate-identity-regexp '^https://github.com/cosmos/ibc/.github/workflows/release.yml@refs/tags/v' \
+cosign verify ghcr.io/cosmos/ibc:<tag> \
+  --certificate-identity https://github.com/cosmos/ibc/.github/workflows/release.yml@refs/tags/<tag> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
-gh attestation verify oci://ghcr.io/cosmos/ibc:vX.Y.Z --repo cosmos/ibc \
-  --signer-workflow cosmos/ibc/.github/workflows/release.yml
+gh attestation verify oci://ghcr.io/cosmos/ibc:<tag> --repo cosmos/ibc \
+  --signer-workflow cosmos/ibc/.github/workflows/release.yml \
+  --source-ref refs/tags/<tag>
 ```
 
 Image SBOMs are attached to the platform digests, not the multi-platform tag. To check one, pass the platform digest with `--predicate-type https://spdx.dev/Document/v2.3`.

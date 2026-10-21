@@ -24,7 +24,7 @@ Reference the actions by full commit SHA, like every other action in these repos
 uses: cosmos/ibc/.github/actions/publish-draft-release@<commit-sha> # main
 ```
 
-Do not tag the actions with `v*` tags in this repository: pushing a `v*` tag runs the IBC CLI release here. A change to an action reaches ibc-go and ibc-contracts only when they bump the SHA, so bump it in both in the same way you would bump any pinned action.
+Do not tag the actions with `v*` or `cli-v*` tags in this repository: pushing either runs the IBC CLI release here. A change to an action reaches ibc-go and ibc-contracts only when they bump the SHA, so bump it in both in the same way you would bump any pinned action.
 
 The `cosmos` organization's Actions policy must allow `cosmos/ibc` actions in those repositories.
 

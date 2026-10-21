@@ -11,7 +11,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "cli-v*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -41,12 +41,13 @@ jobs:
       - name: Check tag format
         id: tag
         run: |
-          if [[ ! "$TAG" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
-            echo "::error::Tag must match vX.Y.Z or vX.Y.Z-<suffix>"
+          if [[ ! "$TAG" =~ ^(cli-)?(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::Tag must match vX.Y.Z or cli-vX.Y.Z, optionally followed by -<suffix>"
             exit 1
           fi
-          version="${BASH_REMATCH[1]}"
-          suffix="${BASH_REMATCH[2]}"
+          # Both tag forms name the assets and the title after the version alone.
+          version="${BASH_REMATCH[2]}"
+          suffix="${BASH_REMATCH[3]}"
           {
             echo "name=ibc-${version}"
             echo "title=IBC CLI ${version}"

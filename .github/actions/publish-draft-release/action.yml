@@ -3,8 +3,8 @@
 name: Publish draft release
 description: >-
   Collects the `release-assets-*` artifacts uploaded by the attest-release-assets action,
-  verifies every asset against its attestation bundles, signs a `checksums.txt` over the assets
-  and SBOMs with cosign, and attaches everything to a draft release for the pushed tag, with a
+  verifies every asset against its attestation bundles, signs a `checksums.txt` over the assets,
+  SBOMs and combined attestation bundle with cosign, and attaches everything to a draft release for the pushed tag, with a
   "Verifying the release" section in its notes. Must run in a job triggered by a tag push. The
   calling job needs `contents: write` and `id-token: write`.
 
@@ -12,7 +12,7 @@ inputs:
   name:
     description: >-
       File name stem of the combined attestation bundle, e.g. `ibc-v1.2.3`. It is published as
-      `<name>.sigstore.jsonl`.
+      `<name>.intoto.jsonl`, the suffix OpenSSF Scorecard's Signed-Releases check looks for.
     required: true
   title:
     description: Title of the release, used when the draft is created.
@@ -100,14 +100,15 @@ runs:
           echo "::error::No release assets or attestation bundles were downloaded"
           exit 1
         fi
-        for reserved in checksums.txt checksums.txt.sigstore.json "${NAME}.sigstore.jsonl"; do
+        for reserved in checksums.txt checksums.txt.sigstore.json "${NAME}.intoto.jsonl"; do
           if [[ -e "${dist}/${reserved}" ]]; then
             echo "::error::A build job produced ${reserved}, which this action generates"
             exit 1
           fi
         done
+        # The bundle is written first, so the signed checksums cover it as well.
+        jq -c . "${bundles[@]}" > "${dist}/${NAME}.intoto.jsonl"
         (cd "$dist" && sha256sum -- * > checksums.txt && cat checksums.txt)
-        jq -c . "${bundles[@]}" > "${dist}/${NAME}.sigstore.jsonl"
 
     - name: Verify assets against the attestation bundles
       if: inputs.verify == 'true'
@@ -123,7 +124,7 @@ runs:
         while IFS= read -r file; do
           for predicate in https://slsa.dev/provenance/v1 https://spdx.dev/Document/v2.3; do
             gh attestation verify "${dist}/${file}" \
-              --bundle "${dist}/${NAME}.sigstore.jsonl" \
+              --bundle "${dist}/${NAME}.intoto.jsonl" \
               --predicate-type "$predicate" \
               --repo "$GITHUB_REPOSITORY" \
               --signer-workflow "${GITHUB_WORKFLOW_REF%@*}" \
@@ -151,7 +152,7 @@ runs:
 
         Verify the build provenance of a release asset. Add
         \`--predicate-type https://spdx.dev/Document/v2.3\` to verify its SBOM instead, or
-        \`--bundle ${NAME}.sigstore.jsonl\` to verify without the attestations API:
+        \`--bundle ${NAME}.intoto.jsonl\` to verify without the attestations API:
 
         \`\`\`sh
         gh attestation verify ${example} \\
