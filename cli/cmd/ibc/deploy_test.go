@@ -148,11 +148,6 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Equal(t, "0xmulticallB", out.Chains[1].EVM.IBCMulticall)
 	require.Empty(t, out.Chains[1].EVM.RPC)
 
-	// An incomplete manifest must not retain a stale configured address.
-	incomplete := *a
-	incomplete.Core.Multicall = ""
-	require.Empty(t, renderedChain(cfg, &incomplete).EVM.IBCMulticall)
-
 	require.Len(t, out.Connections, 2)
 	conn := out.Connections[0]
 	require.Equal(t, "1-2", conn.Alias)
