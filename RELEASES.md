@@ -37,18 +37,17 @@ Pushing a `v*` tag runs the [release workflow](./.github/workflows/release.yml).
 | `checksums.txt.sigstore.json` | Cosign signature over `checksums.txt` |
 | `ibc-<version>.sigstore.jsonl` | Provenance and SBOM attestation bundles, for `gh attestation verify --bundle` without the attestations API |
 
-The same release workflow runs in [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts); only the tag patterns and the build differ. Here the build also pushes the container image, and an extra job publishes its multi-platform tag.
+The attesting, signing and publishing steps are the [shared release actions](./.github/actions/README.md), which [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts) use too; each repository only defines its tag patterns and its build. Here the build also pushes the container image, and an extra job publishes its multi-platform tag.
 
 ### Release procedure
 
 1. Tag the release commit and push the tag (e.g. `git tag -s v0.2.0 -m v0.2.0 origin/main && git push origin v0.2.0`).
-2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. The draft is only created once every build job has passed. If one fails, re-run the failed jobs.
+2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. The draft is only created once every build job and the signed multi-platform image have succeeded. If one fails, re-run the failed jobs.
 3. Edit the draft and write the release notes above the generated "Verifying the release" section.
 4. Check the `Set as a pre-release` checkbox if needed. The workflow already checks it for tags with a pre-release suffix such as `-rc.1`.
-5. Confirm the workflow's *Publish multi-platform image* job passed. The draft does not wait for it, so the `vX.Y.Z` image may not be signed yet.
-6. Publish the release.
+5. Publish the release.
 
-Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml`.
+Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml` and `.github/actions`.
 
 ### Container images
 
