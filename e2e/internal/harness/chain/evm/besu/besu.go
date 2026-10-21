@@ -44,6 +44,7 @@ const (
 	besuReadyTimeout        = 90 * time.Second
 	besuStopTimeout         = 30 * time.Second
 	besuLogTimeout          = 10 * time.Second
+	besuDiscardTimeout      = 10 * time.Second
 	besuStartupLogTailBytes = 4096
 	besuTreasuryBalanceHex  = "0xc9f2c9cd04674edea40000000"
 	besuOperatorConfigFile  = "operatorConfigFile.json"
@@ -375,7 +376,8 @@ func (bc *Chain) Validators(ctx context.Context) ([]common.Address, error) {
 // VoteValidator has every node in the validator set vote validator in or out,
 // waits until the head's set reflects it, then discards the votes. Only a node
 // of this chain can be voted in: a validator with no node halts the chain.
-func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, add bool) error {
+// Votes are discarded on failure too, so none outlives the call.
+func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, add bool) (err error) {
 	if add && !slices.Contains(bc.Nodes(), validator) {
 		return fmt.Errorf("besu chain %s: %s runs no node of the chain", bc.logID, validator)
 	}
@@ -390,7 +392,13 @@ func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, ad
 		}
 	}
 
+	var proposed []*node
+	defer func() {
+		err = errors.Join(err, bc.discardVotes(ctx, proposed, validator))
+	}()
 	for _, n := range voters {
+		// A failed call may still have registered the vote.
+		proposed = append(proposed, n)
 		if voteErr := n.rpc.CallContext(ctx, nil, bc.api+"_proposeValidatorVote", validator, add); voteErr != nil {
 			return fmt.Errorf("besu chain %s: %s votes on %s: %w", bc.logID, n.address, validator, voteErr)
 		}
@@ -406,18 +414,23 @@ func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, ad
 			"besu chain %s: vote on %s did not pass, validators %v: %w", bc.logID, validator, current, err,
 		)
 	}
-	for _, n := range voters {
-		if discardErr := n.rpc.CallContext(ctx, nil, bc.api+"_discardValidatorVote", validator); discardErr != nil {
-			return fmt.Errorf(
-				"besu chain %s: %s discards its vote on %s: %w",
-				bc.logID,
-				n.address,
-				validator,
-				discardErr,
-			)
+	return nil
+}
+
+// discardVotes has each of nodes discard its vote on validator, even once ctx
+// is done.
+func (bc *Chain) discardVotes(ctx context.Context, nodes []*node, validator common.Address) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), besuDiscardTimeout)
+	defer cancel()
+	var errs []error
+	for _, n := range nodes {
+		if err := n.rpc.CallContext(ctx, nil, bc.api+"_discardValidatorVote", validator); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"besu chain %s: %s discards its vote on %s: %w", bc.logID, n.address, validator, err,
+			))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // nodeLauncher starts the nodes of one chain.
