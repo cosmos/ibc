@@ -143,24 +143,6 @@ func TestBuildRelayTxsInvalidInput(t *testing.T) {
 			require.Empty(t, txs)
 		})
 	}
-	t.Run("missing multicall", func(t *testing.T) {
-		txs, err := New(
-			router,
-			common.Address{},
-			nil,
-		).BuildRelayTxs(t.Context(), testSender, v2.ClientUpdate{}, simulationPackets(1))
-		require.ErrorContains(t, err, "ibcMulticall is required")
-		require.Empty(t, txs)
-	})
-	t.Run("invalid sender", func(t *testing.T) {
-		txs, err := New(
-			router,
-			multicall,
-			nil,
-		).BuildRelayTxs(t.Context(), "bad address", v2.ClientUpdate{}, simulationPackets(1))
-		require.ErrorContains(t, err, "invalid sender address")
-		require.Empty(t, txs)
-	})
 }
 
 func TestBuildRelayTxsSimulation(t *testing.T) {

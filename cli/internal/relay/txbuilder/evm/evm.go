@@ -94,12 +94,6 @@ func (c *TxBuilder) BuildRelayTxs(
 	clientUpdate v2.ClientUpdate,
 	packetRelayItems []v2.PacketRelayItem,
 ) ([]v2.RelayTx, error) {
-	if !common.IsHexAddress(from) {
-		return nil, errors.Errorf("invalid sender address %q", from)
-	}
-	if c.multicall == (common.Address{}) {
-		return nil, errors.New("ibcMulticall is required for relaying")
-	}
 	calls := make([][]byte, 0, len(clientUpdate.Payloads)+len(packetRelayItems))
 
 	for _, payload := range clientUpdate.Payloads {
