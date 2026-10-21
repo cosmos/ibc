@@ -47,6 +47,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 	}
 
 	if !retry {
+		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.TimeoutTxHash)
 		client, ok := p.chains.Get(p.route.SourceChainID)
 		if !ok {
 			return nil, errors.Errorf("no configured chain client for source chain %s", p.route.SourceChainID)
@@ -57,7 +58,6 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 			return nil, errors.Wrapf(err, "checking timeout event in tx %s", *tr.TimeoutTxHash)
 		}
 		if executed {
-			metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.TimeoutTxHash)
 			return tr, nil
 		}
 	}

@@ -47,6 +47,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 	}
 
 	if !retry {
+		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.AckTxHash)
 		client, ok := p.chains.Get(p.route.SourceChainID)
 		if !ok {
 			return nil, errors.Errorf("no configured chain client for source chain %s", p.route.SourceChainID)
@@ -57,7 +58,6 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 			return nil, errors.Wrapf(err, "checking ack event in tx %s", *tr.AckTxHash)
 		}
 		if executed {
-			metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.AckTxHash)
 			return tr, nil
 		}
 	}
