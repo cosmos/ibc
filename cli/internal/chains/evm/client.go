@@ -87,10 +87,22 @@ var nodeTransport = func() *http.Transport {
 	return transport
 }()
 
-// Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
+// Dial verifies the endpoint's chain ID, then records subsequent calls in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	rpcClient, err := rpc.DialOptions(
-		context.Background(),
+	client, err := dialRPC(chainID, rpcURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return newMeteredClient(chainID, client), nil
+}
+
+func dialRPC(chainID, rpcURL string) (*rpcClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := rpc.DialOptions(
+		ctx,
 		rpcURL,
 		rpc.WithHTTPClient(&http.Client{Transport: nodeTransport}),
 	)
@@ -98,10 +110,21 @@ func Dial(chainID, rpcURL string) (ETHClient, error) {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
 
-	return newMeteredClient(chainID, newRPCClient(rpcClient)), nil
+	client := newRPCClient(conn)
+	actual, err := client.ChainID(ctx)
+	if err != nil {
+		client.Close()
+		return nil, errors.Wrapf(err, "querying chain ID for chain %s", chainID)
+	}
+	if actual.String() != chainID {
+		client.Close()
+		return nil, errors.Errorf("rpc reports chain ID %s, configured chain ID is %s", actual, chainID)
+	}
+
+	return client, nil
 }
 
-// New dials the chain.
+// New dials the chain and verifies each endpoint's chain ID.
 func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := Dial(chainID, rpcURL)
 	if err != nil {
@@ -112,12 +135,12 @@ func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 
 	if wsURL != "" {
 		// ws is not metered
-		dialed, errDial := rpc.Dial(wsURL)
+		dialed, errDial := dialRPC(chainID, wsURL)
 		if errDial != nil {
 			return nil, errors.Wrapf(errDial, "dialing websocket for chain %s", chainID)
 		}
 
-		ws = newRPCClient(dialed)
+		ws = dialed
 	}
 
 	return NewWithClients(chainID, eth, ws, ics26RouterAddress)
@@ -918,7 +941,7 @@ func (c *Client) PacketWriteAckStatus(
 
 	for _, log := range receipt.Logs {
 		switch {
-		case log == nil, len(log.Topics) == 0:
+		case log == nil, len(log.Topics) == 0, log.Address != c.routerAddress:
 			continue
 		case log.Topics[0] != c.routerABI.Events[writeAckEvent].ID:
 			continue

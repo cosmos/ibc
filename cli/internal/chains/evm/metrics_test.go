@@ -334,10 +334,15 @@ func TestNewRecordsRealResponses(t *testing.T) {
 			reader := installTestMetrics(t)
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var req struct {
-					ID json.RawMessage `json:"id"`
+					ID     json.RawMessage `json:"id"`
+					Method string          `json:"method"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if req.Method == "eth_chainId" {
+					_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": "0x1"})
 					return
 				}
 
