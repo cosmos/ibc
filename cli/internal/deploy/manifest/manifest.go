@@ -37,8 +37,8 @@ type Core struct {
 	Multicall string `json:"multicall"`
 }
 
-// Client is one light client registered on the chain's router. Its params
-// field records its type.
+// Client is one light client registered on the chain's router. The params
+// field that is set determines its type.
 type Client struct {
 	ClientID             string             `json:"clientId"`
 	Address              string             `json:"address"`
