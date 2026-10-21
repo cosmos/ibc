@@ -129,18 +129,13 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 	if err != nil {
 		return nil, err
 	}
-	var submission *v2.Submission
 	for range maxBroadcastAttempts {
 		txData.GasFeeCap, txData.GasTipCap = fee, tip
 		tx, err := signTransaction(ctx, types.NewTx(txData), c.signer, c.ethSigner, c.address)
 		if err != nil {
-			return submission, err
+			return nil, err
 		}
-		submission = &v2.Submission{
-			TxHash:         tx.Hash().Hex(),
-			SubmittedAt:    time.Now().UTC(),
-			RelayerAddress: c.address.Hex(),
-		}
+		submittedAt := time.Now().UTC()
 		err = broadcast(ctx, c.eth, tx)
 		if err == nil {
 			c.nextNonce = max(c.nextNonce, nonce+1)
@@ -150,23 +145,27 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 			}
 			metrics.startTx(c.chainID, c.address.Hex(), tx.Hash().Hex())
 			slog.Debug("Transaction broadcast", "chainID", c.chainID, "nonce", nonce, "txHash", tx.Hash())
-			return submission, nil
+			return &v2.Submission{
+				TxHash:         tx.Hash().Hex(),
+				SubmittedAt:    submittedAt,
+				RelayerAddress: c.address.Hex(),
+			}, nil
 		}
 		if !isReplacementUnderpriced(err) {
-			return submission, errors.Wrapf(err, "broadcasting transaction %s at nonce %d", tx.Hash(), nonce)
+			return nil, errors.Wrapf(err, "broadcasting transaction %s at nonce %d", tx.Hash(), nonce)
 		}
 		if nonce == c.lowestUnminedNonce {
 			c.lastAttemptedFeeCap, c.lastAttemptedTipCap = fee, tip
 		}
 		nextFee, nextTip := capFees(bump(fee), bump(tip), feeCeiling)
 		if nextFee.Cmp(fee) == 0 && nextTip.Cmp(tip) == 0 {
-			return submission, errors.Wrapf(err,
+			return nil, errors.Wrapf(err,
 				"fee ceiling %s wei (%dx fresh estimate) reached for nonce %d",
 				feeCeiling, feeCeilingMultiplier, nonce)
 		}
 		fee, tip = nextFee, nextTip
 	}
-	return submission, errors.Errorf(
+	return nil, errors.Errorf(
 		"replacement still underpriced after %d attempts at nonce %d",
 		maxBroadcastAttempts,
 		nonce,

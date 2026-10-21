@@ -114,7 +114,10 @@ func expireNonce(c *TxSubmitter) {
 
 func submit(t *testing.T, c *TxSubmitter) error {
 	t.Helper()
-	_, err := c.Submit(t.Context(), testIntent())
+	submission, err := c.Submit(t.Context(), testIntent())
+	if err != nil {
+		require.Nil(t, submission)
+	}
 	return err
 }
 
@@ -237,10 +240,8 @@ func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 			rpc.send = func(*types.Transaction) error { return tt.err }
 			submission, err := c.Submit(t.Context(), testIntent())
 			require.ErrorIs(t, err, tt.err)
+			require.Nil(t, submission)
 			require.Len(t, rpc.sent, 1)
-			require.Equal(t, rpc.sent[0].Hash().Hex(), submission.TxHash)
-			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
-			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
 			require.Zero(t, c.nextNonce)
 
 			for range 2 {
@@ -248,8 +249,13 @@ func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 				require.Zero(t, c.nextNonce)
 			}
 			rpc.send = nil
-			require.NoError(t, submit(t, c))
+			submission, err = c.Submit(t.Context(), testIntent())
+			require.NoError(t, err)
+			require.NotNil(t, submission)
 			require.Len(t, rpc.sent, 4)
+			require.Equal(t, rpc.sent[3].Hash().Hex(), submission.TxHash)
+			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
+			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
 			for _, tx := range rpc.sent {
 				require.Zero(t, tx.Nonce())
 				require.Equal(t, rpc.sent[0].GasFeeCap(), tx.GasFeeCap())
@@ -345,8 +351,9 @@ func TestSignerDeadlineDoesNotConsumeNonce(t *testing.T) {
 	c.signer = stalledSigner{key}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
-	_, err := c.Submit(ctx, testIntent())
+	submission, err := c.Submit(ctx, testIntent())
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.Nil(t, submission)
 	require.Empty(t, rpc.sent)
 	c.signer = key
 	require.NoError(t, submit(t, c))
@@ -413,6 +420,7 @@ func TestUnderpricedRetriesStopAtFeeCeiling(t *testing.T) {
 
 	submission, err := c.Submit(t.Context(), testIntent())
 	require.ErrorIs(t, err, underpriced)
+	require.Nil(t, submission)
 	require.ErrorContains(t, err, "fee ceiling 8 wei (4x fresh estimate)")
 	require.Len(t, rpc.sent, 6)
 	require.Equal(t, 1, rpc.tipCalls)
@@ -426,7 +434,6 @@ func TestUnderpricedRetriesStopAtFeeCeiling(t *testing.T) {
 	last := rpc.sent[5]
 	require.Equal(t, big.NewInt(8), last.GasFeeCap())
 	require.Equal(t, big.NewInt(8), last.GasTipCap())
-	require.Equal(t, last.Hash().Hex(), submission.TxHash)
 
 	// The next submission gets a fresh ceiling and can increase fees again.
 	rpc.send = nil
