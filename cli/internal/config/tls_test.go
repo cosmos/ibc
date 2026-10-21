@@ -381,52 +381,52 @@ func TestSignerConfigTLS(t *testing.T) {
 	})
 }
 
-func TestProverConfigValidate(t *testing.T) {
+func TestRemoteProverConfigValidate(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := certs.WriteSelfSigned(t, dir, "test")
 
 	for _, tt := range []struct {
 		name        string
-		prover      ProverConfig
+		prover      RemoteProverConfig
 		errContains string
 	}{
 		{
 			name:   "https url",
-			prover: ProverConfig{URL: "https://prover.example.com:9090"},
+			prover: RemoteProverConfig{URL: "https://prover.example.com:9090"},
 		},
 		{
 			name:   "http url",
-			prover: ProverConfig{URL: "http://prover.example.com:9090"},
+			prover: RemoteProverConfig{URL: "http://prover.example.com:9090"},
 		},
 		{
 			name:   "bare host:port",
-			prover: ProverConfig{URL: "prover.example.com:9090"},
+			prover: RemoteProverConfig{URL: "prover.example.com:9090"},
 		},
 		{
 			name: "https url with tls",
-			prover: ProverConfig{
+			prover: RemoteProverConfig{
 				URL: "https://prover.example.com:9090",
 				TLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
 			},
 		},
 		{
 			name:   "uppercase https with tls",
-			prover: ProverConfig{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
+			prover: RemoteProverConfig{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
 		},
 		{
 			name:        "non-http scheme",
-			prover:      ProverConfig{URL: "grpc://prover.example.com:9090"},
+			prover:      RemoteProverConfig{URL: "grpc://prover.example.com:9090"},
 			errContains: "url: must be a bare host:port or an http(s):// URL",
 		},
 		{
 			name:        "empty url",
-			prover:      ProverConfig{},
+			prover:      RemoteProverConfig{},
 			errContains: "url: required",
 		},
 		{
 			// Its settings would be read and then silently ignored.
 			name: "tls block with a plaintext url",
-			prover: ProverConfig{
+			prover: RemoteProverConfig{
 				URL: "http://prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
@@ -434,7 +434,7 @@ func TestProverConfigValidate(t *testing.T) {
 		},
 		{
 			name: "tls block with a bare host:port",
-			prover: ProverConfig{
+			prover: RemoteProverConfig{
 				URL: "prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
@@ -442,45 +442,45 @@ func TestProverConfigValidate(t *testing.T) {
 		},
 		{
 			name:        "query on a url",
-			prover:      ProverConfig{URL: "https://prover.example.com/grpc?token=abc"},
+			prover:      RemoteProverConfig{URL: "https://prover.example.com/grpc?token=abc"},
 			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:        "fragment on a url",
-			prover:      ProverConfig{URL: "http://prover.example.com#section"},
+			prover:      RemoteProverConfig{URL: "http://prover.example.com#section"},
 			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:   "path on a url",
-			prover: ProverConfig{URL: "https://prover.example.com/grpc"},
+			prover: RemoteProverConfig{URL: "https://prover.example.com/grpc"},
 		},
 		{
 			name:   "userinfo on a url",
-			prover: ProverConfig{URL: "https://user:secret@prover.example.com"},
+			prover: RemoteProverConfig{URL: "https://user:secret@prover.example.com"},
 		},
 		{
 			name:        "url without a host",
-			prover:      ProverConfig{URL: "https://"},
+			prover:      RemoteProverConfig{URL: "https://"},
 			errContains: "url: must include a host",
 		},
 		{
 			name:        "bare host:port with a bad port",
-			prover:      ProverConfig{URL: "prover.example.com:abc"},
+			prover:      RemoteProverConfig{URL: "prover.example.com:abc"},
 			errContains: "url: invalid URL",
 		},
 		{
 			name:        "bare host:port with a query",
-			prover:      ProverConfig{URL: "prover.example.com:9090?token=abc"},
+			prover:      RemoteProverConfig{URL: "prover.example.com:9090?token=abc"},
 			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:        "url with a bad port",
-			prover:      ProverConfig{URL: "https://prover.example.com:abc"},
+			prover:      RemoteProverConfig{URL: "https://prover.example.com:abc"},
 			errContains: "url: invalid URL",
 		},
 		{
 			name: "bad tls block on an https url",
-			prover: ProverConfig{
+			prover: RemoteProverConfig{
 				URL: "https://prover.example.com:9090",
 				TLS: &TLSClientConfig{CertFile: certFile},
 			},
@@ -509,7 +509,7 @@ func TestEndpointURL(t *testing.T) {
 		"https://svc.example.com/grpc": "https://svc.example.com/grpc",
 	} {
 		require.Equal(t, want, AttestorConfig{GRPC: addr}.EndpointURL(), addr)
-		require.Equal(t, want, ProverConfig{URL: addr}.EndpointURL(), addr)
+		require.Equal(t, want, RemoteProverConfig{URL: addr}.EndpointURL(), addr)
 	}
 }
 

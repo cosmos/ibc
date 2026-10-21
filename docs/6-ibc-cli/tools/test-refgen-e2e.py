@@ -1099,10 +1099,10 @@ func (c EVMChainConfig) Validate(validateICS26Router bool) error {""")
 @case("a key required inside an optional block names the block")
 def _():
     with Sandbox() as box:
-        # A bare `required` told readers every client end needs a prover.
+        # A bare `required` told readers every client end needs a remoteProver.
         # `evm.rpc`, above, stays bare: its block cannot be left out.
-        key = "connections[].clientA.prover.url, connections[].clientB.prover.url"
-        assert _cell(box, "config:relayer:connections", key) == "**required** in `prover`", \
+        key = "connections[].clientA.remoteProver.url, connections[].clientB.remoteProver.url"
+        assert _cell(box, "config:relayer:connections", key) == "**required** in `remoteProver`", \
             _cell(box, "config:relayer:connections", key)
 
 

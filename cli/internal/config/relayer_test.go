@@ -393,8 +393,8 @@ func TestConnectionConfigSourceEnd(t *testing.T) {
 	}
 }
 
-// A prover relays a light client the IBC CLI does not implement, so it lifts
-// the restriction to built-in types.
+// A remoteProver relays a light client the IBC CLI does not implement, so it
+// lifts the restriction to built-in types.
 func TestClientEndType(t *testing.T) {
 	t.Parallel()
 
@@ -407,11 +407,11 @@ func TestClientEndType(t *testing.T) {
 	}{
 		{name: "attestation", doc: "type: attestation\n"},
 		{name: "besu", doc: "type: besu\n"},
-		{name: "built-in type with prover", doc: "type: besu\nprover:\n  url: http://prover:9090\n"},
-		{name: "any type with prover", doc: "type: tendermint\nprover:\n  url: http://prover:9090\n"},
-		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set prover"},
-		{name: "missing type", doc: "prover:\n  url: http://prover:9090\n", wantErr: "type: required"},
-		{name: "prover errors carry its path", doc: "type: tendermint\nprover:\n  url: grpc://prover:9090\n", wantErr: "prover.url: must be a bare host:port"},
+		{name: "built-in type with remoteProver", doc: "type: besu\nremoteProver:\n  url: http://prover:9090\n"},
+		{name: "any type with remoteProver", doc: "type: tendermint\nremoteProver:\n  url: http://prover:9090\n"},
+		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set remoteProver"},
+		{name: "missing type", doc: "remoteProver:\n  url: http://prover:9090\n", wantErr: "type: required"},
+		{name: "remoteProver errors carry its path", doc: "type: tendermint\nremoteProver:\n  url: grpc://prover:9090\n", wantErr: "remoteProver.url: must be a bare host:port"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

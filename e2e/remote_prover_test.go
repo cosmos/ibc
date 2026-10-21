@@ -36,7 +36,7 @@ func startRemoteProverEnv(t *testing.T, requirements e2etest.EVMRequirements) re
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner,
 		func(cfg *ibccli.RelayerConfig) {
 			for i := range cfg.Connections {
-				cfg.Connections[i].ProverURL = "http://" + prover.Address()
+				cfg.Connections[i].RemoteProverURL = "http://" + prover.Address()
 			}
 		}, route)
 

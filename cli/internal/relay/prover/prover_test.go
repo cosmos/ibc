@@ -119,11 +119,11 @@ func TestNewSetFromConfig(t *testing.T) {
 	t.Run("proverBadTLSConfigErrors", func(t *testing.T) {
 		// ARRANGE
 		conn := testConnection()
-		conn.ClientA.Prover = &config.ProverConfig{
+		conn.ClientA.RemoteProver = &config.RemoteProverConfig{
 			URL: "https://127.0.0.1:1",
 			TLS: &config.TLSClientConfig{CAFile: "/nonexistent/ca.crt"},
 		}
-		conn.ClientB.Prover = &config.ProverConfig{URL: "http://127.0.0.1:1"}
+		conn.ClientB.RemoteProver = &config.RemoteProverConfig{URL: "http://127.0.0.1:1"}
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{
 			conn.ClientA.ChainID: mocks.NewMockClient(t),
@@ -136,7 +136,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
 
 		// ASSERT
-		require.ErrorContains(t, err, "prover: tls.caFile")
+		require.ErrorContains(t, err, "remoteProver: tls.caFile")
 	})
 }
 
@@ -166,14 +166,14 @@ func TestNewSetFromConfigBesu(t *testing.T) {
 	})
 }
 
-// An end with a prover needs no chain client or attestors, and its type,
+// An end with a remoteProver needs no chain client or attestors, and its type,
 // built-in or not, only labels its metrics.
 func TestNewSetFromConfigProver(t *testing.T) {
 	conn := testConnection()
 	conn.ClientA.Type = "op-stack"
-	conn.ClientA.Prover = &config.ProverConfig{URL: "http://prover:9090"}
+	conn.ClientA.RemoteProver = &config.RemoteProverConfig{URL: "http://prover:9090"}
 	conn.ClientB.Type = config.ClientTypeBesu
-	conn.ClientB.Prover = &config.ProverConfig{URL: "http://prover:9090"}
+	conn.ClientB.RemoteProver = &config.RemoteProverConfig{URL: "http://prover:9090"}
 	cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
 
 	set, err := NewSetFromConfig(context.Background(), cfg, chains.NewClientSet(nil), nil, slog.Default())

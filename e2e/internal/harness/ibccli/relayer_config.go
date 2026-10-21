@@ -70,9 +70,9 @@ type RelayerClientEnd struct {
 type RelayerConnection struct {
 	A, B RelayerClientEnd
 
-	// ProverURL points both client ends at a ProverService instead of their
-	// built-in provers.
-	ProverURL string
+	// RemoteProverURL points both client ends at a ProverService instead of
+	// their built-in provers.
+	RemoteProverURL string
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -175,8 +175,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
-		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
+		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.RemoteProverURL)
+		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.RemoteProverURL)
 		file.Relayer.Connections = append(file.Relayer.Connections, ConnectionFileConfig{
 			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
 			ClientA: a,
@@ -195,7 +195,7 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) Clie
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
 	if proverURL != "" {
-		result.Prover = &ProverFileConfig{URL: proverURL}
+		result.RemoteProver = &RemoteProverFileConfig{URL: proverURL}
 	}
 	return result
 }
@@ -264,15 +264,15 @@ type ConnectionFileConfig struct {
 }
 
 type ClientEndFileConfig struct {
-	ChainID   string               `yaml:"chainId"`
-	Signer    string               `yaml:"signer"`
-	ClientID  string               `yaml:"clientId"`
-	Type      clientkind.Kind      `yaml:"type"`
-	Prover    *ProverFileConfig    `yaml:"prover,omitempty"`
-	AutoRelay *AutoRelayFileConfig `yaml:"autoRelay,omitempty"`
+	ChainID      string                  `yaml:"chainId"`
+	Signer       string                  `yaml:"signer"`
+	ClientID     string                  `yaml:"clientId"`
+	Type         clientkind.Kind         `yaml:"type"`
+	RemoteProver *RemoteProverFileConfig `yaml:"remoteProver,omitempty"`
+	AutoRelay    *AutoRelayFileConfig    `yaml:"autoRelay,omitempty"`
 }
 
-type ProverFileConfig struct {
+type RemoteProverFileConfig struct {
 	URL string `yaml:"url"`
 }
 

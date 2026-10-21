@@ -71,13 +71,14 @@ type ClientEnd struct {
 	Signer   string `yaml:"signer"`
 	ClientID string `yaml:"clientId"`
 
-	// Type is the on-chain light client type: `attestation` or `besu`,
-	// or with a prover any type, including ones the IBC CLI does not implement.
+	// Type is the on-chain light client type: `attestation` or `besu`, or
+	// with a remoteProver any type, including ones the IBC CLI does not
+	// implement.
 	Type string `yaml:"type"`
 
-	// Prover is a ProverService that generates this client's proofs instead of
-	// the built-in prover for Type.
-	Prover *ProverConfig `yaml:"prover,omitempty"`
+	// RemoteProver is a ProverService that generates this client's proofs instead
+	// of the built-in prover for Type.
+	RemoteProver *RemoteProverConfig `yaml:"remoteProver,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -97,8 +98,8 @@ type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
-// ProverConfig is a ProverService endpoint.
-type ProverConfig struct {
+// RemoteProverConfig is a ProverService endpoint.
+type RemoteProverConfig struct {
 	// URL is the ProverService endpoint: an http(s):// URL, or a bare host:port
 	// dialed as http://. Without a query or fragment.
 	URL string `yaml:"url"`
@@ -241,25 +242,27 @@ func (c ClientEnd) Validate() error {
 		return errPathf("signer", "required")
 	case c.Type == "":
 		return errPathf("type", "required")
-	case c.Prover == nil && !slices.Contains(builtInClientTypes, c.Type):
+	case c.RemoteProver == nil && !slices.Contains(builtInClientTypes, c.Type):
 		return errPathf(
-			"type", "unknown client type: %q; set prover for a light client the IBC CLI does not implement", c.Type,
+			"type",
+			"unknown client type: %q; set remoteProver for a light client the IBC CLI does not implement",
+			c.Type,
 		)
 	}
 
-	if c.Prover == nil {
+	if c.RemoteProver == nil {
 		return nil
 	}
 
-	return errPath("prover", c.Prover.Validate())
+	return errPath("remoteProver", c.RemoteProver.Validate())
 }
 
 // EndpointURL returns URL as a URL, see endpointURL.
-func (p ProverConfig) EndpointURL() string {
+func (p RemoteProverConfig) EndpointURL() string {
 	return endpointURL(p.URL)
 }
 
-func (p ProverConfig) Validate() error {
+func (p RemoteProverConfig) Validate() error {
 	if p.URL == "" {
 		return errPathf("url", "required")
 	}
