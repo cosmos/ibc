@@ -11,10 +11,12 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -570,14 +572,25 @@ func TestShouldRetry(t *testing.T) {
 	}
 }
 
+type revertError string
+
+func (revertError) Error() string    { return "execution reverted" }
+func (revertError) ErrorCode() int   { return -32000 }
+func (e revertError) ErrorData() any { return string(e) }
+
 func TestSubmitRejectsEstimationRevert(t *testing.T) {
 	submitter, eth := newSubmitter(t)
-	revert := errors.New("execution reverted")
+	contractABI, err := besuqbft.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	customErr := contractABI.Errors["ConsensusStateExpired"]
+	args, err := customErr.Inputs.Pack(uint64(100), big.NewInt(121), uint64(20))
+	require.NoError(t, err)
+	revert := revertError(hexutil.Encode(append(customErr.ID[:4], args...)))
 	eth.gasErr = revert
 	result, err := submitter.Submit(t.Context(), testIntent())
 	require.Nil(t, result)
 	require.ErrorIs(t, err, revert)
-	require.EqualError(t, err, "estimating gas: execution reverted")
+	require.EqualError(t, err, "estimating gas: ConsensusStateExpired(100, 121, 20): execution reverted")
 	require.Empty(t, eth.sent)
 	require.Zero(t, submitter.nextNonce)
 }
