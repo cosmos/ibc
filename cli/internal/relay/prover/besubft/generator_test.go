@@ -128,11 +128,6 @@ func consensusHeader(height uint64, state besumsgs.IBesuLightClientMsgsConsensus
 	}
 }
 
-func (e *fixtureEnv) parsedUpdate(t *testing.T, update besutest.UpdateFixture) *besu.ParsedHeader {
-	t.Helper()
-	return besutest.ParseHeader(t, update.HeaderRLP)
-}
-
 func (e *fixtureEnv) setAnchor(t *testing.T, height uint64, state besumsgs.IBesuLightClientMsgsConsensusState) {
 	t.Helper()
 	e.host.clientState = e.clientState(height)
@@ -151,7 +146,7 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 			env := newFixtureEnv(t, consensus)
 			update := env.fixture.NonAdjacentUpdate
 			env.expectInitialAnchor(t)
-			env.counterparty.sealed[update.Height] = env.parsedUpdate(t, update)
+			env.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP)
 
 			payloads, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
 			require.NoError(t, err)
@@ -174,7 +169,7 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 	env := newFixtureEnv(t, besu.QBFT)
 	update := env.fixture.NonAdjacentUpdate
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
-	env.counterparty.sealed[update.Height] = env.parsedUpdate(t, update)
+	env.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP)
 
 	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
@@ -214,7 +209,7 @@ func (e *fixtureEnv) expectProofAt(
 	nodesFor func(slot common.Hash) [][]byte,
 ) {
 	t.Helper()
-	e.counterparty.sealed[update.Height] = e.parsedUpdate(t, update)
+	e.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP)
 	e.counterparty.proof = func(height uint64, slots []common.Hash) (evm.RouterProof, error) {
 		if height != update.Height {
 			return evm.RouterProof{}, fmt.Errorf("router proof at %d, want %d", height, update.Height)

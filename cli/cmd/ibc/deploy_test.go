@@ -261,18 +261,14 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 	a.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{
-			"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
-		},
+		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{
-			"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60),
-		},
+		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")

@@ -144,11 +144,12 @@ func normalizeCommitSeals(
 		return nil, "", errors.New("no commit seal recovers to a header validator")
 	}
 
-	sortedSeals, err := rlp.EncodeToBytes(kept)
-	if err != nil {
+	items := slices.Clone(extraItems)
+	var err error
+	if items[extraIdxCommitSeals], err = rlp.EncodeToBytes(kept); err != nil {
 		return nil, "", fmt.Errorf("encode commit seals: %w", err)
 	}
-	out, err := withCommitSeals(h, extraItems, sortedSeals)
+	out, err := withExtraData(h, items)
 
 	return out, detected, err
 }
@@ -191,10 +192,9 @@ func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Cons
 		return nil, fmt.Errorf("no commit seal digest for besu consensus %q", consensus)
 	}
 
-	signing := types.CopyHeader(h)
-	var err error
-	if signing.Extra, err = rlp.EncodeToBytes(signingItems); err != nil {
-		return nil, fmt.Errorf("encode signing extra data: %w", err)
+	signing, err := withExtraData(h, signingItems)
+	if err != nil {
+		return nil, err
 	}
 
 	encoded, err := rlp.EncodeToBytes(signing)
@@ -205,12 +205,8 @@ func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Cons
 	return crypto.Keccak256(encoded), nil
 }
 
-// withCommitSeals returns a copy of h whose extraData carries seals, an RLP
-// list, in place of its commit seals.
-func withCommitSeals(h *types.Header, extraItems []rlp.RawValue, seals rlp.RawValue) (*types.Header, error) {
-	items := slices.Clone(extraItems)
-	items[extraIdxCommitSeals] = seals
-
+// withExtraData returns a copy of h whose extraData is the RLP list of items.
+func withExtraData(h *types.Header, items []rlp.RawValue) (*types.Header, error) {
 	out := types.CopyHeader(h)
 	var err error
 	if out.Extra, err = rlp.EncodeToBytes(items); err != nil {
@@ -222,11 +218,7 @@ func withCommitSeals(h *types.Header, extraItems []rlp.RawValue, seals rlp.RawVa
 
 // ReadSealedHeader reads and parses the Besu header at number, or the head
 // when number is nil.
-func ReadSealedHeader(
-	ctx context.Context,
-	backend bind.ContractBackend,
-	number *big.Int,
-) (*ParsedHeader, error) {
+func ReadSealedHeader(ctx context.Context, backend bind.ContractBackend, number *big.Int) (*ParsedHeader, error) {
 	at := "latest"
 	if number != nil {
 		at = number.String()
