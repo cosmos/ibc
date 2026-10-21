@@ -24,6 +24,7 @@ type Instance struct {
 type AppStack struct {
 	ICS20Transfer common.Address // ERC1967 proxy
 	ICS27GMP      common.Address // ERC1967 proxy
+	IBCMulticall  common.Address // ERC1967 proxy
 }
 
 // Client is a light client registered with one Instance, with the attestation

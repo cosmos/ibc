@@ -256,6 +256,7 @@ func acquireIBCInstance(
 			accessManager: EVMAddress(resolved.AccessManager.Hex()),
 			ics20Transfer: EVMAddress(apps.ICS20Transfer.Hex()),
 			ics27GMP:      EVMAddress(apps.ICS27GMP.Hex()),
+			ibcMulticall:  EVMAddress(apps.IBCMulticall.Hex()),
 		}, nil
 	case ExistingIBCInstance:
 		resolved, err := setup.AttachInstance(ctx, common.HexToAddress(string(instance.Locator)))

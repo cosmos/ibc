@@ -85,6 +85,12 @@ type CoreRef struct {
 	TargetData map[string]string
 }
 
+// MulticallRef is the deployed multicall proxy and its implementation.
+type MulticallRef struct {
+	Address        string
+	Implementation string
+}
+
 // ClientRef is the result of provisioning a light client contract.
 type ClientRef struct {
 	Address string
@@ -167,6 +173,8 @@ func (r Report) Failed() []Check {
 type Target interface {
 	// ProvisionCore deploys the core routing stack.
 	ProvisionCore(ctx context.Context, p CoreParams) (CoreRef, error)
+	// ProvisionMulticall deploys a multicall governed by the core's access manager.
+	ProvisionMulticall(ctx context.Context, accessManager string) (MulticallRef, error)
 	// ProvisionClient deploys a light client governed by router, without
 	// registering it.
 	ProvisionClient(ctx context.Context, router string, spec ClientSpec) (ClientRef, error)
