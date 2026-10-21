@@ -111,7 +111,7 @@ func mergeConnections(existing, incoming []ConnectionConfig, conflicts *[]Confli
 			}
 			if end.Type != incomingEnd.Type {
 				return nil, fmt.Errorf(
-					"connection %q: client %q on chain %q has type %q, manifest has %q; automatic client-type changes are not supported, even when the router changes: explicitly update the client's type in the config before rerunning",
+					"connection %q: client %q on chain %q has type %q, manifest has %q; automatic client-type changes are not supported, even when the router changes: explicitly update the client's type and compatible params in the config before rerunning",
 					merged.Alias,
 					end.ClientID,
 					end.ChainID,

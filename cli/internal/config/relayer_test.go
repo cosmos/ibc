@@ -414,6 +414,10 @@ func TestClientEndType(t *testing.T) {
 		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set prover"},
 		{name: "missing type", doc: "prover:\n  url: http://prover:9090\n", wantErr: "type: required"},
 		{name: "prover errors carry its path", doc: "type: tendermint\nprover:\n  url: grpc://prover:9090\n", wantErr: "prover.url: must be a bare host:port"},
+		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "params are checked with a prover", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\nprover:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "unimplemented type takes no params", doc: "type: tendermint\nparams:\n  trustLevel: 1/3\nprover:\n  url: http://prover:9090\n", wantErr: `params: client type "tendermint" takes no params`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -429,6 +433,31 @@ func TestClientEndType(t *testing.T) {
 			require.NoError(t, client.Validate())
 		})
 	}
+}
+
+// Params are checked by Validate, not by parsing, so commands that load a
+// config without validating it still work.
+func TestClientEndParams(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		clientType string
+		want       ClientParams
+	}{
+		{clientType: ClientTypeAttestation, want: &AttestationParams{}},
+		{clientType: ClientTypeBesuQBFT, want: &BesuQBFTParams{}},
+	} {
+		t.Run(tt.clientType, func(t *testing.T) {
+			t.Parallel()
+
+			params, err := ClientEnd{Type: tt.clientType}.ClientParams()
+			require.NoError(t, err)
+			require.IsType(t, tt.want, params)
+		})
+	}
+
+	_, err := ClientEnd{Type: "tendermint"}.ClientParams()
+	require.ErrorContains(t, err, `unknown client type: "tendermint"`)
 }
 
 func TestRelayerConfigClearOnStartEnabled(t *testing.T) {
