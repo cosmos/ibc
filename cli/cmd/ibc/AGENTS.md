@@ -1,15 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# CLI development (located in cmd/ibc/)
+# CLI commands
 
-1. Use a single `init()` function in main.go to wire all subcommands. Never create init() per CLI file.
-2. Commands implemented in this package should be variables and start with a `cmd*` prefix. The relayer
-   family is constructed by an importable command package because its transport types are shared with
-   the e2e harness. Examples for commands that remain here:
- - `ibc attestor run` corresponds to `var cmdAttestorRun = ...`;
- - `ibc config validate` corresponds to `var cmdConfigValidate = ...`;
- - `ibc migrate up` corresponds to `var cmdMigrateUp = ...`;
-3. Command implementations in this package should use `func commandName(cmd *cobra.Command, args []string) error`.
-   Importable command packages may pass command-owned option structs to injected handlers so flags stay
-   local to the command constructor. Be consistent within each command family.
-4. Global CLI flags such as `--home` or `--config` belong in `config.FlagSet`. Add new global flags there, and don't use a separate variable if it can be global.
+- Use the single `init()` in `main.go` to wire subcommands; do not add per-file `init()` functions.
+- Define commands implemented in this package as variables with a `cmd*` prefix. Importable command
+  packages may construct command families whose transport types are shared outside this package.
+- Package-local handlers use `func commandName(cmd *cobra.Command, args []string) error`. Importable
+  command packages may pass command-owned option structs to injected handlers.
+- Put global flags such as `--home` and `--config` in `config.FlagSet`.
