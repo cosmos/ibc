@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/goccy/go-yaml"
 )
 
 // Client types the IBC CLI proves itself.
@@ -22,6 +24,12 @@ var builtInClientTypes = []string{ClientTypeAttestation, ClientTypeBesuQBFT}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
+
+// ClientParams is a client type's decoded params
+type ClientParams interface {
+	isClientParams()
+	Validate() error
+}
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -76,6 +84,10 @@ type ClientEnd struct {
 	// or with a prover any type, including ones the IBC CLI does not implement.
 	Type string `yaml:"type"`
 
+	// Params is settings specific to Type: none yet for `attestation` and
+	// `besu-qbft`, and not accepted for types the IBC CLI does not implement.
+	Params yaml.RawMessage `yaml:"params,omitempty"`
+
 	// Prover is a ProverService that generates this client's proofs instead of
 	// the built-in prover for Type.
 	Prover *ProverConfig `yaml:"prover,omitempty"`
@@ -107,6 +119,13 @@ type ProverConfig struct {
 	// TLS settings for an https:// URL, see TLSClientConfig.
 	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
+
+// AttestationParams is empty
+type AttestationParams struct{}
+
+// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
+// the two chains and the light client itself.
+type BesuQBFTParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -253,11 +272,44 @@ func (c ClientEnd) Validate() error {
 		)
 	}
 
+	if err := c.validateParams(); err != nil {
+		return errPath("params", err)
+	}
+
 	if c.Prover == nil {
 		return nil
 	}
 
 	return errPath("prover", c.Prover.Validate())
+}
+
+func (c ClientEnd) validateParams() error {
+	if !slices.Contains(builtInClientTypes, c.Type) {
+		if len(c.Params) > 0 {
+			return fmt.Errorf("client type %q takes no params", c.Type)
+		}
+
+		return nil
+	}
+
+	params, err := c.ClientParams()
+	if err != nil {
+		return err
+	}
+
+	return params.Validate()
+}
+
+// ClientParams decodes this client's params
+func (c ClientEnd) ClientParams() (ClientParams, error) {
+	switch c.Type {
+	case ClientTypeAttestation:
+		return decodeYAML[AttestationParams](c.Params)
+	case ClientTypeBesuQBFT:
+		return decodeYAML[BesuQBFTParams](c.Params)
+	default:
+		return nil, errPathf("type", "unknown client type: %q", c.Type)
+	}
 }
 
 // EndpointURL returns URL as a URL, see endpointURL.
@@ -276,6 +328,10 @@ func (p ProverConfig) Validate() error {
 
 	return validateEndpointTLS(p.URL, p.TLS)
 }
+
+func (AttestationParams) Validate() error { return nil }
+
+func (BesuQBFTParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -327,6 +383,23 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 	}
 
 	return nil
+}
+
+func (AttestationParams) isClientParams() {}
+func (BesuQBFTParams) isClientParams()    {}
+
+func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
+	var params T
+
+	if len(raw) == 0 {
+		return &params, nil
+	}
+
+	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
+		return nil, err
+	}
+
+	return &params, nil
 }
 
 // ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.

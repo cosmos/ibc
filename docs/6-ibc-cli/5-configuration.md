@@ -255,6 +255,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
 | `connections[].clientA.type, connections[].clientB.type` | `string` | **required** | The on-chain light client type: `attestation` or `besu-qbft`, or with a prover any type, including ones the IBC CLI does not implement. |
+| `connections[].clientA.params, connections[].clientB.params` | block | optional | Settings specific to Type: none yet for `attestation` and `besu-qbft`, and not accepted for types the IBC CLI does not implement. |
 | `connections[].clientA.prover.url, connections[].clientB.prover.url` | `string` | **required** in `prover` | The ProverService endpoint: an http(s):// URL, or a bare host:port dialed as http://. Without a query or fragment. |
 | `connections[].clientA.prover.tls.caFile, connections[].clientB.prover.tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
 | `connections[].clientA.prover.tls.certFile, connections[].clientB.prover.tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
@@ -263,7 +264,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.prover.tls.insecureSkipVerify, connections[].clientB.prover.tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L62](cli/internal/config/relayer.go#L62) -->
+<!-- [relayer.go:L70](cli/internal/config/relayer.go#L70) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -287,7 +288,7 @@ The relayer uses these defaults unless you override them.
 | `clearOnStart` | `bool` | `true` | Runs a clearing pass at startup. Unset runs it. |
 | `clearInterval` | `duration` | `5m` | How often a clearing pass runs; a chainOverrides entry wins. |
 
-<!-- [relayer.go:L27](cli/internal/config/relayer.go#L27) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L18](cli/internal/config/relayer.go#L18) --> <!-- [relayer.go:L24](cli/internal/config/relayer.go#L24) -->
+<!-- [relayer.go:L35](cli/internal/config/relayer.go#L35) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L20](cli/internal/config/relayer.go#L20) --> <!-- [relayer.go:L26](cli/internal/config/relayer.go#L26) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -304,7 +305,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
 | `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L38](cli/internal/config/relayer.go#L38) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L46](cli/internal/config/relayer.go#L46) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 

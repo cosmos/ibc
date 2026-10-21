@@ -749,6 +749,13 @@ NO_NAMED_DEFAULT = {
     ("RelayerChainOverride", "abandonUnrecoverablePackets"),
 }
 
+# What a reader writes where the Go type says nothing useful. `params` is a
+# raw block whose shape is fixed by the sibling `type` key, which no reading of
+# the field alone can recover.
+OPAQUE_TYPES = {
+    ("ClientEnd", "params"): "block",
+}
+
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
             "bool": "bool", "float64": "float64", "time.Duration": "duration"}
 
@@ -1458,6 +1465,7 @@ def parse_go_config():
 RULELESS_VALIDATORS = {
     "Attestors", "Chains", "Signers",        # check cross-references, delegate the rest
     "Config", "ServerConfig",
+    "AttestationParams", "BesuQBFTParams",   # `return nil`, satisfies an interface
 }
 
 
@@ -1792,14 +1800,16 @@ def _type_cell(go, field, model):
         return "list"
     if t in model["structs"] or t in model["aliases"]:
         return "block"
+    if (go, field["yaml"]) in OPAQUE_TYPES:
+        return OPAQUE_TYPES[(go, field["yaml"])]
     # Everything else was published as whatever Go calls it, which put
     # `yaml.RawMessage` in a column a reader writes values into. A type this
     # tool cannot describe is one it must not name.
     _problem("unreadable_type",
              f"{go}.{field['go']} has type `{t}`, which is neither a Go type a "
              "reader writes, a block, nor a set of constants -- so the column "
-             "would publish the Go type name. Give the field a type "
-             "this tool can describe.",
+             "would publish the Go type name. Give it an entry in OPAQUE_TYPES "
+             "saying what a reader writes there.",
              struct=go, field=field["yaml"], go_type=t)
     return UNREADABLE
 
