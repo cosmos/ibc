@@ -135,6 +135,8 @@ With both chains registered, deploy the IBC contracts on each.
 
 Each fresh deployment sends seven transactions: an access manager, implementations and proxies for the router and multicall, and two calls that open their relay entrypoints to any caller. Your deployer key is the access manager's admin.
 
+For permissioned relaying, follow [Restrict relaying on an existing deployment](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#restrict-relaying-on-an-existing-deployment) after deployment.
+
 ```
 level=INFO msg="would execute" dryRun=true step="core stack on chain 41001"
 level=INFO msg="would execute" dryRun=true step="multicall on chain 41001"
