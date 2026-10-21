@@ -57,6 +57,12 @@ const (
 	besuJVMOptions = "-Xms128m -Xmx512m -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC"
 )
 
+// besuBoots admits two chains to boot at once, one environment's pair: a
+// booting Besu JVM is CPU-bound for tens of seconds, and parallel tests
+// booting thirty-odd JVMs together starve nodes past besuReadyTimeout on a
+// four-core host. A running chain costs little.
+var besuBoots = make(chan struct{}, 2)
+
 // validatorCount is the number of validators every managed Besu chain runs:
 // the smallest BFT set that tolerates a faulty validator, so a header can
 // reach quorum without every seal.
@@ -171,6 +177,13 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 	if removeErr := os.RemoveAll(networkFilesDir); removeErr != nil {
 		return nil, fmt.Errorf("remove stale besu network files: %w", removeErr)
 	}
+
+	select {
+	case besuBoots <- struct{}{}:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("besu chain %s: wait to boot: %w", spec.ID, ctx.Err())
+	}
+	defer func() { <-besuBoots }()
 
 	namePrefix := container.NamePrefix(spec.RunID, spec.ID)
 	labels := container.Labels(spec.RunID)
