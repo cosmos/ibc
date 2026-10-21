@@ -32,7 +32,7 @@ Within this repository the release workflow uses the actions by local path (`./.
 
 ### Release workflow
 
-A build job puts its release files in `out/assets` and calls `attest-release-assets`. Give each job of a matrix a distinct `platform`. Then a single job, after every build job, calls `publish-draft-release`. It must run for a tag, either a tag push or a manual run started from the tag, because the notes it writes verify against `GITHUB_REF` and `GITHUB_WORKFLOW_REF`.
+A build job puts its release files in `out/assets` and calls `attest-release-assets`. Give each job of a matrix a distinct `platform`. Then a single job, after every build job, calls `publish-draft-release`. It must run for a tag push, because the notes it writes verify against `GITHUB_REF` and `GITHUB_WORKFLOW_REF`.
 
 For example, the ibc-go source archive:
 
@@ -124,6 +124,4 @@ For a single-platform image, call it once with `sign: "true"` and the default `s
 
 Keep the inputs backwards compatible where you can, since ibc-go and ibc-contracts pin a SHA and pick up a change only when they bump it. If an input has to change, update both repositories in the same bump.
 
-To try a change, run this repository's [release workflow](../workflows/release.yml) from your branch and choose an existing release tag as the `tag` input: the run builds that tag's source with your branch's workflow and actions. For example, `gh workflow run release.yml --ref my-branch -f tag=cli-v0.1.0`. That dry run (`dry-run: "true"` on `publish-draft-release`) attests, verifies and signs as a release would, but creates no release and pushes no image, and uploads what would be released as the `release-dry-run` artifact.
-
-To also exercise the draft release and the image signing, use a fork: push a pre-release tag such as `v0.0.0-test.1` there, check the draft release and its verification commands, then delete the draft, the tag and any images it pushed.
+The safest way to try a change end to end is in a fork: push a pre-release tag such as `v0.0.0-test.1` there, check the draft release and its verification commands, then delete the draft, the tag and any images it pushed.
