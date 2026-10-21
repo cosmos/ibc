@@ -29,6 +29,9 @@ type TxSubmitter interface {
 
 var _ TxSubmitter = (*evm.TxSubmitter)(nil)
 
+// ErrBusy indicates that a submission should be retried when capacity is available.
+var ErrBusy = evm.ErrBusy
+
 // Set holds one tx submitter per (chain, signer) pair relayed by
 // the configured routes. A chain may carry several signers when different
 // clients on it are relayed by different routes.
