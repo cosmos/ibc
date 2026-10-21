@@ -5,7 +5,6 @@ package txsubmitter
 
 import (
 	"context"
-	"math/big"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -76,14 +75,9 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 		if override, ok := cfg.Relayer.ChainOverride(pair.ChainID); ok {
 			if override.EVM != nil {
 				e := override.EVM
-				if e.MaxFeePerGas != nil {
-					opts.MaxFeePerGas = new(big.Int).SetUint64(*e.MaxFeePerGas)
-				}
 				if e.PendingTxTimeout != nil {
 					opts.PendingTxTimeout = *e.PendingTxTimeout
 				}
-				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
-				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
 			}
 		}
 

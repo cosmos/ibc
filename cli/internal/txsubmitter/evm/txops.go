@@ -20,7 +20,6 @@ func estimateFees(
 	ctx context.Context,
 	eth ETHClient,
 	baseFee *big.Int,
-	opts *ChainOptions,
 ) (fee, tip *big.Int, err error) {
 	if baseFee == nil {
 		return nil, nil, errors.New("chain must support EIP-1559")
@@ -30,11 +29,6 @@ func estimateFees(
 		return nil, nil, errors.Wrap(err, "getting suggested gas tip cap")
 	}
 	fee = new(big.Int).Add(tip, new(big.Int).Mul(baseFee, big.NewInt(2)))
-	fee, tip = capFees(
-		applyMultiplier(fee, opts.GasFeeCapMultiplier),
-		applyMultiplier(tip, opts.GasTipCapMultiplier),
-		opts.MaxFeePerGas,
-	)
 	return fee, tip, nil
 }
 
@@ -89,14 +83,6 @@ func broadcast(ctx context.Context, eth ETHClient, tx *types.Transaction) error 
 
 func isReplacementUnderpriced(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "replacement transaction underpriced")
-}
-
-func applyMultiplier(v *big.Int, m *float64) *big.Int {
-	if m == nil {
-		return v
-	}
-	out, _ := new(big.Float).Mul(new(big.Float).SetInt(v), big.NewFloat(*m)).Int(nil)
-	return out
 }
 
 func (c *TxSubmitter) prepareTransaction(

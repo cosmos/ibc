@@ -26,18 +26,15 @@ const (
 	DefaultPendingTxTimeout = 2 * time.Minute
 	DefaultRequestTimeout   = 10 * time.Second
 	DefaultMaxInFlight      = 16
-	DefaultMaxFeePerGas     = 20000000000
 	maxBroadcastAttempts    = 8
+	feeCeilingMultiplier    = 4
 )
 
-// ChainOptions controls transaction pricing and nonce recovery.
+// ChainOptions controls submission limits and nonce recovery.
 type ChainOptions struct {
-	GasFeeCapMultiplier *float64
-	GasTipCapMultiplier *float64
-	PendingTxTimeout    time.Duration
-	RequestTimeout      time.Duration
-	MaxInFlight         int
-	MaxFeePerGas        *big.Int
+	PendingTxTimeout time.Duration
+	RequestTimeout   time.Duration
+	MaxInFlight      int
 }
 
 // ETHClient go-ethereum methods used by the EVM tx submitter.
@@ -91,11 +88,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	if opts.MaxInFlight == 0 {
 		opts.MaxInFlight = DefaultMaxInFlight
 	}
-	if opts.MaxFeePerGas == nil {
-		opts.MaxFeePerGas = big.NewInt(DefaultMaxFeePerGas)
-	}
-	if opts.PendingTxTimeout <= 0 || opts.RequestTimeout <= 0 || opts.MaxInFlight <= 0 ||
-		opts.MaxFeePerGas.Sign() <= 0 {
+	if opts.PendingTxTimeout <= 0 || opts.RequestTimeout <= 0 || opts.MaxInFlight <= 0 {
 		return nil, errors.New("invalid transaction limits")
 	}
 	id, ok := new(big.Int).SetString(chainID, 10)
@@ -126,14 +119,15 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 	if err != nil {
 		return nil, err
 	}
-	fee, tip, err := estimateFees(ctx, c.eth, head.BaseFee, &c.opts)
+	fee, tip, err := estimateFees(ctx, c.eth, head.BaseFee)
 	if err != nil {
 		return nil, err
 	}
+	feeCeiling := new(big.Int).Mul(fee, big.NewInt(feeCeilingMultiplier))
 	if nonce == c.lowestUnminedNonce && c.lastAttemptedFeeCap != nil {
 		fee, tip = maxBig(fee, bump(c.lastAttemptedFeeCap)), maxBig(tip, bump(c.lastAttemptedTipCap))
-		fee, tip = capFees(fee, tip, c.opts.MaxFeePerGas)
 	}
+	fee, tip = capFees(fee, tip, feeCeiling)
 	txData, err := c.prepareTransaction(ctx, intent.To, intent.Data, nonce, fee, tip)
 	if err != nil {
 		return nil, err
@@ -167,9 +161,11 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		if nonce == c.lowestUnminedNonce {
 			c.lastAttemptedFeeCap, c.lastAttemptedTipCap = fee, tip
 		}
-		nextFee, nextTip := capFees(bump(fee), bump(tip), c.opts.MaxFeePerGas)
+		nextFee, nextTip := capFees(bump(fee), bump(tip), feeCeiling)
 		if nextFee.Cmp(fee) == 0 && nextTip.Cmp(tip) == 0 {
-			return submission, errors.Wrapf(err, "fee cap %s wei reached for nonce %d", c.opts.MaxFeePerGas, nonce)
+			return submission, errors.Wrapf(err,
+				"fee ceiling %s wei (%dx fresh estimate) reached for nonce %d",
+				feeCeiling, feeCeilingMultiplier, nonce)
 		}
 		fee, tip = nextFee, nextTip
 	}

@@ -25,10 +25,12 @@ const chainIDEth = "1"
 // Submission is serialized by the submitter, including access to this RPC stub.
 type testRPC struct {
 	height         uint64
+	baseFee, tip   int64
 	mined, pending uint64
 	sent           []*types.Transaction
 	send           func(*types.Transaction) error
 	headerCalls    int
+	tipCalls       int
 	codeCalls      int
 	gasCalls       int
 	gas            uint64
@@ -44,9 +46,14 @@ func (r *testRPC) BalanceAt(context.Context, common.Address, *big.Int) (*big.Int
 
 func (r *testRPC) HeaderByNumber(context.Context, *big.Int) (*types.Header, error) {
 	r.headerCalls++
-	return &types.Header{Number: new(big.Int).SetUint64(r.height), BaseFee: big.NewInt(100)}, nil
+	return &types.Header{Number: new(big.Int).SetUint64(r.height), BaseFee: big.NewInt(r.baseFee)}, nil
 }
-func (r *testRPC) SuggestGasTipCap(context.Context) (*big.Int, error) { return big.NewInt(10), nil }
+
+func (r *testRPC) SuggestGasTipCap(context.Context) (*big.Int, error) {
+	r.tipCalls++
+	return big.NewInt(r.tip), nil
+}
+
 func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error) {
 	r.codeCalls++
 	return []byte{1}, nil
@@ -91,7 +98,7 @@ func newSubmitter(t *testing.T) (*TxSubmitter, *testRPC) {
 	t.Helper()
 	key, err := signer.GenerateLocalSecp256k1Signer()
 	require.NoError(t, err)
-	rpc := &testRPC{height: 100, gas: 100_000}
+	rpc := &testRPC{height: 100, baseFee: 100, tip: 10, gas: 100_000}
 	c, err := New(chainIDEth, rpc, key, ChainOptions{})
 	require.NoError(t, err)
 	return c, rpc
@@ -173,6 +180,7 @@ func TestRetryBumpsOnUnderpricedAndPreservesProgress(t *testing.T) {
 			require.Len(t, rpc.sent, maxBroadcastAttempts)
 			require.Equal(t, 1, rpc.codeCalls)
 			require.Equal(t, 1, rpc.gasCalls)
+			require.Equal(t, 1, rpc.tipCalls)
 			require.Equal(t, 2, rpc.headerCalls, "one initial observation and one submission")
 			// The next call continues escalating rather than restarting at the estimate.
 			rpc.gas = 150_000
@@ -180,16 +188,18 @@ func TestRetryBumpsOnUnderpricedAndPreservesProgress(t *testing.T) {
 			require.Greater(t, len(rpc.sent), maxBroadcastAttempts)
 			require.Equal(t, 2, rpc.codeCalls)
 			require.Equal(t, 2, rpc.gasCalls)
+			require.Equal(t, 2, rpc.tipCalls)
 			require.Equal(t, 3, rpc.headerCalls)
 			for i, tx := range rpc.sent {
 				require.Zero(t, tx.Nonce())
+				require.LessOrEqual(t, tx.GasFeeCap().Int64(), int64(840))
 				if i < maxBroadcastAttempts {
 					require.Equal(t, uint64(100_000), tx.Gas())
 				} else {
 					require.Equal(t, uint64(150_000), tx.Gas())
 				}
 				if i > 0 {
-					require.Positive(t, tx.GasFeeCap().Cmp(rpc.sent[i-1].GasFeeCap()))
+					require.GreaterOrEqual(t, tx.GasFeeCap().Cmp(rpc.sent[i-1].GasFeeCap()), 0)
 					require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
 				}
 			}
@@ -343,73 +353,88 @@ func TestSignerDeadlineDoesNotConsumeNonce(t *testing.T) {
 	require.Zero(t, rpc.sent[0].Nonce())
 }
 
-func TestSubmissionCapsEstimatedFees(t *testing.T) {
+func TestSubmissionUsesNodeFeeEstimate(t *testing.T) {
 	for _, tt := range []struct {
-		name                         string
-		maxFee                       int64
-		feeMultiplier, tipMultiplier float64
-		wantFee, wantTip             int64
+		name             string
+		baseFee, tip     int64
+		wantFee, wantTip int64
 	}{
-		{name: "below cap", maxFee: 250, feeMultiplier: 1, tipMultiplier: 1, wantFee: 210, wantTip: 10},
-		{name: "estimate exceeds cap", maxFee: 200, feeMultiplier: 1, tipMultiplier: 1, wantFee: 200, wantTip: 10},
-		{name: "multipliers exceed cap", maxFee: 250, feeMultiplier: 2, tipMultiplier: 30, wantFee: 250, wantTip: 250},
-		{name: "tip exceeds fee", maxFee: 500, feeMultiplier: 1, tipMultiplier: 30, wantFee: 210, wantTip: 210},
+		{name: "standard fees", baseFee: 100, tip: 10, wantFee: 210, wantTip: 10},
+		{name: "zero fees"},
+		{
+			name: "above old fixed cap", baseFee: 20_000_000_000, tip: 1_000_000_000,
+			wantFee: 41_000_000_000, wantTip: 1_000_000_000,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c, rpc := newSubmitter(t)
-			c.opts.MaxFeePerGas = big.NewInt(tt.maxFee)
-			c.opts.GasFeeCapMultiplier = &tt.feeMultiplier
-			c.opts.GasTipCapMultiplier = &tt.tipMultiplier
+			rpc.baseFee, rpc.tip = tt.baseFee, tt.tip
 			require.NoError(t, submit(t, c))
 			require.Len(t, rpc.sent, 1)
 			require.Equal(t, big.NewInt(tt.wantFee), rpc.sent[0].GasFeeCap())
 			require.Equal(t, big.NewInt(tt.wantTip), rpc.sent[0].GasTipCap())
-			require.Equal(t, big.NewInt(tt.maxFee), c.opts.MaxFeePerGas)
+			require.Equal(t, 1, rpc.tipCalls)
 		})
 	}
 }
 
-func TestStalledReplacementUsesFeeCap(t *testing.T) {
+func TestStalledReplacementRefreshesFeeCeiling(t *testing.T) {
 	c, rpc := newSubmitter(t)
-	c.opts.MaxFeePerGas = big.NewInt(250)
-	require.NoError(t, submit(t, c))
-	expireNonce(c)
-	require.NoError(t, submit(t, c))
-	require.Len(t, rpc.sent, 2)
-	require.Equal(t, rpc.sent[0].Nonce(), rpc.sent[1].Nonce())
-	require.Equal(t, big.NewInt(250), rpc.sent[1].GasFeeCap())
-	require.Equal(t, big.NewInt(12), rpc.sent[1].GasTipCap())
+	rpc.send = func(*types.Transaction) error { return errors.New("replacement transaction underpriced") }
+	require.ErrorContains(t, submit(t, c), "still underpriced")
+	rpc.send = nil
+	for i, prices := range []struct{ baseFee, tip, wantFee int64 }{
+		{100, 10, 840},
+		{200, 20, 1008},
+		{50, 5, 420},
+		{50, 5, 420},
+		{0, 2, 8},
+	} {
+		rpc.baseFee, rpc.tip = prices.baseFee, prices.tip
+		require.NoError(t, submit(t, c))
+		require.Len(t, rpc.sent, maxBroadcastAttempts+i+1)
+		tx := rpc.sent[maxBroadcastAttempts+i]
+		require.Zero(t, tx.Nonce())
+		require.Equal(t, big.NewInt(prices.wantFee), tx.GasFeeCap())
+		require.LessOrEqual(t, tx.GasTipCap().Cmp(tx.GasFeeCap()), 0)
+		expireNonce(c)
+	}
+	require.Equal(t, 6, rpc.tipCalls)
 }
 
-func TestUnderpricedRetriesStopAtFeeCap(t *testing.T) {
+func TestUnderpricedRetriesStopAtFeeCeiling(t *testing.T) {
 	c, rpc := newSubmitter(t)
-	c.opts.MaxFeePerGas = big.NewInt(250)
-	tipMultiplier := 20.0
-	c.opts.GasTipCapMultiplier = &tipMultiplier
+	rpc.baseFee, rpc.tip = 0, 2
 	underpriced := errors.New("replacement transaction underpriced")
-	rpc.send = func(*types.Transaction) error { return underpriced }
+	rpc.send = func(*types.Transaction) error {
+		rpc.baseFee, rpc.tip = 1, 4
+		return underpriced
+	}
 
 	submission, err := c.Submit(t.Context(), testIntent())
 	require.ErrorIs(t, err, underpriced)
-	require.ErrorContains(t, err, "fee cap 250 wei")
-	require.Len(t, rpc.sent, 3)
+	require.ErrorContains(t, err, "fee ceiling 8 wei (4x fresh estimate)")
+	require.Len(t, rpc.sent, 6)
+	require.Equal(t, 1, rpc.tipCalls)
 	for i, tx := range rpc.sent {
 		require.Zero(t, tx.Nonce())
-		require.LessOrEqual(t, tx.GasFeeCap().Int64(), int64(250))
+		require.LessOrEqual(t, tx.GasFeeCap().Int64(), int64(8))
 		if i > 0 {
 			require.Positive(t, tx.GasTipCap().Cmp(rpc.sent[i-1].GasTipCap()))
 		}
 	}
-	last := rpc.sent[2]
-	require.Equal(t, big.NewInt(250), last.GasFeeCap())
-	require.Equal(t, big.NewInt(250), last.GasTipCap())
+	last := rpc.sent[5]
+	require.Equal(t, big.NewInt(8), last.GasFeeCap())
+	require.Equal(t, big.NewInt(8), last.GasTipCap())
 	require.Equal(t, last.Hash().Hex(), submission.TxHash)
 
-	// A later submission can still succeed if the conflicting transaction disappears.
+	// The next submission gets a fresh ceiling and can increase fees again.
 	rpc.send = nil
 	require.NoError(t, submit(t, c))
-	require.Len(t, rpc.sent, 4)
-	require.Equal(t, last.Hash(), rpc.sent[3].Hash())
+	require.Len(t, rpc.sent, 7)
+	require.Equal(t, big.NewInt(10), rpc.sent[6].GasFeeCap())
+	require.Equal(t, big.NewInt(10), rpc.sent[6].GasTipCap())
+	require.Equal(t, 2, rpc.tipCalls)
 }
 
 func TestNonceQueryFailureDoesNotBroadcast(t *testing.T) {

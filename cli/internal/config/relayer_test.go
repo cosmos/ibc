@@ -38,8 +38,6 @@ func TestRelayerConfig(t *testing.T) {
 		require.NotNil(t, chain.AbandonUnrecoverablePackets)
 		assert.True(t, *chain.AbandonUnrecoverablePackets)
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
-		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
-		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
 		assert.Equal(t, 2*time.Minute, *chain.EVM.PendingTxTimeout)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
@@ -217,14 +215,6 @@ func TestRelayerConfig(t *testing.T) {
 				patch: func(c *Config) {
 					c.Chains[0].EVM.ICS26Router = ""
 				},
-			},
-			{
-				name: "zero gas multiplier",
-				patch: func(c *Config) {
-					zero := 0.0
-					c.Relayer.ChainOverrides[0].EVM.GasFeeCapMultiplier = &zero
-				},
-				errContains: ".gasFeeCapMultiplier: must be positive",
 			},
 			{
 				name: "zero pending transaction timeout",

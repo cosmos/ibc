@@ -76,9 +76,7 @@ relayer:
   chainOverrides:
     - chainId: "1"
       evm:
-        gasFeeCapMultiplier: 1.5
         pendingTxTimeout: 2m
-        gasTipCapMultiplier: 1.5
       packetBatchSize: 20
       packetBatchTimeout: 10s
       clearInterval: 15m
@@ -258,7 +256,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it is required. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L78](cli/internal/config/relayer.go#L78) -->
+<!-- [relayer.go:L73](cli/internal/config/relayer.go#L73) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -293,14 +291,13 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
-| `chainOverrides[].evm.maxFeePerGas` | `uint64` | `20000000000` | Caps each transaction's fee per gas, in wei. |
 | `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
-| `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
-| `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
 
-<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L29](cli/internal/txsubmitter/evm/evm.go#L29) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
+<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
+
+Each EVM submission estimates its fee cap as twice the latest block's base fee plus the node's suggested tip. Replacement attempts increase the fee cap and tip by 20%, rounded up with a minimum increase of one wei, within a ceiling of four times that fresh estimate. The ceiling stays fixed during a submission's retries and is recalculated from fresh node data on the next submission. <!-- [cli/internal/txsubmitter/evm/txops.go: estimateFees] --> <!-- [cli/internal/txsubmitter/evm/txops.go: bump] --> <!-- [cli/internal/txsubmitter/evm/evm.go: TxSubmitter.Submit] -->
 
 Add an override only when a chain needs different behavior:
 
@@ -312,8 +309,7 @@ relayer:
       packetBatchSize: 25
       packetBatchTimeout: 15s
       evm:
-        gasFeeCapMultiplier: 1.2
-        gasTipCapMultiplier: 1.1
+        pendingTxTimeout: 3m
 ```
 
 Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: Options] -->
