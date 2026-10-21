@@ -14,10 +14,8 @@ The generated pages are:
 | [6-cli-commands.md](../6-cli-commands.md) | the built command tree |
 | [7-api.md](../7-api.md) | `proto/cli/*.proto` |
 
-Run the commands below from the repository root. They require Python, Go, and `buf`.
-
-Never edit between a `<!-- GEN:... START -->` marker and its `END`. To change the generated example
-configuration, edit `cli/internal/config/testdata/sample.yml`.
+Run the commands below from the repository root. To change the generated example configuration,
+edit `cli/internal/config/testdata/sample.yml`.
 
 ## 1. Find what moved
 
@@ -26,9 +24,7 @@ python3 docs/6-ibc-cli/tools/refgen.py all --check
 python3 docs/6-ibc-cli/tools/refgen.py all --plan
 ```
 
-Both commands run the CLI, building it when needed. Resolve `--check` errors as well as plan entries:
-`--plan` and `--report` omit notice-placement and prose-citation checks. Read
-[REFERENCE.md](REFERENCE.md) for the reported kinds and exit codes.
+Read [REFERENCE.md](REFERENCE.md) for the reported kinds and exit codes.
 
 ## 2. Resolve decisions
 
