@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc/cli/internal/service/signer"
@@ -52,9 +51,6 @@ func signTransaction(
 	sig, err := chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes())
 	if err != nil {
 		return nil, errors.Wrapf(err, "signing transaction with address %s", address)
-	}
-	if len(sig) != crypto.SignatureLength {
-		return nil, errors.Errorf("invalid signature length: %d", len(sig))
 	}
 	signed, err := tx.WithSignature(ethSigner, sig)
 	if err != nil {
