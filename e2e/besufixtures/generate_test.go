@@ -99,14 +99,15 @@ func generate(t *testing.T, consensus besu.Consensus) besutest.Fixture {
 	require.NoError(t, err)
 	t.Cleanup(g.rpc.Close)
 
+	clients, ok := deployment.RouteClients(route.ID)
+	require.True(t, ok)
 	packetTx := transfer.PacketTx()
-	packet := g.sendPacket(packetTx.SourceTxHash, packetTx.Sequence)
 	send := packetTx.SourceBlockNumber
 	require.Greater(t, send, uint64(2))
 
 	trusted := g.headers.Sealed(send - 2)
 	nonAdjacent := g.headers.Sealed(send)
-	commitmentPath := hostv2.PacketCommitmentKey(packet.SourceClient, packet.Sequence)
+	commitmentPath := hostv2.PacketCommitmentKey(clients.SourceClientID, packetTx.Sequence)
 	return besutest.Fixture{
 		RouterAddress:            g.router,
 		InitialTrustedHeight:     trusted.Height,
@@ -115,40 +116,21 @@ func generate(t *testing.T, consensus besu.Consensus) besutest.Fixture {
 		InitialTrustedValidators: trusted.Validators,
 		TrustingPeriod:           fixtureTrustingPeriod,
 		MaxClockDrift:            fixtureMaxClockDrift,
-		AdjacentUpdate:           g.update(trusted, g.headers.Sealed(send-1)),
-		NonAdjacentUpdate:        g.update(trusted, nonAdjacent),
+		AdjacentUpdate:           update(trusted, g.headers.Sealed(send-1)),
+		NonAdjacentUpdate:        update(trusted, nonAdjacent),
 		LowQuorumUpdate:          g.lowQuorumUpdate(trusted, nonAdjacent),
 		ConflictingUpdate:        g.conflictingUpdate(trusted, nonAdjacent),
 		LowOverlapUpdate:         g.lowOverlapUpdate(trusted, send+1),
 		Membership:               g.proof(nonAdjacent, commitmentPath, g.commitment(commitmentPath, send)),
 		NonMembership: g.proof(
 			nonAdjacent,
-			hostv2.PacketReceiptKey(packet.DestClient, packet.Sequence),
+			hostv2.PacketReceiptKey(clients.DestClientID, packetTx.Sequence),
 			nil,
 		),
 	}
 }
 
-func (g generator) sendPacket(txHash string, sequence uint64) ics26router.IICS26RouterMsgsPacket {
-	g.t.Helper()
-	receipt, err := g.source.TransactionReceipt(g.ctx, common.HexToHash(txHash))
-	require.NoError(g.t, err)
-	filterer, err := ics26router.NewContractFilterer(g.router, nil)
-	require.NoError(g.t, err)
-	for _, log := range receipt.Logs {
-		if log.Address != g.router {
-			continue
-		}
-		event, parseErr := filterer.ParseSendPacket(*log)
-		if parseErr == nil && event.Packet.Sequence == sequence {
-			return event.Packet
-		}
-	}
-	require.FailNow(g.t, "no SendPacket event", "sequence %d in %s", sequence, txHash)
-	return ics26router.IICS26RouterMsgsPacket{}
-}
-
-func (g generator) update(trusted, header *besu.ParsedHeader) besutest.UpdateFixture {
+func update(trusted, header *besu.ParsedHeader) besutest.UpdateFixture {
 	return besutest.UpdateFixture{
 		Height:             header.Height,
 		HeaderRLP:          header.RLP,
