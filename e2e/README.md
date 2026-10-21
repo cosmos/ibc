@@ -2,7 +2,7 @@
 
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients and, between two Besu chains, through Besu QBFT light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients and, on connections that track a Besu chain, through Besu QBFT light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
 
 `internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation and Besu QBFT light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
@@ -10,7 +10,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-Besu QBFT light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestDeployBesuQBFTConnection` deploys the clients through `ibc deploy client besu-qbft`. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
+Besu QBFT light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestDeployBesuQBFTConnection` deploys a besu-qbft connection with `ibc deploy` alone and relays an IFT transfer over it, and `TestDeployMixedBesuQBFTAttestationConnection` does the same for the production shape, a besu-qbft client on one end and an attestation client on the other, relaying a round trip so each client type proves both a receive and an acknowledgement. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
 
 ## Running the acceptance tests
 

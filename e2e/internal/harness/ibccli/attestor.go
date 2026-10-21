@@ -90,7 +90,7 @@ type AttestorProcess struct {
 
 // StartAttestor writes a private IBC CLI configuration, stores a local ECDSA key
 // when configured, starts `ibc attestor run`, and returns only after
-// LatestHeight succeeds.
+// health reports SERVING and LatestHeight succeeds.
 func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess, error) {
 	key, signerAddress, err := validateAttestorLaunch(launch)
 	if err != nil {
@@ -204,6 +204,9 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		return err
 	}
 	p.address = address
+	if err := awaitHealth(startupCtx, address, p.handle.doneCh()); err != nil {
+		return fmt.Errorf("attestor readiness: %w; logs: %s", err, p.logTail())
+	}
 	p.client = attestorv2.NewAttestationServiceClient(
 		&http.Client{Timeout: probeRequestTimeout},
 		"http://"+address,
@@ -424,7 +427,7 @@ func prepareAttestorWorkspace(
 				ICS26Router: spec.ICS26Router,
 			},
 		}},
-		Attestors: []attestorFileConfig{{
+		Attestors: []AttestorFileConfig{{
 			Name:           spec.Name,
 			ChainID:        spec.ChainID,
 			Type:           RelayerAttestorLocal,
@@ -559,7 +562,7 @@ type fileConfig struct {
 	Observability observabilityConfig  `yaml:"observability,omitempty"`
 	Chains        []chainConfig        `yaml:"chains"`
 	Relayer       *relayerFileConfig   `yaml:"relayer,omitempty"`
-	Attestors     []attestorFileConfig `yaml:"attestors"`
+	Attestors     []AttestorFileConfig `yaml:"attestors"`
 	Signers       []signerConfig       `yaml:"signers"`
 }
 
@@ -584,7 +587,7 @@ type dbConfig struct {
 	URL  string `yaml:"url"`
 }
 
-type attestorFileConfig struct {
+type AttestorFileConfig struct {
 	Name    string `yaml:"name"`
 	ChainID string `yaml:"chainId"`
 	Type    string `yaml:"type"`

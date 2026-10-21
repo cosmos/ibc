@@ -5,13 +5,13 @@ package e2e_test
 import (
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )

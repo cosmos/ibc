@@ -104,6 +104,11 @@ func New(attestors []Attestor) (*Service, error) {
 	}, nil
 }
 
+// CheckReady reports readiness after construction; chain RPCs and signers are not probed.
+func (s *Service) CheckReady(ctx context.Context) error {
+	return ctx.Err()
+}
+
 // Add adds an attestor to the service. Not thread-safe.
 func (s *Service) Add(id string, attestor Attestor) {
 	s.attestors[id] = MetricsWrapper(attestor)

@@ -9,6 +9,7 @@ go 1.26.9
 ignore ./internal/harness/environment/solidityibc/contracts/node_modules
 
 require (
+	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261019162621-0bc3d31921cd
 	github.com/cosmos/ibc-go/v11 v11.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
 	github.com/ethereum/go-ethereum v1.17.5
@@ -307,7 +308,6 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cosmos/ibc/cli v0.0.0
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20261006113229-b9ceb3c5518a
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

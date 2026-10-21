@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -18,6 +17,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"

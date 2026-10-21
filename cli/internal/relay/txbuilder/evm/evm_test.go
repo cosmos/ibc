@@ -5,11 +5,11 @@ package evm
 import (
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )

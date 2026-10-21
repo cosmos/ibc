@@ -9,11 +9,11 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )

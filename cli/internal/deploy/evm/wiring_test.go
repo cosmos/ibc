@@ -9,9 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -22,6 +19,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"

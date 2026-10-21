@@ -3,10 +3,12 @@
 package besu_test
 
 import (
+	"math/big"
 	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,47 +31,103 @@ func TestParseSealedHeaderFixture(t *testing.T) {
 	}
 }
 
-func TestParseSealedHeaderSortsCommitSeals(t *testing.T) {
+// The light client accepts only canonical seals from validators, one per
+// signer, in strictly ascending signer order. Each mutation breaks that without
+// changing which validators signed, so parsing must restore the sealed header.
+func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
 	fixture := besutest.MustFixture(t)
-
-	for _, update := range []besutest.UpdateFixture{fixture.AdjacentUpdate, fixture.NonAdjacentUpdate} {
+	updates := map[string]besutest.UpdateFixture{
+		"adjacent":    fixture.AdjacentUpdate,
+		"nonAdjacent": fixture.NonAdjacentUpdate,
+	}
+	for updateName, update := range updates {
 		var header types.Header
 		require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
-
-		var extraItems []rlp.RawValue
-		require.NoError(t, rlp.DecodeBytes(header.Extra, &extraItems))
-		var seals [][]byte
-		require.NoError(t, rlp.DecodeBytes(extraItems[4], &seals))
-		require.Greater(t, len(seals), 1)
-		slices.Reverse(seals)
-		var err error
-		extraItems[4], err = rlp.EncodeToBytes(seals)
+		items, _ := splitExtra(t, header.Extra)
+		digest, err := besu.CommitSealDigest(&header, items)
 		require.NoError(t, err)
-		header.Extra, err = rlp.EncodeToBytes(extraItems)
+		key, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		outsider, err := crypto.Sign(digest, key)
 		require.NoError(t, err)
 
-		parsed, err := besu.ParseSealedHeader(&header)
-		require.NoError(t, err)
-		assert.Equal(t, []byte(update.HeaderRLP), parsed.RLP)
+		highS := func(seals [][]byte) [][]byte {
+			n := crypto.S256().Params().N
+			new(big.Int).Sub(n, new(big.Int).SetBytes(seals[0][32:64])).FillBytes(seals[0][32:64])
+			seals[0][64] ^= 1
+			return seals
+		}
+		legacyV := func(seals [][]byte) [][]byte {
+			seals[0][64] += 27
+			return seals
+		}
+		repeated := func(seals [][]byte) [][]byte { return append(seals, seals[0]) }
+		nonValidator := func(seals [][]byte) [][]byte { return append(seals, outsider) }
+		invalid := func(seals [][]byte) [][]byte {
+			return append(seals, []byte{0x01}, append(slices.Clone(seals[1][:64]), 2))
+		}
+		reversed := func(seals [][]byte) [][]byte {
+			slices.Reverse(seals)
+			return seals
+		}
+		mutations := map[string]func([][]byte) [][]byte{
+			"highS":        highS,
+			"legacyV":      legacyV,
+			"repeated":     repeated,
+			"nonValidator": nonValidator,
+			"invalid":      invalid,
+			"reversed":     reversed,
+			"all": func(seals [][]byte) [][]byte {
+				return reversed(invalid(nonValidator(append(legacyV(highS(seals)), seals[1]))))
+			},
+		}
+
+		for name, mutate := range mutations {
+			t.Run(updateName+"/"+name, func(t *testing.T) {
+				var header types.Header
+				require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
+				items, seals := splitExtra(t, header.Extra)
+				require.Greater(t, len(seals), 1)
+				var err error
+				items[4], err = rlp.EncodeToBytes(mutate(seals))
+				require.NoError(t, err)
+				header.Extra, err = rlp.EncodeToBytes(items)
+				require.NoError(t, err)
+
+				parsed, err := besu.ParseSealedHeader(&header)
+				require.NoError(t, err)
+				assert.Equal(t, []byte(update.HeaderRLP), parsed.RLP)
+			})
+		}
 	}
 }
 
-func TestParseSealedHeaderRejectsRepeatedSigner(t *testing.T) {
+// Dropping every seal, as a seal digest mismatch would, must fail clearly. A
+// header without seals, like the genesis block, still parses.
+func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	var header types.Header
 	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
-
-	var extraItems []rlp.RawValue
-	require.NoError(t, rlp.DecodeBytes(header.Extra, &extraItems))
-	var seals [][]byte
-	require.NoError(t, rlp.DecodeBytes(extraItems[4], &seals))
-	var err error
-	extraItems[4], err = rlp.EncodeToBytes(append(seals, seals[0]))
+	items, seals := splitExtra(t, header.Extra)
+	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
-	header.Extra, err = rlp.EncodeToBytes(extraItems)
+	outsider, err := crypto.Sign(crypto.Keccak256([]byte("another digest")), key)
 	require.NoError(t, err)
 
-	_, err = besu.ParseSealedHeader(&header)
-	require.ErrorContains(t, err, "more than one commit seal")
+	withSeals := func(seals [][]byte) *types.Header {
+		encoded, encErr := rlp.EncodeToBytes(seals)
+		require.NoError(t, encErr)
+		items[4] = encoded
+		sealed := types.CopyHeader(&header)
+		sealed.Extra, encErr = rlp.EncodeToBytes(items)
+		require.NoError(t, encErr)
+		return sealed
+	}
+
+	_, err = besu.ParseSealedHeader(withSeals([][]byte{outsider, seals[0][:64]}))
+	require.ErrorContains(t, err, "no commit seal recovers to a header validator")
+
+	_, err = besu.ParseSealedHeader(withSeals([][]byte{}))
+	require.NoError(t, err)
 }
 
 func TestParseSealedHeaderRejectsMalformed(t *testing.T) {

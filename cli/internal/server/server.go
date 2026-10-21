@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/grpchealth"
 	"connectrpc.com/grpcreflect"
 	"github.com/pkg/errors"
 
@@ -21,6 +22,7 @@ type Server struct {
 	mux    *http.ServeMux
 	server *http.Server
 	logger *slog.Logger
+	health *healthChecker
 
 	useReflection        bool
 	serviceNames         []string
@@ -33,6 +35,7 @@ type Server struct {
 type Handler interface {
 	Register(opts ...connect.HandlerOption) (prefix string, handler http.Handler)
 	Name() string
+	CheckReady(ctx context.Context) error
 }
 
 var errInternal = connect.NewError(connect.CodeInternal, errors.New("internal server error"))
@@ -47,9 +50,13 @@ func New(addr string, useReflection, enableObservability bool) *Server {
 	protocols.SetUnencryptedHTTP2(true)
 
 	mux := http.NewServeMux()
+	health := &healthChecker{handlers: make(map[string]Handler)}
+	mux.Handle(grpchealth.NewHandler(health))
 
 	return &Server{
 		mux:           mux,
+		health:        health,
+		serviceNames:  []string{grpchealth.HealthV1ServiceName},
 		useReflection: useReflection,
 		server: &http.Server{
 			Addr:      addr,
@@ -70,6 +77,10 @@ func (s *Server) Start() (net.Addr, error) {
 		return nil, err
 	}
 
+	if err := s.health.start(); err != nil {
+		_ = ln.Close()
+		return nil, err
+	}
 	go s.start(ln)
 
 	return ln.Addr(), nil
@@ -82,10 +93,12 @@ func (s *Server) Stop() error {
 	defer cancel()
 
 	s.logger.Info("Shutting down server")
+	s.health.stop()
 
 	return s.server.Shutdown(ctx)
 }
 
+// Register adds a service and its readiness check before Start is called.
 func (s *Server) Register(h Handler) {
 	var handlerOptions []connect.HandlerOption
 	if s.enableObservability {
@@ -98,9 +111,12 @@ func (s *Server) Register(h Handler) {
 
 	s.mux.Handle(prefix, handler)
 	s.serviceNames = append(s.serviceNames, h.Name())
+	s.health.handlers[h.Name()] = h
 }
 
 func (s *Server) start(ln net.Listener) {
+	defer s.health.stop()
+
 	err := s.server.Serve(ln)
 	switch err {
 	case nil, http.ErrServerClosed:
