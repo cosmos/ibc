@@ -11,8 +11,8 @@ repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
 run overwrites whatever is there, so a hand edit looks like a fix and is not.
 The prose around them is written by hand and is yours to change.
 
-After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
-before opening a pull request.
+When changing commands, configuration, APIs, or cited behavior represented on
+these pages, follow docs/6-ibc-cli/tools/AGENTS.md.
 -->
 
 <!-- GEN:notice END -->

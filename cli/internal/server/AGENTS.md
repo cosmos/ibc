@@ -1,15 +1,9 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# ConnectRPC Guide for AI Agents
+# ConnectRPC adapters
 
-Development flow:
-1. Update raw protos in `proto/cli/*`.
-2. Run `make codegen` (proto and mocks included).
-3. Implement ConnectRPC handlers in `attestor_handler.go` or `relayer_handler.go`.
-4. Add missing `AttestorService`/`RelayerService` methods if needed.
-   - Use idiomatic Go: `ctx` first.
-   - If a service method needs more than 3 args, use a DTO struct.
-5. Keep `server/` as an adapter only:
-   - Convert ConnectRPC/proto types to service DTOs.
-   - Call the service interface.
-   - Map domain errors to `connect.Code*`.
+Keep this package as a transport adapter: convert ConnectRPC/proto types to service DTOs, call the
+service interface, and map domain errors to `connect.Code*`.
+
+When an RPC schema changes, update `proto/cli/` and run `make codegen` from `cli/` before updating
+the handler.
