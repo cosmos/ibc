@@ -144,8 +144,18 @@ func TestStartFailsWhenConfiguredAttestorsDoNotSatisfyOnChainQuorum(t *testing.T
 			SignerAlias:   "relayer-key",
 			SignerKeyFile: signerKeyPath,
 			Chains: []ibccli.RelayerChain{
-				{ChainID: chainAID, RPC: chainARPC, ICS26Router: string(resolvedInstanceA.Locator())},
-				{ChainID: chainBID, RPC: chainBRPC, ICS26Router: string(resolvedInstanceB.Locator())},
+				{
+					ChainID:      chainAID,
+					RPC:          chainARPC,
+					ICS26Router:  string(resolvedInstanceA.Locator()),
+					IBCMulticall: string(resolvedInstanceA.IBCMulticallAddress()),
+				},
+				{
+					ChainID:      chainBID,
+					RPC:          chainBRPC,
+					ICS26Router:  string(resolvedInstanceB.Locator()),
+					IBCMulticall: string(resolvedInstanceB.IBCMulticallAddress()),
+				},
 			},
 			Connections: []ibccli.RelayerConnection{
 				{

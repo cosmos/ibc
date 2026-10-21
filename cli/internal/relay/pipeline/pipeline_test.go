@@ -94,6 +94,8 @@ func newPipelineEnv(t *testing.T) (*pipelineEnv, Deps) {
 		srcTxSubmitter: mocks.NewMockTxSubmitter(t),
 		dstTxSubmitter: mocks.NewMockTxSubmitter(t),
 	}
+	env.srcTxSubmitter.EXPECT().Address().Return("0xrelayer").Maybe()
+	env.dstTxSubmitter.EXPECT().Address().Return("0xrelayer").Maybe()
 	env.srcClient.EXPECT().ChainID().Return(testRoute.SourceChainID).Maybe()
 	env.dstClient.EXPECT().ChainID().Return(testRoute.DestinationChainID).Maybe()
 
@@ -135,7 +137,7 @@ func mockRelay(
 	mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, height).Return([][]byte{{0x01}}, nil).Once()
 	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything, mock.Anything).
 		Return(make([][]byte, len(events)), nil).Once()
-	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, "0xrelayer", mock.Anything, mock.Anything).
 		Return([]v2.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
 }
 
@@ -288,6 +290,8 @@ func TestPipelineLifecycle(t *testing.T) {
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, ackTxHash, v2.RelayKindAck,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
@@ -345,6 +349,8 @@ func TestPipelineLifecycle(t *testing.T) {
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, ackTxHash, v2.RelayKindAck,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
@@ -386,6 +392,8 @@ func TestPipelineLifecycle(t *testing.T) {
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, timeoutTxHash, v2.RelayKindTimeout,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 

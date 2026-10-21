@@ -32,10 +32,12 @@ chains:
       rpc: https://ethereum-rpc.example.com
       ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
 relayer:
   dispatchPollInterval: 3s
   chainOverrides:

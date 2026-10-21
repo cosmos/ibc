@@ -18,6 +18,7 @@ import (
 // TxSubmitter signs and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
+	Address() string
 	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
 
 	// ShouldRetry reports whether a transaction submitted at sentAt is failed

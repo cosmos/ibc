@@ -37,7 +37,7 @@ func revertData(t testing.TB, metadata *bind.MetaData, name string, args ...any)
 	return hexutil.Encode(append(customErr.ID[:4], packed...))
 }
 
-// namedReverts are custom errors explainRevert names.
+// namedReverts are custom errors ExplainRevert names.
 var namedReverts = []struct {
 	metadata *bind.MetaData
 	name     string
@@ -59,19 +59,19 @@ func TestExplainRevert(t *testing.T) {
 			data := revertData(t, tc.metadata, tc.name, tc.args...)
 			// geth and Besu 26.x use code 3, older Besu -32000
 			for _, code := range []int{3, -32000} {
-				err := explainRevert(revertError{code: code, data: data})
+				err := ExplainRevert(revertError{code: code, data: data})
 				require.EqualError(t, err, tc.want+": execution reverted")
 			}
 		})
 	}
 
 	t.Run("keeps unknown data", func(t *testing.T) {
-		err := explainRevert(revertError{data: "0xdeadbeef"})
+		err := ExplainRevert(revertError{data: "0xdeadbeef"})
 		require.EqualError(t, err, "execution reverted")
 	})
 
 	t.Run("keeps errors without data", func(t *testing.T) {
 		plain := errors.New("connection refused")
-		require.Equal(t, plain, explainRevert(plain))
+		require.Equal(t, plain, ExplainRevert(plain))
 	})
 }

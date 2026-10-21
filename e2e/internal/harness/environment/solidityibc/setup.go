@@ -20,6 +20,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcerc20"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics20transfer"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27account"
@@ -177,7 +178,7 @@ const (
 	gmpPortID      = "gmpport"
 )
 
-// DeployAppStack deploys ICS20 Transfer and ICS27 GMP (with their logic
+// DeployAppStack deploys multicall, ICS20 Transfer and ICS27 GMP (with their logic
 // contracts), registers both ports on the router, and opens public relaying.
 func (s *Setup) DeployAppStack(
 	ctx context.Context,
@@ -230,6 +231,15 @@ func (s *Setup) DeployAppStack(
 	ics27Impl, err := s.deployVerified(ctx, authority, "ICS27GMP implementation",
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := ics27gmp.DeployContract(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	multicallImpl, err := s.deployVerified(ctx, authority, "IBCMulticall implementation",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := ibcmulticall.DeployContract(opts, s.backend)
 			return address, transaction, deployErr
 		})
 	if err != nil {
@@ -301,6 +311,35 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, codeErr
 	}
 
+	multicallABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode IBCMulticall initialization: %w", err)
+	}
+	if multicallABI == nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode IBCMulticall initialization: upstream binding has no ABI")
+	}
+	multicallInit, err := multicallABI.Pack("initialize", instance.AccessManager)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode IBCMulticall initialization: %w", err)
+	}
+
+	multicallProxy, err := s.deployVerified(ctx, authority, "initialized IBCMulticall proxy",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := erc1967proxy.DeployContract(
+				opts,
+				s.backend,
+				multicallImpl,
+				multicallInit,
+			)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+	if codeErr := s.requireCode(ctx, "IBCMulticall proxy", multicallProxy); codeErr != nil {
+		return AppStack{}, codeErr
+	}
+
 	router, err := ics26router.NewContract(instance.Router, s.backend)
 	if err != nil {
 		return AppStack{}, fmt.Errorf("solidity IBC register AppStack: bind ICS26Router: %w", err)
@@ -357,6 +396,26 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, err
 	}
 
+	multicallSelector, err := methodSelector(*multicallABI, "multicall")
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public multicall: %w", err)
+	}
+	_, tx, err = s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := manager.SetTargetFunctionRole(
+			opts,
+			multicallProxy,
+			[][4]byte{multicallSelector},
+			math.MaxUint64, // OZ AccessManager PUBLIC_ROLE
+		)
+		return common.Address{}, transaction, sendErr
+	})
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public multicall: %w", err)
+	}
+	if _, err = s.awaitMined(ctx, "open public multicall", tx); err != nil {
+		return AppStack{}, err
+	}
+
 	registeredTransfer, err := router.GetIBCApp(&bind.CallOpts{Context: ctx}, transferPortID)
 	if err != nil {
 		return AppStack{}, fmt.Errorf("solidity IBC verify transfer app: %w", err)
@@ -404,6 +463,7 @@ func (s *Setup) DeployAppStack(
 	return AppStack{
 		ICS20Transfer: ics20Proxy,
 		ICS27GMP:      ics27Proxy,
+		IBCMulticall:  multicallProxy,
 	}, nil
 }
 

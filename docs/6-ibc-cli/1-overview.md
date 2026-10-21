@@ -81,7 +81,7 @@ For a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md), 
 
 Either way it returns the client updates for a height, and a proof for each packet in the batch.
 
-The relayer then turns each batch of packets heading to the same destination into one transaction. That transaction makes a single call to the router. It carries a list of operations: first an update advancing the light client to the height just proved, then one delivery for each packet in the batch.
+The relayer then turns each batch of packets heading to the same destination into one transaction. Every configured EVM chain must have router and `IBCMulticall` addresses to run a relayer; an attestor requires only the router address. CLI deployments include both in the generated config. Each batch carries a list of operations: first any client updates needed for the height just proved, then one delivery for each packet in the batch.
 
 ### Signing and gas
 
@@ -135,7 +135,7 @@ IBC CLI stores the configuration for deployment, the relayer, and attestors in a
 
 It has eight blocks:
 
-- `chains`: the chains all three parts talk to, with a router address for each, an RPC endpoint, and a websocket endpoint where auto-relay is enabled.
+- `chains`: the chains all three parts talk to, with router and multicall addresses for relaying, an RPC endpoint, and a websocket endpoint where auto-relay is enabled.
 - `relayer`: the connections to relay, and per-chain relay settings.
 - `attestors`: the attestors this process runs, or queries over the network.
 - `signers`: the keys, each under an alias the other blocks reference by name.
