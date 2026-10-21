@@ -102,35 +102,32 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	if err != nil {
 		return 0, time.Time{}, err
 	}
-	_, stuck, err := g.path(ctx, trusted, head, state.TrustLevel)
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-	if stuck == nil {
-		return head.Height, blockTime(head), nil
-	}
-
-	// Which headers the search finds depends on its target, so a height is
-	// reported only once the search ClientUpdatePayloads repeats towards it
-	// succeeds. Each retry stops lower, ending at the trusted height at worst.
-	reached := stuck.reached
+	// Which headers the search finds depends on its target, so when it stops
+	// short, a height is reported only once the search ClientUpdatePayloads
+	// repeats towards it succeeds. Each retry stops lower, ending at the
+	// trusted height at worst.
+	reached := head
+	var first *stuckError
 	for reached.Height > trusted.Height {
-		_, again, errAgain := g.path(ctx, trusted, reached, state.TrustLevel)
-		if errAgain != nil {
-			return 0, time.Time{}, errAgain
+		_, stuck, err := g.path(ctx, trusted, reached, state.TrustLevel)
+		if err != nil {
+			return 0, time.Time{}, err
 		}
-		if again == nil {
+		if stuck == nil {
 			break
 		}
-		reached = again.reached
+		if first == nil {
+			first = stuck
+		}
+		reached = stuck.reached
 	}
 
-	if g.reported.Swap(stuck.reached.Height) != stuck.reached.Height {
+	if first != nil && g.reported.Swap(first.reached.Height) != first.reached.Height {
 		g.logger.Error(
 			"Client cannot follow a validator set change; relaying only up to the furthest height it reaches",
 			"reachedHeight", reached.Height,
 			"headHeight", head.Height,
-			"err", stuck,
+			"err", first,
 		)
 	}
 	return reached.Height, blockTime(reached), nil
