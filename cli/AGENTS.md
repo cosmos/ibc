@@ -2,10 +2,8 @@
 
 # IBC CLI
 
-- Run the relevant tests and `make lint` from this directory before finishing.
-- `gen/` at the repository root holds generated code only, and its layout is fixed by an ADR — don't
-  move it or put anything handwritten there. Generator scripts belong in the root `scripts/`
-  directory, not beside their output. The one exception is `gen/README.md`, which documents the tree.
+- Run the relevant tests from this directory. Run `make lint` here when changing Go code or inputs
+  that affect linting.
 - From the repository root, keep `make -C e2e test` green when changing the CLI transport contract
   exercised by the repository-wide black-box tests.
 
