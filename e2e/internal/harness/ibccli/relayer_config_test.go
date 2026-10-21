@@ -135,7 +135,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},
 		{Alias: "alice-signer", Type: RelayerSignerLocal, File: "/tmp/alice.key"},
 	}, file.Signers)
-	require.Equal(t, []attestorFileConfig{
+	require.Equal(t, []AttestorFileConfig{
 		{Name: "alice", ChainID: "2", Type: RelayerAttestorLocal, Signer: "alice-signer", FinalityOffset: 3},
 		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
 		{Name: "carol", Type: RelayerAttestorRemote, GRPC: "carol:8080"},
