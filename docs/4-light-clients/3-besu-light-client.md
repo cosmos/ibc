@@ -44,7 +44,7 @@ An update carries a raw Besu header, the height the client already trusts, and t
 
 Besu validators seal a block by signing a digest of its header, with the seals themselves left out: QBFT replaces them with an empty list, IBFT 2.0 drops them from the header's extra data. The client rebuilds that digest, recovers the signer of every seal, and applies two rules:
 
-- **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client` always uses two thirds.
+- **Trusted overlap.** At least `trustLevel` of the validators trusted at the trusted height, rounded up, must be among the signers. This is what stops a new validator set the client has never heard of from feeding it headers. The contract accepts a trust level from one third to one, fixed at deployment; `ibc deploy client besu` always uses two thirds.
 - **Quorum.** At least two thirds of the header's own validator set must be among the signers, which is the same threshold Besu needs to produce the block.
 
 The client requires the seals in ascending order of signer address. Besu does not order them that way, so the relayer recovers the signers with the digest under which they recover to the header's validators, which is the chain's consensus, and reorders the seals before submitting the header; the digest leaves the seals out, so reordering does not change what was signed.
