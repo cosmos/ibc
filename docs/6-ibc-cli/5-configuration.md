@@ -231,7 +231,7 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | **required** to run | Address of the ICS26 router on the chain. |
-| `evm.ibcMulticall` | `string` | optional | The batching contract address. |
+| `evm.ibcMulticall` | `string` | **required** to relay | The batching contract address, required to run the relayer. |
 
 <!-- [config.go:L119](cli/internal/config/config.go#L119) -->
 

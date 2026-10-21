@@ -15,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -255,6 +254,8 @@ func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 			require.Len(t, rpc.sent, 4)
 			require.Equal(t, rpc.sent[3].Hash().Hex(), submission.TxHash)
 			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
+			require.Equal(t, c.address.Hex(), c.Address())
+			require.Equal(t, testIntent().Data, rpc.sent[3].Data())
 			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
 			for _, tx := range rpc.sent {
 				require.Zero(t, tx.Nonce())
@@ -569,24 +570,14 @@ func TestShouldRetry(t *testing.T) {
 	}
 }
 
-func TestSubmitRejectsContractSimulationRevert(t *testing.T) {
+func TestSubmitRejectsEstimationRevert(t *testing.T) {
 	submitter, eth := newSubmitter(t)
-	revert := revertError{
-		code: -32000,
-		data: revertData(
-			t,
-			besuqbft.ContractMetaData,
-			"ConsensusStateExpired",
-			uint64(100),
-			big.NewInt(121),
-			uint64(20),
-		),
-	}
+	revert := errors.New("execution reverted")
 	eth.gasErr = revert
 	result, err := submitter.Submit(t.Context(), testIntent())
 	require.Nil(t, result)
 	require.ErrorIs(t, err, revert)
-	require.EqualError(t, err, "estimating gas: ConsensusStateExpired(100, 121, 20): execution reverted")
+	require.EqualError(t, err, "estimating gas: execution reverted")
 	require.Empty(t, eth.sent)
 	require.Zero(t, submitter.nextNonce)
 }

@@ -38,6 +38,50 @@ func (_m *MockTxSubmitter) EXPECT() *MockTxSubmitter_Expecter {
 	return &MockTxSubmitter_Expecter{mock: &_m.Mock}
 }
 
+// Address provides a mock function for the type MockTxSubmitter
+func (_mock *MockTxSubmitter) Address() string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Address")
+	}
+
+	var r0 string
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	return r0
+}
+
+// MockTxSubmitter_Address_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Address'
+type MockTxSubmitter_Address_Call struct {
+	*mock.Call
+}
+
+// Address is a helper method to define mock.On call
+func (_e *MockTxSubmitter_Expecter) Address() *MockTxSubmitter_Address_Call {
+	return &MockTxSubmitter_Address_Call{Call: _e.mock.On("Address")}
+}
+
+func (_c *MockTxSubmitter_Address_Call) Run(run func()) *MockTxSubmitter_Address_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockTxSubmitter_Address_Call) Return(s string) *MockTxSubmitter_Address_Call {
+	_c.Call.Return(s)
+	return _c
+}
+
+func (_c *MockTxSubmitter_Address_Call) RunAndReturn(run func() string) *MockTxSubmitter_Address_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ShouldRetry provides a mock function for the type MockTxSubmitter
 func (_mock *MockTxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
 	ret := _mock.Called(ctx, txHash, sentAt)

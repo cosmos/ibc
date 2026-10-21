@@ -22,10 +22,10 @@ var revertContracts = []*bind.MetaData{
 	ics26router.ContractMetaData, attestation.ContractMetaData, besuqbft.ContractMetaData,
 }
 
-// explainRevert names the custom error in err's revert data, which nodes
+// ExplainRevert names the custom error in err's revert data, which nodes
 // return undecoded. Any error code is accepted: Besu before 26.x reports
 // reverts with -32000 rather than 3.
-func explainRevert(err error) error {
+func ExplainRevert(err error) error {
 	var dataErr rpc.DataError
 	if !errors.As(err, &dataErr) {
 		return err

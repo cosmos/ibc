@@ -122,7 +122,14 @@ func relayPackets(
 		}
 	}
 
-	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
+	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
+	defer cancel()
+
+	if err = chainClient.WaitForChain(waitCtx); err != nil {
+		return nil, errors.Wrap(err, "waiting for chain")
+	}
+
+	relayTxs, err := txBuilder.BuildRelayTxs(ctx, txSubmitter.Address(), v2.ClientUpdate{
 		ClientID: clientID,
 		Payloads: clientUpdatePayloads,
 	}, items)
@@ -135,13 +142,6 @@ func relayPackets(
 	}
 
 	relayTx := relayTxs[0]
-
-	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
-	defer cancel()
-
-	if err = chainClient.WaitForChain(waitCtx); err != nil {
-		return nil, errors.Wrap(err, "waiting for chain")
-	}
 
 	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
 		To:   common.BytesToAddress(relayTx.To).Hex(),

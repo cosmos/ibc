@@ -107,6 +107,10 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	return c, nil
 }
 
+func (c *TxSubmitter) Address() string {
+	return c.address.Hex()
+}
+
 func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

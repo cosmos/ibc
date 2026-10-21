@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 
+	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
 
@@ -106,7 +107,7 @@ func (c *TxSubmitter) prepareTransaction(
 		nil,
 	)
 	if err != nil {
-		return nil, errors.Wrap(explainRevert(err), "estimating gas")
+		return nil, errors.Wrap(chainsevm.ExplainRevert(err), "estimating gas")
 	}
 	return &types.DynamicFeeTx{
 		ChainID:   c.ethSigner.ChainID(),
