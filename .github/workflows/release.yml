@@ -12,6 +12,18 @@ name: Release
 on:
   push:
     tags: ["v*", "cli-v*"]
+  # Run manually from a tag ("Use workflow from" or `gh workflow run release.yml --ref <tag>`) to
+  # release it, with the same ref, commit and signing identity as a tag push. Run it from a branch
+  # with a `tag` input to test the workflow: a dry run that creates no release and pushes no image.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          Only for a dry run from a branch. An existing tag, e.g. cli-v0.1.0, is built from its own
+          source with this branch's workflow; any other version, e.g. v0.0.0-test.1, builds the
+          branch and names the test assets after it. Leave empty when running from a tag.
+        required: false
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,7 +37,7 @@ defaults:
 
 env:
   GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
-  TAG: ${{ github.ref_name }}
+  TAG: ${{ inputs.tag || github.ref_name }}
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
@@ -37,10 +49,34 @@ jobs:
       name: ${{ steps.tag.outputs.name }}
       title: ${{ steps.tag.outputs.title }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
+      dry-run: ${{ steps.tag.outputs.dry-run }}
+      build-tag: ${{ steps.tag.outputs.build-tag }}
     steps:
       - name: Check tag format
         id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ -n "$INPUT_TAG" && "$INPUT_TAG" != "$GITHUB_REF_NAME" ]]; then
+              echo "::error::The tag input is only for dry runs from a branch; leave it empty when running from a tag"
+              exit 1
+            fi
+            echo "dry-run=false" >> "$GITHUB_OUTPUT"
+            echo "build-tag=false" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$INPUT_TAG" ]]; then
+            echo "::notice::Dry run of ${INPUT_TAG} from ${GITHUB_REF_NAME}: no release is created and no image is pushed"
+            echo "dry-run=true" >> "$GITHUB_OUTPUT"
+            # Exit code 2 means no such tag, so the branch itself is built.
+            if git ls-remote --exit-code --tags "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "refs/tags/${INPUT_TAG}" > /dev/null; then
+              echo "build-tag=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "build-tag=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "::error::Run the release workflow from a tag, or from a branch with the tag input set for a dry run"
+            exit 1
+          fi
           if [[ ! "$TAG" =~ ^(cli-)?(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
             echo "::error::Tag must match vX.Y.Z or cli-vX.Y.Z, optionally followed by -<suffix>"
             exit 1
@@ -85,6 +121,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # A dry run of an existing tag builds the tag's source with this branch's workflow and
+      # actions, which the tagged commit may not have.
+      - name: Check out the tag to test
+        if: needs.validate-tag.outputs.build-tag == 'true'
+        run: |
+          cp -R .github/actions "${RUNNER_TEMP}/release-actions"
+          git fetch --depth=1 origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          git checkout --detach "refs/tags/${TAG}"
+          rm -rf .github/actions
+          mkdir -p .github
+          cp -R "${RUNNER_TEMP}/release-actions" .github/actions
+          echo "::notice::Building ${TAG} ($(git rev-parse HEAD)) with the release workflow from ${GITHUB_REF_NAME}"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: cli/go.mod
@@ -119,6 +167,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # A dry run builds the image without pushing it, so nothing appears under a release tag.
       - name: Build & Push image
         id: image
         if: matrix.goos == 'linux'
@@ -128,14 +177,14 @@ jobs:
           file: cli/Dockerfile
           target: target-artifact
           platforms: linux/${{ matrix.goarch }}
-          push: true
+          push: ${{ needs.validate-tag.outputs.dry-run == 'false' }}
           # Disable BuildKit's unsigned attestation, so the pushed digest is the platform image
           # itself rather than an index wrapping it.
           provenance: false
           tags: ${{ env.IMAGE_NAME }}:${{ env.TAG }}-${{ env.PLATFORM }}
       # The platform image gets its provenance and SBOM; the index is signed in publish-manifest.
       - name: Attest image
-        if: matrix.goos == 'linux'
+        if: matrix.goos == 'linux' && needs.validate-tag.outputs.dry-run == 'false'
         uses: ./.github/actions/attest-image
         with:
           image: ${{ env.IMAGE_NAME }}
@@ -144,7 +193,8 @@ jobs:
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [build]
+    needs: [validate-tag, build]
+    if: needs.validate-tag.outputs.dry-run == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -189,10 +239,12 @@ jobs:
           # Also signs the platform manifests referenced by the index.
           recursive: "true"
 
-  # Waits for publish-manifest as well, so a draft release always comes with a signed image.
+  # Waits for publish-manifest as well, so a draft release always comes with a signed image. A dry
+  # run skips publish-manifest.
   release:
     name: Attach signed assets to draft release
     needs: [validate-tag, build, publish-manifest]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.publish-manifest.result == 'success' || needs.validate-tag.outputs.dry-run == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -209,3 +261,4 @@ jobs:
           name: ${{ needs.validate-tag.outputs.name }}
           title: ${{ needs.validate-tag.outputs.title }}
           prerelease: ${{ needs.validate-tag.outputs.prerelease }}
+          dry-run: ${{ needs.validate-tag.outputs.dry-run }}

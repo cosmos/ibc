@@ -4,9 +4,10 @@ name: Publish draft release
 description: >-
   Collects the `release-assets-*` artifacts uploaded by the attest-release-assets action,
   verifies every asset against its attestation bundles, signs a `checksums.txt` over the assets,
-  SBOMs and combined attestation bundle with cosign, and attaches everything to a draft release for the pushed tag, with a
-  "Verifying the release" section in its notes. Must run in a job triggered by a tag push. The
-  calling job needs `contents: write` and `id-token: write`.
+  SBOMs and combined attestation bundle with cosign, and attaches everything to a draft release
+  for the tag, with a "Verifying the release" section in its notes. Must run for a tag: a tag
+  push, or a manual run started from the tag. The calling job needs `contents: write` and
+  `id-token: write`.
 
 inputs:
   name:
@@ -25,6 +26,13 @@ inputs:
     description: Verify every asset against the attestation bundles before signing (`true` or `false`).
     required: false
     default: "true"
+  dry-run:
+    description: >-
+      Do everything except create or update the release, and upload what would be released as the
+      `release-dry-run` artifact instead (`true` or `false`). Can run for a branch, to test the
+      release workflow.
+    required: false
+    default: "false"
   github-token:
     description: Token used to create the release and verify the attestations.
     required: false
@@ -32,7 +40,7 @@ inputs:
 
 outputs:
   url:
-    description: URL of the draft (or already published) release.
+    description: URL of the draft (or already published) release. Empty for a dry run.
     value: ${{ steps.release.outputs.url }}
 
 runs:
@@ -44,20 +52,21 @@ runs:
         NAME: ${{ inputs.name }}
         PRERELEASE: ${{ inputs.prerelease }}
         VERIFY: ${{ inputs.verify }}
+        DRY_RUN: ${{ inputs.dry-run }}
       run: |
         # The verification notes name the tag through GITHUB_REF and the signing workflow through
         # GITHUB_WORKFLOW_REF, so the release must be for the tag this run was triggered by.
-        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-          echo "::error::publish-draft-release must run for a tag push, not ${GITHUB_REF}"
+        if [[ "$DRY_RUN" != "true" && "$GITHUB_REF_TYPE" != "tag" ]]; then
+          echo "::error::publish-draft-release must run for a tag (a tag push, or a manual run from the tag), not ${GITHUB_REF}; set dry-run to test it from a branch"
           exit 1
         fi
         if [[ ! "$NAME" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
           echo "::error::name may only contain letters, digits, '.', '_' and '-' (got '${NAME}')"
           exit 1
         fi
-        for value in "$PRERELEASE" "$VERIFY"; do
+        for value in "$PRERELEASE" "$VERIFY" "$DRY_RUN"; do
           if [[ "$value" != "true" && "$value" != "false" ]]; then
-            echo "::error::prerelease and verify must be 'true' or 'false' (got '${value}')"
+            echo "::error::prerelease, verify and dry-run must be 'true' or 'false' (got '${value}')"
             exit 1
           fi
         done
@@ -174,8 +183,21 @@ runs:
         \`\`\`
         EOF
 
+    - name: Upload dry run
+      if: inputs.dry-run == 'true'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: release-dry-run
+        path: |
+          ${{ runner.temp }}/release-dist/
+          ${{ runner.temp }}/release-verify.md
+        if-no-files-found: error
+        overwrite: true
+        retention-days: 7
+
     - name: Create or update draft release
       id: release
+      if: inputs.dry-run != 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
