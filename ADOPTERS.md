@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Adopters
 
 This file lists known production and pilot deployments of IBC. If your organization uses IBC, please add yourself with a pull request. Entries are self-reported.

@@ -1,6 +1,8 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Technical Steering Committee Members
 
-The Technical Steering Committee is the body of Maintainers, each a voting member with one vote. The members below are the initial TSC. See GOVERNANCE.md for how the TSC works.
+The Technical Steering Committee is the body of Maintainers, each a voting member with one vote. The members below are the initial TSC. See [GOVERNANCE.md](GOVERNANCE.md) for how the TSC works.
 
 ## Current TSC
 
@@ -20,7 +22,7 @@ Giovanni Vitali, Cosmos Labs
 
 ## Security response team
 
-The following members receive private security disclosures per SECURITY.md:
+The following members receive private security disclosures per [SECURITY.md](SECURITY.md):
 
 - [TBD]
 
@@ -30,4 +32,4 @@ The following members receive private security disclosures per SECURITY.md:
 
 ## Maintainers
 
-The full list of Maintainers is maintained in MAINTAINERS.md in the repo.
+The full list of Maintainers is maintained in [MAINTAINERS.md](MAINTAINERS.md) in the repo.

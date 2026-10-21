@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Contributing to IBC
 
 Thank you for your interest in contributing to IBC. IBC is an open standard for trust-minimized interoperability between independent ledgers, stewarded under the Linux Foundation Decentralized Trust (LFDT). Contributions come in many forms, and all of them follow the same public path.
@@ -25,8 +27,8 @@ Browse issues labeled good first issue and help wanted. Before you start work on
 - GitHub pull requests for ADRs, code, docs, and specs.
 - Community calls, open to all and recorded, with a public calendar, for synchronous design and roadmap.
 - Community chat on the LFDT Discord for questions and coordination.
-- The governance forum named in MAINTAINERS.md for formal and asynchronous governance decisions.
-- Security disclosures follow the private path in SECURITY.md and never go through public issues.
+- The governance forum named in [MAINTAINERS.md](MAINTAINERS.md) for formal and asynchronous governance decisions.
+- Security disclosures follow the private path in [SECURITY.md](SECURITY.md) and never go through public issues.
 
 ## Contribution workflow
 
@@ -111,4 +113,4 @@ Jun Kimura, Datachain
 
 ## Governance
 
-The project is governed by a Technical Steering Committee under the Technical Charter. See GOVERNANCE.md for the roles and how decisions are made.
+The project is governed by a Technical Steering Committee under the Technical Charter. See [GOVERNANCE.md](GOVERNANCE.md) for the roles and how decisions are made.

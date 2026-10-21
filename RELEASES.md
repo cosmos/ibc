@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Releases
 
 IBC publishes releases so adopters can plan upgrades. The release rhythm suits the component: libraries and infrastructure release regularly, while the on-chain contracts release only on deliberate, reviewed changes rather than on a schedule.
@@ -18,7 +20,7 @@ The changelog is generated from Conventional Commit titles at release time, so a
 
 ## Supported versions
 
-The currently supported release lines are listed here and referenced by SECURITY.md. Security fixes target supported lines. Different components of the monorepo may maintain their own release lines.
+The currently supported release lines are listed here and referenced by [SECURITY.md](SECURITY.md). Security fixes target supported lines. Different components of the monorepo may maintain their own release lines.
 
 | Release line | Status | Supported until |
 | --- | --- | --- |
