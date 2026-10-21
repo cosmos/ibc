@@ -573,10 +573,9 @@ type chainConfig struct {
 }
 
 type evmChainConfig struct {
-	RPC          string `yaml:"rpc"`
-	WS           string `yaml:"ws,omitempty"`
-	ICS26Router  string `yaml:"ics26Router"`
-	IBCMulticall string `yaml:"ibcMulticall,omitempty"`
+	RPC         string `yaml:"rpc"`
+	WS          string `yaml:"ws,omitempty"`
+	ICS26Router string `yaml:"ics26Router"`
 }
 
 type serverConfig struct {
