@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Feature or enhancement
+description: Propose a change or new capability
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For substantial changes, expect to be asked for an ADR.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What need or use case does this address? Point to an adopter need where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: A step-by-step description of the enhancement.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
