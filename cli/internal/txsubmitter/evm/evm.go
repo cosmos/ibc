@@ -107,7 +107,7 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	}
 	pub, err := crypto.DecompressPubkey(chainSigner.PublicKey())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "decompressing signer public key for chain %q", chainID)
 	}
 	c := &TxSubmitter{
 		chainID: chainID, eth: eth, signer: chainSigner,
@@ -178,7 +178,7 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, error) {
 	head, err := c.eth.HeaderByNumber(ctx, nil)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrap(err, "getting latest header for nonce selection")
 	}
 	height := head.Number.Uint64()
 	if height < c.lowestUnminedNonceHeight {
@@ -190,11 +190,11 @@ func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, e
 	}
 	mined, err := c.eth.NonceAt(ctx, c.address, head.Number)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "getting mined nonce for %s at block %s", c.address, head.Number)
 	}
 	pending, err := c.eth.PendingNonceAt(ctx, c.address)
 	if err != nil {
-		return 0, err
+		return 0, errors.Wrapf(err, "getting pending nonce for %s", c.address)
 	}
 	c.lowestUnminedNonceHeight = height
 	if mined != c.lowestUnminedNonce {

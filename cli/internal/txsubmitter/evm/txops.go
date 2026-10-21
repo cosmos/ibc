@@ -19,14 +19,14 @@ import (
 func estimateFees(ctx context.Context, eth ETHClient, opts *ChainOptions) (fee, tip *big.Int, err error) {
 	head, err := eth.HeaderByNumber(ctx, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "getting latest header for fee estimation")
 	}
 	if head.BaseFee == nil {
 		return nil, nil, errors.New("chain must support EIP-1559")
 	}
 	tip, err = eth.SuggestGasTipCap(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errors.Wrap(err, "getting suggested gas tip cap")
 	}
 	fee = new(big.Int).Add(tip, new(big.Int).Mul(head.BaseFee, big.NewInt(2)))
 	fee, tip = capFees(
@@ -56,17 +56,20 @@ func signTransaction(
 ) (*types.Transaction, error) {
 	sig, err := chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "signing transaction with address %s", address)
 	}
 	if len(sig) != crypto.SignatureLength {
 		return nil, errors.Errorf("invalid signature length: %d", len(sig))
 	}
 	signed, err := tx.WithSignature(ethSigner, sig)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "attaching transaction signature")
 	}
 	sender, err := types.Sender(ethSigner, signed)
-	if err != nil || sender != address {
+	if err != nil {
+		return nil, errors.Wrap(err, "recovering transaction sender")
+	}
+	if sender != address {
 		return nil, errors.New("transaction signature does not match configured sender")
 	}
 	return signed, nil
@@ -108,7 +111,7 @@ func (c *TxSubmitter) buildAndSignTransaction(
 	to := common.HexToAddress(destination)
 	code, err := c.eth.PendingCodeAt(ctx, to)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "getting code at %s", to)
 	}
 	if len(code) == 0 {
 		return nil, errors.Errorf("no contract code at %s", to)
