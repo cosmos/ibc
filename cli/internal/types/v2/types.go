@@ -105,6 +105,28 @@ type RelayTx struct {
 	Data []byte
 }
 
+// OperationType identifies a client update or packet relay.
+type OperationType int
+
+// Operation types.
+const (
+	OperationTypeUnknown OperationType = iota
+	OperationTypeUpdate
+	OperationTypePacket
+)
+
+// OperationResult is the simulated outcome of one client update or packet relay.
+type OperationResult struct {
+	Type          OperationType
+	Success       bool
+	FailureReason string
+}
+
+// RelaySimulation contains outcomes in transaction execution order.
+type RelaySimulation struct {
+	Operations []OperationResult
+}
+
 // PacketEvent a packet event.
 type PacketEvent struct {
 	Height    uint64

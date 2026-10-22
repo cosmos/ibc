@@ -38,50 +38,6 @@ func (_m *MockTxSubmitter) EXPECT() *MockTxSubmitter_Expecter {
 	return &MockTxSubmitter_Expecter{mock: &_m.Mock}
 }
 
-// Address provides a mock function for the type MockTxSubmitter
-func (_mock *MockTxSubmitter) Address() string {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Address")
-	}
-
-	var r0 string
-	if returnFunc, ok := ret.Get(0).(func() string); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	return r0
-}
-
-// MockTxSubmitter_Address_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Address'
-type MockTxSubmitter_Address_Call struct {
-	*mock.Call
-}
-
-// Address is a helper method to define mock.On call
-func (_e *MockTxSubmitter_Expecter) Address() *MockTxSubmitter_Address_Call {
-	return &MockTxSubmitter_Address_Call{Call: _e.mock.On("Address")}
-}
-
-func (_c *MockTxSubmitter_Address_Call) Run(run func()) *MockTxSubmitter_Address_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockTxSubmitter_Address_Call) Return(s string) *MockTxSubmitter_Address_Call {
-	_c.Call.Return(s)
-	return _c
-}
-
-func (_c *MockTxSubmitter_Address_Call) RunAndReturn(run func() string) *MockTxSubmitter_Address_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // ShouldRetry provides a mock function for the type MockTxSubmitter
 func (_mock *MockTxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error) {
 	ret := _mock.Called(ctx, txHash, sentAt)
@@ -150,6 +106,72 @@ func (_c *MockTxSubmitter_ShouldRetry_Call) Return(b bool, err error) *MockTxSub
 }
 
 func (_c *MockTxSubmitter_ShouldRetry_Call) RunAndReturn(run func(ctx context.Context, txHash string, sentAt time.Time) (bool, error)) *MockTxSubmitter_ShouldRetry_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SimulateRelayTx provides a mock function for the type MockTxSubmitter
+func (_mock *MockTxSubmitter) SimulateRelayTx(ctx context.Context, tx v2.RelayTx) (v2.RelaySimulation, error) {
+	ret := _mock.Called(ctx, tx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SimulateRelayTx")
+	}
+
+	var r0 v2.RelaySimulation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.RelayTx) (v2.RelaySimulation, error)); ok {
+		return returnFunc(ctx, tx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v2.RelayTx) v2.RelaySimulation); ok {
+		r0 = returnFunc(ctx, tx)
+	} else {
+		r0 = ret.Get(0).(v2.RelaySimulation)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v2.RelayTx) error); ok {
+		r1 = returnFunc(ctx, tx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockTxSubmitter_SimulateRelayTx_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SimulateRelayTx'
+type MockTxSubmitter_SimulateRelayTx_Call struct {
+	*mock.Call
+}
+
+// SimulateRelayTx is a helper method to define mock.On call
+//   - ctx context.Context
+//   - tx v2.RelayTx
+func (_e *MockTxSubmitter_Expecter) SimulateRelayTx(ctx any, tx any) *MockTxSubmitter_SimulateRelayTx_Call {
+	return &MockTxSubmitter_SimulateRelayTx_Call{Call: _e.mock.On("SimulateRelayTx", ctx, tx)}
+}
+
+func (_c *MockTxSubmitter_SimulateRelayTx_Call) Run(run func(ctx context.Context, tx v2.RelayTx)) *MockTxSubmitter_SimulateRelayTx_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v2.RelayTx
+		if args[1] != nil {
+			arg1 = args[1].(v2.RelayTx)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTxSubmitter_SimulateRelayTx_Call) Return(relaySimulation v2.RelaySimulation, err error) *MockTxSubmitter_SimulateRelayTx_Call {
+	_c.Call.Return(relaySimulation, err)
+	return _c
+}
+
+func (_c *MockTxSubmitter_SimulateRelayTx_Call) RunAndReturn(run func(ctx context.Context, tx v2.RelayTx) (v2.RelaySimulation, error)) *MockTxSubmitter_SimulateRelayTx_Call {
 	_c.Call.Return(run)
 	return _c
 }

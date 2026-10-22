@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package txsubmitter signs and broadcasts transactions for the relayer.
+// Package txsubmitter simulates, signs, and broadcasts transactions for the relayer.
 package txsubmitter
 
 import (
@@ -15,10 +15,12 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// TxSubmitter signs and broadcasts transactions on a single chain;
+// TxSubmitter simulates, signs, and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
-	Address() string
+	// SimulateRelayTx returns decoded outcomes in execution order, including failures.
+	SimulateRelayTx(ctx context.Context, tx v2.RelayTx) (v2.RelaySimulation, error)
+
 	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
 
 	// ShouldRetry reports whether a transaction submitted at sentAt is failed

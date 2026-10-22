@@ -4,7 +4,10 @@ package processors
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -129,7 +132,7 @@ func relayPackets(
 		return nil, errors.Wrap(err, "waiting for chain")
 	}
 
-	relayTxs, err := txBuilder.BuildRelayTxs(ctx, txSubmitter.Address(), v2.ClientUpdate{
+	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
 		ClientID: clientID,
 		Payloads: clientUpdatePayloads,
 	}, items)
@@ -142,6 +145,13 @@ func relayPackets(
 	}
 
 	relayTx := relayTxs[0]
+	simulation, err := txSubmitter.SimulateRelayTx(ctx, relayTx)
+	if err != nil {
+		return nil, errors.Wrap(err, "simulating relay tx")
+	}
+	if err = validateRelaySimulation(ctx, logger, simulation); err != nil {
+		return nil, err
+	}
 
 	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
 		To:   common.BytesToAddress(relayTx.To).Hex(),
@@ -156,4 +166,36 @@ func relayPackets(
 	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
 
 	return submission, nil
+}
+
+func validateRelaySimulation(ctx context.Context, logger *slog.Logger, simulation v2.RelaySimulation) error {
+	requiredType := v2.OperationTypeUpdate
+	if slices.ContainsFunc(simulation.Operations, func(result v2.OperationResult) bool {
+		return result.Type == v2.OperationTypePacket
+	}) {
+		requiredType = v2.OperationTypePacket
+	}
+	var failures []string
+	canSucceed := false
+	for i, result := range simulation.Operations {
+		if result.Success {
+			canSucceed = canSucceed || result.Type == requiredType
+			continue
+		}
+		if len(failures) < 5 {
+			reason := result.FailureReason
+			if len(reason) > 256 {
+				reason = reason[:256] + "..."
+			}
+			failures = append(failures, fmt.Sprintf("call[%d]: %s", i, reason))
+		}
+	}
+	details := strings.Join(failures, "; ")
+	if canSucceed {
+		if len(failures) > 0 {
+			logger.DebugContext(ctx, "Relay simulation has failed calls", "failures", details)
+		}
+		return nil
+	}
+	return errors.Errorf("no packet calls can currently succeed: %s", details)
 }

@@ -5,28 +5,20 @@
 package txbuilder
 
 import (
-	"context"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder/evm"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// TxBuilder builds and simulates transactions from packet relay and client update details
+// TxBuilder builds transactions from packet relay and client update details
 // for one chain. It returns a list of transactions rather than one, since
 // some chains (e.g. Solana, due to tx size limits) must split a batch of
 // packet relays across multiple transactions.
 type TxBuilder interface {
-	BuildRelayTxs(
-		ctx context.Context,
-		from string,
-		clientUpdate v2.ClientUpdate,
-		packetRelayItems []v2.PacketRelayItem,
-	) ([]v2.RelayTx, error)
+	BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error)
 }
 
 var _ TxBuilder = (*evm.TxBuilder)(nil)
@@ -68,14 +60,9 @@ func NewSetFromConfig(cfg config.Config) (*Set, error) {
 			if err != nil {
 				return nil, errors.Wrapf(err, "chain %q: invalid ibcMulticall", chainCfg.ChainID)
 			}
-			eth, err := chainsevm.Dial(chainCfg.ChainID, chainCfg.EVM.RPC)
-			if err != nil {
-				return nil, errors.Wrapf(err, "creating tx builder for chain %q", chainCfg.ChainID)
-			}
 			builders[chainCfg.ChainID] = evm.New(
 				common.HexToAddress(chainCfg.EVM.ICS26Router),
 				multicall,
-				eth,
 			)
 		default:
 			return nil, errors.Errorf(

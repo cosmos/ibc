@@ -110,11 +110,17 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
-	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, "0xrelayer", mock.Anything, mock.Anything).
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().Address().Return("0xrelayer").Once()
+	txSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+		v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}).Return(v2.RelaySimulation{
+		Operations: []v2.OperationResult{
+			{Type: v2.OperationTypeUpdate, Success: true},
+			{Type: v2.OperationTypePacket, Success: true},
+		},
+	}, nil).Once()
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
@@ -211,11 +217,17 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
-	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, "0xrelayer", mock.Anything, mock.Anything).
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().Address().Return("0xrelayer").Once()
+	txSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+		v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}).Return(v2.RelaySimulation{
+		Operations: []v2.OperationResult{
+			{Type: v2.OperationTypeUpdate, Success: true},
+			{Type: v2.OperationTypePacket, Success: true},
+		},
+	}, nil).Once()
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
@@ -320,11 +332,17 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		Return([][]byte{{0x02}}, nil)
 
 	txBuilder := mocks.NewMockTxBuilder(t)
-	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, "0xrelayer", mock.Anything, mock.Anything).
+	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
-	txSubmitter.EXPECT().Address().Return("0xrelayer").Once()
+	txSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+		v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}).Return(v2.RelaySimulation{
+		Operations: []v2.OperationResult{
+			{Type: v2.OperationTypeUpdate, Success: true},
+			{Type: v2.OperationTypePacket, Success: true},
+		},
+	}, nil).Once()
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),

@@ -60,6 +60,10 @@ func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error)
 	return []byte{1}, nil
 }
 
+func (r *testRPC) CallContract(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error) {
+	return nil, errors.New("unexpected call")
+}
+
 func (r *testRPC) EstimateGasAtBlock(_ context.Context, _ ethereum.CallMsg, block *big.Int) (uint64, error) {
 	r.gasCalls++
 	if block != nil {
@@ -256,7 +260,6 @@ func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 			require.Len(t, rpc.sent, 4)
 			require.Equal(t, rpc.sent[3].Hash().Hex(), submission.TxHash)
 			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
-			require.Equal(t, c.address.Hex(), c.Address())
 			require.Equal(t, testIntent().Data, rpc.sent[3].Data())
 			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
 			for _, tx := range rpc.sent {

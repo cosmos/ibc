@@ -5,7 +5,6 @@
 package mocks
 
 import (
-	"context"
 	"github.com/cosmos/ibc/cli/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -38,8 +37,8 @@ func (_m *MockTxBuilder) EXPECT() *MockTxBuilder_Expecter {
 }
 
 // BuildRelayTxs provides a mock function for the type MockTxBuilder
-func (_mock *MockTxBuilder) BuildRelayTxs(ctx context.Context, from string, clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error) {
-	ret := _mock.Called(ctx, from, clientUpdate, packetRelayItems)
+func (_mock *MockTxBuilder) BuildRelayTxs(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error) {
+	ret := _mock.Called(clientUpdate, packetRelayItems)
 
 	if len(ret) == 0 {
 		panic("no return value specified for BuildRelayTxs")
@@ -47,18 +46,18 @@ func (_mock *MockTxBuilder) BuildRelayTxs(ctx context.Context, from string, clie
 
 	var r0 []v2.RelayTx
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, v2.ClientUpdate, []v2.PacketRelayItem) ([]v2.RelayTx, error)); ok {
-		return returnFunc(ctx, from, clientUpdate, packetRelayItems)
+	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) ([]v2.RelayTx, error)); ok {
+		return returnFunc(clientUpdate, packetRelayItems)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, v2.ClientUpdate, []v2.PacketRelayItem) []v2.RelayTx); ok {
-		r0 = returnFunc(ctx, from, clientUpdate, packetRelayItems)
+	if returnFunc, ok := ret.Get(0).(func(v2.ClientUpdate, []v2.PacketRelayItem) []v2.RelayTx); ok {
+		r0 = returnFunc(clientUpdate, packetRelayItems)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]v2.RelayTx)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, v2.ClientUpdate, []v2.PacketRelayItem) error); ok {
-		r1 = returnFunc(ctx, from, clientUpdate, packetRelayItems)
+	if returnFunc, ok := ret.Get(1).(func(v2.ClientUpdate, []v2.PacketRelayItem) error); ok {
+		r1 = returnFunc(clientUpdate, packetRelayItems)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -71,37 +70,25 @@ type MockTxBuilder_BuildRelayTxs_Call struct {
 }
 
 // BuildRelayTxs is a helper method to define mock.On call
-//   - ctx context.Context
-//   - from string
 //   - clientUpdate v2.ClientUpdate
 //   - packetRelayItems []v2.PacketRelayItem
-func (_e *MockTxBuilder_Expecter) BuildRelayTxs(ctx any, from any, clientUpdate any, packetRelayItems any) *MockTxBuilder_BuildRelayTxs_Call {
-	return &MockTxBuilder_BuildRelayTxs_Call{Call: _e.mock.On("BuildRelayTxs", ctx, from, clientUpdate, packetRelayItems)}
+func (_e *MockTxBuilder_Expecter) BuildRelayTxs(clientUpdate any, packetRelayItems any) *MockTxBuilder_BuildRelayTxs_Call {
+	return &MockTxBuilder_BuildRelayTxs_Call{Call: _e.mock.On("BuildRelayTxs", clientUpdate, packetRelayItems)}
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(ctx context.Context, from string, clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem)) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTxs_Call) Run(run func(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem)) *MockTxBuilder_BuildRelayTxs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
+		var arg0 v2.ClientUpdate
 		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+			arg0 = args[0].(v2.ClientUpdate)
 		}
-		var arg1 string
+		var arg1 []v2.PacketRelayItem
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 v2.ClientUpdate
-		if args[2] != nil {
-			arg2 = args[2].(v2.ClientUpdate)
-		}
-		var arg3 []v2.PacketRelayItem
-		if args[3] != nil {
-			arg3 = args[3].([]v2.PacketRelayItem)
+			arg1 = args[1].([]v2.PacketRelayItem)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
-			arg3,
 		)
 	})
 	return _c
@@ -112,7 +99,7 @@ func (_c *MockTxBuilder_BuildRelayTxs_Call) Return(relayTxs []v2.RelayTx, err er
 	return _c
 }
 
-func (_c *MockTxBuilder_BuildRelayTxs_Call) RunAndReturn(run func(ctx context.Context, from string, clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error)) *MockTxBuilder_BuildRelayTxs_Call {
+func (_c *MockTxBuilder_BuildRelayTxs_Call) RunAndReturn(run func(clientUpdate v2.ClientUpdate, packetRelayItems []v2.PacketRelayItem) ([]v2.RelayTx, error)) *MockTxBuilder_BuildRelayTxs_Call {
 	_c.Call.Return(run)
 	return _c
 }
