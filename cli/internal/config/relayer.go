@@ -13,7 +13,7 @@ import (
 // Client types
 const (
 	ClientTypeAttestation ClientType = "attestation"
-	ClientTypeBesuQBFT    ClientType = "besu-qbft"
+	ClientTypeBesu        ClientType = "besu"
 	ClientTypeRemote      ClientType = "remote"
 )
 
@@ -21,7 +21,7 @@ const (
 const DefaultClearOnStart = true
 
 // clientTypes are the values ClientEnd.Type accepts.
-var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
+var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesu, ClientTypeRemote}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
@@ -50,7 +50,6 @@ type RelayerConfig struct {
 type RelayerChainOverride struct {
 	ChainID            string            `yaml:"chainId"`
 	EVM                *RelayerEVMConfig `yaml:"evm,omitempty"`
-	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
 
@@ -65,8 +64,8 @@ type RelayerChainOverride struct {
 
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
-	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
-	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
+	// PendingTxTimeout sets how long to wait before retrying an unmined transaction or reusing a stalled nonce.
+	PendingTxTimeout *time.Duration `yaml:"pendingTxTimeout,omitempty"`
 }
 
 // ConnectionConfig one bidirectional IBC connection the relayer actively
@@ -86,7 +85,7 @@ type ClientEnd struct {
 	Type     ClientType `yaml:"type"`
 
 	// Params is this client type's settings, decoded per Type by ClientParams:
-	// empty for `attestation` and `besu-qbft`, and
+	// empty for `attestation` and `besu`, and
 	// `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it
 	// is required.
 	Params yaml.RawMessage `yaml:"params,omitempty"`
@@ -122,9 +121,9 @@ type RemoteParams struct {
 // AttestationParams is empty
 type AttestationParams struct{}
 
-// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
-// the two chains and the light client itself.
-type BesuQBFTParams struct{}
+// BesuParams is empty: the Besu provers read everything they need from the
+// two chains and the light client itself.
+type BesuParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -194,8 +193,6 @@ func (c RelayerChainOverride) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errPathf("chainId", "required")
-	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
-		return errPathf("txSubmissionDelay", "must not be negative")
 	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
 		return errPathf("packetBatchSize", "must be positive")
 	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
@@ -214,11 +211,8 @@ func (c RelayerChainOverride) Validate() error {
 }
 
 func (c RelayerEVMConfig) Validate() error {
-	switch {
-	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
-		return errPathf("gasFeeCapMultiplier", "must be positive")
-	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
-		return errPathf("gasTipCapMultiplier", "must be positive")
+	if c.PendingTxTimeout != nil && *c.PendingTxTimeout <= 0 {
+		return errPathf("pendingTxTimeout", "must be positive")
 	}
 
 	return nil
@@ -284,8 +278,8 @@ func (c ClientEnd) ClientParams() (ClientParams, error) {
 	switch c.Type {
 	case ClientTypeAttestation:
 		return decodeYAML[AttestationParams](c.Params)
-	case ClientTypeBesuQBFT:
-		return decodeYAML[BesuQBFTParams](c.Params)
+	case ClientTypeBesu:
+		return decodeYAML[BesuParams](c.Params)
 	case ClientTypeRemote:
 		return decodeYAML[RemoteParams](c.Params)
 	default:
@@ -312,7 +306,7 @@ func (p RemoteParams) Validate() error {
 
 func (AttestationParams) Validate() error { return nil }
 
-func (BesuQBFTParams) Validate() error { return nil }
+func (BesuParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -368,7 +362,7 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 
 func (RemoteParams) isClientParams()      {}
 func (AttestationParams) isClientParams() {}
-func (BesuQBFTParams) isClientParams()    {}
+func (BesuParams) isClientParams()        {}
 
 func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
 	var params T

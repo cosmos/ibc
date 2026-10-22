@@ -132,6 +132,9 @@ type EVMChainConfig struct {
 	WS string `yaml:"ws,omitempty"`
 
 	ICS26Router string `yaml:"ics26Router"`
+
+	// IBCMulticall is the batching contract address.
+	IBCMulticall string `yaml:"ibcMulticall"`
 }
 
 // Attestors is the list of attestors, used both by the relayer
@@ -818,12 +821,19 @@ func (c Config) validateRunnable() error {
 // for the operator to fill in by hand, keyed by YAML path for
 // PrintYAMLWithComments/StoreToFileWithComments.
 func CollectComments(cfg Config) map[string]string {
+	const fillIn = "TODO: fill in"
 	comments := map[string]string{}
 
 	for i, chain := range cfg.Chains {
-		if chain.EVM != nil && chain.EVM.ICS26Router == "" {
+		if chain.EVM == nil {
+			continue
+		}
+		if chain.EVM.ICS26Router == "" {
 			path := fmt.Sprintf("$.chains[%d].evm.ics26Router", i)
-			comments[path] = "TODO: fill in"
+			comments[path] = fillIn
+		}
+		if chain.EVM.IBCMulticall == "" {
+			comments[fmt.Sprintf("$.chains[%d].evm.ibcMulticall", i)] = fillIn
 		}
 	}
 

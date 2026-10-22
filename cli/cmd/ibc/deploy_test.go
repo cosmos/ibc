@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
@@ -79,6 +80,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	// connection share the same sorted "cli-<a>-<b>" name.
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
+	a.Core.Multicall = "0xmulticallA"
 	a.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: "attestation", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
@@ -105,6 +107,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
+	b.Core.Multicall = "0xmulticallB"
 	b.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Type: "attestation", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
@@ -120,7 +123,14 @@ func TestRenderRelayConfig(t *testing.T) {
 	unreferencedSigner, _ := newLocalSignerConfig(t, "unused-signer")
 	cfg := config.Config{
 		Chains: []config.ChainConfig{
-			{ChainID: "1", EVM: &config.EVMChainConfig{RPC: "http://a", ICS26Router: "0xstale"}},
+			{
+				ChainID: "1",
+				EVM: &config.EVMChainConfig{
+					RPC:          "http://a",
+					ICS26Router:  "0xstale",
+					IBCMulticall: "0xstaleMulticall",
+				},
+			},
 		},
 		Signers: config.Signers{watcherSigner, unreferencedSigner},
 	}
@@ -131,10 +141,12 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Len(t, out.Chains, 2)
 	require.Equal(t, "1", out.Chains[0].ChainID)
 	require.Equal(t, "0xrouterA", out.Chains[0].EVM.ICS26Router)
+	require.Equal(t, "0xmulticallA", out.Chains[0].EVM.IBCMulticall)
 	require.Equal(t, "http://a", out.Chains[0].EVM.RPC)
-	// chain 2 is undeclared: minimal entry with just the router
+	// chain 2 is undeclared: minimal entry with the deployed addresses
 	require.Equal(t, "2", out.Chains[1].ChainID)
 	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
+	require.Equal(t, "0xmulticallB", out.Chains[1].EVM.IBCMulticall)
 	require.Empty(t, out.Chains[1].EVM.RPC)
 
 	require.Len(t, out.Connections, 2)
@@ -221,6 +233,7 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainB`)
 	require.Contains(t, rendered, `ics26Router: "" # TODO: fill in`)
+	require.Contains(t, rendered, `ibcMulticall: "" # TODO: fill in`)
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias backing this attestor's key`)
 }
 
@@ -242,18 +255,18 @@ func captureStdout(t *testing.T, fn func()) string {
 	return string(bz)
 }
 
-func TestRenderRelayConfigBesuQBFT(t *testing.T) {
+func TestRenderRelayConfigBesu(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
+		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
 		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
 	})
@@ -261,13 +274,13 @@ func TestRenderRelayConfigBesuQBFT(t *testing.T) {
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
 	require.NoError(t, err)
 	require.Len(t, out.Connections, 1)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
+	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientB.Type)
 	require.Empty(t, out.Connections[0].ClientA.Params)
-	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+	require.Empty(t, out.Attestors, "besu clients need no attestors")
 }
 
-func TestBesuQBFTParamsFlags(t *testing.T) {
+func TestBesuParamsFlags(t *testing.T) {
 	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
 	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
 	const router = "0x00000000000000000000000000000000000000bb"
@@ -294,7 +307,7 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 				flagDeployMaxClockDrift = tc.drift
 			}
 			source := &besuHeadTarget{}
-			params, err := besuQBFTParams(t.Context(), tc.router, source)
+			params, err := besuParams(t.Context(), tc.router, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -302,7 +315,8 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
-			require.Equal(t, deploy.BesuQBFTParams{
+			require.Equal(t, deploy.BesuParams{
+				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
@@ -312,8 +326,8 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 		})
 	}
 
-	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
-	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+	_, err := besuParams(t.Context(), router, &hostOnlyTarget{})
+	require.ErrorContains(t, err, "cannot serve a besu consensus state")
 }
 
 func TestIFTRateLimit(t *testing.T) {
@@ -398,15 +412,15 @@ const (
 	besuHeadTimestamp = 1788200000
 )
 
-// besuHeadTarget is a Besu chain whose head is besuHeadHeight.
+// besuHeadTarget is an IBFT2 Besu chain whose head is besuHeadHeight.
 type besuHeadTarget struct {
 	deploy.Target
 	called bool
 }
 
-func (t *besuHeadTarget) BesuQBFTHead(context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+func (t *besuHeadTarget) BesuHead(context.Context) (*besu.ParsedHeader, error) {
 	t.called = true
-	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
+	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.IBFT2}, nil
 }
 
 // hostOnlyTarget is a chain that cannot serve Besu consensus states.

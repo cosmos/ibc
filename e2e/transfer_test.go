@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -95,14 +96,12 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	})
 }
 
-// A timeout through besu-qbft light clients proves the receipt's absence with
+// A timeout through Besu QBFT light clients proves the receipt's absence with
 // a non-membership proof. Besu cannot move its clock, so the packet expires as
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
-	))
+	spec, runtime := besuMesh(besuChains(t, besu.QBFT, besu.QBFT))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
 }
 
@@ -170,14 +169,26 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 	return nil
 }
 
-// Two Besu QBFT chains relay through besu-qbft light clients: header, account
+// Two Besu QBFT chains relay through Besu QBFT light clients: header, account
 // and storage proofs instead of attestations. Besu is only available outside
 // fast mode, so this skips there.
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
-		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
-	))
+	requireBesuAutoRelay(t, besu.QBFT)
+}
+
+// Two Besu IBFT 2.0 chains relay through the IBFT 2.0 light client, whose
+// commit seals sign a different digest than QBFT's.
+func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
+	t.Parallel()
+	requireBesuAutoRelay(t, besu.IBFT2)
+}
+
+// requireBesuAutoRelay relays a transfer between two Besu chains running
+// consensus through the light client for that consensus.
+func requireBesuAutoRelay(t *testing.T, consensus besu.Consensus) {
+	t.Helper()
+	spec, runtime := besuMesh(besuChains(t, consensus, consensus))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -190,7 +201,7 @@ func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	amount := new(big.Int).Mul(big.NewInt(500_000), big.NewInt(1_000_000_000_000_000_000))
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
 		Amount: amount,
-		Memo:   "transfer-besu-qbft",
+		Memo:   "transfer-besu-" + string(consensus),
 	})
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyEscrowed(ctx))
