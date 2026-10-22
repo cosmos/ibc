@@ -54,9 +54,9 @@ type deployManifest struct {
 	} `json:"tokens"`
 	TargetData map[string]string `json:"targetData"`
 	Clients    []struct {
-		Params struct {
+		Besu struct {
 			Consensus string `json:"consensus"`
-		} `json:"params"`
+		} `json:"besu"`
 	} `json:"clients"`
 }
 
@@ -388,7 +388,7 @@ func (d *deployCLI) requireClientConsensus(t *testing.T, chainID string, consens
 	t.Helper()
 	clients := d.manifest(t, chainID).Clients
 	require.Len(t, clients, 1)
-	require.Equal(t, string(consensus), clients[0].Params.Consensus)
+	require.Equal(t, string(consensus), clients[0].Besu.Consensus)
 }
 
 // besuClient is the `ibc deploy client besu` command for a client on chainID

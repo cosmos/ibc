@@ -125,7 +125,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
 		ClientID:             "cli-2",
-		Type:                 deploy.ClientTypeAttestation,
 		Address:              ref.Address,
 		CounterpartyClientID: "cli-1",
 	})
@@ -411,7 +410,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			m.Core.Multicall = multicall.Address
 			m.TargetData = core.TargetData
 			m.UpsertClient(manifest.Client{
-				ClientID: "besu-2", Type: params.ClientType(), Address: ref.Address, CounterpartyClientID: "besu-1",
+				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
 			})
 			report, err := d.Verify(ctx, m)
 			require.NoError(t, err)

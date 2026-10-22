@@ -82,42 +82,42 @@ func TestRenderRelayConfig(t *testing.T) {
 	a.Core.Router = "0xrouterA"
 	a.Core.Multicall = "0xmulticallA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation", Address: "0xca",
+		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{
-			"threshold": float64(2),
-			"attestors": []any{watcherAddress, "0xUnresolvedAddress"},
+		Attestation: &manifest.AttestationParams{
+			Threshold: 2,
+			Attestors: []string{watcherAddress, "0xUnresolvedAddress"},
 		},
 	})
 	// stray client tracking another chain must not pair
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-9", Type: "attestation",
+		ClientID:            "cli-1-9",
 		CounterpartyChainID: "9", CounterpartyClientID: "cli-1-9",
 	})
 	// a second, custom-named connection between the same chain pair --
 	// exercises the alias seqno suffix, and reuses the same attestor address
 	// watching chain 2 to exercise cross-connection attestor deduplication.
 	a.UpsertClient(manifest.Client{
-		ClientID: "custom-a", Type: "attestation", Address: "0xca2",
+		ClientID: "custom-a", Address: "0xca2",
 		CounterpartyChainID: "2", CounterpartyClientID: "custom-b",
-		Params: map[string]any{
-			"threshold": float64(2),
-			"attestors": []any{watcherAddress},
+		Attestation: &manifest.AttestationParams{
+			Threshold: 2,
+			Attestors: []string{watcherAddress},
 		},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.Core.Multicall = "0xmulticallB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation", Address: "0xcb",
+		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"threshold": float64(2)},
+		Attestation: &manifest.AttestationParams{Threshold: 2},
 	})
 	b.UpsertClient(manifest.Client{
-		ClientID: "custom-b", Type: "attestation", Address: "0xcb2",
+		ClientID: "custom-b", Address: "0xcb2",
 		CounterpartyChainID: "1", CounterpartyClientID: "custom-a",
 		// no configured attestors: must not surface as an attestors: entry
-		Params: map[string]any{"threshold": float64(2)},
+		Attestation: &manifest.AttestationParams{Threshold: 2},
 	})
 
 	unreferencedSigner, _ := newLocalSignerConfig(t, "unused-signer")
@@ -193,7 +193,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	mismatched := manifest.New("2", "evm")
 	mismatched.Core.Router = "0xrouterB"
 	mismatched.UpsertClient(manifest.Client{
-		ClientID: "cli-1", Type: "attestation",
+		ClientID:            "cli-1",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-other",
 	})
 	_, err = renderRelayConfig(cfg, a, mismatched, "signer-a", "signer-b")
@@ -207,17 +207,18 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation",
+		ClientID:            "cli-1-2",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		// unresolvable address: exercises the attestor signer TODO
-		Params: map[string]any{"attestors": []any{"0xUnresolvedAddress"}},
+		Attestation: &manifest.AttestationParams{Attestors: []string{"0xUnresolvedAddress"}},
 	})
 	b := manifest.New("2", "evm")
 	// chain 2's router is left blank on purpose: exercises the ics26Router
 	// TODO alongside the signer TODOs in the same render
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation",
+		ClientID:            "cli-1-2",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Attestation: &manifest.AttestationParams{},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "", "")
@@ -259,16 +260,16 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xca",
+		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200, MaxClockDrift: 60},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xcb",
+		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200, MaxClockDrift: 60},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
@@ -501,7 +502,7 @@ func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type: deploy.ClientTypeAttestation,
+			Attestation: &manifest.AttestationParams{},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
@@ -545,8 +546,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type:   deploy.ClientTypeAttestation,
-			Params: map[string]any{"attestors": []any{attestorAddress}},
+			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddress}},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}

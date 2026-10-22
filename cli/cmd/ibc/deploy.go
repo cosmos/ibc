@@ -566,15 +566,9 @@ func deployShow(_ *cobra.Command, args []string) error {
 
 // attestorsFromClient projects one client's on-chain attestor addresses into
 // attestors
-func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
-	addresses, _ := c.Params["attestors"].([]any)
-
-	out := make(config.Attestors, 0, len(addresses))
-	for _, raw := range addresses {
-		address, ok := raw.(string)
-		if !ok {
-			continue
-		}
+func attestorsFromClient(cfg config.Config, p manifest.AttestationParams, watchedChainID string) config.Attestors {
+	out := make(config.Attestors, 0, len(p.Attestors))
+	for _, address := range p.Attestors {
 		alias, _ := signerAliasForAddress(cfg, address)
 		out = append(out, config.AttestorConfig{
 			ChainID: watchedChainID,
@@ -648,7 +642,7 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) c
 		ChainID:   m.ChainID,
 		Signer:    signer,
 		ClientID:  c.ClientID,
-		Type:      config.ClientType(c.Type),
+		Type:      c.Type(),
 		AutoRelay: config.AutoRelayConfig{Enabled: &autoRelay},
 	}
 }
@@ -677,11 +671,13 @@ func renderRelayConfig(
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		if ca.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		if ca.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *ca.Attestation, b.ChainID))
 		}
-		if cb.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		if cb.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *cb.Attestation, a.ChainID))
 		}
 	}
 	if len(out.Connections) == 0 {
