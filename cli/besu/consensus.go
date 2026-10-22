@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 )
 
@@ -19,12 +20,15 @@ type Consensus string
 
 // Supported consensus protocols.
 const (
-	QBFT Consensus = "qbft"
+	QBFT  Consensus = "qbft"
+	IBFT2 Consensus = "ibft2"
 )
 
-// lightClients is the contract verifying each supported consensus.
+// lightClients is the contract verifying each supported consensus. The
+// contracts share their ABI and differ only in the commit seal digest.
 var lightClients = map[Consensus]*bind.MetaData{
-	QBFT: besuqbft.ContractMetaData,
+	QBFT:  besuqbft.ContractMetaData,
+	IBFT2: besuibft2.ContractMetaData,
 }
 
 // Consensuses lists the supported consensus protocols.

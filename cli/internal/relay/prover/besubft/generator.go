@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package besubft implements prover.Prover for a Besu light client: it reads the client's state from the host chain, fetches sealed
+// Package besubft implements prover.Prover for a Besu light client, QBFT or
+// IBFT 2.0: it reads the client's state from the host chain, fetches sealed
 // headers and eth_getProof results from the Besu chain it tracks and encodes
 // update and membership payloads. The contract verifies everything they
 // carry, checked by simulation at submission.

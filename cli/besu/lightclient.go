@@ -82,7 +82,8 @@ func DeployLightClient(
 	return addr, tx, err
 }
 
-// ReadClientState reads the state of the Besu light client at address.
+// ReadClientState reads the state of the Besu light client at address. The
+// QBFT and IBFT2 clients share their ABI, so either binding reads both.
 func ReadClientState(
 	ctx context.Context,
 	caller bind.ContractCaller,

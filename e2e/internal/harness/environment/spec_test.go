@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 )
 
@@ -421,8 +422,8 @@ func TestBesuClientCounterpartyChain(t *testing.T) {
 	}
 	spec := Spec{
 		Chains: []ChainSpec{
-			ManagedBesu{ID: "chain-a", EVMChainID: 1},
-			ManagedBesu{ID: "chain-b", EVMChainID: 2},
+			ManagedBesu{ID: "chain-a", EVMChainID: 1, Consensus: besu.QBFT},
+			ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.QBFT},
 		},
 		IBCInstances: []IBCInstanceSpec{
 			NewIBCInstance{ID: "ibc-a", Chain: "chain-a", Authority: "deploy-a"},

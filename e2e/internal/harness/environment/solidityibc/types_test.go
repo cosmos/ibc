@@ -15,7 +15,7 @@ import (
 // set) are left to the contract; validate covers only what it cannot see.
 func TestBesuClientConfigValidation(t *testing.T) {
 	valid := BesuClientConfig{
-		Consensus: besu.QBFT, ID: "cli-test", CounterpartyClientID: "cli-other",
+		Consensus: besu.IBFT2, ID: "cli-test", CounterpartyClientID: "cli-other",
 		CounterpartyRouter: common.HexToAddress("0x02"),
 	}
 	require.NoError(t, valid.validate())

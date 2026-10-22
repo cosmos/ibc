@@ -759,7 +759,7 @@ func TestClientStepsBesu(t *testing.T) {
 		},
 		"trustingPeriod": func(p *BesuParams) { p.TrustingPeriod = 1 },
 		"maxClockDrift":  func(p *BesuParams) { p.MaxClockDrift = 1 },
-		"consensus":      func(p *BesuParams) { p.Consensus = "other" },
+		"consensus":      func(p *BesuParams) { p.Consensus = besu.IBFT2 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			conflicting := besuSpec()

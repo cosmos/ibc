@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package besutest provides the Besu QBFT fixture from
+// Package besutest provides the Besu QBFT and IBFT2 fixtures from
 // ibc-contracts for tests in the cli module.
 package besutest
 

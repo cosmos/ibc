@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
@@ -174,6 +175,20 @@ func TestAttestedMeshConnectsEveryChainPair(t *testing.T) {
 	require.NoError(t, environment.Validate(spec, runtime))
 }
 
+// besuChains requests Besu Chains A and B running consensusA and consensusB.
+func besuChains(t *testing.T, consensusA, consensusB besu.Consensus) []environment.ChainSpec {
+	t.Helper()
+	requirements := e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}
+	chains := e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB)
+	for i, consensus := range []besu.Consensus{consensusA, consensusB} {
+		chain, ok := chains[i].(environment.ManagedBesu)
+		require.True(t, ok)
+		chain.Consensus = consensus
+		chains[i] = chain
+	}
+	return chains
+}
+
 // besuMesh declares a fully connected graph of Besu Clients over chains: per
 // Chain pair one Connection whose ends verify each other's sealed Besu
 // headers, so it needs no Attestors. Every chain must run Besu.
@@ -214,8 +229,8 @@ func besuMeshClient(chain environment.ChainID) environment.NewBesuClient {
 
 func TestBesuMesh(t *testing.T) {
 	spec, runtime := besuMesh([]environment.ChainSpec{
-		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2},
-		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1},
+		environment.ManagedBesu{ID: "chain-b", EVMChainID: 2, Consensus: besu.IBFT2},
+		environment.ManagedBesu{ID: "chain-a", EVMChainID: 1, Consensus: besu.IBFT2},
 	})
 
 	require.NoError(t, environment.Validate(spec, runtime))

@@ -3,10 +3,12 @@
 package besu_test
 
 import (
+	"crypto/ecdsa"
 	"math/big"
 	"slices"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -17,7 +19,8 @@ import (
 	"github.com/cosmos/ibc/cli/besu/besutest"
 )
 
-// Each fixture chain's headers parse to the consensus it runs.
+// Each fixture chain's headers parse to the consensus it runs: under the other
+// consensus's digest no seal recovers to a validator.
 func TestParseSealedHeaderFixture(t *testing.T) {
 	for _, consensus := range besu.Consensuses {
 		fixture := besutest.MustFixture(t, consensus)
@@ -142,6 +145,40 @@ func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	parsed, err := besu.ParseSealedHeader(withSeals([][]byte{}))
 	require.NoError(t, err)
 	assert.Empty(t, parsed.Consensus)
+}
+
+// Validator seals under two consensuses leave the chain's consensus unknown,
+// so parsing fails rather than pick one.
+func TestParseSealedHeaderRejectsSealsUnderTwoConsensuses(t *testing.T) {
+	var header types.Header
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t, besu.QBFT).AdjacentUpdate.HeaderRLP, &header))
+	items, _ := splitExtra(t, header.Extra)
+
+	keys := make([]*ecdsa.PrivateKey, len(besu.Consensuses))
+	validators := make([]common.Address, len(keys))
+	for i := range keys {
+		key, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		keys[i], validators[i] = key, crypto.PubkeyToAddress(key.PublicKey)
+	}
+	var err error
+	items[1], err = rlp.EncodeToBytes(validators)
+	require.NoError(t, err)
+
+	seals := make([][]byte, len(keys))
+	for i, consensus := range besu.Consensuses {
+		digest, digestErr := besu.CommitSealDigest(&header, items, consensus)
+		require.NoError(t, digestErr)
+		seals[i], err = crypto.Sign(digest, keys[i])
+		require.NoError(t, err)
+	}
+	items[4], err = rlp.EncodeToBytes(seals)
+	require.NoError(t, err)
+	header.Extra, err = rlp.EncodeToBytes(items)
+	require.NoError(t, err)
+
+	_, err = besu.ParseSealedHeader(&header)
+	require.ErrorContains(t, err, "commit seals recover to header validators under both")
 }
 
 func TestParseSealedHeaderRejectsMalformed(t *testing.T) {
