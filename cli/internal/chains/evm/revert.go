@@ -20,6 +20,7 @@ import (
 )
 
 // revertContracts contains known custom errors from relay calls.
+// Besu QBFT and IBFT2 share the same errors.
 var revertContracts = []*bind.MetaData{
 	ics26router.ContractMetaData, attestation.ContractMetaData, besuqbft.ContractMetaData,
 	ibcmulticall.ContractMetaData, ift.ContractMetaData,

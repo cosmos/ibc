@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package besuqbft implements prover.Prover for a Besu QBFT light client: it
-// reads the client's state from the host chain, fetches sealed headers and
-// eth_getProof results from the Besu chain it tracks and encodes update and
-// membership payloads. The contract verifies everything they carry, checked
-// by simulation at submission.
-package besuqbft
+// Package besubft implements prover.Prover for a Besu light client, QBFT or
+// IBFT 2.0: it reads the client's state from the host chain, fetches sealed
+// headers and eth_getProof results from the Besu chain it tracks and encodes
+// update and membership payloads. The contract verifies everything they
+// carry, checked by simulation at submission.
+package besubft
 
 import (
 	"context"
@@ -24,10 +24,10 @@ import (
 // Host is the chain the light client lives on. It needs no Besu consensus:
 // any EVM chain hosting the contract qualifies.
 type Host interface {
-	BesuQBFTClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
-	// BesuQBFTConsensusStateHash fails when the client stores no consensus
-	// state at height.
-	BesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error)
+	BesuClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
+	// BesuConsensusStateHash fails when the client stores no consensus state
+	// at height.
+	BesuConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error)
 }
 
 // Counterparty is the Besu chain the light client tracks.
@@ -40,7 +40,7 @@ type Counterparty interface {
 	GetRouterProof(ctx context.Context, height uint64, slots []common.Hash) (evm.RouterProof, error)
 }
 
-// Generator implements prover.Prover for one Besu QBFT light client.
+// Generator implements prover.Prover for one Besu light client.
 type Generator struct {
 	host         Host
 	counterparty Counterparty
@@ -50,7 +50,7 @@ type Generator struct {
 // NewGenerator builds the prover for clientID on host, tracking counterparty,
 // and fails fast unless the client proves counterparty's configured router.
 func NewGenerator(ctx context.Context, clientID string, host Host, counterparty Counterparty) (*Generator, error) {
-	state, err := host.BesuQBFTClientState(ctx, clientID)
+	state, err := host.BesuClientState(ctx, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 // fails here unless the client already stores it, since the packet proofs at
 // target would revert.
 func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([][]byte, error) {
-	state, err := g.host.BesuQBFTClientState(ctx, g.clientID)
+	state, err := g.host.BesuClientState(ctx, g.clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 		return nil, nil
 	}
 	if target < trustedHeight {
-		if _, errStored := g.host.BesuQBFTConsensusStateHash(ctx, g.clientID, target); errStored != nil {
+		if _, errStored := g.host.BesuConsensusStateHash(ctx, g.clientID, target); errStored != nil {
 			return nil, fmt.Errorf(
 				"client advanced to height %d past target %d, which it does not store; retry at a newer height: %w",
 				trustedHeight, target, errStored,

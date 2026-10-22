@@ -176,7 +176,7 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 Deploying a working connection between two chains takes `deploy core` on both, then a `deploy client` subcommand on both, each client tracking the other chain. The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) walks that through end to end.
 
-`--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu-qbft`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
+`--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
 `--dry-run` prints the steps a command would take and submits nothing. <!-- [cli/internal/deploy/steps.go: RunSteps] -->
 
@@ -217,11 +217,11 @@ The client lives on `--chain` and watches `--counterparty-chain`. `--attestors` 
 
 Rerunning with the same `--client-id` continues that client. Rerunning with different attestors or a different threshold under the same id fails and lists the differences, because those values are fixed when the client is constructed. <!-- [cli/internal/deploy/steps.go: clientConflicts] -->
 
-### `ibc deploy client besu-qbft`
+### `ibc deploy client besu`
 
-<!-- GEN:cli:cmd:deploy-client-besu-qbft START -->
+<!-- GEN:cli:cmd:deploy-client-besu START -->
 
-Deploy and register a Besu QBFT light client trusting the counterparty head.
+Deploy and register a Besu light client for the counterparty's consensus, trusting its head.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -238,13 +238,13 @@ Deploy and register a Besu QBFT light client trusting the counterparty head.
 
 <!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
 
-<!-- GEN:cli:cmd:deploy-client-besu-qbft END -->
+<!-- GEN:cli:cmd:deploy-client-besu END -->
 
 ```bash
-ibc deploy client besu-qbft --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
+ibc deploy client besu --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
 ```
 
-The client starts trusting the counterparty's current head. Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning with a different router, trusting period or clock drift under the same id fails and lists the differences. See [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md#deploying) for choosing the trusting period.
+The client starts trusting the counterparty's current head, and the head's commit seals decide which light client it deploys: the QBFT one or the IBFT 2.0 one, whose seals sign a different digest. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or clock drift, or after the counterparty's consensus changed, fails and lists the differences. See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
 
 ### `ibc deploy core`
 

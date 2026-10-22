@@ -4,6 +4,7 @@ package evm
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"math/big"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
@@ -123,7 +125,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
 		ClientID:             "cli-2",
-		Type:                 deploy.ClientTypeAttestation,
 		Address:              ref.Address,
 		CounterpartyClientID: "cli-1",
 	})
@@ -352,71 +353,87 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 	require.NotEmpty(t, report.Failed())
 }
 
-// A Besu QBFT client deploys from recorded params alone, registers like any
-// other client, and exposes its state through the reads the prover relies on.
-func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
-	d, sim, _ := newSimDriver(t)
-	ctx := context.Background()
-	fixture := besutest.MustFixture(t)
+// A Besu client deploys the contract for its consensus from recorded params
+// alone, registers like any other client, and exposes its state through the
+// reads the prover relies on.
+func TestProvisionRegisterVerifyBesu(t *testing.T) {
+	for consensus, metadata := range map[besu.Consensus]*bind.MetaData{
+		besu.QBFT:  besuqbft.ContractMetaData,
+		besu.IBFT2: besuibft2.ContractMetaData,
+	} {
+		t.Run(string(consensus), func(t *testing.T) {
+			d, sim, _ := newSimDriver(t)
+			ctx := context.Background()
+			fixture := besutest.MustFixture(t, consensus)
 
-	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
-	require.NoError(t, err)
-	multicall, err := d.ProvisionMulticall(ctx, core.TargetData["accessManager"])
-	require.NoError(t, err)
+			core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
+			require.NoError(t, err)
+			multicall, err := d.ProvisionMulticall(ctx, core.TargetData["accessManager"])
+			require.NoError(t, err)
 
-	// the constructor rejects an expired initial state, so trust the fixture's
-	// state at the current head time
-	head, err := sim.Client().HeaderByNumber(ctx, nil)
-	require.NoError(t, err)
-	consensusState := fixture.InitialConsensusState()
-	consensusState.Timestamp = head.Time
+			// the constructor rejects an expired initial state, so trust the
+			// fixture's state at the current head time
+			head, err := sim.Client().HeaderByNumber(ctx, nil)
+			require.NoError(t, err)
+			consensusState := fixture.InitialConsensusState()
+			consensusState.Timestamp = head.Time
 
-	spec := deploy.ClientSpec{
-		ClientID:             "besu-2",
-		CounterpartyChainID:  "2",
-		CounterpartyClientID: "besu-1",
-		Params: deploy.BesuQBFTParams{
-			IBCRouter:             fixture.RouterAddress,
-			InitialHeight:         fixture.InitialTrustedHeight,
-			InitialConsensusState: consensusState,
-			TrustingPeriod:        fixture.TrustingPeriod,
-			MaxClockDrift:         fixture.MaxClockDrift,
-		},
+			params := deploy.BesuParams{
+				Consensus:             consensus,
+				IBCRouter:             fixture.RouterAddress,
+				InitialHeight:         fixture.InitialTrustedHeight,
+				InitialConsensusState: consensusState,
+				TrustingPeriod:        fixture.TrustingPeriod,
+				MaxClockDrift:         fixture.MaxClockDrift,
+			}
+			spec := deploy.ClientSpec{
+				ClientID:             "besu-2",
+				CounterpartyChainID:  "2",
+				CounterpartyClientID: "besu-1",
+				Params:               params,
+			}
+			ref, err := d.ProvisionClient(ctx, core.Router, spec)
+			require.NoError(t, err)
+
+			// the deployed runtime code is embedded in the consensus's creation code
+			code, err := sim.Client().CodeAt(ctx, common.HexToAddress(ref.Address), nil)
+			require.NoError(t, err)
+			require.NotEmpty(t, code)
+			require.Contains(t, metadata.Bin, hex.EncodeToString(code))
+
+			id, err := d.RegisterClient(ctx, core.Router, spec, ref)
+			require.NoError(t, err)
+			require.Equal(t, "besu-2", id)
+
+			m := manifest.New("1337", "evm")
+			m.Core.Router = core.Router
+			m.Core.Multicall = multicall.Address
+			m.TargetData = core.TargetData
+			m.UpsertClient(manifest.Client{
+				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
+			})
+			report, err := d.Verify(ctx, m)
+			require.NoError(t, err)
+			require.Empty(t, report.Failed())
+
+			state, err := besu.ReadClientState(ctx, sim.Client(), common.HexToAddress(ref.Address))
+			require.NoError(t, err)
+			require.Equal(t, besumsgs.IBesuLightClientMsgsClientState{
+				IbcRouter:      fixture.RouterAddress,
+				LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
+				TrustingPeriod: fixture.TrustingPeriod,
+				MaxClockDrift:  fixture.MaxClockDrift,
+				TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
+			}, state)
+
+			lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
+			require.NoError(t, err)
+			hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
+			require.NoError(t, err)
+
+			want, err := besutest.HashConsensusState(consensusState)
+			require.NoError(t, err)
+			require.Equal(t, want, common.Hash(hash))
+		})
 	}
-	ref, err := d.ProvisionClient(ctx, core.Router, spec)
-	require.NoError(t, err)
-
-	id, err := d.RegisterClient(ctx, core.Router, spec, ref)
-	require.NoError(t, err)
-	require.Equal(t, "besu-2", id)
-
-	m := manifest.New("1337", "evm")
-	m.Core.Router = core.Router
-	m.Core.Multicall = multicall.Address
-	m.TargetData = core.TargetData
-	m.UpsertClient(manifest.Client{
-		ClientID: "besu-2", Type: deploy.ClientTypeBesuQBFT, Address: ref.Address, CounterpartyClientID: "besu-1",
-	})
-	report, err := d.Verify(ctx, m)
-	require.NoError(t, err)
-	require.Empty(t, report.Failed())
-
-	state, err := besu.ReadClientState(ctx, sim.Client(), common.HexToAddress(ref.Address))
-	require.NoError(t, err)
-	require.Equal(t, besumsgs.IBesuLightClientMsgsClientState{
-		IbcRouter:      fixture.RouterAddress,
-		LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
-		TrustingPeriod: fixture.TrustingPeriod,
-		MaxClockDrift:  fixture.MaxClockDrift,
-		TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
-	}, state)
-
-	lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
-	require.NoError(t, err)
-	hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
-	require.NoError(t, err)
-
-	want, err := besutest.HashConsensusState(consensusState)
-	require.NoError(t, err)
-	require.Equal(t, want, common.Hash(hash))
 }

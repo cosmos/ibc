@@ -91,11 +91,11 @@ var (
 		RunE:  deployAttestationClient,
 	}
 
-	cmdDeployClientBesuQBFT = &cobra.Command{
-		Use:   "besu-qbft",
-		Short: "Deploy and register a Besu QBFT light client trusting the counterparty head",
+	cmdDeployClientBesu = &cobra.Command{
+		Use:   "besu",
+		Short: "Deploy and register a Besu light client for the counterparty's consensus, trusting its head",
 		Args:  cobra.NoArgs,
-		RunE:  deployBesuQBFTClient,
+		RunE:  deployBesuClient,
 	}
 
 	cmdDeployStatus = &cobra.Command{
@@ -353,39 +353,41 @@ func attestationParams(
 	}, nil
 }
 
-// besuQBFTParams reads the besu-qbft flags and trusts the counterparty head.
-func besuQBFTParams(
+// besuParams reads the Besu client flags and trusts the counterparty head,
+// whose commit seals decide the consensus the client verifies.
+func besuParams(
 	ctx context.Context,
 	counterpartyRouter string,
 	counterpartyTarget deploy.Target,
-) (deploy.BesuQBFTParams, error) {
+) (deploy.BesuParams, error) {
 	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "--%s", flagNameTrustingPeriod)
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameTrustingPeriod)
 	}
 	if trustingPeriod == 0 {
-		return deploy.BesuQBFTParams{}, errors.Errorf("--%s must be positive", flagNameTrustingPeriod)
+		return deploy.BesuParams{}, errors.Errorf("--%s must be positive", flagNameTrustingPeriod)
 	}
 	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
 	}
 	router, err := config.ParseEVMAddress(counterpartyRouter)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
+		return deploy.BesuParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
 	}
-	source, ok := counterpartyTarget.(deploy.BesuQBFTSource)
+	source, ok := counterpartyTarget.(deploy.BesuSource)
 	if !ok {
-		return deploy.BesuQBFTParams{}, errors.New("counterparty cannot serve a besu-qbft consensus state")
+		return deploy.BesuParams{}, errors.New("counterparty cannot serve a besu consensus state")
 	}
-	height, state, err := source.BesuQBFTHead(ctx)
+	head, err := source.BesuHead(ctx)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrap(err, "read counterparty head")
+		return deploy.BesuParams{}, errors.Wrap(err, "read counterparty head")
 	}
-	return deploy.BesuQBFTParams{
+	return deploy.BesuParams{
+		Consensus:             head.Consensus,
 		IBCRouter:             router,
-		InitialHeight:         height,
-		InitialConsensusState: state,
+		InitialHeight:         head.Height,
+		InitialConsensusState: head.ConsensusState(),
 		TrustingPeriod:        trustingPeriod,
 		MaxClockDrift:         maxClockDrift,
 	}, nil
@@ -412,14 +414,14 @@ func deployAttestationClient(cmd *cobra.Command, _ []string) error {
 	return deployClient(cmd, attestationParams)
 }
 
-func deployBesuQBFTClient(cmd *cobra.Command, _ []string) error {
+func deployBesuClient(cmd *cobra.Command, _ []string) error {
 	return deployClient(cmd, func(
 		ctx context.Context, cfg config.Config, counterpartyChainID string, counterpartyTarget deploy.Target,
 	) (deploy.ClientParams, error) {
 		// newTarget already checked that the counterparty is a configured EVM chain
 		counterparty, _ := cfg.Chain(counterpartyChainID)
-		params, err := besuQBFTParams(ctx, counterparty.EVM.ICS26Router, counterpartyTarget)
-		return params, errors.Wrapf(err, "besu-qbft client tracking chain %s", counterpartyChainID)
+		params, err := besuParams(ctx, counterparty.EVM.ICS26Router, counterpartyTarget)
+		return params, errors.Wrapf(err, "besu client tracking chain %s", counterpartyChainID)
 	})
 }
 
@@ -564,15 +566,9 @@ func deployShow(_ *cobra.Command, args []string) error {
 
 // attestorsFromClient projects one client's on-chain attestor addresses into
 // attestors
-func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
-	addresses, _ := c.Params["attestors"].([]any)
-
-	out := make(config.Attestors, 0, len(addresses))
-	for _, raw := range addresses {
-		address, ok := raw.(string)
-		if !ok {
-			continue
-		}
+func attestorsFromClient(cfg config.Config, p manifest.AttestationParams, watchedChainID string) config.Attestors {
+	out := make(config.Attestors, 0, len(p.Attestors))
+	for _, address := range p.Attestors {
 		alias, _ := signerAliasForAddress(cfg, address)
 		out = append(out, config.AttestorConfig{
 			ChainID: watchedChainID,
@@ -646,7 +642,7 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) c
 		ChainID:   m.ChainID,
 		Signer:    signer,
 		ClientID:  c.ClientID,
-		Type:      config.ClientType(c.Type),
+		Type:      c.Type(),
 		AutoRelay: config.AutoRelayConfig{Enabled: &autoRelay},
 	}
 }
@@ -675,11 +671,13 @@ func renderRelayConfig(
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		if ca.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		if ca.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *ca.Attestation, b.ChainID))
 		}
-		if cb.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		if cb.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *cb.Attestation, a.ChainID))
 		}
 	}
 	if len(out.Connections) == 0 {

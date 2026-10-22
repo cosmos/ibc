@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
@@ -65,10 +66,6 @@ func (f *fakeTarget) HasCode(_ context.Context, address string) (bool, error) {
 func (f *fakeTarget) Head(context.Context) (uint64, uint64, error) { return 10, 1000, nil }
 func (f *fakeTarget) Verify(context.Context, *manifest.Manifest) (Report, error) {
 	return Report{}, nil
-}
-
-func (f *fakeTarget) SupportedClientTypes() []string {
-	return []string{ClientTypeAttestation, ClientTypeBesuQBFT}
 }
 
 // fakeBridge is the on-chain bridge state a fakeTarget records.
@@ -288,13 +285,20 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	require.ErrorContains(t, err, "already deployed with different values")
 	require.ErrorContains(t, err, "attestors")
 	require.ErrorContains(t, err, `["0xb","0xc"]`)
+	require.ErrorContains(t, err, "threshold: deployed 1, requested 2")
 	require.ErrorContains(t, err, "--client-id")
+
+	// a different client type conflicts without comparing params
+	retyped := spec
+	retyped.Params = besuSpec().Params
+	_, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", retyped))
+	require.ErrorContains(t, err, `type: deployed "attestation", requested "besu"`)
 
 	// manifest must still describe the deployed contract
 	m, loadErr := manifest.Load(dir, "1")
 	require.NoError(t, loadErr)
 	c, _ := m.Client("cli-1-2")
-	require.Equal(t, []any{"0xa"}, c.Params["attestors"].([]any))
+	require.Equal(t, []string{"0xa"}, c.Attestation.Attestors)
 }
 
 // initialHeight/initialTimestamp default from the live counterparty head and
@@ -392,8 +396,8 @@ func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	m, err = manifest.Load(dir, "1")
 	require.NoError(t, err)
 	c, _ := m.Client("cli-1-2")
-	require.InDelta(t, 5, c.Params["initialHeight"], 0)
-	require.InDelta(t, 500, c.Params["initialTimestamp"], 0)
+	require.Equal(t, uint64(5), c.Attestation.InitialHeight)
+	require.Equal(t, uint64(500), c.Attestation.InitialTimestamp)
 }
 
 func TestIFTStepsIdempotentAndDuplicateSymbol(t *testing.T) {
@@ -673,12 +677,13 @@ func TestIFTBridgeStepsUnrecordedToken(t *testing.T) {
 	require.Empty(t, m.Tokens)
 }
 
-func besuQBFTSpec() ClientSpec {
+func besuSpec() ClientSpec {
 	return ClientSpec{
 		ClientID:             "cli-2",
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
-		Params: BesuQBFTParams{
+		Params: BesuParams{
+			Consensus:     besu.QBFT,
 			IBCRouter:     common.HexToAddress("0x00000000000000000000000000000000000000cc"),
 			InitialHeight: 112,
 			InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{
@@ -692,8 +697,9 @@ func besuQBFTSpec() ClientSpec {
 	}
 }
 
-// besuQBFTRecord is the manifest record of besuQBFTSpec's params.
-const besuQBFTRecord = `{
+// besuRecord is the manifest record of besuSpec's params.
+const besuRecord = `{
+	"consensus": "qbft",
 	"ibcRouter": "0x00000000000000000000000000000000000000cc",
 	"initialHeight": 112,
 	"initialTimestamp": 1788192445,
@@ -703,17 +709,7 @@ const besuQBFTRecord = `{
 	"maxClockDrift": 15
 }`
 
-// heights must not round through float64 before saving
-func TestSpecToClientBesuQBFTParams(t *testing.T) {
-	spec := besuQBFTSpec()
-	params := spec.Params.(BesuQBFTParams)
-	params.InitialHeight = 1<<53 + 1
-	spec.Params = params
-	client := specToClient(spec, "0xclient")
-	require.Equal(t, params.InitialHeight, client.Params["initialHeight"])
-}
-
-func TestClientStepsBesuQBFT(t *testing.T) {
+func TestClientStepsBesu(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
 	target.hasCode["0xrouter"] = true
@@ -722,7 +718,7 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	m.Core.Router = "0xrouter"
 	require.NoError(t, m.Save(dir))
 
-	spec := besuQBFTSpec()
+	spec := besuSpec()
 
 	res, err := RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", spec))
 	require.NoError(t, err)
@@ -732,16 +728,15 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	require.NoError(t, err)
 	recorded, ok := m.Client("cli-2")
 	require.True(t, ok)
-	require.Equal(t, ClientTypeBesuQBFT, recorded.Type)
 
 	// the manifest records the constructor params
-	got, err := json.Marshal(recorded.Params)
+	got, err := json.Marshal(recorded.Besu)
 	require.NoError(t, err)
-	require.JSONEq(t, besuQBFTRecord, string(got))
+	require.JSONEq(t, besuRecord, string(got))
 
 	// rerun skips; initial trusted state drift is not an identity conflict
-	drifted := besuQBFTSpec()
-	p := drifted.Params.(BesuQBFTParams)
+	drifted := besuSpec()
+	p := drifted.Params.(BesuParams)
 	p.InitialHeight, p.InitialConsensusState.Timestamp = 200, 1788192600
 	drifted.Params = p
 	res, err = RunSteps(context.Background(), slog.Default(), false, ClientSteps(target, dir, "1", drifted))
@@ -750,16 +745,17 @@ func TestClientStepsBesuQBFT(t *testing.T) {
 	require.Equal(t, 1, target.registers)
 
 	// identity fields do conflict
-	for name, mutate := range map[string]func(*BesuQBFTParams){
-		"ibcRouter": func(p *BesuQBFTParams) {
+	for name, mutate := range map[string]func(*BesuParams){
+		"ibcRouter": func(p *BesuParams) {
 			p.IBCRouter = common.HexToAddress("0x00000000000000000000000000000000000000dd")
 		},
-		"trustingPeriod": func(p *BesuQBFTParams) { p.TrustingPeriod = 1 },
-		"maxClockDrift":  func(p *BesuQBFTParams) { p.MaxClockDrift = 1 },
+		"trustingPeriod": func(p *BesuParams) { p.TrustingPeriod = 1 },
+		"maxClockDrift":  func(p *BesuParams) { p.MaxClockDrift = 1 },
+		"consensus":      func(p *BesuParams) { p.Consensus = besu.IBFT2 },
 	} {
 		t.Run(name, func(t *testing.T) {
-			conflicting := besuQBFTSpec()
-			p := conflicting.Params.(BesuQBFTParams)
+			conflicting := besuSpec()
+			p := conflicting.Params.(BesuParams)
 			mutate(&p)
 			conflicting.Params = p
 			_, runErr := RunSteps(

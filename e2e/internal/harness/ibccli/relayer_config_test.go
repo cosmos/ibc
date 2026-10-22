@@ -202,13 +202,13 @@ func testRelayerConfig() RelayerConfig {
 
 func TestClientTypesPerEnd(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].A.ClientType = clientkind.BesuQBFT
-	cfg.Connections[0].B.ClientType = clientkind.BesuQBFT
+	cfg.Connections[0].A.ClientType = clientkind.Besu
+	cfg.Connections[0].B.ClientType = clientkind.Besu
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientB.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientB.Type)
 	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
 	require.Empty(t, file.Attestors)
 	require.Equal(t, []signerConfig{
@@ -219,7 +219,7 @@ func TestClientTypesPerEnd(t *testing.T) {
 	cfg.Connections[0].B.ClientType = clientkind.Attestation
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 
 	// a prover URL overrides both ends
