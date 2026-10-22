@@ -66,7 +66,7 @@ Add a chain entry to the config.
 ibc config add-chain --chain-id 41001 --rpc http://localhost:8545
 ```
 
-Leave `--router` out until the chain has a router to point at. `ibc deploy render-config` prints the finished chain entries, with the router addresses filled in from the manifests. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
+Leave `--router` out until the chain has a router to point at. `ibc deploy render-config` prints the finished chain entries, with the router and multicall addresses filled in from the manifests. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
 ### `ibc config new`
 
@@ -263,6 +263,10 @@ Deploy the core IBC routing stack on one chain.
 <!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-core END -->
+
+Deploys the access manager, router, and multicall. The manifest records the
+proxies as `core.router` and `core.multicall`. Rerunning resumes unfinished
+deployment steps and skips contracts already deployed. <!-- [cli/internal/deploy/steps.go: CoreSteps] -->
 
 ### `ibc deploy gmp`
 

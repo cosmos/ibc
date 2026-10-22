@@ -25,6 +25,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/evmiftsendcall"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27account"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
@@ -173,6 +174,43 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 			"ics26RouterImplementation": implAddr.Hex(),
 		},
 	}, nil
+}
+
+// ProvisionMulticall deploys an initialized proxy and opens multicall to public relayers.
+func (d *Driver) ProvisionMulticall(ctx context.Context, accessManager string) (deploy.MulticallRef, error) {
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return deploy.MulticallRef{}, err
+	}
+	amAddr := common.HexToAddress(accessManager)
+	am, err := accessmanager.NewAccessManager(amAddr, d.backend)
+	if err != nil {
+		return deploy.MulticallRef{}, err
+	}
+	implAddr, implTx, _, err := ibcmulticall.DeployContract(opts, d.backend)
+	if err != nil {
+		return deploy.MulticallRef{}, fmt.Errorf("deploy IBCMulticall implementation: %w", err)
+	}
+	if err = d.awaitMined(ctx, "deploy IBCMulticall implementation", implTx); err != nil {
+		return deploy.MulticallRef{}, err
+	}
+	addr, err := d.deployProxy(ctx, opts, "IBCMulticall", ibcmulticall.ContractMetaData, implAddr, amAddr)
+	if err != nil {
+		return deploy.MulticallRef{}, err
+	}
+	contractABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	if err != nil {
+		return deploy.MulticallRef{}, err
+	}
+	selectors := [][4]byte{[4]byte(contractABI.Methods["multicall"].ID)}
+	roleTx, err := am.SetTargetFunctionRole(opts, addr, selectors, uint64(math.MaxUint64))
+	if err != nil {
+		return deploy.MulticallRef{}, fmt.Errorf("set multicall role: %w", err)
+	}
+	if err = d.awaitMined(ctx, "set multicall role", roleTx); err != nil {
+		return deploy.MulticallRef{}, err
+	}
+	return deploy.MulticallRef{Address: addr.Hex(), Implementation: implAddr.Hex()}, nil
 }
 
 // ProvisionClient deploys a light client contract.
