@@ -35,7 +35,7 @@ It shares the tutorial's keystore, so the attestor key generated there is alread
 
 ## 2. Write its configuration
 
-Write the attestor's configuration file, reading the router address and your own signing address from the deployment:
+Write the attestor's configuration file, reading the router address from the deployment:
 
 ```bash
 cat > ~/.ibc/ibc-attestor-41002.yml <<EOF

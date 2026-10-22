@@ -65,10 +65,12 @@ chains:
       rpc: https://ethereum-rpc.example.com
       ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
 relayer:
   dispatchPollInterval: 3s
   clearOnStart: false
@@ -76,9 +78,7 @@ relayer:
   chainOverrides:
     - chainId: "1"
       evm:
-        gasFeeCapMultiplier: 1.5
-        gasTipCapMultiplier: 1.5
-      txSubmissionDelay: 2s
+        pendingTxTimeout: 2m
       packetBatchSize: 20
       packetBatchTimeout: 10s
       clearInterval: 15m
@@ -231,12 +231,13 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | **required** to run | Address of the ICS26 router on the chain. |
+| `evm.ibcMulticall` | `string` | optional | The batching contract address. |
 
 <!-- [config.go:L119](cli/internal/config/config.go#L119) -->
 
 <!-- GEN:config:chains END -->
 
-`ibc deploy core` deploys the router. <!-- [cli/internal/deploy/steps.go: RunSteps] --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
+`ibc deploy core` deploys the router and multicall. <!-- [cli/internal/deploy/steps.go: CoreSteps] --> Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
 The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: resolveDeployerAlias] -->
 
@@ -258,7 +259,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it is required. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L74](cli/internal/config/relayer.go#L74) -->
+<!-- [relayer.go:L73](cli/internal/config/relayer.go#L73) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -289,17 +290,17 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
-| `chainOverrides[].txSubmissionDelay` | `duration` | `2s` | Minimum delay between two transaction submissions on the chain. |
 | `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
-| `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
-| `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
+| `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
 
-<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
+
+Each EVM submission estimates its fee cap as twice the latest block's base fee plus the node's suggested tip. Replacement attempts increase the fee cap and tip by 20%, rounded up with a minimum increase of one wei, within a ceiling of four times that fresh estimate. The ceiling stays fixed during a submission's retries and is recalculated from fresh node data on the next submission. <!-- [cli/internal/txsubmitter/evm/txops.go: estimateFees] --> <!-- [cli/internal/txsubmitter/evm/txops.go: bump] --> <!-- [cli/internal/txsubmitter/evm/evm.go: TxSubmitter.Submit] -->
 
 Add an override only when a chain needs different behavior:
 
@@ -308,12 +309,10 @@ relayer:
   dispatchPollInterval: 5s
   chainOverrides:
     - chainId: "41002"
-      txSubmissionDelay: 3s
       packetBatchSize: 25
       packetBatchTimeout: 15s
       evm:
-        gasFeeCapMultiplier: 1.2
-        gasTipCapMultiplier: 1.1
+        pendingTxTimeout: 3m
 ```
 
 Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: Options] -->
@@ -334,7 +333,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L143](cli/internal/config/config.go#L143) -->
+<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -362,7 +361,7 @@ attestors:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L143](cli/internal/config/config.go#L143) -->
+<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -386,7 +385,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -416,7 +415,7 @@ signers:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
 
 <!-- GEN:config:signers:remote END -->
 

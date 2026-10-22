@@ -702,6 +702,72 @@ func TestPacketWriteAckStatus(t *testing.T) {
 	})
 }
 
+func TestPacketWriteAckStatusLogAddress(t *testing.T) {
+	packet := testPacket()
+	routerAddr := common.HexToAddress(routerAddress)
+	appAddr := common.HexToAddress("0x0000000000000000000000000000000000000bad")
+	appAck := writeAckLog(t, appAddr, packet, [][]byte{{0x01}})
+	malformedAppAck := *appAck
+	malformedAppAck.Data = []byte{0xff}
+	malformedRouterAck := malformedAppAck
+	malformedRouterAck.Address = routerAddr
+
+	for _, tt := range []struct {
+		name       string
+		logs       []*types.Log
+		wantStatus v2.WriteAckStatus
+		wantErr    error
+	}{
+		{
+			name: "appSuccessBeforeRouterError",
+			logs: []*types.Log{
+				appAck,
+				writeAckLog(t, routerAddr, packet, [][]byte{errorAcknowledgement[:]}),
+			},
+			wantStatus: v2.WriteAckStatusError,
+		},
+		{
+			name: "malformedAppLogBeforeRouterSuccess",
+			logs: []*types.Log{
+				&malformedAppAck,
+				writeAckLog(t, routerAddr, packet, [][]byte{{0x01}}),
+			},
+			wantStatus: v2.WriteAckStatusSuccess,
+		},
+		{
+			name:       "appLogOnly",
+			logs:       []*types.Log{appAck},
+			wantStatus: v2.WriteAckStatusUnknown,
+			wantErr:    v2.ErrWriteAckNotFoundForPacket,
+		},
+		{
+			name:       "malformedAppLogOnly",
+			logs:       []*types.Log{&malformedAppAck},
+			wantStatus: v2.WriteAckStatusUnknown,
+			wantErr:    v2.ErrWriteAckNotFoundForPacket,
+		},
+		{
+			name:       "malformedRouterLog",
+			logs:       []*types.Log{&malformedRouterAck},
+			wantStatus: v2.WriteAckStatusUnknown,
+			wantErr:    v2.ErrWriteAckDecoding,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			client, eth := newTestClient(t)
+			eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{Logs: tt.logs}, nil).Once()
+
+			status, err := client.PacketWriteAckStatus(
+				ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient,
+			)
+
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, tt.wantStatus, status)
+		})
+	}
+}
+
 func TestGetAttestationSet(t *testing.T) {
 	lightClientAddress := common.HexToAddress("0x00000000000000000000000000000000000abc")
 

@@ -64,6 +64,9 @@ UPDATE packets SET
     recv_tx_hash = NULL,
     recv_tx_time = NULL,
     recv_tx_relayer_address = NULL,
+    write_ack_tx_hash = NULL,
+    write_ack_tx_time = NULL,
+    write_ack_status = NULL,
     updated_at = CURRENT_TIMESTAMP
 WHERE source_chain_id = sqlc.arg(source_chain_id)
 AND packet_source_client_id = sqlc.arg(packet_source_client_id)

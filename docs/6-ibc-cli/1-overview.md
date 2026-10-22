@@ -31,7 +31,7 @@ You can deploy the IBC Solidity contracts to an EVM chain with an RPC endpoint a
 
 It deploys the following contracts:
 
-- The core routing stack: an access manager and the [ICS26Router](../5-ibc-solidity-contracts/2-ics26-router.md) behind a proxy.
+- The core routing stack: an access manager, the [ICS26Router](../5-ibc-solidity-contracts/2-ics26-router.md), and `IBCMulticall`, with both contracts behind proxies.
 - A light client on each chain tracking the other, registered on the router: an [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md), or a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md) when the tracked chain runs Besu QBFT.
 - The [ICS27GMP](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) app and its account logic.
 - [IFT](../5-ibc-solidity-contracts/4-ift-contracts.md) token contracts, and the bridges between them.
@@ -40,7 +40,7 @@ Signer keys, contract addresses, client IDs, and finality settings all have to s
 
 Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to learn the full process of deploying IBC between two chains and sending a token.
 
-Deployment is done from a single key. It becomes the access manager's admin, which governs the router and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
+Deployment is done from a single key. It becomes the access manager's admin, which governs the router, multicall, and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
 
 ## The relayer
 

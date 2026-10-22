@@ -21,11 +21,13 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
+	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 const simChainID = 1337 // ethclient/simulated fixed chain id
@@ -78,6 +80,9 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	require.NotEmpty(t, router)
 	require.NotEmpty(t, core.TargetData["accessManager"])
 	require.NotEmpty(t, core.TargetData["ics26RouterImplementation"])
+	multicall, err := d.ProvisionMulticall(ctx, core.TargetData["accessManager"])
+	require.NoError(t, err)
+	require.NotEmpty(t, multicall.Implementation)
 
 	// not registered yet
 	_, registered, err := d.ClientRegistered(ctx, router, "cli-2")
@@ -114,6 +119,7 @@ func TestProvisionRegisterVerify(t *testing.T) {
 
 	m := manifest.New("1337", "evm")
 	m.Core.Router = router
+	m.Core.Multicall = multicall.Address
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
 		ClientID:             "cli-2",
@@ -124,6 +130,59 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	report, err := d.Verify(ctx, m)
 	require.NoError(t, err)
 	require.Empty(t, report.Failed())
+
+	t.Run("relay permissions", func(t *testing.T) {
+		am, accessErr := accessmanager.NewAccessManager(
+			common.HexToAddress(core.TargetData["accessManager"]), d.backend,
+		)
+		require.NoError(t, accessErr)
+		multicallABI, accessErr := ibcmulticall.ContractMetaData.GetAbi()
+		require.NoError(t, accessErr)
+		routerABI, accessErr := ics26router.ContractMetaData.GetAbi()
+		require.NoError(t, accessErr)
+		caller := common.HexToAddress("0x1234")
+		multicallAddress := common.HexToAddress(multicall.Address)
+		routerAddress := common.HexToAddress(router)
+		opts := &bind.CallOpts{Context: ctx}
+
+		permission, accessErr := am.CanCall(
+			opts, caller, multicallAddress, [4]byte(multicallABI.Methods["multicall"].ID),
+		)
+		require.NoError(t, accessErr)
+		require.True(t, permission.Immediate, "multicall must be publicly callable")
+
+		permission, accessErr = am.CanCall(
+			opts, multicallAddress, routerAddress, [4]byte(routerABI.Methods["recvPacket"].ID),
+		)
+		require.NoError(t, accessErr)
+		require.True(t, permission.Immediate, "multicall must be allowed to relay packets")
+
+		permission, accessErr = am.CanCall(
+			opts, caller, multicallAddress, [4]byte(multicallABI.Methods["upgradeToAndCall"].ID),
+		)
+		require.NoError(t, accessErr)
+		require.False(t, permission.Immediate, "multicall upgrades must remain restricted")
+
+		permission, accessErr = am.CanCall(
+			opts, multicallAddress, routerAddress, [4]byte(routerABI.Methods["addClient"].ID),
+		)
+		require.NoError(t, accessErr)
+		require.False(t, permission.Immediate, "multicall must not be allowed to register clients")
+	})
+
+	t.Run("missing multicall", func(t *testing.T) {
+		broken := *m
+		broken.Core.Multicall = ""
+		broken.Clients = []manifest.Client{m.Clients[0]}
+		broken.Clients[0].Address = common.HexToAddress("0x1234").Hex()
+		result, verifyErr := d.Verify(ctx, &broken)
+		require.NoError(t, verifyErr)
+		require.Len(t, result.Failed(), 2)
+		require.Equal(t, "client cli-2 address matches", result.Failed()[0].Name)
+		require.Contains(t, result.Failed(), deploy.Check{
+			Name: "core multicall recorded", Status: deploy.CheckFailed, Detail: "manifest has no multicall",
+		})
+	})
 
 	// verification catches drift
 	broken := *m
@@ -254,6 +313,8 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 
 	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
 	require.NoError(t, err)
+	multicall, err := d.ProvisionMulticall(ctx, core.TargetData["accessManager"])
+	require.NoError(t, err)
 	gmp, err := d.ProvisionGMP(ctx, core.Router, core.TargetData["accessManager"])
 	require.NoError(t, err)
 	require.NoError(t, d.RegisterApp(ctx, core.Router, gmp.Address, deploy.GMPPortID))
@@ -267,6 +328,7 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 
 	m := manifest.New("1337", "evm")
 	m.Core.Router = core.Router
+	m.Core.Multicall = multicall.Address
 	m.TargetData = core.TargetData
 	m.GMP = &manifest.GMP{Address: gmp.Address, AccountLogic: gmp.AccountLogic, Port: deploy.GMPPortID}
 	m.UpsertToken(manifest.Token{Symbol: "FOO", Name: "Foo", Address: token.Address, Owner: owner.Hex()})
@@ -299,6 +361,8 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 
 	core, err := d.ProvisionCore(ctx, deploy.CoreParams{})
 	require.NoError(t, err)
+	multicall, err := d.ProvisionMulticall(ctx, core.TargetData["accessManager"])
+	require.NoError(t, err)
 
 	// the constructor rejects an expired initial state, so trust the fixture's
 	// state at the current head time
@@ -328,6 +392,7 @@ func TestProvisionRegisterVerifyBesuQBFT(t *testing.T) {
 
 	m := manifest.New("1337", "evm")
 	m.Core.Router = core.Router
+	m.Core.Multicall = multicall.Address
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
 		ClientID: "besu-2", Type: deploy.ClientTypeBesuQBFT, Address: ref.Address, CounterpartyClientID: "besu-1",
