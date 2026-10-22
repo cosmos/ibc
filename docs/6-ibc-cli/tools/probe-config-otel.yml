@@ -41,9 +41,7 @@ relayer:
   chainOverrides:
     - chainId: "1"
       evm:
-        gasFeeCapMultiplier: 1.5
-        gasTipCapMultiplier: 1.5
-      txSubmissionDelay: 2s
+        pendingTxTimeout: 2m
       packetBatchSize: 20
       packetBatchTimeout: 10s
     - chainId: "8453"

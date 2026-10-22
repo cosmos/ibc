@@ -18,7 +18,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 )
 
-func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
+func TestSealedHeaderRejectsNonBesu(t *testing.T) {
 	ctx := context.Background()
 	client, eth := newTestClient(t)
 
@@ -29,7 +29,7 @@ func TestSealedHeaderRejectsNonQBFT(t *testing.T) {
 	require.ErrorContains(t, err, "parse header 7: extra data list")
 }
 
-func TestBesuQBFTClientState(t *testing.T) {
+func TestBesuClientState(t *testing.T) {
 	ctx := context.Background()
 	lightClientAddress := common.HexToAddress("0x00000000000000000000000000000000000abc")
 	routerAddr := common.HexToAddress(routerAddress)
@@ -69,7 +69,7 @@ func TestBesuQBFTClientState(t *testing.T) {
 			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: getClientStateCallData}, (*big.Int)(nil),
 		).Return(output, nil).Once()
 
-		got, err := client.BesuQBFTClientState(ctx, "besu-0")
+		got, err := client.BesuClientState(ctx, "besu-0")
 		require.NoError(t, err)
 		assert.Equal(t, state, got)
 	})
@@ -90,7 +90,7 @@ func TestBesuQBFTClientState(t *testing.T) {
 			ctx, ethereum.CallMsg{To: &lightClientAddress, Data: callData}, (*big.Int)(nil),
 		).Return(output, nil).Once()
 
-		got, err := client.BesuQBFTConsensusStateHash(ctx, "besu-0", 112)
+		got, err := client.BesuConsensusStateHash(ctx, "besu-0", 112)
 		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	})

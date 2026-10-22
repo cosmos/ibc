@@ -28,9 +28,10 @@ type Manifest struct {
 	TargetData             map[string]string `json:"targetData,omitempty"`
 }
 
-// Core holds the ICS26 routing endpoint. The address format is target-specific.
+// Core holds the routing and batching endpoints. The address format is target-specific.
 type Core struct {
-	Router string `json:"router"`
+	Router    string `json:"router"`
+	Multicall string `json:"multicall"`
 }
 
 // Client is one light client registered on the chain's router.

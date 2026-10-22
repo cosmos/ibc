@@ -28,6 +28,9 @@ type TxSubmitter interface {
 
 var _ TxSubmitter = (*evm.TxSubmitter)(nil)
 
+// ErrBusy indicates that a submission should be retried when capacity is available.
+var ErrBusy = evm.ErrBusy
+
 // Set holds one tx submitter per (chain, signer) pair relayed by
 // the configured routes. A chain may carry several signers when different
 // clients on it are relayed by different routes.
@@ -68,14 +71,13 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 			return nil, errors.Errorf("unknown signer %q for chain %q", pair.SignerAlias, pair.ChainID)
 		}
 
-		opts := evm.ChainOptions{TxSubmissionDelay: evm.DefaultTxSubmissionDelay}
+		var opts evm.ChainOptions
 		if override, ok := cfg.Relayer.ChainOverride(pair.ChainID); ok {
-			if override.TxSubmissionDelay != nil {
-				opts.TxSubmissionDelay = *override.TxSubmissionDelay
-			}
 			if override.EVM != nil {
-				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
-				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
+				e := override.EVM
+				if e.PendingTxTimeout != nil {
+					opts.PendingTxTimeout = *e.PendingTxTimeout
+				}
 			}
 		}
 

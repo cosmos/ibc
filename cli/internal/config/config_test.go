@@ -1011,10 +1011,12 @@ func TestConfigAccessors(t *testing.T) {
 }
 
 func TestCollectComments(t *testing.T) {
+	const fillIn = "TODO: fill in"
 	cfg := Config{
 		Chains: []ChainConfig{
 			{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: ""}},
 			{ChainID: "2", EVM: &EVMChainConfig{ICS26Router: "0xabc"}},
+			{ChainID: "3", EVM: &EVMChainConfig{ICS26Router: "0xabc"}},
 		},
 		Relayer: RelayerConfig{Connections: []ConnectionConfig{
 			{ClientA: ClientEnd{ChainID: "1"}, ClientB: ClientEnd{ChainID: "2", Signer: "relayer-key"}},
@@ -1027,18 +1029,26 @@ func TestCollectComments(t *testing.T) {
 	}
 
 	require.Equal(t, map[string]string{
-		"$.chains[0].evm.ics26Router":             "TODO: fill in",
+		"$.chains[0].evm.ics26Router":             fillIn,
+		"$.chains[0].evm.ibcMulticall":            fillIn,
+		"$.chains[1].evm.ibcMulticall":            fillIn,
+		"$.chains[2].evm.ibcMulticall":            fillIn,
 		"$.relayer.connections[0].clientA.signer": "TODO: signers[] alias that submits relay txs on chainA",
 		"$.attestors[0].signer":                   "TODO: signers[] alias backing this attestor's key",
 		"$.attestors[0].finalityOffset":           finalityOffsetTODO,
 		"$.attestors[1].finalityOffset":           finalityOffsetTODO,
 	}, CollectComments(cfg))
 
+	require.Equal(t, map[string]string{
+		"$.chains[0].evm.ics26Router":  fillIn,
+		"$.chains[0].evm.ibcMulticall": fillIn,
+	}, CollectComments(Config{Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{}}}}))
+
 	// nothing left blank -> only the always-on finalityOffset reminder remains
 	require.Equal(t, map[string]string{
 		"$.attestors[0].finalityOffset": finalityOffsetTODO,
 	}, CollectComments(Config{
-		Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: "0xabc"}}},
+		Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: "0xabc", IBCMulticall: "0xdef"}}},
 		Relayer: RelayerConfig{Connections: []ConnectionConfig{
 			{ClientA: ClientEnd{ChainID: "1", Signer: "a"}, ClientB: ClientEnd{ChainID: "2", Signer: "b"}},
 		}},
