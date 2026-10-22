@@ -45,6 +45,7 @@ type BesuParams struct {
 	InitialConsensusState besumsgs.IBesuLightClientMsgsConsensusState
 	TrustingPeriod        uint64
 	MaxClockDrift         uint64
+	TrustLevel            besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
 func (BesuParams) clientParams() {}

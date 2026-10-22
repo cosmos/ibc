@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/evm"
@@ -31,6 +34,7 @@ import (
 const (
 	flagNameTrustingPeriod = "trusting-period"
 	flagNameMaxClockDrift  = "max-clock-drift"
+	flagNameTrustLevel     = "trust-level"
 )
 
 var (
@@ -48,6 +52,7 @@ var (
 	flagDeployTimestamp       uint64
 	flagDeployTrustingPeriod  time.Duration
 	flagDeployMaxClockDrift   time.Duration
+	flagDeployTrustLevel      string
 
 	flagDeployRenderSignerA  string
 	flagDeployRenderSignerB  string
@@ -371,6 +376,10 @@ func besuParams(
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
 	}
+	level, err := trustLevel(flagDeployTrustLevel)
+	if err != nil {
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameTrustLevel)
+	}
 	router, err := config.ParseEVMAddress(counterpartyRouter)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
@@ -390,7 +399,27 @@ func besuParams(
 		InitialConsensusState: head.ConsensusState(),
 		TrustingPeriod:        trustingPeriod,
 		MaxClockDrift:         maxClockDrift,
+		TrustLevel:            level,
 	}, nil
+}
+
+// defaultTrustLevel is the --trust-level default, besu.DefaultTrustLevel as n/d.
+var defaultTrustLevel = fmt.Sprintf("%d/%d", besu.DefaultTrustLevel.Numerator, besu.DefaultTrustLevel.Denominator)
+
+// trustLevel parses n/d, which the contract accepts from one third to one.
+func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
+	numerator, denominator, _ := strings.Cut(s, "/")
+	n, errN := strconv.ParseUint(numerator, 10, 8)
+	d, errD := strconv.ParseUint(denominator, 10, 8)
+	switch {
+	case errN != nil || errD != nil:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("want n/d, each at most 255, got %q", s)
+	case d == 0:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("denominator must not be zero, got %q", s)
+	case n > d || 3*n < d:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 1, got %q", s)
+	}
+	return besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: uint8(n), Denominator: uint8(d)}, nil
 }
 
 // wholeSeconds converts a duration into the contract's seconds, truncating

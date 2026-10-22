@@ -693,6 +693,7 @@ func besuSpec() ClientSpec {
 			},
 			TrustingPeriod: 1209600,
 			MaxClockDrift:  15,
+			TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
 		},
 	}
 }
@@ -706,7 +707,8 @@ const besuRecord = `{
 	"initialStateRoot": "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
 	"initialValidators": ["0x00000000000000000000000000000000000000AA"],
 	"trustingPeriod": 1209600,
-	"maxClockDrift": 15
+	"maxClockDrift": 15,
+	"trustLevel": {"numerator": 2, "denominator": 3}
 }`
 
 func TestClientStepsBesu(t *testing.T) {
@@ -751,7 +753,10 @@ func TestClientStepsBesu(t *testing.T) {
 		},
 		"trustingPeriod": func(p *BesuParams) { p.TrustingPeriod = 1 },
 		"maxClockDrift":  func(p *BesuParams) { p.MaxClockDrift = 1 },
-		"consensus":      func(p *BesuParams) { p.Consensus = besu.IBFT2 },
+		"trustLevel": func(p *BesuParams) {
+			p.TrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}
+		},
+		"consensus": func(p *BesuParams) { p.Consensus = besu.IBFT2 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			conflicting := besuSpec()

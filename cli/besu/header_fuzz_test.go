@@ -88,6 +88,7 @@ func FuzzParseSealedHeader(f *testing.F) {
 			got = append(got, crypto.PubkeyToAddress(*pubkey))
 		}
 		require.Equal(t, want, got, "not one seal per validator that signed, in signer order")
+		require.Equal(t, want, parsed.Signers)
 
 		reparsed, err := besu.ParseSealedHeader(&sorted)
 		require.NoError(t, err)

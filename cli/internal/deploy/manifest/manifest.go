@@ -59,14 +59,22 @@ type AttestationParams struct {
 // BesuParams are the constructor params of a Besu client. Periods are in
 // seconds.
 type BesuParams struct {
-	Consensus         string   `json:"consensus"`
-	IBCRouter         string   `json:"ibcRouter"`
-	InitialHeight     uint64   `json:"initialHeight"`
-	InitialTimestamp  uint64   `json:"initialTimestamp"`
-	InitialStateRoot  string   `json:"initialStateRoot"`
-	InitialValidators []string `json:"initialValidators"`
-	TrustingPeriod    uint64   `json:"trustingPeriod"`
-	MaxClockDrift     uint64   `json:"maxClockDrift"`
+	Consensus         string     `json:"consensus"`
+	IBCRouter         string     `json:"ibcRouter"`
+	InitialHeight     uint64     `json:"initialHeight"`
+	InitialTimestamp  uint64     `json:"initialTimestamp"`
+	InitialStateRoot  string     `json:"initialStateRoot"`
+	InitialValidators []string   `json:"initialValidators"`
+	TrustingPeriod    uint64     `json:"trustingPeriod"`
+	MaxClockDrift     uint64     `json:"maxClockDrift"`
+	TrustLevel        TrustLevel `json:"trustLevel"`
+}
+
+// TrustLevel is the fraction of the trusted validators that must seal an
+// update.
+type TrustLevel struct {
+	Numerator   uint8 `json:"numerator"`
+	Denominator uint8 `json:"denominator"`
 }
 
 // Type is the client type c records params for, or "" if it records none.

@@ -270,7 +270,7 @@ func (d *Driver) provisionBesu(
 			LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
 			TrustingPeriod: params.TrustingPeriod,
 			MaxClockDrift:  params.MaxClockDrift,
-			TrustLevel:     besu.DefaultTrustLevel,
+			TrustLevel:     params.TrustLevel,
 		},
 		params.InitialConsensusState,
 		common.HexToAddress(router),

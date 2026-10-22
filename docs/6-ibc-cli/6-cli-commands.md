@@ -229,6 +229,7 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
 | `--max-clock-drift <duration>` | `1m0s` | How far ahead of this chain's block time a counterparty header may be. |
+| `--trust-level <string>` | `2/3` | Fraction n/d of the trusted validators that must seal an update, from 1/3 to 1. |
 | `--trusting-period <duration>` | required | Positive trusted state lifetime. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
@@ -305,7 +306,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L195](cli/cmd/ibc/main.go#L195) -->
+<!-- [main.go:L197](cli/cmd/ibc/main.go#L197) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -334,7 +335,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L205](cli/cmd/ibc/main.go#L205) -->
+<!-- [main.go:L207](cli/cmd/ibc/main.go#L207) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -359,7 +360,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L187](cli/cmd/ibc/main.go#L187) -->
+<!-- [main.go:L189](cli/cmd/ibc/main.go#L189) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -547,7 +548,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L231](cli/cmd/ibc/main.go#L231) -->
+<!-- [main.go:L233](cli/cmd/ibc/main.go#L233) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -567,7 +568,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L236](cli/cmd/ibc/main.go#L236) -->
+<!-- [main.go:L238](cli/cmd/ibc/main.go#L238) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

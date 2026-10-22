@@ -44,6 +44,7 @@ func TestRoundTrip(t *testing.T) {
 			InitialValidators: []string{"0xv1", "0xv2"},
 			TrustingPeriod:    1209600,
 			MaxClockDrift:     15,
+			TrustLevel:        TrustLevel{Numerator: 2, Denominator: 3},
 		},
 	}
 	m = New("1", "evm")

@@ -40,6 +40,9 @@ type ParsedHeader struct {
 	Timestamp  uint64
 	StateRoot  common.Hash
 	Validators []common.Address
+	// Signers are the validators whose commit seals the header keeps, in
+	// ascending order: the signers the contract recovers.
+	Signers []common.Address
 	// Consensus is the protocol whose digest the commit seals sign, empty for
 	// a header without seals.
 	Consensus Consensus
@@ -84,11 +87,11 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
-	sorted, consensus, err := normalizeCommitSeals(h, extraItems, header.Validators)
+	sorted, consensus, signers, err := normalizeCommitSeals(h, extraItems, header.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", header.Height, err)
 	}
-	header.Consensus = consensus
+	header.Consensus, header.Signers = consensus, signers
 
 	header.RLP, err = rlp.EncodeToBytes(sorted)
 	if err != nil {
@@ -103,36 +106,37 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 // ascending order of signer. The contract rejects the whole header for any
 // other seal. Changing the seals is safe because the seal digest excludes
 // them. It also returns the consensus whose digest the seals sign, which
-// must be the only one under which any of them recovers to a validator.
+// must be the only one under which any of them recovers to a validator, and
+// the signers of the kept seals.
 func normalizeCommitSeals(
 	h *types.Header,
 	extraItems []rlp.RawValue,
 	validators []common.Address,
-) (*types.Header, Consensus, error) {
+) (*types.Header, Consensus, []common.Address, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals); err != nil {
-		return nil, "", fmt.Errorf("commit seals: %w", err)
+		return nil, "", nil, fmt.Errorf("commit seals: %w", err)
 	}
 
 	if len(seals) == 0 {
-		return h, "", nil
+		return h, "", nil, nil
 	}
 
 	var (
 		detected Consensus
-		kept     [][]byte
+		kept     []signedSeal
 	)
 	for _, consensus := range Consensuses {
 		digest, err := commitSealDigest(h, extraItems, consensus)
 		if err != nil {
-			return nil, "", err
+			return nil, "", nil, err
 		}
 		signed := validatorSeals(digest, seals, validators)
 		if len(signed) == 0 {
 			continue
 		}
 		if detected != "" {
-			return nil, "", fmt.Errorf(
+			return nil, "", nil, fmt.Errorf(
 				"commit seals recover to header validators under both %s and %s",
 				detected,
 				consensus,
@@ -141,26 +145,32 @@ func normalizeCommitSeals(
 		detected, kept = consensus, signed
 	}
 	if detected == "" {
-		return nil, "", errors.New("no commit seal recovers to a header validator")
+		return nil, "", nil, errors.New("no commit seal recovers to a header validator")
 	}
 
+	keptSeals := make([][]byte, len(kept))
+	signers := make([]common.Address, len(kept))
+	for i, s := range kept {
+		keptSeals[i], signers[i] = s.seal, s.signer
+	}
 	items := slices.Clone(extraItems)
 	var err error
-	if items[extraIdxCommitSeals], err = rlp.EncodeToBytes(kept); err != nil {
-		return nil, "", fmt.Errorf("encode commit seals: %w", err)
+	if items[extraIdxCommitSeals], err = rlp.EncodeToBytes(keptSeals); err != nil {
+		return nil, "", nil, fmt.Errorf("encode commit seals: %w", err)
 	}
 	out, err := withExtraData(h, items)
 
-	return out, detected, err
+	return out, detected, signers, err
+}
+
+type signedSeal struct {
+	signer common.Address
+	seal   []byte
 }
 
 // validatorSeals returns the canonical form of the seals over digest that
 // recover to one of validators, one per signer, in ascending signer order.
-func validatorSeals(digest []byte, seals [][]byte, validators []common.Address) [][]byte {
-	type signedSeal struct {
-		signer common.Address
-		seal   []byte
-	}
+func validatorSeals(digest []byte, seals [][]byte, validators []common.Address) []signedSeal {
 	signed := make([]signedSeal, 0, len(seals))
 	for _, seal := range seals {
 		signer, canonical, err := ecrecover.Recover(digest, seal)
@@ -169,14 +179,8 @@ func validatorSeals(digest []byte, seals [][]byte, validators []common.Address) 
 		}
 	}
 	slices.SortStableFunc(signed, func(a, b signedSeal) int { return a.signer.Cmp(b.signer) })
-	signed = slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
 
-	kept := make([][]byte, len(signed))
-	for i, s := range signed {
-		kept[i] = s.seal
-	}
-
-	return kept
+	return slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
 }
 
 // commitSealDigest is the digest commit seals sign under consensus, matching
