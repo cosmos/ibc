@@ -19,14 +19,25 @@ func TestRequireEOARejectsZeroBeforeRPC(t *testing.T) {
 }
 
 func TestTransactionSerializationObservesContext(t *testing.T) {
-	client := &EVMClient{txGate: make(chan struct{}, 1)}
-	client.txGate <- struct{}{}
+	client := &EVMClient{accounts: map[common.Address]*accountState{}}
+	sender := common.HexToAddress("0x01")
+	gate := client.account(sender).gate
+	gate <- struct{}{}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
-	err := client.acquireTx(ctx)
+	err := acquireTx(ctx, client.account(sender).gate)
 
 	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestTransactionSerializationIsPerSender(t *testing.T) {
+	client := &EVMClient{accounts: map[common.Address]*accountState{}}
+	client.account(common.HexToAddress("0x01")).gate <- struct{}{}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	require.NoError(t, acquireTx(ctx, client.account(common.HexToAddress("0x02")).gate))
 }
 
 func TestNormalizeWaitErrorPreservesDeadlineAndOperation(t *testing.T) {
