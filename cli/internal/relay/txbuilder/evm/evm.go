@@ -78,7 +78,7 @@ func (c *TxBuilder) BuildRelayTxs(
 	clientUpdate v2.ClientUpdate,
 	packetRelayItems []v2.PacketRelayItem,
 ) ([]v2.RelayTx, error) {
-	calls := make([][]byte, 0, len(clientUpdate.Payloads)+len(packetRelayItems))
+	calls := make([]ibcmulticall.IIBCMulticallMsgsCall, 0, len(clientUpdate.Payloads)+len(packetRelayItems))
 
 	for _, payload := range clientUpdate.Payloads {
 		updateCall, err := packUpdateClient(clientUpdate.ClientID, payload)
@@ -86,7 +86,9 @@ func (c *TxBuilder) BuildRelayTxs(
 			return nil, err
 		}
 
-		calls = append(calls, updateCall)
+		calls = append(calls, ibcmulticall.IIBCMulticallMsgsCall{
+			Target: c.router, CallData: updateCall, AllowFailure: false,
+		})
 	}
 
 	for _, item := range packetRelayItems {
@@ -95,18 +97,13 @@ func (c *TxBuilder) BuildRelayTxs(
 			return nil, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
 		}
 
-		calls = append(calls, call)
+		calls = append(calls, ibcmulticall.IIBCMulticallMsgsCall{
+			Target: c.router, CallData: call, AllowFailure: true,
+		})
 	}
 
-	batch := make([]ibcmulticall.IIBCMulticallMsgsCall, len(calls))
-	for i, call := range calls {
-		batch[i] = ibcmulticall.IIBCMulticallMsgsCall{
-			Target: c.router, CallData: call,
-			AllowFailure: true,
-		}
-	}
 	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return multicall.Multicall(opts, batch)
+		return multicall.Multicall(opts, calls)
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing IBCMulticall")

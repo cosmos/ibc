@@ -99,13 +99,14 @@ func TestBuildRelayTxs(t *testing.T) {
 			methods := []string{"recvPacket", "ackPacket", "timeoutPacket"}
 			for i, call := range calls {
 				require.Equal(t, router, call.Target)
-				require.True(t, call.AllowFailure)
 				if i < len(tc.updates) {
+					require.False(t, call.AllowFailure)
 					requireSelector(t, "updateClient", call.CallData)
 					args, err := routerABI.Methods["updateClient"].Inputs.Unpack(call.CallData[4:])
 					require.NoError(t, err)
 					require.Equal(t, []any{update.ClientID, tc.updates[i]}, args)
 				} else {
+					require.True(t, call.AllowFailure)
 					requireSelector(t, methods[i-len(tc.updates)], call.CallData)
 				}
 			}
