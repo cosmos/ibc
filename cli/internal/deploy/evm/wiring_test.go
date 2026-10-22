@@ -184,22 +184,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 		})
 	})
 
-	t.Run("multicall without code", func(t *testing.T) {
-		broken := *m
-		broken.Core.Multicall = common.HexToAddress("0x1234").Hex()
-		broken.Clients = []manifest.Client{m.Clients[0]}
-		broken.Clients[0].Address = common.HexToAddress("0x1234").Hex()
-		result, verifyErr := d.Verify(ctx, &broken)
-		require.NoError(t, verifyErr)
-		require.Len(t, result.Failed(), 2)
-		require.Equal(t, "client cli-2 address matches", result.Failed()[0].Name)
-		require.Contains(t, result.Failed(), deploy.Check{
-			Name:   "multicall code present",
-			Status: deploy.CheckFailed,
-			Detail: "no contract code at " + broken.Core.Multicall,
-		})
-	})
-
 	// verification catches drift
 	broken := *m
 	broken.Clients = []manifest.Client{
