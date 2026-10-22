@@ -133,6 +133,14 @@ func (c *meteredClient) PendingNonceAt(ctx context.Context, account common.Addre
 	return nonce, err
 }
 
+func (c *meteredClient) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
+	started := time.Now()
+	nonce, err := c.eth.NonceAt(ctx, account, blockNumber)
+	c.record(ctx, "eth_getTransactionCount", started, err)
+
+	return nonce, err
+}
+
 func (c *meteredClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 	started := time.Now()
 	price, err := c.eth.SuggestGasPrice(ctx)
@@ -152,6 +160,18 @@ func (c *meteredClient) SuggestGasTipCap(ctx context.Context) (*big.Int, error) 
 func (c *meteredClient) EstimateGas(ctx context.Context, call ethereum.CallMsg) (uint64, error) {
 	started := time.Now()
 	gas, err := c.eth.EstimateGas(ctx, call)
+	c.record(ctx, "eth_estimateGas", started, err)
+
+	return gas, err
+}
+
+func (c *meteredClient) EstimateGasAtBlock(
+	ctx context.Context,
+	call ethereum.CallMsg,
+	blockNumber *big.Int,
+) (uint64, error) {
+	started := time.Now()
+	gas, err := c.eth.EstimateGasAtBlock(ctx, call, blockNumber)
 	c.record(ctx, "eth_estimateGas", started, err)
 
 	return gas, err

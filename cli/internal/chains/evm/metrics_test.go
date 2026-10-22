@@ -131,6 +131,13 @@ func TestMeteredClient(t *testing.T) {
 				call: func(c ETHClient) error { _, err := c.PendingNonceAt(ctx, address); return err },
 			},
 			{
+				operation: "eth_getTransactionCount",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().NonceAt(ctx, address, (*big.Int)(nil)).Return(0, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.NonceAt(ctx, address, nil); return err },
+			},
+			{
 				operation: "eth_gasPrice",
 				expect: func(eth *mocks.MockETHClient) {
 					eth.EXPECT().SuggestGasPrice(ctx).Return(nil, assert.AnError).Once()
@@ -150,6 +157,13 @@ func TestMeteredClient(t *testing.T) {
 					eth.EXPECT().EstimateGas(ctx, mock.Anything).Return(0, assert.AnError).Once()
 				},
 				call: func(c ETHClient) error { _, err := c.EstimateGas(ctx, ethereum.CallMsg{}); return err },
+			},
+			{
+				operation: "eth_estimateGas",
+				expect: func(eth *mocks.MockETHClient) {
+					eth.EXPECT().EstimateGasAtBlock(ctx, mock.Anything, (*big.Int)(nil)).Return(0, assert.AnError).Once()
+				},
+				call: func(c ETHClient) error { _, err := c.EstimateGasAtBlock(ctx, ethereum.CallMsg{}, nil); return err },
 			},
 			{
 				operation: "eth_sendRawTransaction",
@@ -320,10 +334,15 @@ func TestNewRecordsRealResponses(t *testing.T) {
 			reader := installTestMetrics(t)
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var req struct {
-					ID json.RawMessage `json:"id"`
+					ID     json.RawMessage `json:"id"`
+					Method string          `json:"method"`
 				}
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if req.Method == "eth_chainId" {
+					_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": "0x1"})
 					return
 				}
 

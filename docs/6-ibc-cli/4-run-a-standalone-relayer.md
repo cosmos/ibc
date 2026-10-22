@@ -19,7 +19,7 @@ The tutorial's keystore already holds a funded key, so this guide reuses it rath
 ./bin/ibc config new --config ibc-relayer2.yml
 ```
 
-2. Write its configuration, reading both router addresses from your deployment:
+2. Write its configuration, reading the router and multicall addresses from your deployment:
 
 ```bash
 cat > ~/.ibc/ibc-relayer2.yml <<EOF
@@ -35,11 +35,13 @@ chains:
     rpc: http://localhost:8545
     ws: ws://localhost:8546
     ics26Router: "$(./bin/ibc deploy show 41001 | jq -r '.core.router')"
+    ibcMulticall: "$(./bin/ibc deploy show 41001 | jq -er '.core.multicall')"
 - chainId: "41002"
   evm:
     rpc: http://localhost:8745
     ws: ws://localhost:8746
     ics26Router: "$(./bin/ibc deploy show 41002 | jq -r '.core.router')"
+    ibcMulticall: "$(./bin/ibc deploy show 41002 | jq -er '.core.multicall')"
 
 relayer:
   connections:

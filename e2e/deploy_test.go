@@ -12,18 +12,20 @@ import (
 	"strconv"
 	"testing"
 
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 // deployStepResult mirrors cli/internal/deploy.StepResult, which e2e cannot
@@ -38,7 +40,8 @@ type deployStepResult struct {
 // this test needs to observe from the written JSON file.
 type deployManifest struct {
 	Core struct {
-		Router string `json:"router"`
+		Router    string `json:"router"`
+		Multicall string `json:"multicall"`
 	} `json:"core"`
 	GMP *struct {
 		Address string `json:"address"`
@@ -555,10 +558,7 @@ func readManifest(t testing.TB, manifestDir, chainID string) deployManifest {
 	return m
 }
 
-// assertPublicRelaying proves the deployed AccessManager lets an arbitrary
-// address call the router's recvPacket immediately, via a hand-packed
-// canCall(address,address,bytes4) eth_call (the harness carries no
-// AccessManager binding).
+// assertPublicRelaying checks both relay entrypoints and their shared authority.
 func assertPublicRelaying(ctx context.Context, t testing.TB, rpcURL string, m deployManifest) {
 	t.Helper()
 	authority := m.TargetData["accessManager"]
@@ -566,25 +566,32 @@ func assertPublicRelaying(ctx context.Context, t testing.TB, rpcURL string, m de
 
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
-	recvSelector := routerABI.Methods["recvPacket"].ID[:4]
-
-	caller := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	router := common.HexToAddress(m.Core.Router)
-	data := crypto.Keccak256([]byte("canCall(address,address,bytes4)"))[:4]
-	data = append(data, common.LeftPadBytes(caller.Bytes(), 32)...)
-	data = append(data, common.LeftPadBytes(router.Bytes(), 32)...)
-	data = append(data, common.RightPadBytes(recvSelector, 32)...)
-
 	client, err := ethclient.DialContext(ctx, rpcURL)
 	require.NoError(t, err)
 	defer client.Close()
 
-	to := common.HexToAddress(authority)
-	out, err := client.CallContract(ctx, ethereum.CallMsg{To: &to, Data: data}, nil)
+	manager, err := accessmanager.NewAccessManagerCaller(common.HexToAddress(authority), client)
 	require.NoError(t, err)
-	// returns (bool immediate, uint32 delay)
-	require.GreaterOrEqual(t, len(out), 32)
-	require.Equal(t, byte(1), out[31], "recvPacket is not publicly callable")
+	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), client)
+	require.NoError(t, err)
+	gotAuthority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
+	require.NoError(t, err)
+	require.Equal(t, common.HexToAddress(authority), gotAuthority)
+	multicallABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	caller := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	for _, tc := range []struct {
+		caller, target common.Address
+		selector       [4]byte
+	}{
+		{caller, common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
+		{caller, common.HexToAddress(m.Core.Multicall), [4]byte(multicallABI.Methods["multicall"].ID)},
+		{common.HexToAddress(m.Core.Multicall), common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
+	} {
+		permission, callErr := manager.CanCall(&bind.CallOpts{Context: ctx}, tc.caller, tc.target, tc.selector)
+		require.NoError(t, callErr)
+		require.True(t, permission.Immediate, "relay method is not publicly callable")
+	}
 }
 
 // sentPacket returns the block and sequence of the one packet the router
