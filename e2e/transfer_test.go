@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"context"
 	"math/big"
+	"slices"
 	"testing"
 	"time"
 
@@ -222,9 +223,9 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	chainB.Followers = 3
 	chains[1] = chainB
 	spec, runtime := besuMesh(chains)
-	// At the default two thirds, a client trusting B's four genesis
-	// validators cannot follow a removal sealed by a bare quorum of the rest;
-	// one half follows every single validator change.
+	// At the default two thirds, a client cannot follow a removal sealed by a
+	// bare quorum of the remaining validators; one half follows every single
+	// validator change.
 	connection := &spec.Connections[0]
 	for _, end := range []*environment.ClientSpec{&connection.A, &connection.B} {
 		client, ok := (*end).(environment.NewBesuClient)
@@ -248,12 +249,13 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	for _, follower := range nodes[4:] {
 		require.NoError(t, validators.Add(ctx, follower))
 	}
-	for _, genesis := range nodes[:3] {
+	// Node 0 serves the chain's RPC, so it stays a validator.
+	for _, genesis := range nodes[1:4] {
 		require.NoError(t, validators.Remove(ctx, genesis))
 	}
 	current, err := validators.Current(ctx)
 	require.NoError(t, err)
-	require.ElementsMatch(t, nodes[3:], current)
+	require.ElementsMatch(t, slices.Concat(nodes[:1], nodes[4:]), current)
 
 	relayer := e2etest.StartRelayer(t, driver, env)
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{

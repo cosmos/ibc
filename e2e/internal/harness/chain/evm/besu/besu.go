@@ -347,16 +347,26 @@ func (bc *Chain) Nodes() []common.Address {
 
 // Validators is the validator set at the head.
 func (bc *Chain) Validators(ctx context.Context) ([]common.Address, error) {
+	return bc.validatorsAt(ctx, bc.nodes[0])
+}
+
+// validatorsAt is the validator set at n's head.
+func (bc *Chain) validatorsAt(ctx context.Context, n *node) ([]common.Address, error) {
 	var validators []common.Address
-	err := bc.nodes[0].rpc.CallContext(ctx, &validators, bc.api+"_getValidatorsByBlockNumber", "latest")
+	err := n.rpc.CallContext(ctx, &validators, bc.api+"_getValidatorsByBlockNumber", "latest")
 	if err != nil {
-		return nil, fmt.Errorf("besu chain %s validators: %w", bc.logID, err)
+		return nil, fmt.Errorf("besu chain %s: %s validators: %w", bc.logID, n.address(), err)
+	}
+	// Besu answers null when it has no header at its head number, and a BFT
+	// chain never has an empty set.
+	if len(validators) == 0 {
+		return nil, fmt.Errorf("besu chain %s: %s reports no validators", bc.logID, n.address())
 	}
 	return validators, nil
 }
 
 // VoteValidator has every node in the validator set vote validator in or out,
-// waits until the head's set reflects it, then discards the votes. Only a node
+// waits until every node's head reflects it, then discards the votes. Only a node
 // of this chain can be voted in: a validator with no node halts the chain.
 // Votes are discarded on failure too, so none outlives the call.
 func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, add bool) (err error) {
@@ -387,13 +397,23 @@ func (bc *Chain) VoteValidator(ctx context.Context, validator common.Address, ad
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, bc.wait.Timeout)
 	defer cancel()
+	// Every node, not only the one serving RPC, must see the change before the
+	// deferred discard cancels any vote not yet sealed.
+	var observer *node
+	var readErr error
 	err = poll.Until(waitCtx, bc.wait.PollInterval, func(ctx context.Context) (bool, error) {
-		current, err = bc.Validators(ctx)
-		return err == nil && slices.Contains(current, validator) == add, nil
+		for _, observer = range bc.nodes {
+			current, readErr = bc.validatorsAt(ctx, observer)
+			if readErr != nil || slices.Contains(current, validator) != add {
+				return false, nil
+			}
+		}
+		return true, nil
 	})
 	if err != nil {
 		return fmt.Errorf(
-			"besu chain %s: vote on %s did not pass, validators %v: %w", bc.logID, validator, current, err,
+			"besu chain %s: vote on %s did not pass, %s has validators %v: %w",
+			bc.logID, validator, observer.address(), current, errors.Join(err, readErr),
 		)
 	}
 	return nil
