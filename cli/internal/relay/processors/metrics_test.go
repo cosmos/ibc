@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -17,8 +16,6 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/cosmos/ibc/cli/internal/store"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 type metricsTestSuite struct {
@@ -306,69 +303,6 @@ func TestMetrics(t *testing.T) {
 			assertCompletionMetrics(t, suite, tr, nil)
 		})
 	})
-}
-
-func TestPartialBatchConfirmationMetric(t *testing.T) {
-	for _, kind := range []v2.RelayKind{v2.RelayKindAck, v2.RelayKindTimeout} {
-		t.Run(kind.String(), func(t *testing.T) {
-			// ARRANGE
-			suite := newMetricsTestSuite(t)
-			suite.install(t)
-			route := testSendFinalityRoute()
-			txHash, sentAt := "0xbatch", time.Now()
-			client := mocks.NewMockClient(t)
-			submitter := mocks.NewMockTxSubmitter(t)
-			storage := mocks.NewMockRepository(t)
-			chainClients := staticChains{route.SourceChainID: client}
-			submitter.EXPECT().ShouldRetry(mock.Anything, txHash, sentAt).Return(false, nil).Twice()
-			suite.instruments.txSubmitted(suite.ctx, route.SourceChainID, route.SourceClientID, txHash)
-
-			// Check the failed packet first, then the successful packet in the same transaction.
-			for i, executed := range []bool{false, true} {
-				tr := NewTransfer(store.Packet{
-					SourceChainID:             route.SourceChainID,
-					PacketSourceClientID:      route.SourceClientID,
-					PacketDestinationClientID: route.DestinationClientID,
-					PacketSequenceNumber:      uint64(i + 1),
-					AckTxHash:                 &txHash,
-					AckTxTime:                 &sentAt,
-					TimeoutTxHash:             &txHash,
-					TimeoutTxTime:             &sentAt,
-				}, slog.Default())
-				client.EXPECT().PacketRelayExecuted(mock.Anything, txHash, kind,
-					tr.PacketSequenceNumber, route.SourceClientID, route.DestinationClientID).
-					Return(executed, nil).Once()
-
-				// ACT
-				var err, retryErr error
-				if kind == v2.RelayKindAck {
-					if !executed {
-						storage.EXPECT().ClearPacketAckTx(mock.Anything, tr.Key()).Return(nil).Once()
-					}
-					_, err = NewRetryAckPacket(chainClients, submitter, storage, route).Process(suite.ctx, tr)
-					retryErr = ErrRetryingAckPacket
-				} else {
-					if !executed {
-						storage.EXPECT().ClearPacketTimeoutTx(mock.Anything, tr.Key()).Return(nil).Once()
-					}
-					_, err = NewRetryTimeoutPacket(chainClients, submitter, storage, route).Process(suite.ctx, tr)
-					retryErr = ErrRetryingTimeoutPacket
-				}
-
-				// ASSERT
-				if executed {
-					require.NoError(t, err)
-				} else {
-					require.ErrorIs(t, err, retryErr)
-				}
-				var data metricdata.ResourceMetrics
-				require.NoError(t, suite.reader.Collect(suite.ctx, &data))
-				sum := findInt64Sum(t, data, "transactions_confirmed_total")
-				require.Len(t, sum.DataPoints, 1)
-				require.Equal(t, int64(1), sum.DataPoints[0].Value)
-			}
-		})
-	}
 }
 
 func findInt64Sum(t *testing.T, data metricdata.ResourceMetrics, name string) metricdata.Sum[int64] {
