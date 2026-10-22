@@ -110,7 +110,7 @@ Membership then succeeds on an attested entry whose path hash and commitment bot
 
 Non-membership needs the path to appear in the attested list with an explicitly zero commitment. A path missing from the list reverts `NotMember`.
 
-When the proof height is new, the client has to be updated before the verify call reaches it. The relayer's EVM builder does that by putting the `updateClient` call first in the router multicall, so a verify call later in that transaction finds a stored timestamp at the proof height.
+When the proof height is new, the client has to be updated before the verify call reaches it. The relayer's EVM builder does that by putting the `updateClient` call first in its `IBCMulticall` batch, so a verify call later in that transaction finds a stored timestamp at the proof height.
 
 ### Views
 
