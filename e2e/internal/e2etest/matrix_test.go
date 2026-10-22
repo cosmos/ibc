@@ -53,15 +53,15 @@ func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {
 		t.Fatalf("sorted chain summary = %#v", got)
 	}
 
-	// new and existing Besu QBFT clients count alike, and never as attestors
-	qbft := summarizeSpec(environment.Spec{
+	// new and existing Besu clients count alike, and never as attestors
+	besuSummary := summarizeSpec(environment.Spec{
 		Connections: []environment.ConnectionSpec{{
-			A: environment.NewBesuQBFTClient{},
-			B: environment.ExistingClient{Kind: clientkind.BesuQBFT},
+			A: environment.NewBesuClient{},
+			B: environment.ExistingClient{Kind: clientkind.Besu},
 		}},
 	})
-	if qbft.BesuQBFTClients != 2 || qbft.Attestors != 0 {
-		t.Fatalf("besu qbft summary = %#v", qbft)
+	if besuSummary.BesuClients != 2 || besuSummary.Attestors != 0 {
+		t.Fatalf("besu summary = %#v", besuSummary)
 	}
 }
 

@@ -17,17 +17,22 @@ import (
 	"github.com/cosmos/ibc/cli/besu/besutest"
 )
 
+// Each fixture chain's headers parse to the consensus it runs.
 func TestParseSealedHeaderFixture(t *testing.T) {
-	fixture := besutest.MustFixture(t)
+	for _, consensus := range besu.Consensuses {
+		fixture := besutest.MustFixture(t, consensus)
 
-	for _, update := range []besutest.UpdateFixture{fixture.AdjacentUpdate, fixture.NonAdjacentUpdate} {
-		header := besutest.ParseHeader(t, update.HeaderRLP)
+		for _, update := range []besutest.UpdateFixture{fixture.AdjacentUpdate, fixture.NonAdjacentUpdate} {
+			header := besutest.ParseHeader(t, update.HeaderRLP)
 
-		assert.Equal(t, update.Height, header.Height)
-		assert.Equal(t, update.ExpectedTimestamp, header.Timestamp)
-		assert.Equal(t, update.ExpectedStateRoot, header.StateRoot)
-		assert.Equal(t, update.ExpectedValidators, header.Validators)
-		assert.Equal(t, []byte(update.HeaderRLP), header.RLP)
+			assert.Equal(t, consensus, header.Consensus)
+
+			assert.Equal(t, update.Height, header.Height)
+			assert.Equal(t, update.ExpectedTimestamp, header.Timestamp)
+			assert.Equal(t, update.ExpectedStateRoot, header.StateRoot)
+			assert.Equal(t, update.ExpectedValidators, header.Validators)
+			assert.Equal(t, []byte(update.HeaderRLP), header.RLP)
+		}
 	}
 }
 
@@ -35,7 +40,13 @@ func TestParseSealedHeaderFixture(t *testing.T) {
 // signer, in strictly ascending signer order. Each mutation breaks that without
 // changing which validators signed, so parsing must restore the sealed header.
 func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
-	fixture := besutest.MustFixture(t)
+	for _, consensus := range besu.Consensuses {
+		testParseSealedHeaderNormalizesCommitSeals(t, besutest.MustFixture(t, consensus))
+	}
+}
+
+func testParseSealedHeaderNormalizesCommitSeals(t *testing.T, fixture besutest.Fixture) {
+	t.Helper()
 	updates := map[string]besutest.UpdateFixture{
 		"adjacent":    fixture.AdjacentUpdate,
 		"nonAdjacent": fixture.NonAdjacentUpdate,
@@ -44,7 +55,7 @@ func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
 		var header types.Header
 		require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
 		items, _ := splitExtra(t, header.Extra)
-		digest, err := besu.CommitSealDigest(&header, items)
+		digest, err := besu.CommitSealDigest(&header, items, fixture.Consensus)
 		require.NoError(t, err)
 		key, err := crypto.GenerateKey()
 		require.NoError(t, err)
@@ -83,7 +94,7 @@ func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
 		}
 
 		for name, mutate := range mutations {
-			t.Run(updateName+"/"+name, func(t *testing.T) {
+			t.Run(string(fixture.Consensus)+"/"+updateName+"/"+name, func(t *testing.T) {
 				var header types.Header
 				require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &header))
 				items, seals := splitExtra(t, header.Extra)
@@ -97,16 +108,18 @@ func TestParseSealedHeaderNormalizesCommitSeals(t *testing.T) {
 				parsed, err := besu.ParseSealedHeader(&header)
 				require.NoError(t, err)
 				assert.Equal(t, []byte(update.HeaderRLP), parsed.RLP)
+				assert.Equal(t, fixture.Consensus, parsed.Consensus)
 			})
 		}
 	}
 }
 
-// Dropping every seal, as a seal digest mismatch would, must fail clearly. A
-// header without seals, like the genesis block, still parses.
+// Dropping every seal, as seals from outside the validator set would, must
+// fail clearly. A header without seals, like the genesis block, still parses,
+// with no consensus.
 func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	var header types.Header
-	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t, besu.QBFT).AdjacentUpdate.HeaderRLP, &header))
 	items, seals := splitExtra(t, header.Extra)
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -126,13 +139,14 @@ func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	_, err = besu.ParseSealedHeader(withSeals([][]byte{outsider, seals[0][:64]}))
 	require.ErrorContains(t, err, "no commit seal recovers to a header validator")
 
-	_, err = besu.ParseSealedHeader(withSeals([][]byte{}))
+	parsed, err := besu.ParseSealedHeader(withSeals([][]byte{}))
 	require.NoError(t, err)
+	assert.Empty(t, parsed.Consensus)
 }
 
 func TestParseSealedHeaderRejectsMalformed(t *testing.T) {
 	var header types.Header
-	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t).AdjacentUpdate.HeaderRLP, &header))
+	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t, besu.QBFT).AdjacentUpdate.HeaderRLP, &header))
 
 	_, err := besu.ParseSealedHeader(nil)
 	require.ErrorContains(t, err, "nil header")

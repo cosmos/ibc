@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
@@ -18,7 +19,7 @@ import (
 // DefaultTrustLevel is the fraction of the validators trusted at the trusted height
 // that must seal an update. It matches Besu's own two-thirds commit-seal
 // quorum but is a separate check, against the trusted validator set.
-var DefaultTrustLevel = besuqbft.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}
+var DefaultTrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}
 
 var (
 	messageBindings     = besumsgs.NewBindings()
@@ -55,7 +56,33 @@ func CommitmentSlot(path []byte) common.Hash {
 	return crypto.Keccak256Hash(crypto.Keccak256(path), ibcStoreStorageSlot.Bytes())
 }
 
-// ReadClientState reads the state of the Besu QBFT light client at address.
+// DeployLightClient deploys the light client contract that verifies a chain
+// running consensus.
+func DeployLightClient(
+	opts *bind.TransactOpts,
+	backend bind.ContractBackend,
+	consensus Consensus,
+	clientState besumsgs.IBesuLightClientMsgsClientState,
+	consensusState besumsgs.IBesuLightClientMsgsConsensusState,
+	roleManager common.Address,
+) (common.Address, *types.Transaction, error) {
+	meta, err := consensus.LightClient()
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+	parsed, err := meta.GetAbi()
+	if err != nil {
+		return common.Address{}, nil, err
+	}
+
+	addr, tx, _, err := bind.DeployContract(
+		opts, *parsed, common.FromHex(meta.Bin), backend, clientState, consensusState, roleManager,
+	)
+
+	return addr, tx, err
+}
+
+// ReadClientState reads the state of the Besu light client at address.
 func ReadClientState(
 	ctx context.Context,
 	caller bind.ContractCaller,
@@ -74,7 +101,7 @@ func ReadClientState(
 	state, err := messageBindings.UnpackClientState(raw)
 	if err != nil {
 		return besumsgs.IBesuLightClientMsgsClientState{}, fmt.Errorf(
-			"%s is not a besu-qbft light client: %w", address, err,
+			"%s is not a besu light client: %w", address, err,
 		)
 	}
 

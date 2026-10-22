@@ -138,12 +138,12 @@ func TestNewSetFromConfig(t *testing.T) {
 	})
 }
 
-func TestNewSetFromConfigBesuQBFT(t *testing.T) {
+func TestNewSetFromConfigBesu(t *testing.T) {
 	ctx := context.Background()
 	conn := config.ConnectionConfig{
 		Alias:   "besu-a-besu-b",
-		ClientA: config.ClientEnd{ChainID: "1", Signer: "relayer", ClientID: "besu-b", Type: config.ClientTypeBesuQBFT},
-		ClientB: config.ClientEnd{ChainID: "2", Signer: "relayer", ClientID: "besu-a", Type: config.ClientTypeBesuQBFT},
+		ClientA: config.ClientEnd{ChainID: "1", Signer: "relayer", ClientID: "besu-b", Type: config.ClientTypeBesu},
+		ClientB: config.ClientEnd{ChainID: "2", Signer: "relayer", ClientID: "besu-a", Type: config.ClientTypeBesu},
 	}
 	cfg := config.Config{
 		Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}},

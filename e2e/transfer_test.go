@@ -95,12 +95,12 @@ func TestTransferTimeout_Refund(t *testing.T) {
 	})
 }
 
-// A timeout through besu-qbft light clients proves the receipt's absence with
+// A timeout through Besu QBFT light clients proves the receipt's absence with
 // a non-membership proof. Besu cannot move its clock, so the packet expires as
 // the destination keeps producing blocks in real time.
 func TestTransferBesuQBFT_TimeoutRefund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
+	spec, runtime := besuMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
 	))
 	requireTimeoutRefund(t, spec, runtime, awaitDestinationPastTimeout)
@@ -170,12 +170,12 @@ func awaitDestinationPastTimeout(ctx context.Context, destination *environment.C
 	return nil
 }
 
-// Two Besu QBFT chains relay through besu-qbft light clients: header, account
+// Two Besu QBFT chains relay through Besu QBFT light clients: header, account
 // and storage proofs instead of attestations. Besu is only available outside
 // fast mode, so this skips there.
 func TestTransferBesuQBFT_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := qbftMesh(e2etest.EVMChains(
+	spec, runtime := besuMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{Provider: e2etest.EVMProviderBesu}, e2etest.ChainA, e2etest.ChainB,
 	))
 	env := e2etest.Start(t, spec, runtime)
