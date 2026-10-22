@@ -151,8 +151,8 @@ func init() {
 	dpf.BoolVar(&flagDeployDryRun, "dry-run", false, "print the step plan without submitting transactions")
 	dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")
 
-	cmdDeployClient.AddCommand(cmdDeployClientAttestation, cmdDeployClientBesuQBFT)
-	for _, c := range []*cobra.Command{cmdDeployClientAttestation, cmdDeployClientBesuQBFT} {
+	cmdDeployClient.AddCommand(cmdDeployClientAttestation, cmdDeployClientBesu)
+	for _, c := range []*cobra.Command{cmdDeployClientAttestation, cmdDeployClientBesu} {
 		c.Flags().
 			StringVar(&flagDeployCounterparty, "counterparty-chain", "", "counterparty chain id the client tracks")
 		_ = c.MarkFlagRequired("counterparty-chain")
@@ -177,10 +177,10 @@ func init() {
 		"initial trusted timestamp seconds (default: counterparty head)",
 	)
 
-	dbf := cmdDeployClientBesuQBFT.Flags()
+	dbf := cmdDeployClientBesu.Flags()
 	dbf.DurationVar(&flagDeployTrustingPeriod, flagNameTrustingPeriod, 0,
 		"positive trusted state lifetime")
-	_ = cmdDeployClientBesuQBFT.MarkFlagRequired(flagNameTrustingPeriod)
+	_ = cmdDeployClientBesu.MarkFlagRequired(flagNameTrustingPeriod)
 	dbf.DurationVar(&flagDeployMaxClockDrift, flagNameMaxClockDrift, 60*time.Second,
 		"how far ahead of this chain's block time a counterparty header may be")
 

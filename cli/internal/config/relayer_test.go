@@ -428,8 +428,8 @@ func TestClientEndParams(t *testing.T) {
 		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
 		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
 		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuQBFTParams{}},
-		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "besu", doc: "type: besu\n", wantParams: &BesuParams{}},
+		{name: "besu takes no params", doc: "type: besu\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

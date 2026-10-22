@@ -17,7 +17,7 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
-	"github.com/cosmos/ibc/cli/internal/relay/prover/besuqbft"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/besubft"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -51,7 +51,7 @@ type Prover interface {
 
 var (
 	_ Prover = (*attestation.Generator)(nil)
-	_ Prover = (*besuqbft.Generator)(nil)
+	_ Prover = (*besubft.Generator)(nil)
 )
 
 // Key identifies one configured light client by the chain it lives on and
@@ -146,8 +146,8 @@ func addGenerator(
 		generators[Key(client.ChainID, client.ClientID)] = meteredProver
 
 		return nil
-	case config.ClientTypeBesuQBFT:
-		gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
+	case config.ClientTypeBesu:
+		gen, err := besuGenerator(ctx, client, clientCounterparty, clientSet)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)
 		}
@@ -192,11 +192,11 @@ func addGenerator(
 	}
 }
 
-func besuQBFTGenerator(
+func besuGenerator(
 	ctx context.Context,
 	self, counterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
-) (*besuqbft.Generator, error) {
+) (*besubft.Generator, error) {
 	host, err := evmClient(clientSet, self.ChainID)
 	if err != nil {
 		return nil, err
@@ -207,7 +207,7 @@ func besuQBFTGenerator(
 		return nil, err
 	}
 
-	return besuqbft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
+	return besubft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
 }
 
 // evmClient returns chainID's EVM client from clientSet.

@@ -17,7 +17,8 @@ import (
 )
 
 // revertContracts declare the custom errors a relay transaction can revert
-// with: the router's and those of every light client it routes to.
+// with: the router's and those of every light client it routes to. The Besu
+// QBFT and IBFT2 clients share theirs.
 var revertContracts = []*bind.MetaData{
 	ics26router.ContractMetaData, attestation.ContractMetaData, besuqbft.ContractMetaData,
 }
