@@ -98,7 +98,7 @@ The upgrade call does not check the storage layout. The new logic reads the prox
 
 The access manager stores each function-role assignment under the proxy's address and a selector, so assignments survive an upgrade. Only `ADMIN_ROLE` holders may call a selector with no assignment. So after an upgrade, only admins can call a function if the release newly marks it `restricted` or changes its signature, and so its selector. If `recvPacket`'s signature changed, relaying would stop until an admin binds the new selector to the relaying role with `setTargetFunctionRole`.
 
-[Upgrade the router contract](../6-ibc-cli/8-upgrade-the-router-contract.md) shows a router upgrade on the tutorial's deployment.
+[Upgrade an IBC contract](../6-ibc-cli/8-upgrade-the-router-contract.md) shows a router upgrade on the tutorial's deployment.
 
 ## Replacing a light client
 
