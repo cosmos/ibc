@@ -10,7 +10,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
-	"math"
 	"math/big"
 	"strings"
 
@@ -31,6 +30,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy"
+	"github.com/cosmos/ibc/cli/routeraccess"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
 
@@ -85,10 +85,6 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 	return &Driver{chainID: chainID, key: key, backend: client}, nil
 }
 
-func (d *Driver) SupportedClientTypes() []string {
-	return []string{deploy.ClientTypeAttestation, deploy.ClientTypeBesu}
-}
-
 // requireSigner errors if called on a driver built without a deployer
 // signer; every mutating operation must call it first.
 func (d *Driver) requireSigner() error {
@@ -128,7 +124,7 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	if err != nil {
 		return deploy.CoreRef{}, err
 	}
-	selectors, err := publicRelayingSelectors()
+	selectors, err := routeraccess.PublicRelayingSelectors()
 	if err != nil {
 		return deploy.CoreRef{}, err
 	}
@@ -157,8 +153,7 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 		return deploy.CoreRef{}, err
 	}
 
-	// OZ AccessManager PUBLIC_ROLE is type(uint64).max
-	roleTx, err := am.SetTargetFunctionRole(opts, routerAddr, selectors, uint64(math.MaxUint64))
+	roleTx, err := am.SetTargetFunctionRole(opts, routerAddr, selectors, routeraccess.PublicRole)
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("setTargetFunctionRole: %w", err)
 	}
@@ -202,7 +197,7 @@ func (d *Driver) ProvisionMulticall(ctx context.Context, accessManager string) (
 		return deploy.MulticallRef{}, err
 	}
 	selectors := [][4]byte{[4]byte(contractABI.Methods["multicall"].ID)}
-	roleTx, err := am.SetTargetFunctionRole(opts, addr, selectors, uint64(math.MaxUint64))
+	roleTx, err := am.SetTargetFunctionRole(opts, addr, selectors, routeraccess.PublicRole)
 	if err != nil {
 		return deploy.MulticallRef{}, fmt.Errorf("set multicall role: %w", err)
 	}
@@ -223,11 +218,7 @@ func (d *Driver) ProvisionClient(ctx context.Context, router string, spec deploy
 	case deploy.BesuParams:
 		return d.provisionBesu(ctx, router, params)
 	default:
-		return deploy.ClientRef{}, fmt.Errorf(
-			"client params %T not supported (supported types: %v)",
-			spec.Params,
-			d.SupportedClientTypes(),
-		)
+		return deploy.ClientRef{}, fmt.Errorf("client params %T not supported", spec.Params)
 	}
 }
 
@@ -278,7 +269,7 @@ func (d *Driver) provisionBesu(
 			LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
 			TrustingPeriod: params.TrustingPeriod,
 			MaxClockDrift:  params.MaxClockDrift,
-			TrustLevel:     besu.DefaultTrustLevel,
+			TrustLevel:     params.TrustLevel,
 		},
 		params.InitialConsensusState,
 		common.HexToAddress(router),

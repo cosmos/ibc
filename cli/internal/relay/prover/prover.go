@@ -147,7 +147,7 @@ func addGenerator(
 
 		return nil
 	case config.ClientTypeBesu:
-		gen, err := besuGenerator(ctx, client, clientCounterparty, clientSet)
+		gen, err := besuGenerator(ctx, client, clientCounterparty, clientSet, logger)
 		if err != nil {
 			return errors.Wrapf(err, "connection %q", connAlias)
 		}
@@ -196,6 +196,7 @@ func besuGenerator(
 	ctx context.Context,
 	self, counterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
+	logger *slog.Logger,
 ) (*besubft.Generator, error) {
 	host, err := evmClient(clientSet, self.ChainID)
 	if err != nil {
@@ -207,7 +208,7 @@ func besuGenerator(
 		return nil, err
 	}
 
-	return besubft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
+	return besubft.NewGenerator(ctx, self.ClientID, host, counterpartyClient, logger)
 }
 
 // evmClient returns chainID's EVM client from clientSet.

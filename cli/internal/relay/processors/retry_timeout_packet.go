@@ -18,20 +18,22 @@ type ClearTimeoutTxStorage interface {
 	ClearPacketTimeoutTx(ctx context.Context, key store.PacketKey) error
 }
 
-// RetryTimeoutPacket clears a stuck or failed timeout tx so the timeout is
-// redelivered on the next run.
+// RetryTimeoutPacket clears transactions that failed, stalled, or did not time
+// out this packet so it can be retried.
 type RetryTimeoutPacket struct {
+	chains      ChainClients
 	txSubmitter txsubmitter.TxSubmitter
 	storage     ClearTimeoutTxStorage
 	route       Route
 }
 
 func NewRetryTimeoutPacket(
+	chains ChainClients,
 	txSubmitter txsubmitter.TxSubmitter,
 	storage ClearTimeoutTxStorage,
 	route Route,
 ) RetryTimeoutPacket {
-	return RetryTimeoutPacket{txSubmitter: txSubmitter, storage: storage, route: route}
+	return RetryTimeoutPacket{chains: chains, txSubmitter: txSubmitter, storage: storage, route: route}
 }
 
 func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -46,7 +48,18 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 
 	if !retry {
 		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.TimeoutTxHash)
-		return tr, nil
+		client, ok := p.chains.Get(p.route.SourceChainID)
+		if !ok {
+			return nil, errors.Errorf("no configured chain client for source chain %s", p.route.SourceChainID)
+		}
+		executed, err := client.PacketRelayExecuted(ctx, *tr.TimeoutTxHash, v2.RelayKindTimeout,
+			tr.PacketSequenceNumber, tr.PacketSourceClientID, tr.PacketDestinationClientID)
+		if err != nil {
+			return nil, errors.Wrapf(err, "checking timeout event in tx %s", *tr.TimeoutTxHash)
+		}
+		if executed {
+			return tr, nil
+		}
 	}
 
 	if err := p.storage.ClearPacketTimeoutTx(ctx, tr.Key()); err != nil {

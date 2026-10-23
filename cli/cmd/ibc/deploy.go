@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/evm"
@@ -31,6 +34,7 @@ import (
 const (
 	flagNameTrustingPeriod = "trusting-period"
 	flagNameMaxClockDrift  = "max-clock-drift"
+	flagNameTrustLevel     = "trust-level"
 )
 
 var (
@@ -48,6 +52,7 @@ var (
 	flagDeployTimestamp       uint64
 	flagDeployTrustingPeriod  time.Duration
 	flagDeployMaxClockDrift   time.Duration
+	flagDeployTrustLevel      string
 
 	flagDeployRenderSignerA  string
 	flagDeployRenderSignerB  string
@@ -371,6 +376,10 @@ func besuParams(
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
 	}
+	level, err := trustLevel(flagDeployTrustLevel)
+	if err != nil {
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameTrustLevel)
+	}
 	router, err := config.ParseEVMAddress(counterpartyRouter)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
@@ -390,7 +399,27 @@ func besuParams(
 		InitialConsensusState: head.ConsensusState(),
 		TrustingPeriod:        trustingPeriod,
 		MaxClockDrift:         maxClockDrift,
+		TrustLevel:            level,
 	}, nil
+}
+
+// defaultTrustLevel is the --trust-level default, besu.DefaultTrustLevel as n/d.
+var defaultTrustLevel = fmt.Sprintf("%d/%d", besu.DefaultTrustLevel.Numerator, besu.DefaultTrustLevel.Denominator)
+
+// trustLevel parses n/d, which the contract accepts from one third to one.
+func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
+	numerator, denominator, _ := strings.Cut(s, "/")
+	n, errN := strconv.ParseUint(numerator, 10, 8)
+	d, errD := strconv.ParseUint(denominator, 10, 8)
+	switch {
+	case errN != nil || errD != nil:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("want n/d, each at most 255, got %q", s)
+	case d == 0:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("denominator must not be zero, got %q", s)
+	case n > d || 3*n < d:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 1, got %q", s)
+	}
+	return besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: uint8(n), Denominator: uint8(d)}, nil
 }
 
 // wholeSeconds converts a duration into the contract's seconds, truncating
@@ -566,15 +595,9 @@ func deployShow(_ *cobra.Command, args []string) error {
 
 // attestorsFromClient projects one client's on-chain attestor addresses into
 // attestors
-func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
-	addresses, _ := c.Params["attestors"].([]any)
-
-	out := make(config.Attestors, 0, len(addresses))
-	for _, raw := range addresses {
-		address, ok := raw.(string)
-		if !ok {
-			continue
-		}
+func attestorsFromClient(cfg config.Config, p manifest.AttestationParams, watchedChainID string) config.Attestors {
+	out := make(config.Attestors, 0, len(p.Attestors))
+	for _, address := range p.Attestors {
 		alias, _ := signerAliasForAddress(cfg, address)
 		out = append(out, config.AttestorConfig{
 			ChainID: watchedChainID,
@@ -648,7 +671,7 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) c
 		ChainID:   m.ChainID,
 		Signer:    signer,
 		ClientID:  c.ClientID,
-		Type:      config.ClientType(c.Type),
+		Type:      c.Type(),
 		AutoRelay: config.AutoRelayConfig{Enabled: &autoRelay},
 	}
 }
@@ -677,11 +700,13 @@ func renderRelayConfig(
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		if ca.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		if ca.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *ca.Attestation, b.ChainID))
 		}
-		if cb.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		if cb.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *cb.Attestation, a.ChainID))
 		}
 	}
 	if len(out.Connections) == 0 {
