@@ -42,9 +42,13 @@ An admin makes both kinds of change, and both are calls on the manager rather th
 - **To give an address a role**, call `grantRole(roleId, account, executionDelay)`. A nonzero delay means that address cannot call a gated function directly: it must `schedule` the call, wait out the delay, then `execute` it. Zero lets it call immediately. To take it back, call `revokeRole(roleId, account)`.
 - **To change which functions a role gates**, call `setTargetFunctionRole(target, selectors, roleId)`. The target is an argument, so the map is per contract: `ADMIN_ROLE` gates `migrateClient` and the upgrade selectors on the [router](2-ics26-router.md), and a different set on [ICS27GMP](3-ics27-gmp-and-accounts.md).
 
+[Grant, change, and revoke a role](../6-ibc-cli/9-grant-change-and-revoke-a-role.md) shows both changes on the tutorial's deployment.
+
 ## What a deployment assigns
 
-The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, and the relayer role gates nothing.
+The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. Only the first four carry `restricted`, so `multicall` and `submitMisbehaviour` are open to any caller with or without that binding. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, and the relayer role gates nothing.
+
+The manager treats a function it was never told about as gated by `ADMIN_ROLE`. `ibc deploy core` assigns nothing else, so every other `restricted` function answers to the admin alone. That includes `pause` and `unpause` on ICS27GMP, and the custom-identifier forms of `addIBCApp` and `addClient`.
 
 The manager's constructor takes its first admin as an argument. `ibc deploy core` passes the deployer key and leaves it there, and the driver's own comment calls role hardening a follow-up. The rest of the manager's surface is in [OpenZeppelin's reference](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager).
 
@@ -83,6 +87,19 @@ Both core contracts mark `_authorizeUpgrade` as `restricted`. The role map regis
 
 A contract deployed without a proxy holds its settings in constructor-set state, so it changes by replacement. Every light client is in that group, along with the Cosmos send-call constructor. The AccessManager is not proxied either, so its code changes by replacement, but its role grants and its selector map stay changeable by an admin.
 
+A UUPS upgrade is one call on the proxy, `upgradeToAndCall(newImplementation, data)`. The proxy has no upgrade code. Its current logic runs the call:
+
+1. `_authorizeUpgrade` checks the caller with the access manager.
+2. The call reverts unless the new logic's `proxiableUUID()` returns the ERC1967 implementation slot, where the proxy stores its logic's address. This rejects logic that does not implement UUPS. Such logic has no upgrade function, so the proxy could never upgrade again.
+3. The call writes the new address to that slot and emits `Upgraded`.
+4. If `data` is nonempty, the proxy executes it with the new logic's code, on the proxy's storage. A release puts its migration call in `data`.
+
+The upgrade call does not check the storage layout. The new logic reads the proxy's state by slot position. Inserting, removing, or reordering fields in any of a contract's storage structs moves existing fields to the wrong slots. Appending a field to the end of a struct is safe.
+
+The access manager stores each function-role assignment under the proxy's address and a selector, so assignments survive an upgrade. Only `ADMIN_ROLE` holders may call a selector with no assignment. So after an upgrade, only admins can call a function if the release newly marks it `restricted` or changes its signature, and so its selector. If `recvPacket`'s signature changed, relaying would stop until an admin binds the new selector to the relaying role with `setTargetFunctionRole`.
+
+[Upgrade the router contract](../6-ibc-cli/8-upgrade-the-router-contract.md) shows a router upgrade on the tutorial's deployment.
+
 ## Replacing a light client
 
 A client changes by replacement, and the replacement takes over the client ID. The router's `migrateClient` function takes a client ID, its counterparty info, and the address of a newly deployed client contract. It then points the registry entry at that contract. Counterparties and applications go on using the same identifier.
@@ -93,4 +110,4 @@ Migration is also how a frozen client is restarted. A frozen client keeps revert
 
 Each client type decides what freezes it. The [attestation light client](5-attestation-light-client.md) freezes on conflicting attested timestamps, and nothing in it clears that flag.
 
-The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys the access manager and sets these roles as it goes.
+The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys the access manager and leaves the deployer as the only address granted a role. [Grant, change, and revoke a role](../6-ibc-cli/9-grant-change-and-revoke-a-role.md) assigns roles on that deployment.
