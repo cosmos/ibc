@@ -112,6 +112,7 @@ func testParseSealedHeaderNormalizesCommitSeals(t *testing.T, fixture besutest.F
 				require.NoError(t, err)
 				assert.Equal(t, []byte(update.HeaderRLP), parsed.RLP)
 				assert.Equal(t, fixture.Consensus, parsed.Consensus)
+				assert.Equal(t, besutest.ParseHeader(t, update.HeaderRLP).Signers, parsed.Signers)
 			})
 		}
 	}

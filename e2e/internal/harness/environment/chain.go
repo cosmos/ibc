@@ -4,6 +4,7 @@ package environment
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -39,6 +40,7 @@ type Chain struct {
 	mining     *Mining
 	node       *NodeLifecycle
 	funding    *Funding
+	validators *Validators
 }
 
 func (c *Chain) bindLease(lease *environmentLease) {
@@ -51,6 +53,9 @@ func (c *Chain) bindLease(lease *environmentLease) {
 	}
 	if c.funding != nil {
 		c.funding.chain = c
+	}
+	if c.validators != nil {
+		c.validators.chain = c
 	}
 }
 
@@ -264,6 +269,53 @@ func (c *Chain) Funding() (*Funding, error) {
 		return nil, err
 	}
 	return c.funding, nil
+}
+
+// Validators returns the validators of a managed Besu Chain: their keys, so a
+// workflow can sign headers the Chain itself never produced, and voting.
+func (c *Chain) Validators() (*Validators, error) {
+	err := c.use(func() error {
+		if c.validators == nil {
+			return fmt.Errorf("%w: Chain %q has no validator voting", ErrCapabilityUnavailable, c.id)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c.validators, nil
+}
+
+type Validators struct {
+	controller chainimpl.ValidatorVoter
+	chain      *Chain
+}
+
+// Keys returns the genesis validators' keys.
+func (v *Validators) Keys() []*ecdsa.PrivateKey { return v.controller.ValidatorKeys() }
+
+// Nodes is the validator address of each node, the genesis validators first.
+func (v *Validators) Nodes() []common.Address { return v.controller.Nodes() }
+
+// Current is the validator set at the head.
+func (v *Validators) Current(ctx context.Context) ([]common.Address, error) {
+	var validators []common.Address
+	err := v.chain.use(func() error {
+		var err error
+		validators, err = v.controller.Validators(ctx)
+		return err
+	})
+	return validators, err
+}
+
+// Add votes validator in from every current validator and waits until it is.
+func (v *Validators) Add(ctx context.Context, validator common.Address) error {
+	return v.chain.use(func() error { return v.controller.VoteValidator(ctx, validator, true) })
+}
+
+// Remove votes validator out from every current validator and waits until it is.
+func (v *Validators) Remove(ctx context.Context, validator common.Address) error {
+	return v.chain.use(func() error { return v.controller.VoteValidator(ctx, validator, false) })
 }
 
 type Funding struct {

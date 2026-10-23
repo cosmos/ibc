@@ -125,7 +125,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	m.TargetData = core.TargetData
 	m.UpsertClient(manifest.Client{
 		ClientID:             "cli-2",
-		Type:                 deploy.ClientTypeAttestation,
 		Address:              ref.Address,
 		CounterpartyClientID: "cli-1",
 	})
@@ -194,18 +193,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	report, err = d.Verify(ctx, &broken)
 	require.NoError(t, err)
 	require.NotEmpty(t, report.Failed())
-}
-
-// The PUBLIC_ROLE grant happens inside ProvisionCore and is asserted
-// end-to-end by the e2e module's deploy test; this pins the selector set.
-func TestPublicRelayingSelectors(t *testing.T) {
-	selectors, err := publicRelayingSelectors()
-	require.NoError(t, err)
-	require.Len(t, selectors, len(publicRelayingMethods))
-
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	require.NoError(t, err)
-	require.Equal(t, [4]byte(routerABI.Methods["recvPacket"].ID), selectors[0])
 }
 
 // fakeRPCError mimics go-ethereum's rpc.jsonError: a message plus optional
@@ -386,6 +373,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				InitialConsensusState: consensusState,
 				TrustingPeriod:        fixture.TrustingPeriod,
 				MaxClockDrift:         fixture.MaxClockDrift,
+				TrustLevel:            besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
 			}
 			spec := deploy.ClientSpec{
 				ClientID:             "besu-2",
@@ -411,7 +399,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			m.Core.Multicall = multicall.Address
 			m.TargetData = core.TargetData
 			m.UpsertClient(manifest.Client{
-				ClientID: "besu-2", Type: params.ClientType(), Address: ref.Address, CounterpartyClientID: "besu-1",
+				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
 			})
 			report, err := d.Verify(ctx, m)
 			require.NoError(t, err)
@@ -424,7 +412,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
 				TrustingPeriod: fixture.TrustingPeriod,
 				MaxClockDrift:  fixture.MaxClockDrift,
-				TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
+				TrustLevel:     params.TrustLevel,
 			}, state)
 
 			lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())

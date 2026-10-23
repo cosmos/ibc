@@ -13,11 +13,17 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/besu"
+	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// SealedHeader returns the sealed Besu header at height.
+// SealedHeader returns the sealed Besu header at height, or the head at
+// v2.LatestBlock.
 func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
-	header, err := besu.ReadSealedHeader(ctx, c.eth, new(big.Int).SetUint64(height))
+	var number *big.Int
+	if height != v2.LatestBlock {
+		number = new(big.Int).SetUint64(height)
+	}
+	header, err := besu.ReadSealedHeader(ctx, c.eth, number)
 	if err != nil {
 		return nil, errors.Wrapf(err, "chain %s", c.chainID)
 	}

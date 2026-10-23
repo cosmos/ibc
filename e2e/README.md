@@ -10,7 +10,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-Besu light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestTransferBesuIBFT2_AutoRelay` repeats the transfer on IBFT 2.0 chains. `TestDeployBesuQBFTIBFT2Connection` deploys a besu connection between a QBFT and an IBFT 2.0 chain with `ibc deploy client besu` alone, so each client detects a different consensus, and relays an IFT transfer over it; `TestDeployMixedBesuQBFTAttestationConnection` does the same for the production shape, a besu client on one end and an attestation client on the other, relaying a round trip so each client type proves both a receive and an acknowledgement. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
+Besu light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestTransferBesuIBFT2_AutoRelay` repeats the transfer on IBFT 2.0 chains. `TestDeployBesuQBFTIBFT2Connection` deploys a besu connection between a QBFT and an IBFT 2.0 chain with `ibc deploy client besu` alone, so each client detects a different consensus, and relays an IFT transfer over it; `TestDeployMixedBesuQBFTAttestationConnection` does the same for the production shape, a besu client on one end and an attestation client on the other, relaying a round trip so each client type proves both a receive and an acknowledgement. `TestTransferBesuQBFT_ValidatorTurnover` and `TestTransferBesuIBFT2_ValidatorTurnover` run the source chain with three follower nodes and, before any packet is relayed, vote the followers in as validators and three of the four genesis validators out, so the relayer must step the destination's client across the set changes to relay a transfer. Their clients are deployed at a trust level of one half through `NewBesuClient.TrustLevel`, since at the default two thirds the client cannot follow the removals. `ManagedBesu.Followers` adds the follower nodes and `Chain.Validators` votes through them. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
 
 ## Running the acceptance tests
 
@@ -112,6 +112,12 @@ interval-only, so a transaction may wait up to one second for inclusion.
 
 `Environment` owns and cleans up only managed resources. An attached EVM remains caller-owned even
 when the harness can connect to it, and connectivity does not grant mining or node-lifecycle control.
+
+Managed Besu runs four validators on a Docker network of its own, so a block needs three of the
+four seals; the first validator serves RPC. `ManagedBesu.Followers` adds nodes that sync from
+genesis and can be voted in. `Chain.Validators` votes, and its `Keys` returns the genesis
+validators' keys, which lets a test seal headers the chain never produced, such as misbehaviour
+evidence.
 
 Bootstrapping a Besu light client reads validators from the sealed block header through
 the `ETH` RPC API; it does not require the `QBFT` or `IBFT` RPC API.

@@ -11,6 +11,7 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,10 @@ func (r *testRPC) SuggestGasTipCap(context.Context) (*big.Int, error) {
 func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error) {
 	r.codeCalls++
 	return []byte{1}, nil
+}
+
+func (r *testRPC) CallContract(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error) {
+	return nil, errors.New("unexpected call")
 }
 
 func (r *testRPC) EstimateGasAtBlock(_ context.Context, _ ethereum.CallMsg, block *big.Int) (uint64, error) {
@@ -255,6 +260,7 @@ func TestBroadcastErrorDoesNotAdvanceNonceOrFees(t *testing.T) {
 			require.Len(t, rpc.sent, 4)
 			require.Equal(t, rpc.sent[3].Hash().Hex(), submission.TxHash)
 			require.Equal(t, c.address.Hex(), submission.RelayerAddress)
+			require.Equal(t, testIntent().Data, rpc.sent[3].Data())
 			require.WithinDuration(t, time.Now(), submission.SubmittedAt, time.Second)
 			for _, tx := range rpc.sent {
 				require.Zero(t, tx.Nonce())
@@ -569,19 +575,20 @@ func TestShouldRetry(t *testing.T) {
 	}
 }
 
-func TestSubmitRejectsContractSimulationRevert(t *testing.T) {
+type revertError string
+
+func (revertError) Error() string    { return "execution reverted" }
+func (revertError) ErrorCode() int   { return -32000 }
+func (e revertError) ErrorData() any { return string(e) }
+
+func TestSubmitRejectsEstimationRevert(t *testing.T) {
 	submitter, eth := newSubmitter(t)
-	revert := revertError{
-		code: -32000,
-		data: revertData(
-			t,
-			besuqbft.ContractMetaData,
-			"ConsensusStateExpired",
-			uint64(100),
-			big.NewInt(121),
-			uint64(20),
-		),
-	}
+	contractABI, err := besuqbft.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	customErr := contractABI.Errors["ConsensusStateExpired"]
+	args, err := customErr.Inputs.Pack(uint64(100), big.NewInt(121), uint64(20))
+	require.NoError(t, err)
+	revert := revertError(hexutil.Encode(append(customErr.ID[:4], args...)))
 	eth.gasErr = revert
 	result, err := submitter.Submit(t.Context(), testIntent())
 	require.Nil(t, result)

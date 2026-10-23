@@ -151,9 +151,16 @@ func NewPipeline(
 		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
 	)
 
-	// clear stuck or failed timeout txs so they are redelivered next run
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryTimeoutPacket(srcTxSubmitter, deps.Storage, route)), output)
+	// clear timeout txs that failed, stalled, or omitted this packet
+	output = pipeline.ProcessConcurrently(
+		ctx,
+		stageConcurrency,
+		NewProcessorMW(
+			deps.Storage,
+			processors.NewRetryTimeoutPacket(deps.Chains, srcTxSubmitter, deps.Storage, route),
+		),
+		output,
+	)
 
 	// deliver recvs in batches on the destination chain
 	batchRecvPacket, err := processors.NewBatchRecvPacket(
@@ -213,9 +220,16 @@ func NewPipeline(
 		NewBatchProcessorMW(deps.Storage, batchAckPacket),
 	)
 
-	// clear stuck or failed ack txs so they are redelivered next run
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryAckPacket(srcTxSubmitter, deps.Storage, route)), output)
+	// clear ack txs that failed, stalled, or omitted this packet
+	output = pipeline.ProcessConcurrently(
+		ctx,
+		stageConcurrency,
+		NewProcessorMW(
+			deps.Storage,
+			processors.NewRetryAckPacket(deps.Chains, srcTxSubmitter, deps.Storage, route),
+		),
+		output,
+	)
 
 	// assign terminal statuses
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,

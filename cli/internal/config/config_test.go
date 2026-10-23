@@ -1064,3 +1064,44 @@ func TestPrintJSON(t *testing.T) {
 	}))
 	require.JSONEq(t, `{"txHash":"0xabc","sourceChainId":"chain-1"}`, out.String())
 }
+
+func TestMulticallAddressValidation(t *testing.T) {
+	for _, tc := range []struct {
+		address string
+		invalid bool
+	}{
+		{"", true},
+		{"0x0000000000000000000000000000000000000002", false},
+		{"invalid", true},
+		{"0x0000000000000000000000000000000000000000", true},
+	} {
+		t.Run(tc.address, func(t *testing.T) {
+			cfg := loadSampleConfig(t)
+			cfg.Chains[1].EVM.IBCMulticall = tc.address
+			require.NoError(t, cfg.Validate())
+			require.NoError(t, cfg.AttestorSufficiency())
+			err := cfg.RelayerSufficiency()
+			if tc.invalid {
+				require.ErrorContains(t, err, "chains[1].evm.ibcMulticall")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRelayerRequiresMulticallForEveryEVMChain(t *testing.T) {
+	cfg := loadSampleConfig(t)
+	cfg.Chains = append(cfg.Chains, ChainConfig{
+		ChainID: "42",
+		EVM: &EVMChainConfig{
+			RPC: "http://localhost", ICS26Router: "0x0000000000000000000000000000000000000001",
+		},
+	})
+	require.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.AttestorSufficiency())
+	require.ErrorContains(t, cfg.RelayerSufficiency(), "chains[2].evm.ibcMulticall: required")
+
+	cfg.Chains[2].EVM.IBCMulticall = "0x0000000000000000000000000000000000000002"
+	require.NoError(t, cfg.RelayerSufficiency())
+}

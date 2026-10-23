@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc/cli/besu"
 )
 
@@ -26,6 +27,7 @@ type Instance struct {
 type AppStack struct {
 	ICS20Transfer common.Address // ERC1967 proxy
 	ICS27GMP      common.Address // ERC1967 proxy
+	IBCMulticall  common.Address // ERC1967 proxy
 }
 
 // Client is a light client registered with one Instance, with the attestation
@@ -60,7 +62,7 @@ const BesuTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
 // client verifying a chain that runs Consensus. The initial trusted state
 // describes the counterparty chain at InitialHeight; RoleManager restricts
 // proof submission to that address (the host router), a zero value permits
-// anyone.
+// anyone. TrustLevel is besu.DefaultTrustLevel when zero.
 type BesuClientConfig struct {
 	Consensus            besu.Consensus
 	ID                   string
@@ -72,6 +74,7 @@ type BesuClientConfig struct {
 	InitialValidators    []common.Address
 	TrustingPeriod       uint64
 	MaxClockDrift        uint64
+	TrustLevel           besumsgs.IBesuLightClientMsgsTrustThreshold
 	RoleManager          common.Address
 }
 

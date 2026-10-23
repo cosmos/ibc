@@ -918,6 +918,65 @@ func (c *Client) txSender(ctx context.Context, hash common.Hash) (string, error)
 	return sender.String(), nil
 }
 
+func (c *Client) PacketRelayExecuted(
+	ctx context.Context,
+	txHash string,
+	kind v2.RelayKind,
+	sequence uint64,
+	sourceClientID string,
+	destClientID string,
+) (bool, error) {
+	var eventName string
+	switch kind {
+	case v2.RelayKindAck:
+		eventName = ackPacketEvent
+	case v2.RelayKindTimeout:
+		eventName = timeoutPacketEvent
+	default:
+		return false, errors.Errorf("unsupported relay kind %v", kind)
+	}
+
+	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
+	if errors.Is(err, ethereum.NotFound) {
+		return false, v2.ErrTxNotFound
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return false, nil
+	}
+
+	eventID := c.routerABI.Events[eventName].ID
+	for _, log := range receipt.Logs {
+		if log == nil || len(log.Topics) == 0 || log.Address != c.routerAddress || log.Topics[0] != eventID {
+			continue
+		}
+
+		var packet ics26router.IICS26RouterMsgsPacket
+		switch kind {
+		case v2.RelayKindAck:
+			event, err := c.router.ParseAckPacket(*log)
+			if err != nil {
+				return false, errors.Wrapf(err, "parsing %s from tx %s", eventName, txHash)
+			}
+			packet = event.Packet
+		case v2.RelayKindTimeout:
+			event, err := c.router.ParseTimeoutPacket(*log)
+			if err != nil {
+				return false, errors.Wrapf(err, "parsing %s from tx %s", eventName, txHash)
+			}
+			packet = event.Packet
+		}
+
+		if packet.Sequence == sequence && packet.SourceClient == sourceClientID && packet.DestClient == destClientID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (c *Client) PacketWriteAckStatus(
 	ctx context.Context,
 	recvTxHash string,

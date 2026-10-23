@@ -3,6 +3,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"io"
 	"math/big"
@@ -82,42 +83,42 @@ func TestRenderRelayConfig(t *testing.T) {
 	a.Core.Router = "0xrouterA"
 	a.Core.Multicall = "0xmulticallA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation", Address: "0xca",
+		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{
-			"threshold": float64(2),
-			"attestors": []any{watcherAddress, "0xUnresolvedAddress"},
+		Attestation: &manifest.AttestationParams{
+			Threshold: 2,
+			Attestors: []string{watcherAddress, "0xUnresolvedAddress"},
 		},
 	})
 	// stray client tracking another chain must not pair
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-9", Type: "attestation",
+		ClientID:            "cli-1-9",
 		CounterpartyChainID: "9", CounterpartyClientID: "cli-1-9",
 	})
 	// a second, custom-named connection between the same chain pair --
 	// exercises the alias seqno suffix, and reuses the same attestor address
 	// watching chain 2 to exercise cross-connection attestor deduplication.
 	a.UpsertClient(manifest.Client{
-		ClientID: "custom-a", Type: "attestation", Address: "0xca2",
+		ClientID: "custom-a", Address: "0xca2",
 		CounterpartyChainID: "2", CounterpartyClientID: "custom-b",
-		Params: map[string]any{
-			"threshold": float64(2),
-			"attestors": []any{watcherAddress},
+		Attestation: &manifest.AttestationParams{
+			Threshold: 2,
+			Attestors: []string{watcherAddress},
 		},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.Core.Multicall = "0xmulticallB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation", Address: "0xcb",
+		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"threshold": float64(2)},
+		Attestation: &manifest.AttestationParams{Threshold: 2},
 	})
 	b.UpsertClient(manifest.Client{
-		ClientID: "custom-b", Type: "attestation", Address: "0xcb2",
+		ClientID: "custom-b", Address: "0xcb2",
 		CounterpartyChainID: "1", CounterpartyClientID: "custom-a",
 		// no configured attestors: must not surface as an attestors: entry
-		Params: map[string]any{"threshold": float64(2)},
+		Attestation: &manifest.AttestationParams{Threshold: 2},
 	})
 
 	unreferencedSigner, _ := newLocalSignerConfig(t, "unused-signer")
@@ -193,7 +194,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	mismatched := manifest.New("2", "evm")
 	mismatched.Core.Router = "0xrouterB"
 	mismatched.UpsertClient(manifest.Client{
-		ClientID: "cli-1", Type: "attestation",
+		ClientID:            "cli-1",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-other",
 	})
 	_, err = renderRelayConfig(cfg, a, mismatched, "signer-a", "signer-b")
@@ -207,17 +208,18 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation",
+		ClientID:            "cli-1-2",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		// unresolvable address: exercises the attestor signer TODO
-		Params: map[string]any{"attestors": []any{"0xUnresolvedAddress"}},
+		Attestation: &manifest.AttestationParams{Attestors: []string{"0xUnresolvedAddress"}},
 	})
 	b := manifest.New("2", "evm")
 	// chain 2's router is left blank on purpose: exercises the ics26Router
 	// TODO alongside the signer TODOs in the same render
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation",
+		ClientID:            "cli-1-2",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Attestation: &manifest.AttestationParams{},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "", "")
@@ -259,16 +261,16 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xca",
+		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200, MaxClockDrift: 60},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesu, Address: "0xcb",
+		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200, MaxClockDrift: 60},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
@@ -281,19 +283,28 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 }
 
 func TestBesuParamsFlags(t *testing.T) {
-	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
-	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
+	previousPeriod, previousDrift, previousLevel := flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel
+	t.Cleanup(func() {
+		flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = previousPeriod, previousDrift, previousLevel
+	})
 	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
-		name    string
-		period  time.Duration
-		drift   time.Duration
-		router  string
-		wantErr string
+		name      string
+		period    time.Duration
+		drift     time.Duration
+		level     string
+		router    string
+		wantLevel besumsgs.IBesuLightClientMsgsTrustThreshold
+		wantErr   string
 	}{
 		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
 		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
+		{
+			name: "trust level", period: 2 * time.Hour, level: "1/2", router: router,
+			wantLevel: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
+		},
+		{name: "bad trust level", period: 2 * time.Hour, level: "1/4", router: router, wantErr: "--trust-level: must be from 1/3 to 1"},
 		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},
 		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router: invalid EVM address"},
 		{
@@ -302,7 +313,10 @@ func TestBesuParamsFlags(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			flagDeployTrustingPeriod, flagDeployMaxClockDrift = tc.period, time.Minute
+			flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = tc.period, time.Minute, cmp.Or(
+				tc.level,
+				"2/3",
+			)
 			if tc.drift != 0 {
 				flagDeployMaxClockDrift = tc.drift
 			}
@@ -322,6 +336,7 @@ func TestBesuParamsFlags(t *testing.T) {
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
 				TrustingPeriod:        uint64(tc.period / time.Second),
 				MaxClockDrift:         60,
+				TrustLevel:            cmp.Or(tc.wantLevel, besu.DefaultTrustLevel),
 			}, params)
 		})
 	}
@@ -405,6 +420,47 @@ func TestWholeSeconds(t *testing.T) {
 		require.NoError(t, err, tc.d)
 		require.Equal(t, tc.want, got, tc.d)
 	}
+}
+
+func TestTrustLevel(t *testing.T) {
+	for _, tc := range []struct {
+		s       string
+		want    besumsgs.IBesuLightClientMsgsTrustThreshold
+		wantErr string
+	}{
+		{s: "2/3", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}},
+		{s: "1/3", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 3}},
+		{s: "1/2", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}},
+		{s: "1/1", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 1}},
+		{s: "85/255", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 85, Denominator: 255}},
+		{s: "1/4", wantErr: "must be from 1/3 to 1"},
+		{s: "0/1", wantErr: "must be from 1/3 to 1"},
+		{s: "3/2", wantErr: "must be from 1/3 to 1"},
+		{s: "1/0", wantErr: "denominator must not be zero"},
+		{s: "0/0", wantErr: "denominator must not be zero"},
+		{s: "", wantErr: "want n/d"},
+		{s: "2", wantErr: "want n/d"},
+		{s: "0.5", wantErr: "want n/d"},
+		{s: "1/2/3", wantErr: "want n/d"},
+		{s: " 1/2", wantErr: "want n/d"},
+		{s: "-1/2", wantErr: "want n/d"},
+		{s: "256/256", wantErr: "want n/d"},
+	} {
+		got, err := trustLevel(tc.s)
+		if tc.wantErr != "" {
+			require.ErrorContains(t, err, tc.wantErr, tc.s)
+			continue
+		}
+		require.NoError(t, err, tc.s)
+		require.Equal(t, tc.want, got, tc.s)
+	}
+}
+
+// The flag's default is the client's default trust level.
+func TestTrustLevelFlagDefault(t *testing.T) {
+	got, err := trustLevel(cmdDeployClientBesu.Flags().Lookup(flagNameTrustLevel).DefValue)
+	require.NoError(t, err)
+	require.Equal(t, besu.DefaultTrustLevel, got)
 }
 
 const (
@@ -501,7 +557,7 @@ func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type: deploy.ClientTypeAttestation,
+			Attestation: &manifest.AttestationParams{},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
@@ -545,8 +601,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type:   deploy.ClientTypeAttestation,
-			Params: map[string]any{"attestors": []any{attestorAddress}},
+			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddress}},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
