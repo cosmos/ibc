@@ -114,6 +114,80 @@ func (_c *MockTxSubmitterETHClient_BalanceAt_Call) RunAndReturn(run func(context
 	return _c
 }
 
+// CallContract provides a mock function for the type MockTxSubmitterETHClient
+func (_mock *MockTxSubmitterETHClient) CallContract(context1 context.Context, callMsg ethereum.CallMsg, intParam *big.Int) ([]byte, error) {
+	ret := _mock.Called(context1, callMsg, intParam)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CallContract")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error)); ok {
+		return returnFunc(context1, callMsg, intParam)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ethereum.CallMsg, *big.Int) []byte); ok {
+		r0 = returnFunc(context1, callMsg, intParam)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ethereum.CallMsg, *big.Int) error); ok {
+		r1 = returnFunc(context1, callMsg, intParam)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockTxSubmitterETHClient_CallContract_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CallContract'
+type MockTxSubmitterETHClient_CallContract_Call struct {
+	*mock.Call
+}
+
+// CallContract is a helper method to define mock.On call
+//   - context1 context.Context
+//   - callMsg ethereum.CallMsg
+//   - intParam *big.Int
+func (_e *MockTxSubmitterETHClient_Expecter) CallContract(context1 any, callMsg any, intParam any) *MockTxSubmitterETHClient_CallContract_Call {
+	return &MockTxSubmitterETHClient_CallContract_Call{Call: _e.mock.On("CallContract", context1, callMsg, intParam)}
+}
+
+func (_c *MockTxSubmitterETHClient_CallContract_Call) Run(run func(context1 context.Context, callMsg ethereum.CallMsg, intParam *big.Int)) *MockTxSubmitterETHClient_CallContract_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 ethereum.CallMsg
+		if args[1] != nil {
+			arg1 = args[1].(ethereum.CallMsg)
+		}
+		var arg2 *big.Int
+		if args[2] != nil {
+			arg2 = args[2].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockTxSubmitterETHClient_CallContract_Call) Return(bytes []byte, err error) *MockTxSubmitterETHClient_CallContract_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockTxSubmitterETHClient_CallContract_Call) RunAndReturn(run func(context1 context.Context, callMsg ethereum.CallMsg, intParam *big.Int) ([]byte, error)) *MockTxSubmitterETHClient_CallContract_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // EstimateGasAtBlock provides a mock function for the type MockTxSubmitterETHClient
 func (_mock *MockTxSubmitterETHClient) EstimateGasAtBlock(context1 context.Context, callMsg ethereum.CallMsg, intParam *big.Int) (uint64, error) {
 	ret := _mock.Called(context1, callMsg, intParam)

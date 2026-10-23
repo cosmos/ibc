@@ -4,6 +4,7 @@ package chain
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"math/big"
 	"time"
 
@@ -27,4 +28,13 @@ type FaultInjector interface {
 // without exposing their funding identities or controls to workflow callers.
 type EOAFunder interface {
 	EnsureEOABalance(ctx context.Context, address common.Address, minimum *big.Int) error
+}
+
+// ValidatorVoter exposes a BFT chain's genesis validator keys and changes its
+// validator set through header voting, across nodes the managed Chain runs.
+type ValidatorVoter interface {
+	ValidatorKeys() []*ecdsa.PrivateKey
+	Nodes() []common.Address
+	Validators(ctx context.Context) ([]common.Address, error)
+	VoteValidator(ctx context.Context, validator common.Address, add bool) error
 }

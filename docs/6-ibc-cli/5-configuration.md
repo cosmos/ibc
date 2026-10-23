@@ -231,7 +231,7 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | **required** to run | Address of the ICS26 router on the chain. |
-| `evm.ibcMulticall` | `string` | optional | The batching contract address. |
+| `evm.ibcMulticall` | `string` | **required** to relay | The batching contract address, required to run the relayer. |
 
 <!-- [config.go:L119](cli/internal/config/config.go#L119) -->
 
@@ -255,8 +255,8 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.chainId, connections[].clientB.chainId` | `string` | **required** | The chain this end's client lives on. |
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
-| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `besu-qbft` \| `remote` | **required** | Light client type. |
-| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it is required. |
+| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `besu` \| `remote` | **required** | Light client type. |
+| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu`, and `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it is required. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
 <!-- [relayer.go:L73](cli/internal/config/relayer.go#L73) -->

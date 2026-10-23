@@ -32,7 +32,7 @@ You can deploy the IBC Solidity contracts to an EVM chain with an RPC endpoint a
 It deploys the following contracts:
 
 - The core routing stack: an access manager, the [ICS26Router](../5-ibc-solidity-contracts/2-ics26-router.md), and `IBCMulticall`, with both contracts behind proxies.
-- A light client on each chain tracking the other, registered on the router: an [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md), or a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md) when the tracked chain runs Besu QBFT.
+- A light client on each chain tracking the other, registered on the router: an [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md), or a [Besu light client](../4-light-clients/3-besu-light-client.md) when the tracked chain runs Besu QBFT or IBFT 2.0.
 - The [ICS27GMP](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) app and its account logic.
 - [IFT](../5-ibc-solidity-contracts/4-ift-contracts.md) token contracts, and the bridges between them.
 
@@ -77,11 +77,11 @@ Before it can deliver anything, the relayer needs proof of the packets for the l
 
 For an attestation light client, the prover asks the client's attestors to attest to the chain's state at a height. It verifies each signature and checks that the attested data matches the expected chain state or packet claim before counting it toward the client's threshold. Once enough attestors agree, it packages the attestation and its signatures together. That package is the proof.
 
-For a [Besu QBFT light client](../4-light-clients/3-besu-qbft-light-client.md), the prover reads the sealed header and an `eth_getProof` result from the Besu chain itself and packages the header with the account and storage proofs. The client's validator rules are checked when the transaction is simulated.
+For a [Besu light client](../4-light-clients/3-besu-light-client.md), the prover reads the sealed header and an `eth_getProof` result from the Besu chain itself and packages the header with the account and storage proofs. The client's validator rules are checked when the transaction is simulated.
 
 Either way it returns the client updates for a height, and a proof for each packet in the batch.
 
-The relayer then turns each batch of packets heading to the same destination into one transaction. That transaction makes a single call to the router. It carries a list of operations: first an update advancing the light client to the height just proved, then one delivery for each packet in the batch.
+The relayer then turns each batch of packets heading to the same destination into one transaction. Every configured EVM chain must have router and `IBCMulticall` addresses to run a relayer; an attestor requires only the router address. CLI deployments include both in the generated config. Each batch carries a list of operations: first any client updates needed for the height just proved, then one delivery for each packet in the batch.
 
 ### Signing and gas
 
@@ -135,7 +135,7 @@ IBC CLI stores the configuration for deployment, the relayer, and attestors in a
 
 It has eight blocks:
 
-- `chains`: the chains all three parts talk to, with a router address for each, an RPC endpoint, and a websocket endpoint where auto-relay is enabled.
+- `chains`: the chains all three parts talk to, with router and multicall addresses for relaying, an RPC endpoint, and a websocket endpoint where auto-relay is enabled.
 - `relayer`: the connections to relay, and per-chain relay settings.
 - `attestors`: the attestors this process runs, or queries over the network.
 - `signers`: the keys, each under an alias the other blocks reference by name.

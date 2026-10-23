@@ -19,7 +19,7 @@ between them.
 | | Supported |
 | --- | --- |
 | Chain types | `evm` |
-| Light client types | `attestation`, `besu-qbft` |
+| Light client types | `attestation`, `besu` |
 
 ## CLI Commands
 

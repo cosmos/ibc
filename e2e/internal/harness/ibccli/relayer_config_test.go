@@ -35,10 +35,12 @@ chains:
         rpc: http://chain-1
         ws: ws://chain-1
         ics26Router: router-1
+        ibcMulticall: multicall-1
     - chainId: "2"
       evm:
         rpc: http://chain-2
         ics26Router: router-2
+        ibcMulticall: multicall-2
 relayer:
     dispatchPollInterval: 100ms
     chainOverrides:
@@ -175,8 +177,14 @@ func testRelayerConfig() RelayerConfig {
 	return RelayerConfig{
 		DBPath: "/tmp/ibc.db", SignerAlias: "tx", SignerKeyFile: "/tmp/default.key", FinalityOffset: 3,
 		Chains: []RelayerChain{
-			{ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1", ICS26Router: "router-1"},
-			{ChainID: "2", RPC: "http://chain-2", ICS26Router: "router-2"},
+			{
+				ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1",
+				ICS26Router: "router-1", IBCMulticall: "multicall-1",
+			},
+			{
+				ChainID: "2", RPC: "http://chain-2",
+				ICS26Router: "router-2", IBCMulticall: "multicall-2",
+			},
 		},
 		Connections: []RelayerConnection{
 			{
@@ -194,13 +202,13 @@ func testRelayerConfig() RelayerConfig {
 
 func TestClientTypesPerEnd(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].A.ClientType = clientkind.BesuQBFT
-	cfg.Connections[0].B.ClientType = clientkind.BesuQBFT
+	cfg.Connections[0].A.ClientType = clientkind.Besu
+	cfg.Connections[0].B.ClientType = clientkind.Besu
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientB.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientB.Type)
 	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
 	require.Empty(t, file.Attestors)
 	require.Equal(t, []signerConfig{
@@ -211,7 +219,7 @@ func TestClientTypesPerEnd(t *testing.T) {
 	cfg.Connections[0].B.ClientType = clientkind.Attestation
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 
 	// a prover URL overrides both ends

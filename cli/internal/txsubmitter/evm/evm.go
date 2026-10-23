@@ -46,6 +46,7 @@ type ETHClient interface {
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 	SuggestGasTipCap(context.Context) (*big.Int, error)
 	PendingCodeAt(context.Context, common.Address) ([]byte, error)
+	CallContract(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error)
 	EstimateGasAtBlock(context.Context, ethereum.CallMsg, *big.Int) (uint64, error)
 	NonceAt(context.Context, common.Address, *big.Int) (uint64, error)
 	PendingNonceAt(context.Context, common.Address) (uint64, error)
@@ -53,7 +54,7 @@ type ETHClient interface {
 	TransactionReceipt(context.Context, common.Hash) (*types.Receipt, error)
 }
 
-// TxSubmitter signs and broadcasts transactions on one EVM chain.
+// TxSubmitter simulates, signs, and broadcasts transactions on one EVM chain.
 type TxSubmitter struct {
 	chainID                        string
 	eth                            ETHClient
