@@ -81,14 +81,3 @@ run-all-checks: ## Run "all-in-one" code validation step.
 .PHONY: help build install docker-build lint lint-fix test
 .PHONY: codegen codegen-sql codegen-proto codegen-mocks
 .PHONY: check-stale run-all-checks
-
-.PHONY: sync-besu-fixture
-# TODO(FOU-1406): remove once the fixtures are generated in this repo's e2e flow.
-sync-besu-fixture: ## Copy the QBFT and IBFT2 fixtures at the go-abigen commit from the contracts checkout
-	@test -n "$(strip $(IBC_CONTRACTS))" || { echo "Set IBC_CONTRACTS to the ibc-contracts checkout path" >&2; exit 1; }
-	rev=$$(go list -m -f '{{.Version}}' github.com/cosmos/ibc-contracts/packages/go-abigen | sed 's/.*-//') && \
-	for fixture in qbft ibft2; do \
-		git -C "$(IBC_CONTRACTS)" show "$$rev:ibc-solidity/test/besu-bft/fixtures/$$fixture.json" > besu/besutest/testdata/$$fixture.json.tmp && \
-			mv besu/besutest/testdata/$$fixture.json.tmp besu/besutest/testdata/$$fixture.json || \
-			{ rm -f besu/besutest/testdata/$$fixture.json.tmp; exit 1; }; \
-	done
