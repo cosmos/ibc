@@ -54,12 +54,11 @@ relayer:
         signer: "relayer-key"
         clientId: "base-0"
         type: "attestation"
-        params: {}
         autoRelay:
           enabled: false
       clientB:
-        type: "remote"
-        params:
+        type: "attestation"
+        remoteProver:
           url: "https://prover.example.com"
           tls: {}
         chainId: "8453"
