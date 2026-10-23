@@ -7,9 +7,9 @@ TLDR: three pages under `docs/6-ibc-cli/` carry tables of every CLI command and
 flag, every config key, and every gRPC message and field. This script builds
 those tables from the code and writes them onto the pages, replacing only the
 text inside the GEN markers. Run `refgen.py all` to update them and
-`refgen.py all --check` to fail when a page no longer matches the code. Run it
-before opening a pull request that changes `cli/`, `proto/` or `gen/`; the
-procedure is in AGENTS.md beside this file.
+`refgen.py all --check` to fail when a page no longer matches the code. Use it
+when changing the commands, configuration, API, or cited code represented by
+the pages; the procedure is in AGENTS.md beside this file.
 
 A reference page is part prose and part table. The prose is written by a human
 and the tables are derived from code, so the tables can be regenerated whenever
@@ -3232,8 +3232,8 @@ repository by docs/6-ibc-cli/tools/refgen.py. Do not edit inside them: the next
 run overwrites whatever is there, so a hand edit looks like a fix and is not.
 The prose around them is written by hand and is yours to change.
 
-After changing cli/, proto/ or gen/, follow docs/6-ibc-cli/tools/AGENTS.md
-before opening a pull request."""
+When changing commands, configuration, APIs, or cited behavior represented on
+these pages, follow docs/6-ibc-cli/tools/AGENTS.md."""
 
 
 def _notice():
