@@ -181,7 +181,8 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	updateClient, err := routerABI.Pack("updateClient", destinationClient.ID(), proof)
 	require.NoError(t, err)
 	router := common.HexToAddress(string(destinationClient.IBCInstance().Locator()))
-	require.NoError(t, sender.BroadcastTx(ctx, destinationEVM, router, updateClient))
+	_, err = sender.BroadcastTx(ctx, destinationEVM, router, updateClient)
+	require.NoError(t, err)
 
 	frozenState := attestedClientState(t, destinationEVM, clientAddress)
 	require.True(t, frozenState.IsFrozen)

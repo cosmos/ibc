@@ -269,5 +269,6 @@ func setIFTRateLimit(t *testing.T, chain *environment.Chain, deployment *e2etest
 		big.NewInt(int64(rateLimitWindow/time.Second)),
 	)
 	require.NoError(t, err)
-	require.NoError(t, sender.BroadcastTx(t.Context(), client, apps.IFT, data))
+	_, err = sender.BroadcastTx(t.Context(), client, apps.IFT, data)
+	require.NoError(t, err)
 }
