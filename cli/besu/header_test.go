@@ -148,6 +148,42 @@ func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	assert.Empty(t, parsed.Consensus)
 }
 
+// A header resealed by a quorum of new validators parses to their consensus
+// with those validators in ascending order and one seal per signer. A signer
+// outside the validators, or repeated, is rejected.
+func TestSealHeader(t *testing.T) {
+	for _, consensus := range besu.Consensuses {
+		var header types.Header
+		require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t, consensus).AdjacentUpdate.HeaderRLP, &header))
+		header.Root = common.HexToHash("0x01")
+
+		keys := make([]*ecdsa.PrivateKey, 4)
+		validators := make([]common.Address, len(keys))
+		for i := range keys {
+			key, err := crypto.GenerateKey()
+			require.NoError(t, err)
+			keys[i], validators[i] = key, crypto.PubkeyToAddress(key.PublicKey)
+		}
+
+		sealed, err := besu.SealHeader(&header, consensus, validators, keys[:3])
+		require.NoError(t, err)
+		assert.Equal(t, consensus, sealed.Consensus)
+		assert.Equal(t, slices.SortedFunc(slices.Values(validators), common.Address.Cmp), sealed.Validators)
+		assert.Equal(t, header.Root, sealed.StateRoot)
+		var resealed types.Header
+		require.NoError(t, rlp.DecodeBytes(sealed.RLP, &resealed))
+		_, seals := splitExtra(t, resealed.Extra)
+		assert.Len(t, seals, 3)
+
+		outsider, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		_, err = besu.SealHeader(&header, consensus, validators, []*ecdsa.PrivateKey{keys[0], outsider})
+		require.ErrorContains(t, err, "is not a validator")
+		_, err = besu.SealHeader(&header, consensus, validators, []*ecdsa.PrivateKey{keys[0], keys[1], keys[0]})
+		require.ErrorContains(t, err, "repeats")
+	}
+}
+
 // Validator seals under two consensuses leave the chain's consensus unknown,
 // so parsing fails rather than pick one.
 func TestParseSealedHeaderRejectsSealsUnderTwoConsensuses(t *testing.T) {

@@ -470,7 +470,7 @@ func TestDeployConnection(t *testing.T) {
 // routers core deployed (configureRouters).
 func TestDeployBesuQBFTIBFT2Connection(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, besuChains(t, besu.QBFT, besu.IBFT2))
+	d := startDeployCLI(t, e2etest.BesuChains(t, besu.QBFT, besu.IBFT2))
 	ctx := t.Context()
 
 	d.deployCore(t)
@@ -511,7 +511,7 @@ func TestDeployBesuQBFTIBFT2Connection(t *testing.T) {
 // proves its receive with one client type and its ack with the other.
 func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 	t.Parallel()
-	d := startDeployCLI(t, besuChains(t, besu.QBFT, besu.QBFT))
+	d := startDeployCLI(t, e2etest.BesuChains(t, besu.QBFT, besu.QBFT))
 	ctx := t.Context()
 
 	d.deployCore(t)

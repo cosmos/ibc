@@ -140,7 +140,7 @@ func TestRemoteSignerFixtureRequiresKeyID(t *testing.T) {
 
 func TestIFTTransfer_RemoteSigner(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(
 		t,
 		e2etest.EVMRequirements{},
 		e2etest.ChainA,
@@ -212,14 +212,14 @@ func TestIFTTransfer_RemoteSigner(t *testing.T) {
 
 func TestAttestedIFTTransfer_RemoteSigner(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(
 		t,
 		e2etest.EVMRequirements{},
 		e2etest.ChainA,
 		e2etest.ChainB,
 	))
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	remoteAttestorID := meshAttestorFor(route.Destination, route.Source)
+	remoteAttestorID := e2etest.MeshAttestorFor(route.Destination, route.Source)
 	remoteAttestorKey := runtime.Authorities[environment.AuthorityID(remoteAttestorID)].PrivateKeyHex
 	remoteSignerEndpoint, remoteSigner := startRemoteSignerFixture(
 		t,
