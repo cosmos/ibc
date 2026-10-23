@@ -4,6 +4,7 @@ package environment
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -270,8 +271,8 @@ func (c *Chain) Funding() (*Funding, error) {
 	return c.funding, nil
 }
 
-// Validators returns validator voting only for managed Besu Chains running
-// more than one node, so a vote can bring in a validator that seals blocks.
+// Validators returns the validators of a managed Besu Chain: their keys, so a
+// workflow can sign headers the Chain itself never produced, and voting.
 func (c *Chain) Validators() (*Validators, error) {
 	err := c.use(func() error {
 		if c.validators == nil {
@@ -290,7 +291,10 @@ type Validators struct {
 	chain      *Chain
 }
 
-// Nodes is the validator address of each node, the genesis validator first.
+// Keys returns the genesis validators' keys.
+func (v *Validators) Keys() []*ecdsa.PrivateKey { return v.controller.ValidatorKeys() }
+
+// Nodes is the validator address of each node, the genesis validators first.
 func (v *Validators) Nodes() []common.Address { return v.controller.Nodes() }
 
 // Current is the validator set at the head.
