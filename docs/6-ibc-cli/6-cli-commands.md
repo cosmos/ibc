@@ -256,7 +256,7 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 `--chain` is required.
 
 ```bash
-ibc deploy client besu --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
+ibc deploy client besu --chain 41002 --counterparty-chain 41001 --trusting-period 336h --yes
 ```
 
 The client starts trusting the counterparty's current head, and the head's commit seals decide which light client it deploys: the QBFT one or the IBFT 2.0 one, whose seals sign a different digest. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or clock drift, or after the counterparty's consensus changed, fails and lists the differences. See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
@@ -496,7 +496,9 @@ List the packets the relayer is aware of, most recent first.
 ibc relayer packets --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. <!-- [cli/cmd/ibc/relayer.go: relayerPacketsAll] --> [API](7-api.md) lists the states `--state` accepts.
+Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. <!-- [cli/cmd/ibc/relayer.go: relayerPacketsAll] -->
+
+Use the short names in the flag table for `--state`. For example, `--state succeeded` selects `PACKET_STATE_SUCCEEDED` results. <!-- [cli/cmd/ibc/relayer.go: packetStates] --> See [API](7-api.md#packetstate) for the returned states.
 
 ## `attestor`
 
@@ -554,6 +556,8 @@ Query a local attestor for a state attestation at `--height`.
 <!-- [main.go:L123](cli/cmd/ibc/main.go#L123) -->
 
 <!-- GEN:cli:cmd:attestor-state-attestation END -->
+
+Pass a positive `--height`. Zero and omission are rejected. <!-- [cli/internal/service/attestor/local.go: validateHeight] --> <!-- [cli/cmd/ibc/main.go: init] --> <!-- [cli/cmd/ibc/attestor.go: attestorStateAttestation] --> Use `ibc attestor latest-height <name>` to get the highest attestable height. <!-- [cli/internal/service/attestor/local.go: LocalAttestor.LatestHeight] -->
 
 ## `tx`
 
@@ -682,3 +686,7 @@ against the CLI worktree based on ae06619851c69673e8bc8f4075fb0284ed93ef1f.
 Two independent source reviews and a readability review completed. Command tests
 covered preservation, reruns, dry runs, and failure paths. A fresh local Besu
 25.4.0 deployment populated both chains and completed the mixed-client tutorial. -->
+
+<!-- Besu example and flag corrections verified 2026-10-23 against CLI
+2ad55f63, including prior local runtime checks. Two independent source
+reviews and a readability review covered these corrections. -->

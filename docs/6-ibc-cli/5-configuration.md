@@ -57,10 +57,14 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "relayer-key-id"
-  - alias: "attestor-dan-key"
+  - alias: "attestor-dan-base-key"
     type: remote
     grpc: cosmos-kms.example.com:9090
-    remoteKeyId: "attestor-dan-key-id"
+    remoteKeyId: "attestor-dan-base-key-id"
+  - alias: "attestor-dan-ethereum-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-ethereum-key-id"
 db:
   type: sqlite
   url: ibc.db
@@ -113,12 +117,12 @@ attestors:
   - name: "attestor-dan-base"
     chainId: "8453"
     type: local
-    signer: "attestor-dan-key"
+    signer: "attestor-dan-base-key"
     finalityOffset: 1
   - name: "attestor-dan-ethereum"
     chainId: "1"
     type: local
-    signer: "attestor-dan-key"
+    signer: "attestor-dan-ethereum-key"
 ```
 
 <!-- [sample.yml:L1](cli/internal/config/testdata/sample.yml#L1) -->
@@ -144,7 +148,7 @@ Some fields name something declared elsewhere in the file. The loader checks eac
 
 <!-- GEN:config:crossrefs END -->
 
-For example, `signer: attestor-dan-key` selects the signer whose alias is `attestor-dan-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. `ibc config validate`, `ibc relayer run`, and `ibc attestor run` reject unresolved references.
+For example, `signer: attestor-dan-base-key` selects the signer whose alias is `attestor-dan-base-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. `ibc config validate`, `ibc relayer run`, and `ibc attestor run` reject unresolved references.
 
 ## `server`
 
@@ -333,7 +337,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainId` | `string` | **required** | The chain this attestor watches. |
-| `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
+| `name` | `string` | **required** | The attestor's own self-reported identity. For local attestors, names must be unique. |
 | `type` | `local` | **required** | Whether this process runs the attestor or queries it. |
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
@@ -357,7 +361,7 @@ attestors:
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
-| `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
+| `name` | `string` | **required** | The attestor's own self-reported identity. For local attestors, names must be unique. |
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port, or an http(s):// URL without a query or fragment. https:// uses TLS. |
 | `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
@@ -375,6 +379,8 @@ A remote entry does not set `chainId` or `signer`. The process obtains the attes
 Fields from the other attestor type are rejected. A remote attestor cannot set `chainId`, and a local attestor cannot set `grpc`. <!-- [cli/internal/config/config.go: AttestorConfig.Validate] -->
 
 Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [cli/internal/config/config.go: Attestors.validateIdentities] -->
+
+Use separate signing keys for independent clients and chains. See [Attestor keys](../4-light-clients/2-attestors.md#attestor-keys) for the signature replay risk.
 
 ## `signers`
 
@@ -461,3 +467,7 @@ The complete example runs the relayer and both attestors together. In production
 - [Run a standalone relayer](4-run-a-standalone-relayer.md)
 - [Run a standalone attestor](3-run-a-standalone-attestor.md)
 - [CLI commands](6-cli-commands.md) for command-line overrides
+
+<!-- Key and naming corrections verified 2026-10-23 against CLI 2ad55f63
+and contracts f564e633. Two independent source reviews and a readability
+review covered these corrections. The updated config fixture passed its tests. -->
