@@ -42,6 +42,7 @@ var (
 	flagDeployDeployer        string
 	flagDeployDryRun          bool
 	flagDeployYes             bool
+	flagDeployCorePopulate    bool
 	flagDeployChain           string
 	flagDeployCounterparty    string
 	flagDeployClientID        string
@@ -284,7 +285,30 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
+	if runErr := planThenRun(
+		cmd.Context(),
+		deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain),
+	); runErr != nil {
+		return runErr
+	}
+	if !flagDeployCorePopulate || flagDeployDryRun {
+		return nil
+	}
+
+	m, err := manifest.Load(flagDeployManifestDir, flagDeployChain)
+	if err != nil {
+		return err
+	}
+	if m == nil || m.Core.Router == "" || m.Core.Multicall == "" {
+		return errors.Errorf("core manifest for chain %s has no router or multicall recorded", flagDeployChain)
+	}
+	merged, _, err := cfg.ReconcileDeployment(config.DeploymentConfig{
+		Chains: []config.ChainConfig{renderedChain(cfg, m)},
+	})
+	if err != nil {
+		return err
+	}
+	return populateRenderedConfig(merged)
 }
 
 // clientSpec resolves the client ids for --chain tracking

@@ -217,7 +217,7 @@ Deploy and register an attestation light client.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L164](cli/cmd/ibc/main.go#L164) -->
+<!-- [main.go:L166](cli/cmd/ibc/main.go#L166) -->
 
 <!-- GEN:cli:cmd:deploy-client-attestation END -->
 
@@ -249,7 +249,7 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
+<!-- [main.go:L182](cli/cmd/ibc/main.go#L182) -->
 
 <!-- GEN:cli:cmd:deploy-client-besu END -->
 
@@ -269,19 +269,22 @@ Deploy the core IBC routing stack on one chain.
 
 | Flag | Default | Description |
 |---|---|---|
+| `-p, --populate-config` |  | Write the deployed router and multicall addresses to the config. |
 | `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L153](cli/cmd/ibc/main.go#L153) -->
 
 <!-- GEN:cli:cmd:deploy-core END -->
 
 Deploys the access manager, router, and multicall. The manifest records the
 proxies as `core.router` and `core.multicall`. Rerunning resumes unfinished
 deployment steps and skips contracts already deployed. <!-- [cli/internal/deploy/steps.go: CoreSteps] -->
+
+Pass `--populate-config` to write the router and multicall addresses into the chain's config entry. With `--dry-run`, the config stays unchanged. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
 ### `ibc deploy gmp`
 
@@ -320,7 +323,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L197](cli/cmd/ibc/main.go#L197) -->
+<!-- [main.go:L199](cli/cmd/ibc/main.go#L199) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -349,7 +352,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L207](cli/cmd/ibc/main.go#L207) -->
+<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -374,7 +377,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L189](cli/cmd/ibc/main.go#L189) -->
+<!-- [main.go:L191](cli/cmd/ibc/main.go#L191) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -570,7 +573,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L233](cli/cmd/ibc/main.go#L233) -->
+<!-- [main.go:L235](cli/cmd/ibc/main.go#L235) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -590,7 +593,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L238](cli/cmd/ibc/main.go#L238) -->
+<!-- [main.go:L240](cli/cmd/ibc/main.go#L240) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
@@ -673,3 +676,9 @@ cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
 OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
 Unchanged content was not comprehensively reverified. Runtime availability
 and external tool installation are outside this source review. -->
+
+<!-- The deploy core --populate-config behavior was verified 2026-10-23
+against the CLI worktree based on ae06619851c69673e8bc8f4075fb0284ed93ef1f.
+Two independent source reviews and a readability review completed. Command tests
+covered preservation, reruns, dry runs, and failure paths. A fresh local Besu
+25.4.0 deployment populated both chains and completed the mixed-client tutorial. -->

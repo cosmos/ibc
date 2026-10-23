@@ -8,7 +8,7 @@ Replace the tutorial's attestor for chain 41002 by migrating to a replacement cl
 ## Before you begin
 
 Complete [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md).
-Keep its relayer running, including both local attestors.
+Keep its relayer running, including the local attestor for 41002.
 Run every command from the `cli` directory of your IBC clone.
 You need [Foundry](https://getfoundry.sh/introduction/installation), [Bun](https://bun.com/docs/installation), and the tutorial's deployer admin key.
 
@@ -94,11 +94,6 @@ In `~/.ibc/ibc.yml`, replace the `attestors` section with:
 
 ```yaml
 attestors:
-- name: attestor-41001
-  type: local
-  chainId: "41001"
-  signer: attestor-41001
-  finalityOffset: 1
 - name: attestor-41002-replacement
   type: local
   chainId: "41002"
@@ -163,13 +158,13 @@ As a result, `ibc deploy status` reports a client-address mismatch.
 Rerunning `ibc deploy client attestation` does not refresh the recorded set.
 The `ibc deploy render-config` command still derives attestors from those stale records.
 
-<!-- Verified 2026-10-22 against CLI code from main
-1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
-f564e6339cfd49498b043cc9fab770ed6f20ebaa. The direct-migration procedure was
-exercised on isolated Besu 25.4.0 chains. The new client accepted only the
-replacement attestor with threshold one, counterparty data was preserved,
-and a transfer increased the destination balance by one token.
-The manifest stayed unchanged and deploy status reported the client-address
-mismatch. Independent source and readability reviews completed.
-RPC ports and the CLI home were isolated; external tool installation and the
-optional intermediate-client procedure were not tested in this run. -->
+<!-- Mixed-client changes verified 2026-10-23 against CLI
+ae06619851c69673e8bc8f4075fb0284ed93ef1f and contracts
+f564e6339cfd49498b043cc9fab770ed6f20ebaa.
+The mixed-client changes received two independent source reviews. The direct
+migration ran on isolated Besu 25.4.0 chains. The replacement client accepted
+only the replacement attestor with threshold one. A transfer from 41002 to
+41001 succeeded using the replacement attestor for delivery and Besu proofs
+for acknowledgement. RPC ports and the CLI home were isolated. A matching
+contracts checkout was reused; external tool installation and the optional
+intermediate-client procedure were not tested in this run. -->

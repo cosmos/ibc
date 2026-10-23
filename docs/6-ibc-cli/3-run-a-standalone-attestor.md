@@ -15,9 +15,9 @@ You need:
 - **The chain's RPC endpoint and router address.** General configuration validation permits a missing router address, but attestor startup requires it.
 - [Go](https://go.dev/doc/install) 1.26.9 or later and a [build of the binary](2-tutorial-deploy-ibc-and-send-a-token.md).
 
-The commands below continue from the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md). They move the attestor keys it generated into processes of their own, reading values from your own deployment rather than asking you to copy one.
+The commands below move the tutorial's attestor for 41002 into its own process. The Besu client on 41002 verifies chain 41001 without an attestor.
 
-> **Warning:** Stop the tutorial's relayer before you start, with `Ctrl+C` in its terminal. It hosts both attestors inside its own process, and this guide gives those same attestors processes of their own.
+> **Warning:** Stop the tutorial's relayer with `Ctrl+C` in its terminal. It hosts the attestor that this guide moves into a separate process.
 
 ## 1. Attestor config
 
@@ -126,56 +126,6 @@ This should be the address of the attestor.
 
 This shows the attestor's latest height.
 
-## 4. Run the second attestor
-
-The [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) this guide follows generated one attestor per chain. The following steps repeat the process to create an attestor for chain 41001, in its own configuration file on port 3003. Port 3002 is left free for the relayer in the next guide.
-
-1. Create a third configuration file:
-
-```bash
-./bin/ibc config new --config ibc-attestor-41001.yml
-```
-
-2. Write its configuration:
-
-```bash
-cat > ~/.ibc/ibc-attestor-41001.yml <<EOF
-server:
-  listenAddr: 0.0.0.0:3003
-
-chains:
-- chainId: "41001"
-  evm:
-    rpc: http://localhost:8545
-    ics26Router: "$(./bin/ibc deploy show 41001 | jq -r '.core.router')"
-
-attestors:
-- name: attestor-41001
-  type: local
-  chainId: "41001"
-  signer: attestor-41001
-  finalityOffset: 1
-
-signers:
-- alias: attestor-41001
-  type: local
-  file: attestor-41001
-EOF
-```
-
-3. Start it in another terminal:
-
-```bash
-./bin/ibc attestor run --config ibc-attestor-41001.yml
-```
-
-```
-level=INFO msg="Starting attestor" module=bootstrap
-level=INFO msg=Readiness module=bootstrap readiness="{Event:ready HTTP:[::]:3003}"
-```
-
-Both attestors now run in processes of their own, and no relayer is running.
-
 ## Connect a relayer
 
 A relayer references your attestor by name and network address:
@@ -191,11 +141,13 @@ If the attestor is served behind TLS, write its address as `https://host`, which
 
 ## Next steps
 
-- [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries these attestors instead of hosting its own.
+- [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries this attestor instead of hosting its own.
 
-<!-- Verified 2026-10-22 against CLI code from main
-1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
-f564e6339cfd49498b043cc9fab770ed6f20ebaa. Both standalone processes started
-on isolated Besu 25.4.0 chains and served identity, height, and signed state
-attestations. The standalone relayer then delivered a transfer using them.
-RPC ports and the CLI home were isolated; external tool installation was not tested. -->
+<!-- Mixed-client changes verified 2026-10-23 against CLI
+ae06619851c69673e8bc8f4075fb0284ed93ef1f and contracts
+f564e6339cfd49498b043cc9fab770ed6f20ebaa.
+The mixed-client changes received two independent source reviews. One standalone
+attestor for 41002 served identity, height, and signed state attestations on
+isolated Besu 25.4.0 chains. The standalone relayer then delivered a transfer
+using that attestor and the Besu client. RPC ports and the CLI home were
+isolated; external tool installation was not tested. -->

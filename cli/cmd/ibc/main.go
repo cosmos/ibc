@@ -150,6 +150,8 @@ func init() {
 	dpf.StringVar(&flagDeployChain, "chain", "", "chain ID for the chain being deployed to")
 	dpf.BoolVar(&flagDeployDryRun, "dry-run", false, "print the step plan without submitting transactions")
 	dpf.BoolVar(&flagDeployYes, "yes", false, "skip confirmation prompts")
+	cmdDeployCore.Flags().BoolVarP(&flagDeployCorePopulate, "populate-config", "p", false,
+		"write the deployed router and multicall addresses to the config")
 
 	cmdDeployClient.AddCommand(cmdDeployClientAttestation, cmdDeployClientBesu)
 	for _, c := range []*cobra.Command{cmdDeployClientAttestation, cmdDeployClientBesu} {
