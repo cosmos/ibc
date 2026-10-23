@@ -92,9 +92,9 @@ func TestIFTTransfer_RecvRateLimitRefund(t *testing.T) {
 	require.NoError(t, err)
 
 	// Both receives write acknowledgements, including the rejected transfer.
-	sequences, err := iftApp.WriteAcknowledgementSequences(ctx, recvHash)
+	ids, err := iftApp.WriteAcknowledgementPacketIDs(ctx, recvHash)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []uint64{packets[0].Sequence, packets[1].Sequence}, sequences)
+	require.ElementsMatch(t, []e2etest.PacketID{packets[0].ID(), packets[1].ID()}, ids)
 
 	// Prove the rejected transfer hit the limit, rather than an unrelated application error.
 	parser, err := ics26router.NewContractFilterer(apps.ICS26Router, nil)
@@ -153,11 +153,11 @@ func testIFTRefundRateLimit(t *testing.T, timeout time.Duration) {
 	// Tighten the source limit after sending so only refunds, not outbound burns, are constrained.
 	setIFTRateLimit(t, source, deployment, sender)
 	terminal := relayerv2.PacketState_PACKET_STATE_REJECTED
-	sequencesInTx := iftApp.AckPacketSequences
+	packetIDsInTx := iftApp.AckPacketIDs
 	refundTx := (*relayerv2.PacketStatus).GetAckTx
 	if timeout != 0 {
 		terminal = relayerv2.PacketState_PACKET_STATE_TIMED_OUT
-		sequencesInTx = iftApp.TimeoutPacketSequences
+		packetIDsInTx = iftApp.TimeoutPacketIDs
 		refundTx = (*relayerv2.PacketStatus).GetTimeoutTx
 		requireTimeoutFinalized(t, env, route.Destination, batch.LatestTimeoutTimestamp())
 	}
@@ -211,9 +211,9 @@ func testIFTRefundRateLimit(t *testing.T, timeout time.Duration) {
 	require.Equal(t, [][]byte{limitError[:4]}, failures)
 
 	// Only the successful refund should emit an ack or timeout event.
-	sequences, err := sequencesInTx(ctx, firstHash)
+	ids, err := packetIDsInTx(ctx, firstHash)
 	require.NoError(t, err)
-	require.Equal(t, []uint64{packets[refunded].Sequence}, sequences,
+	require.Equal(t, []e2etest.PacketID{packets[refunded].ID()}, ids,
 		"only the refund that fits may succeed")
 
 	// The blocked refund stays pending, and balances reflect just one refund.
@@ -230,9 +230,9 @@ func testIFTRefundRateLimit(t *testing.T, timeout time.Duration) {
 	require.NoError(t, err)
 	retryHash := refundTx(retried).GetTxHash()
 	require.NotEqual(t, firstHash, retryHash)
-	sequences, err = sequencesInTx(ctx, retryHash)
+	ids, err = packetIDsInTx(ctx, retryHash)
 	require.NoError(t, err)
-	require.Equal(t, []uint64{packets[pending].Sequence}, sequences)
+	require.Equal(t, []e2etest.PacketID{packets[pending].ID()}, ids)
 	_, err = e2etest.AwaitState(ctx, relayer, packets[refunded], terminal)
 	require.NoError(t, err)
 	require.NoError(t, batch.VerifyState(ctx, nil, []int{0, 1}))

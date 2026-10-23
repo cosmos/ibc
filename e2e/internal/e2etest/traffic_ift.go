@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -47,16 +46,12 @@ const ercTransferChunk = 64
 
 // IFT drives the Interchain Fungible Token pair on a single directed route.
 type IFT struct {
-	routeID        RouteID
-	source         endpoint
-	destination    endpoint
-	sender         evm.Account
-	sourceIFT      common.Address
-	destIFT        common.Address
-	sourceRouter   common.Address
-	destRouter     common.Address
-	sourceClientID string
-	batcher        common.Address
+	sourceRoute
+	destination endpoint
+	sourceIFT   common.Address
+	destIFT     common.Address
+	destRouter  common.Address
+	batcher     common.Address
 }
 
 // IFTSend is the result of an IFT Send: the packet it emitted plus the balance
@@ -69,7 +64,6 @@ type IFTSend struct {
 	sourceBefore            *big.Int
 	destinationBefore       *big.Int
 	destinationSupplyBefore *big.Int
-	timeoutTimestamp        uint64
 }
 
 func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
@@ -103,31 +97,26 @@ func (i *IFT) Send(ctx context.Context, request IFTRequest) (*IFTSend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT iftTransfer: %w", err)
 	}
-	receipt, sequence, err := send(
-		ctx,
-		i.source.evm,
-		i.sender,
-		i.sourceIFT,
-		data,
-		sendPacketSequence(i.sourceRouter),
-	)
+	sent, err := i.send(ctx, i.sourceIFT, data, 1)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send IFT on route %q: %w", i.routeID, err)
 	}
 	return &IFTSend{
-		sendResult:              newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence),
+		sendResult:              sent[0],
 		app:                     i,
 		receiver:                receiver,
 		amount:                  amount,
 		sourceBefore:            sourceBefore,
 		destinationBefore:       destinationBefore,
 		destinationSupplyBefore: destinationSupplyBefore,
-		timeoutTimestamp:        timeoutTimestamp,
 	}, nil
 }
 
 // SendBatch emits multiple IFT transfers from a single source transaction
 func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, error) {
+	if len(requests) == 0 {
+		return nil, fmt.Errorf("e2etest: IFT batch on route %q has no transfers", i.routeID)
+	}
 	transfers := make([]iftbatchtransfershim.IFTBatchTransferShimTransfer, len(requests))
 	destinationsBefore := make([]*big.Int, len(requests))
 	seenReceivers := make(map[common.Address]struct{}, len(requests))
@@ -180,37 +169,23 @@ func (i *IFT) SendBatch(ctx context.Context, requests []IFTRequest) (*IFTBatch, 
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack IFT batchIftTransfer: %w", err)
 	}
-	receipt, err := i.source.evm.BroadcastTx(ctx, i.sender, &i.batcher, data, nil)
+	sent, err := i.send(ctx, i.batcher, data, len(requests))
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send IFT batch on route %q: %w", i.routeID, err)
 	}
-	sequences, err := SendPacketSequences(i.sourceRouter, receipt)
-	if err != nil {
-		return nil, err
-	}
-	if len(sequences) != len(requests) {
-		return nil, fmt.Errorf(
-			"e2etest: IFT batch on route %q emitted %d packets, want %d",
-			i.routeID,
-			len(sequences),
-			len(requests),
-		)
-	}
 
 	packets := make([]iftBatchPacket, len(requests))
-	for k, sequence := range sequences {
+	for k, result := range sent {
 		packets[k] = iftBatchPacket{
-			packetTx:          newSendResult(i.routeID, i.source, i.sourceClientID, receipt, sequence).PacketTx(),
+			sendResult:        result,
 			receiver:          common.HexToAddress(transfers[k].Receiver),
 			amount:            transfers[k].Amount,
 			destinationBefore: destinationsBefore[k],
-			timeoutTimestamp:  transfers[k].TimeoutTimestamp,
 		}
 	}
 	return &IFTBatch{
 		app:                     i,
 		packets:                 packets,
-		receipt:                 receipt,
 		batcherBefore:           batcherBefore,
 		destinationSupplyBefore: destinationSupplyBefore,
 		total:                   total,
@@ -257,11 +232,10 @@ func (i *IFT) TransferBatch(ctx context.Context, requests []ERCTransferRequest) 
 }
 
 type iftBatchPacket struct {
-	packetTx          PacketTx
+	sendResult
 	receiver          common.Address
 	amount            *big.Int
 	destinationBefore *big.Int
-	timeoutTimestamp  uint64
 }
 
 // IFTBatch is the result of a SendBatch call: several IFT packets emitted
@@ -269,7 +243,6 @@ type iftBatchPacket struct {
 type IFTBatch struct {
 	app                     *IFT
 	packets                 []iftBatchPacket
-	receipt                 *types.Receipt
 	batcherBefore           *big.Int
 	destinationSupplyBefore *big.Int
 	total                   *big.Int
@@ -286,16 +259,13 @@ func (b *IFTBatch) PacketTxs() []PacketTx {
 }
 
 // TxHash is the hex hash of the one source transaction that emitted the batch.
-func (b *IFTBatch) TxHash() string { return b.receipt.TxHash.Hex() }
-
-// Receipt is the batch's source transaction receipt.
-func (b *IFTBatch) Receipt() *types.Receipt { return b.receipt }
+func (b *IFTBatch) TxHash() string { return b.packets[0].TxHash() }
 
 // LatestTimeoutTimestamp returns the latest packet timeout in the batch.
 func (b *IFTBatch) LatestTimeoutTimestamp() uint64 {
 	var latest uint64
 	for _, packet := range b.packets {
-		latest = max(latest, packet.timeoutTimestamp)
+		latest = max(latest, packet.Packet().TimeoutTimestamp)
 	}
 	return latest
 }
@@ -429,57 +399,19 @@ func (b *IFTBatch) VerifyBurned(ctx context.Context) error {
 	return nil
 }
 
-func (p *IFTSend) TimeoutTimestamp() uint64 { return p.timeoutTimestamp }
-
-// WriteAcknowledgementSequences returns the packet sequences written by a destination receive transaction.
-func (i *IFT) WriteAcknowledgementSequences(ctx context.Context, txHash string) ([]uint64, error) {
-	parser := mustBinding(ics26router.NewContractFilterer(i.destRouter, nil))
-	sequences, err := transactionEventSequences(
-		ctx,
-		i.destination,
-		i.destRouter,
-		txHash,
-		parser.ParseWriteAcknowledgement,
-		func(event *ics26router.ContractWriteAcknowledgement) uint64 { return event.Packet.Sequence },
-	)
-	if err != nil {
-		return nil, fmt.Errorf("e2etest: read IFT WriteAcknowledgement events: %w", err)
-	}
-	return sequences, nil
+// WriteAcknowledgementPacketIDs returns the IDs of the packets written by a destination receive transaction.
+func (i *IFT) WriteAcknowledgementPacketIDs(ctx context.Context, txHash string) ([]PacketID, error) {
+	return writeAcknowledgementPacketIDs(ctx, i.destination, i.destRouter, txHash)
 }
 
-// AckPacketSequences returns the packet sequences acknowledged by a source acknowledgement transaction.
-func (i *IFT) AckPacketSequences(ctx context.Context, txHash string) ([]uint64, error) {
-	parser := mustBinding(ics26router.NewContractFilterer(i.sourceRouter, nil))
-	sequences, err := transactionEventSequences(
-		ctx,
-		i.source,
-		i.sourceRouter,
-		txHash,
-		parser.ParseAckPacket,
-		func(event *ics26router.ContractAckPacket) uint64 { return event.Packet.Sequence },
-	)
-	if err != nil {
-		return nil, fmt.Errorf("e2etest: read IFT AckPacket events: %w", err)
-	}
-	return sequences, nil
+// AckPacketIDs returns the IDs of the packets acknowledged by a source acknowledgement transaction.
+func (i *IFT) AckPacketIDs(ctx context.Context, txHash string) ([]PacketID, error) {
+	return ackPacketIDs(ctx, i.source, i.sourceRouter, txHash)
 }
 
-// TimeoutPacketSequences returns the packet sequences timed out by a source timeout transaction.
-func (i *IFT) TimeoutPacketSequences(ctx context.Context, txHash string) ([]uint64, error) {
-	parser := mustBinding(ics26router.NewContractFilterer(i.sourceRouter, nil))
-	sequences, err := transactionEventSequences(
-		ctx,
-		i.source,
-		i.sourceRouter,
-		txHash,
-		parser.ParseTimeoutPacket,
-		func(event *ics26router.ContractTimeoutPacket) uint64 { return event.Packet.Sequence },
-	)
-	if err != nil {
-		return nil, fmt.Errorf("e2etest: read IFT TimeoutPacket events: %w", err)
-	}
-	return sequences, nil
+// TimeoutPacketIDs returns the IDs of the packets timed out by a source timeout transaction.
+func (i *IFT) TimeoutPacketIDs(ctx context.Context, txHash string) ([]PacketID, error) {
+	return timeoutPacketIDs(ctx, i.source, i.sourceRouter, txHash)
 }
 
 // VerifyBurned checks that the submitted amount left the source sender balance.
