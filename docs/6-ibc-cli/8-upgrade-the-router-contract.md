@@ -175,3 +175,10 @@ Clear the admin key when finished:
 ```bash
 unset DEPLOYER_KEY
 ```
+
+## Manifest drift
+
+The CLI does not currently have first-class support for contract upgrades.
+This guide upgrades the routers directly on chain, leaving each manifest's `targetData.ics26RouterImplementation` at its original address.
+Rerunning `ibc deploy core` reuses the deployed contracts without refreshing their implementation addresses in the manifests.
+
