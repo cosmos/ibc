@@ -401,6 +401,34 @@ func TestIFTRateLimit(t *testing.T) {
 	}
 }
 
+func TestNormalizeIFTAddress(t *testing.T) {
+	cfg := config.Config{Chains: config.Chains{
+		{ChainID: "1", EVM: &config.EVMChainConfig{}},
+		{ChainID: "2"},
+	}}
+	for _, expected := range []string{
+		"0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+		"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+	} {
+		for _, input := range []string{strings.ToLower(expected), expected} {
+			actual, err := normalizeIFTAddress(cfg, "1", input)
+			require.NoError(t, err)
+			require.Equal(t, expected, actual)
+		}
+	}
+
+	for _, input := range []string{"counterparty-token", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"} {
+		actual, err := normalizeIFTAddress(cfg, "2", input)
+		require.NoError(t, err)
+		require.Equal(t, input, actual)
+	}
+
+	_, err := normalizeIFTAddress(cfg, "1", "invalid")
+	require.ErrorContains(t, err, "invalid IFT address")
+	_, err = normalizeIFTAddress(cfg, "unknown", "counterparty-token")
+	require.ErrorContains(t, err, "not declared in config")
+}
+
 func TestWholeSeconds(t *testing.T) {
 	for _, tc := range []struct {
 		d       time.Duration

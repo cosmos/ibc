@@ -938,10 +938,13 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 	if flagDeployBridgeChainA == flagDeployBridgeChainB {
 		return errors.New("--chain-a and --chain-b must differ")
 	}
-	for _, addr := range []string{flagDeployBridgeIFTA, flagDeployBridgeIFTB} {
-		if !common.IsHexAddress(addr) {
-			return errors.Errorf("invalid IFT address %q", addr)
-		}
+	iftA, err := normalizeIFTAddress(cfg, flagDeployBridgeChainA, flagDeployBridgeIFTA)
+	if err != nil {
+		return err
+	}
+	iftB, err := normalizeIFTAddress(cfg, flagDeployBridgeChainB, flagDeployBridgeIFTB)
+	if err != nil {
+		return err
 	}
 	clientID := flagDeployBridgeClientID
 	if clientID == "" {
@@ -959,10 +962,25 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainB)
 	}
 	stepsA := deploy.IFTBridgeSteps(
-		targetA, flagDeployManifestDir, flagDeployBridgeChainA, flagDeployBridgeIFTA, flagDeployBridgeCtorA,
-		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTB})
+		targetA, flagDeployManifestDir, flagDeployBridgeChainA, iftA, flagDeployBridgeCtorA,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: iftB})
 	stepsB := deploy.IFTBridgeSteps(
-		targetB, flagDeployManifestDir, flagDeployBridgeChainB, flagDeployBridgeIFTB, flagDeployBridgeCtorB,
-		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTA})
+		targetB, flagDeployManifestDir, flagDeployBridgeChainB, iftB, flagDeployBridgeCtorB,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: iftA})
 	return planThenRun(cmd.Context(), append(stepsA, stepsB...))
+}
+
+func normalizeIFTAddress(cfg config.Config, chainID, address string) (string, error) {
+	chain, ok := cfg.Chain(chainID)
+	if !ok {
+		return "", errors.Errorf("chain %q not declared in config", chainID)
+	}
+	if chain.Type() != config.ChainTypeEVM {
+		return address, nil
+	}
+	if !common.IsHexAddress(address) {
+		return "", errors.Errorf("invalid IFT address %q", address)
+	}
+	// GMP identifies EVM senders by their checksummed address string.
+	return common.HexToAddress(address).Hex(), nil
 }
