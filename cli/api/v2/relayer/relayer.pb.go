@@ -152,8 +152,7 @@ type RelayRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
 	SourceChainId string                 `protobuf:"bytes,2,opt,name=source_chain_id,json=sourceChainId,proto3" json:"source_chain_id,omitempty"`
-	// Selection is required and controls only this relayer instance; IBC
-	// relaying remains permissionless.
+	// Selection is required and controls only this relayer instance.
 	//
 	// Types that are valid to be assigned to Selection:
 	//
@@ -765,9 +764,9 @@ func (x *TransactionInfo) GetChainId() string {
 type PacketStatus struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	State PacketState            `protobuf:"varint,1,opt,name=state,proto3,enum=ibc.v2.relayer.PacketState" json:"state,omitempty"`
-	// Together with source_client_id, identifies the packet.
+	// Together with source_client_id and send_tx.chain_id, identifies the packet.
 	SequenceNumber uint64 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
-	// Together with sequence_number, identifies the packet.
+	// Together with sequence_number and send_tx.chain_id, identifies the packet.
 	SourceClientId string `protobuf:"bytes,3,opt,name=source_client_id,json=sourceClientId,proto3" json:"source_client_id,omitempty"`
 	// The source-chain SendPacket transaction. Always present.
 	SendTx *TransactionInfo `protobuf:"bytes,4,opt,name=send_tx,json=sendTx,proto3" json:"send_tx,omitempty"`

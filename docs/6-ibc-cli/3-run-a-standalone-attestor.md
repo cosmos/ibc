@@ -5,8 +5,6 @@ description: "Run an attestor in its own process, separate from any relayer, so 
 
 This guide runs an attestor as its own process, serving one chain. A relayer can then query it and count its signatures toward a light client's quorum.
 
-In order to run a standalone attestor, your signing address must already be in the light client's attestation set, which is fixed when the client is deployed and read from the chain.
-
 ## Before you begin
 
 You need:
@@ -31,7 +29,9 @@ Create a second configuration file alongside the tutorial's:
 
 It shares the tutorial's keystore, so the attestor key generated there is already available. That key's address matches the one in the client's attestation set.
 
-> **Warning:** An attestor address must never appear in more than one client's attestation set. The signed attestation carries no domain separation, so a signature made for one client can be replayed against another.
+<Warning>
+Use separate keys for independent clients and chains. Signatures are not bound to a chain, router, or verifying client.
+</Warning>
 
 ## 2. Write its configuration
 
@@ -62,7 +62,7 @@ signers:
 EOF
 ```
 
-An attestor's name is `attestor-<chain it watches>`.
+This guide names each attestor `attestor-<chain it watches>`. Names must be unique within the serving process.
 
 > **Warning:** The attestor's name has to match the name the relayer uses for it. A relayer sends that name in every query, and the process serves its attestors by name, so a mismatch makes every lookup fail.
 
@@ -192,3 +192,10 @@ If the attestor is served behind TLS, write its address as `https://host`, which
 ## Next steps
 
 - [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries these attestors instead of hosting its own.
+
+<!-- Verified 2026-10-22 against CLI code from main
+1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
+f564e6339cfd49498b043cc9fab770ed6f20ebaa. Both standalone processes started
+on isolated Besu 25.4.0 chains and served identity, height, and signed state
+attestations. The standalone relayer then delivered a transfer using them.
+RPC ports and the CLI home were isolated; external tool installation was not tested. -->

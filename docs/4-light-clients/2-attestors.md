@@ -100,6 +100,11 @@ The configuration carries no threshold, and it does not say which client an atte
 
 A deployed set never changes. No function adds, removes, or replaces an attestor, and no path changes the threshold, so a different set means deploying a new client.
 
+## Rotating attestors
+
+Attestor set rotation requires client migration on the router, which replaces the client contract under an existing client ID.
+Follow [Rotate an attestor set](../6-ibc-cli/10-rotate-an-attestor-set.md) to deploy a replacement client and migrate the existing client ID.
+
 ## Attestor keys
 
 An attestor signs with one ECDSA key per attestor entry, resolved through a named signer. The address of that key is what appears in a client's set: to the client, the attestor is its key.
@@ -109,10 +114,18 @@ A key lives in one of two places:
 - A local keyfile on disk.
 - A remote signing service that holds the key, reached over gRPC and addressed by a key id.
 
-A key's reach is wider than one client. The signed bytes name no chain, no verifying client, and no contract address, so a signature produced for one client is valid on every client whose set contains that address.
-
 <Warning>
-Never reuse an attestor key across clients. A signature produced for one client verifies on every other client whose set holds that address, so one key counts toward both clients' thresholds and weakens both.
+Use separate keys for independent clients and chains. Signatures are not bound to a chain, router, or verifying client.
 </Warning>
 
 Follow the [Run a standalone attestor](../6-ibc-cli/3-run-a-standalone-attestor.md) guide to learn how to run one for yourself.
+
+<!-- Verified 2026-10-22: Only the rotation-related additions and corrections on this page received independent source checks.
+Sources: cosmos/ibc at 09269d75b71f76bc28c2dae786b22e58e485992b
+(cli/internal/deploy, config, bootstrap, relay, service/attestor, txsubmitter;
+cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
+0bc3d31921cd909166652c0e24fc99b7acea2965
+(ibc-solidity/contracts/light-clients/attestation, utils, msgs;
+OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
+Unchanged content was not comprehensively reverified. Runtime availability
+and external tool installation are outside this source review. -->
