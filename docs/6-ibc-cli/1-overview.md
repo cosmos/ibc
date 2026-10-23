@@ -40,6 +40,8 @@ Signer keys, contract addresses, client IDs, and finality settings all have to s
 
 Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to learn the full process of deploying IBC between two chains and sending a token.
 
+Each side can use a different client type. The tutorial pairs an attestation light client with a Besu consensus light client.
+
 Deployment is done from a single key. It becomes the access manager's admin, which governs the router, multicall, and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
 
 ## The relayer
