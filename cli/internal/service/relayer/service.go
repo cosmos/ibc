@@ -119,6 +119,7 @@ type PacketFilter struct {
 	State               PacketState
 	SourceTxHash        string
 	SequenceNumber      uint64
+	MinSequenceNumber   uint64
 }
 
 // PacketSelector identifies a packet in a source transaction.
@@ -488,6 +489,7 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 		SourceClientID:      filter.SourceClientID,
 		DestinationClientID: filter.DestinationClientID,
 		SequenceNumber:      filter.SequenceNumber,
+		MinSequenceNumber:   filter.MinSequenceNumber,
 	}
 
 	for _, chainID := range []string{filter.SourceChainID, filter.DestinationChainID} {

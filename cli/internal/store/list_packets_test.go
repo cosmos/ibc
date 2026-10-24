@@ -111,6 +111,11 @@ func testListPackets(t *testing.T, s Store) {
 					[]string{"0xlist3"},
 				},
 				{
+					"minimum sequence",
+					PacketFilter{Statuses: all, SourceChainID: chainOne, MinSequenceNumber: 2},
+					[]string{"0xlist2"},
+				},
+				{
 					"status subset",
 					PacketFilter{
 						Statuses:      []RelayStatus{RelayStatusCompleteWithAck},

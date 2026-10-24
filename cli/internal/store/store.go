@@ -322,6 +322,7 @@ type PacketFilter struct {
 	DestinationClientID string
 	SourceTxHash        string
 	SequenceNumber      uint64
+	MinSequenceNumber   uint64
 }
 
 // Page bounds a ListPackets result. Before is an exclusive upper bound on
@@ -364,4 +365,8 @@ func (f PacketFilter) statusList() *string {
 
 func (f PacketFilter) sequenceFilter() int64 {
 	return int64(f.SequenceNumber) //nolint:gosec // IBC sequences fit in int64
+}
+
+func (f PacketFilter) minSequenceFilter() int64 {
+	return int64(f.MinSequenceNumber) //nolint:gosec // IBC sequences fit in int64
 }

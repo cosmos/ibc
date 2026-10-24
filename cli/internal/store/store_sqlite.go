@@ -544,6 +544,7 @@ func (db *SqliteDB) ListPackets(
 		DestinationClientID: filter.DestinationClientID,
 		SourceTxHash:        filter.SourceTxHash,
 		SequenceNumber:      filter.sequenceFilter(),
+		MinSequenceNumber:   filter.minSequenceFilter(),
 		Before:              page.before(),
 		RowLimit:            page.Limit,
 	})
