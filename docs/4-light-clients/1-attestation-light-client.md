@@ -91,7 +91,7 @@ The client first requires at least the threshold number of signatures. Each sign
 What a passing call proves is that a threshold of known keys signed those exact bytes.
 
 <Warning>
-Use separate keys for independent clients and chains. A signature from a retained key also verifies on earlier deployments during a [set replacement](2-attestors.md#replace-a-set).
+Use separate keys for independent clients and chains. A signature from a retained key also verifies on earlier deployments during a [set replacement](2-attestors.md#rotating-attestors).
 </Warning>
 
 ## Updates and proof checks
