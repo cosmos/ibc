@@ -3,11 +3,11 @@ title: "Run a standalone relayer"
 description: "Run a relayer in its own process, querying attestors it does not host."
 ---
 
-This guide shows you how to run a relayer in its own process. It hosts no attestors and queries them over the network instead.
+Run a relayer that queries a standalone attestor for 41002 and builds Besu proofs for 41001.
 
 ## Before you begin
 
-Before proceeding, run the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) and [standalone attestor](3-run-a-standalone-attestor.md) guides first, in order. You'll need to have an IBC deployment and standalone attestors on both chains to complete this guide.
+Complete the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) and [standalone attestor](3-run-a-standalone-attestor.md) guides, in order. Keep the standalone attestor for 41002 running.
 
 The tutorial's keystore already holds a funded key, so this guide reuses it rather than importing another.
 
@@ -57,7 +57,7 @@ relayer:
       chainId: "41002"
       clientId: cli-41001-41002
       signer: relayer
-      type: attestation
+      type: besu
       autoRelay:
         enabled: true
 
@@ -65,9 +65,6 @@ attestors:
 - name: attestor-41002
   type: remote
   grpc: 127.0.0.1:3001
-- name: attestor-41001
-  type: remote
-  grpc: 127.0.0.1:3003
 
 signers:
 - alias: relayer
@@ -77,6 +74,7 @@ EOF
 ```
 
 - No chain names a deployer, because this relayer deploys nothing.
+- The client `type` describes how that end verifies the opposite chain. The client on 41001 trusts the remote attestor for 41002. The client on 41002 verifies Besu proofs from 41001.
 - The signer on each client end is the key that submits on that end's own chain, so one connection can use a different key per side.
 - `autoRelay` is set on each client end and governs packets leaving that end's chain. It requires the chain's `ws` endpoint.
 - The listen address and the database are this relayer's own, so neither collides with the tutorial's.
@@ -134,3 +132,12 @@ It reads `PACKET_STATE_PENDING` until the receive and the acknowledgement have b
 ```
 
 The balance should be one token higher, meaning the packet was delivered successfully.
+
+<!-- Mixed-client changes verified 2026-10-23 against CLI
+ae06619851c69673e8bc8f4075fb0284ed93ef1f and contracts
+f564e6339cfd49498b043cc9fab770ed6f20ebaa.
+The mixed-client changes received two independent source reviews. The standalone
+relayer delivered a transfer using the remote attestor for 41002 and Besu proofs
+from 41001. The packet succeeded and the destination balance increased by one
+token. Besu 25.4.0 chains, RPC ports, and the CLI home were isolated; external
+tool installation was not tested. -->

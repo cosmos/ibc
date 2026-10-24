@@ -40,6 +40,8 @@ Signer keys, contract addresses, client IDs, and finality settings all have to s
 
 Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to learn the full process of deploying IBC between two chains and sending a token.
 
+Each side can use a different client type. The tutorial pairs an attestation light client with a Besu consensus light client.
+
 Deployment is done from a single key. It becomes the access manager's admin, which governs the router, multicall, and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
 
 ## The relayer
@@ -153,3 +155,8 @@ The [configuration reference](5-configuration.md) carries every key and its defa
 - [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) brings up two chains and moves a token between them.
 - [Run a standalone attestor](3-run-a-standalone-attestor.md) takes an attestor out of the relayer's process and into its own.
 - [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer against a connection someone else deployed.
+
+<!-- Mixed-client changes verified 2026-10-23 against CLI
+ae06619851c69673e8bc8f4075fb0284ed93ef1f and contracts
+f564e6339cfd49498b043cc9fab770ed6f20ebaa.
+The mixed-client description received two independent source reviews. -->

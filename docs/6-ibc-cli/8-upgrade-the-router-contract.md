@@ -139,6 +139,12 @@ Clear the admin key when finished:
 unset DEPLOYER_KEY
 ```
 
+## Manifest drift
+
+The CLI does not currently have first-class support for contract upgrades.
+This guide upgrades the routers directly on chain, leaving each manifest's `targetData.ics26RouterImplementation` at its original address.
+Rerunning `ibc deploy core` reuses the deployed contracts without refreshing their implementation addresses in the manifests.
+
 <!-- Verified 2026-10-22 against CLI code from main
 1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
 f564e6339cfd49498b043cc9fab770ed6f20ebaa. The commands were exercised on
@@ -148,3 +154,7 @@ Deployment manifests remained unchanged. Upgrade and release-policy guidance
 was checked against UPGRADEABILITY.md, RELEASES.md, and OpenZeppelin's
 UUPSUpgradeable/ERC1967Utils. Independent source and readability reviews completed.
 RPC ports and the CLI home were isolated; external tool installation was not tested. -->
+
+<!-- Manifest drift section verified 2026-10-23 against CLI 2ad55f63
+(deployShow, Driver.Verify, CoreSteps) and isolated Besu runtime results.
+Two independent source reviews and a readability review covered this addition. -->
