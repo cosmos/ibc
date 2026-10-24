@@ -2,7 +2,11 @@
 
 # Inter-Blockchain Communication Protocol (IBC)
 
+[![CodeQL](https://github.com/cosmos/ibc/actions/workflows/codeql.yml/badge.svg)](https://github.com/cosmos/ibc/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/cosmos/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cosmos/ibc/blob/main/LICENSE)
+[![Discord](https://img.shields.io/discord/669268347736686612?logo=discord&label=Discord)](https://discord.com/invite/interchain)
+[![Version](https://img.shields.io/github/v/tag/cosmos/ibc?filter=v*&label=version)](https://github.com/cosmos/ibc/releases/latest)
 
 ![banner](./.github/assets/cosmos-ibc-github.svg)
 
@@ -35,6 +39,12 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 
 <!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of IBC, you can also read [this blog post](https://medium.com/the-interchain-foundation/eli5-what-is-ibc-def44d7b5b4c).
+
+## Releases
+
+See [`RELEASES.md`](RELEASES.md) for how to cut a release.
+
+See [Release artifacts](RELEASES.md#release-artifacts) for the files and images each release tag publishes.
 
 ## Interchain Standards
 

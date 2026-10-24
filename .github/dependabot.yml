@@ -3,7 +3,10 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: "/"
+    # The shared release actions pin actions too; "/" alone only covers .github/workflows.
+    directories:
+      - "/"
+      - "/.github/actions/*"
     target-branch: main
     schedule:
       interval: weekly

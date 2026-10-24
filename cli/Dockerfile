@@ -32,9 +32,10 @@ USER 65532:65532
 ENTRYPOINT ["/opt/ibc"]
 
 # 3. Used for CI docker image.
-# Expects current dir to contain valid `ibc` binary.
+# Expects current dir to contain valid `ibc` binary, `LICENSE` and `NOTICE`.
 FROM runtime AS target-artifact
 COPY ibc /opt/ibc
+COPY --chmod=a+rX LICENSE NOTICE /usr/share/licenses/ibc/
 
 # 4. Used for local docker image building.
 FROM runtime AS target-builder

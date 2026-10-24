@@ -1,0 +1,165 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Attest release assets
+description: >-
+  Generates an SPDX SBOM for the release assets in `<out-dir>/assets`, attests their build
+  provenance and SBOM, and uploads the assets, the SBOM and the attestation bundles as the
+  `release-assets-<platform>` artifact that the publish-draft-release action collects.
+  The calling job needs `contents: read`, `id-token: write`, `attestations: write` and
+  `artifact-metadata: write`.
+
+inputs:
+  name:
+    description: >-
+      File name stem of the SBOM, e.g. `ibc-v1.2.3-linux-amd64`. The SBOM is written to
+      `<out-dir>/sbom/<name>.spdx.json` and becomes a release asset.
+    required: true
+  platform:
+    description: >-
+      Identifies this job among the build jobs of one release, e.g. `linux-amd64`. Used in the
+      artifact name and the attestation bundle names, so it must be unique per job.
+    required: false
+    default: all
+  sbom-file:
+    description: A single file, such as a binary, to generate the SBOM from. Set exactly one of `sbom-file` and `sbom-dir`.
+    required: false
+    default: ""
+  sbom-dir:
+    description: A directory, such as a source tree with lockfiles, to generate the SBOM from. Set exactly one of `sbom-file` and `sbom-dir`.
+    required: false
+    default: ""
+  out-dir:
+    description: Directory whose `assets` subdirectory holds the release assets. The SBOM and the attestation bundles are written next to it.
+    required: false
+    default: out
+  min-sbom-packages:
+    description: >-
+      Fail if the SBOM lists fewer packages than this, not counting the scanned file or
+      directory itself. Catches an SBOM generated from the wrong source. Set to 0 to disable.
+    required: false
+    default: "1"
+  retention-days:
+    description: Retention of the uploaded artifact. The release job only needs it within the same run.
+    required: false
+    default: "7"
+
+outputs:
+  sbom-path:
+    description: Path of the generated SBOM.
+    value: ${{ steps.check.outputs.sbom-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check inputs
+      id: check
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        PLATFORM: ${{ inputs.platform }}
+        SBOM_FILE: ${{ inputs.sbom-file }}
+        SBOM_DIR: ${{ inputs.sbom-dir }}
+        OUT_DIR: ${{ inputs.out-dir }}
+        MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
+      run: |
+        for value in "$NAME" "$PLATFORM"; do
+          if [[ ! "$value" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::name and platform may only contain letters, digits, '.', '_' and '-' (got '${value}')"
+            exit 1
+          fi
+        done
+        if [[ ! "$MIN_PACKAGES" =~ ^[0-9]+$ ]]; then
+          echo "::error::min-sbom-packages must be a non-negative integer (got '${MIN_PACKAGES}')"
+          exit 1
+        fi
+        if [[ -n "$SBOM_FILE" && -n "$SBOM_DIR" ]] || [[ -z "$SBOM_FILE" && -z "$SBOM_DIR" ]]; then
+          echo "::error::Set exactly one of sbom-file and sbom-dir"
+          exit 1
+        fi
+        if [[ -n "$SBOM_FILE" && ! -f "$SBOM_FILE" ]]; then
+          echo "::error::sbom-file '${SBOM_FILE}' is not a file"
+          exit 1
+        fi
+        if [[ -n "$SBOM_DIR" && ! -d "$SBOM_DIR" ]]; then
+          echo "::error::sbom-dir '${SBOM_DIR}' is not a directory"
+          exit 1
+        fi
+        if ! compgen -G "${OUT_DIR}/assets/*" > /dev/null; then
+          echo "::error::No release assets in ${OUT_DIR}/assets"
+          exit 1
+        fi
+        mkdir -p "${OUT_DIR}/sbom" "${OUT_DIR}/attestations"
+        echo "sbom-path=${OUT_DIR}/sbom/${NAME}.spdx.json" >> "$GITHUB_OUTPUT"
+
+    - name: Generate SBOM from file
+      if: inputs.sbom-file != ''
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      with:
+        file: ${{ inputs.sbom-file }}
+        format: spdx-json
+        output-file: ${{ steps.check.outputs.sbom-path }}
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: Generate SBOM from directory
+      if: inputs.sbom-dir != ''
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      with:
+        path: ${{ inputs.sbom-dir }}
+        format: spdx-json
+        output-file: ${{ steps.check.outputs.sbom-path }}
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: Check SBOM
+      shell: bash
+      env:
+        SBOM: ${{ steps.check.outputs.sbom-path }}
+        MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
+      run: |
+        # The scanned file or directory itself is listed as an SPDXRef-DocumentRoot package.
+        count=$(jq '[.packages[]? | select(.SPDXID | startswith("SPDXRef-DocumentRoot") | not)] | length' "$SBOM")
+        echo "SBOM lists ${count} packages"
+        if (( count < MIN_PACKAGES )); then
+          echo "::error::SBOM ${SBOM} lists ${count} packages, fewer than min-sbom-packages (${MIN_PACKAGES})"
+          exit 1
+        fi
+
+    - name: Attest build provenance
+      id: provenance
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-path: ${{ inputs.out-dir }}/assets/*
+
+    - name: Attest SBOM
+      id: sbom
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-path: ${{ inputs.out-dir }}/assets/*
+        sbom-path: ${{ steps.check.outputs.sbom-path }}
+
+    - name: Collect attestation bundles
+      shell: bash
+      env:
+        OUT_DIR: ${{ inputs.out-dir }}
+        PLATFORM: ${{ inputs.platform }}
+        PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+      run: |
+        cp "$PROVENANCE_BUNDLE" "${OUT_DIR}/attestations/${PLATFORM}.provenance.json"
+        cp "$SBOM_BUNDLE" "${OUT_DIR}/attestations/${PLATFORM}.sbom.json"
+
+    # Only the three subdirectories are uploaded, so other build outputs in out-dir stay out of the
+    # release. Their common parent is out-dir, so the artifact keeps the assets/, sbom/ and
+    # attestations/ layout.
+    - name: Upload artifact
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: release-assets-${{ inputs.platform }}
+        path: |
+          ${{ inputs.out-dir }}/assets/
+          ${{ inputs.out-dir }}/sbom/
+          ${{ inputs.out-dir }}/attestations/
+        if-no-files-found: error
+        overwrite: true
+        retention-days: ${{ inputs.retention-days }}
