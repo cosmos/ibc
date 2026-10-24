@@ -32,6 +32,8 @@ That timestamp is this client's [consensus state](../2-how-ibc-works/4-clients-a
 
 The set and the threshold hold for the life of the client. Deployment fixes them along with an initial height and timestamp, and rejects an empty set, a zero threshold, a threshold larger than the set, and duplicate addresses.
 
+Changing the set requires a replacement contract and a router client migration. [Rotate an attestor set](../6-ibc-cli/10-rotate-an-attestor-set.md) preserves the client ID while replacing the attestor set.
+
 Each attestor adds two assumptions of its own: that its chain RPC endpoint reports accurate state, and that its signing key stays secret. [Attestors](2-attestors.md) covers how attestors run and how their keys are held.
 
 ## What an attestation claims
@@ -89,7 +91,7 @@ The client first requires at least the threshold number of signatures. Each sign
 What a passing call proves is that a threshold of known keys signed those exact bytes.
 
 <Warning>
-Do not reuse an attestor address across clients. A signature from that key verifies on every client that trusts it.
+Use separate keys for independent clients and chains. A signature from a retained key also verifies on earlier deployments during a [set replacement](2-attestors.md#rotating-attestors).
 </Warning>
 
 ## Updates and proof checks
@@ -136,3 +138,13 @@ Disagreement stalls a connection identically. Only byte-identical attestation da
 
 The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys one of these clients on each of two chains.
 Visit the [Attestation light client contract page](../5-ibc-solidity-contracts/5-attestation-light-client.md) for more information on the Solidity implementation.
+
+<!-- Verified 2026-10-22: Only the rotation-related additions and corrections on this page received independent source checks.
+Sources: cosmos/ibc at 09269d75b71f76bc28c2dae786b22e58e485992b
+(cli/internal/deploy, config, bootstrap, relay, service/attestor, txsubmitter;
+cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
+0bc3d31921cd909166652c0e24fc99b7acea2965
+(ibc-solidity/contracts/light-clients/attestation, utils, msgs;
+OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
+Unchanged content was not comprehensively reverified. Runtime availability
+and external tool installation are outside this source review. -->

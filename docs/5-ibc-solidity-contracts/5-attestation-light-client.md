@@ -211,10 +211,10 @@ The initial height becomes `latestHeight`, and its timestamp is stored as the tr
 
 No function adds, removes, or replaces an attestor.
 
-The signed bytes carry no chain, client, or contract identifier, so an attestation is valid on every client that trusts the same attestor addresses.
+Signatures are not bound to a chain, router, or verifying client. The same signature can count toward the threshold on every client that trusts its key.
 
 <Warning>
-Do not reuse attestor addresses across clients. A signature gathered for one client verifies on every other client that trusts the same address.
+Use separate keys for independent clients and chains. A signature from a retained key also verifies on earlier deployments during a [set replacement](../4-light-clients/2-attestors.md#rotating-attestors).
 </Warning>
 
 ## Deployment and replacement
@@ -227,3 +227,17 @@ A deployed client becomes usable once `addClient` registers it on the router und
 
 Replacing a client is a router operation: the admin-gated `migrateClient` swaps a new client contract in behind an existing client ID.
 That is also the only recovery from a freeze, since the contract itself cannot be unfrozen.
+
+Migration overwrites the address and the supplied counterparty information. Preserve both the counterparty client ID and its Merkle prefix. The replacement has its own consensus state; migration copies no timestamps from the old contract.
+
+Follow [Rotate an attestor set](../6-ibc-cli/10-rotate-an-attestor-set.md) to deploy a replacement client and migrate the existing client ID.
+
+<!-- Verified 2026-10-22: Only the rotation-related additions and corrections on this page received independent source checks.
+Sources: cosmos/ibc at 09269d75b71f76bc28c2dae786b22e58e485992b
+(cli/internal/deploy, config, bootstrap, relay, service/attestor, txsubmitter;
+cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
+0bc3d31921cd909166652c0e24fc99b7acea2965
+(ibc-solidity/contracts/light-clients/attestation, utils, msgs;
+OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
+Unchanged content was not comprehensively reverified. Runtime availability
+and external tool installation are outside this source review. -->
