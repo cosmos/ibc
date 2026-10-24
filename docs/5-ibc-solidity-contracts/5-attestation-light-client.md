@@ -214,7 +214,7 @@ No function adds, removes, or replaces an attestor.
 Signatures are not bound to a chain, router, or verifying client. The same signature can count toward the threshold on every client that trusts its key.
 
 <Warning>
-Use separate keys for independent clients and chains. A signature from a retained key also verifies on earlier deployments during a [set replacement](../4-light-clients/2-attestors.md#replace-a-set).
+Use separate keys for independent clients and chains. A signature from a retained key also verifies on earlier deployments during a [set replacement](../4-light-clients/2-attestors.md#rotating-attestors).
 </Warning>
 
 ## Deployment and replacement
