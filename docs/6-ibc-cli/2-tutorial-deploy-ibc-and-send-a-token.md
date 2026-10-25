@@ -160,6 +160,13 @@ Wrote /Users/you/.ibc/ibc.yml
 
 Rerunning skips contracts already recorded and deployed, and resumes any unfinished deployment steps.
 
+<Warning>
+These commands enable public relaying and make the deployer the access manager's admin.
+For production deployments, restrict relaying to authorized keys.
+Transfer admin authority to an appropriate account.
+Follow [Grant, change, and revoke a role](9-grant-change-and-revoke-a-role.md) for both procedures.
+</Warning>
+
 2. Deploy an attestation light client on 41001 to verify chain 41002:
 
 ```bash
@@ -399,3 +406,8 @@ chains without manually editing router addresses. Core reruns skipped deployment
 dry runs left the config unchanged. Delivery used Besu proofs, acknowledgement
 used attestation, and the final token balances were 90 and 10. RPC ports and
 the CLI home were isolated; tool installation and a fresh clone were not tested. -->
+
+<!-- Production guidance source-verified 2026-10-25 against CLI
+32cbdf4134293f3c03cf4e0f9fd1011d481a67bd. Independent source and readability
+reviews covered the warning and linked procedures. Links and shell syntax were
+checked; the tutorial was not rerun for this documentation change. -->
