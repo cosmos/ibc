@@ -138,13 +138,3 @@ Disagreement stalls a connection identically. Only byte-identical attestation da
 
 The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys one of these clients on each of two chains.
 Visit the [Attestation light client contract page](../5-ibc-solidity-contracts/5-attestation-light-client.md) for more information on the Solidity implementation.
-
-<!-- Verified 2026-10-22: Only the rotation-related additions and corrections on this page received independent source checks.
-Sources: cosmos/ibc at 09269d75b71f76bc28c2dae786b22e58e485992b
-(cli/internal/deploy, config, bootstrap, relay, service/attestor, txsubmitter;
-cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
-0bc3d31921cd909166652c0e24fc99b7acea2965
-(ibc-solidity/contracts/light-clients/attestation, utils, msgs;
-OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
-Unchanged content was not comprehensively reverified. Runtime availability
-and external tool installation are outside this source review. -->

@@ -484,7 +484,7 @@ Returns identity information about a configured attestor.
 
 ```bash
 grpcurl -plaintext -d '{"attestor":"attestor-41002"}' \
-  localhost:3001 ibc.v2.attestor.AttestationService/Info
+  localhost:3000 ibc.v2.attestor.AttestationService/Info
 ```
 
 ```json

@@ -663,13 +663,3 @@ Migrations run against the `db` block, so `--db` picks a different database for 
 
 - [Configuration](5-configuration.md) for the file these commands read.
 - [API](7-api.md) for the gRPC calls behind `relayer relay`, `relayer packets`, and the attestor queries.
-
-<!-- Verified 2026-10-22: Only the rotation-related additions and corrections on this page received independent source checks.
-Sources: cosmos/ibc at 09269d75b71f76bc28c2dae786b22e58e485992b
-(cli/internal/deploy, config, bootstrap, relay, service/attestor, txsubmitter;
-cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
-0bc3d31921cd909166652c0e24fc99b7acea2965
-(ibc-solidity/contracts/light-clients/attestation, utils, msgs;
-OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
-Unchanged content was not comprehensively reverified. Runtime availability
-and external tool installation are outside this source review. -->

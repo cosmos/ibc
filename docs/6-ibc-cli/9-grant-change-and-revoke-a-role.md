@@ -273,13 +273,3 @@ Then clear the admin key:
 ```bash
 unset DEPLOYER_KEY
 ```
-
-<!-- Verified 2026-10-22 against CLI code from main
-1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
-f564e6339cfd49498b043cc9fab770ed6f20ebaa. All 37 Bash blocks were exercised
-on isolated Besu 25.4.0 chains. Transfers through separate multicall contracts
-succeeded with the old signer, with the replacement, and after revocation.
-Transaction senders were checked. The revoked key was denied router and
-multicall access on both chains; deployment manifests remained unchanged.
-Independent source and readability reviews completed.
-RPC ports and the CLI home were isolated; external tool installation was not tested. -->

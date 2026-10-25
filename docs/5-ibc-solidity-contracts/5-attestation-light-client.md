@@ -231,13 +231,3 @@ That is also the only recovery from a freeze, since the contract itself cannot b
 Migration overwrites the address and the supplied counterparty information. Preserve both the counterparty client ID and its Merkle prefix. The replacement has its own consensus state; migration copies no timestamps from the old contract.
 
 Follow [Rotate an attestor set](../6-ibc-cli/10-rotate-an-attestor-set.md) to deploy a replacement client and migrate the existing client ID.
-
-<!-- Verified 2026-10-22: Only the rotation-related additions and corrections on this page received independent source checks.
-Sources: cosmos/ibc at 09269d75b71f76bc28c2dae786b22e58e485992b
-(cli/internal/deploy, config, bootstrap, relay, service/attestor, txsubmitter;
-cli/cmd/ibc; proto/cli), and cosmos/ibc-contracts at
-0bc3d31921cd909166652c0e24fc99b7acea2965
-(ibc-solidity/contracts/light-clients/attestation, utils, msgs;
-OpenZeppelin AccessManager 5.7.0). No released-version equivalence is asserted.
-Unchanged content was not comprehensively reverified. Runtime availability
-and external tool installation are outside this source review. -->

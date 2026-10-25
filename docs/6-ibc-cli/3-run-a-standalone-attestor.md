@@ -192,10 +192,3 @@ If the attestor is served behind TLS, write its address as `https://host`, which
 ## Next steps
 
 - [Run a standalone relayer](4-run-a-standalone-relayer.md) brings up a relayer that queries these attestors instead of hosting its own.
-
-<!-- Verified 2026-10-22 against CLI code from main
-1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
-f564e6339cfd49498b043cc9fab770ed6f20ebaa. Both standalone processes started
-on isolated Besu 25.4.0 chains and served identity, height, and signed state
-attestations. The standalone relayer then delivered a transfer using them.
-RPC ports and the CLI home were isolated; external tool installation was not tested. -->

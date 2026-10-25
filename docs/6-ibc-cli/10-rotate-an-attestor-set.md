@@ -162,14 +162,3 @@ This guide migrates the client directly on chain, leaving the manifest with the 
 As a result, `ibc deploy status` reports a client-address mismatch.
 Rerunning `ibc deploy client attestation` does not refresh the recorded set.
 The `ibc deploy render-config` command still derives attestors from those stale records.
-
-<!-- Verified 2026-10-22 against CLI code from main
-1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
-f564e6339cfd49498b043cc9fab770ed6f20ebaa. The direct-migration procedure was
-exercised on isolated Besu 25.4.0 chains. The new client accepted only the
-replacement attestor with threshold one, counterparty data was preserved,
-and a transfer increased the destination balance by one token.
-The manifest stayed unchanged and deploy status reported the client-address
-mismatch. Independent source and readability reviews completed.
-RPC ports and the CLI home were isolated; external tool installation and the
-optional intermediate-client procedure were not tested in this run. -->

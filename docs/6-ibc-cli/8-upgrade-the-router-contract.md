@@ -175,13 +175,3 @@ Clear the admin key when finished:
 ```bash
 unset DEPLOYER_KEY
 ```
-
-<!-- Verified 2026-10-22 against CLI code from main
-1e957fe1f95ca4ba1433451c8c190a82f186d9c2 and contracts
-f564e6339cfd49498b043cc9fab770ed6f20ebaa. The commands were exercised on
-isolated Besu 25.4.0 chains: both implementation addresses changed, deployment
-checks passed, and a transfer increased the destination balance by ten tokens.
-Deployment manifests remained unchanged. Upgrade and release-policy guidance
-was checked against UPGRADEABILITY.md, RELEASES.md, and OpenZeppelin's
-UUPSUpgradeable/ERC1967Utils. Independent source and readability reviews completed.
-RPC ports and the CLI home were isolated; external tool installation was not tested. -->
