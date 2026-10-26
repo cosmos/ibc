@@ -5,6 +5,8 @@ package watcher
 import (
 	"context"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,54 @@ import (
 	"github.com/cosmos/ibc/cli/internal/otel"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
+
+func TestSubscriptionHealth(t *testing.T) {
+	db := watcherStore(t)
+	reader := setupWatcherMetrics(t)
+	synctest.Test(t, func(t *testing.T) {
+		chain := newFakeChain(t)
+		w := newTestWatcher(chain, db)
+		chain.failNextSub(assert.AnError)
+		require.Error(t, w.Start())
+		assertSubscriptionUp(t, reader, 0)
+		require.NoError(t, w.Start())
+		defer func() { require.NoError(t, w.Stop()) }()
+		assertSubscriptionUp(t, reader, 1)
+		time.Sleep(time.Second)
+		assertSubscriptionUp(t, reader, 1)
+
+		chain.failNextSub(assert.AnError)
+		chain.latestSub().errs <- assert.AnError
+		synctest.Wait()
+		assertSubscriptionUp(t, reader, 0)
+		time.Sleep(DefaultMinBackoff)
+		synctest.Wait()
+		assertSubscriptionUp(t, reader, 0)
+		time.Sleep(2 * DefaultMinBackoff)
+		synctest.Wait()
+		assertSubscriptionUp(t, reader, 1)
+		require.NoError(t, w.Stop())
+		assertSubscriptionUp(t, reader, 0)
+	})
+}
+
+func assertSubscriptionUp(t *testing.T, reader *sdkmetric.ManualReader, want int64) {
+	t.Helper()
+	var data metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &data))
+	for _, scope := range data.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			if m.Name == "watcher_subscription_up" {
+				gauge, ok := m.Data.(metricdata.Gauge[int64])
+				require.True(t, ok)
+				require.Len(t, gauge.DataPoints, 1)
+				assert.Equal(t, want, gauge.DataPoints[0].Value)
+				return
+			}
+		}
+	}
+	t.Fatal("subscription gauge missing")
+}
 
 func TestWatcherHandleEventMetrics(t *testing.T) {
 	t.Run("acceptedEvent", func(t *testing.T) {

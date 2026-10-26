@@ -558,7 +558,7 @@ func TestShouldRetry(t *testing.T) {
 		{name: "expired missing receipt", expired: true, retry: true},
 		{name: "mined success", receipt: &types.Receipt{Status: types.ReceiptStatusSuccessful}},
 		{name: "old mined success", receipt: &types.Receipt{Status: types.ReceiptStatusSuccessful}, expired: true},
-		{name: "mined failure", receipt: &types.Receipt{Status: types.ReceiptStatusFailed}, retry: true},
+		{name: "mined failure", receipt: &types.Receipt{Status: types.ReceiptStatusFailed}, retry: true, wantErr: v2.ErrTxReverted},
 		{name: "RPC unavailable", err: context.DeadlineExceeded, expired: true, wantErr: context.DeadlineExceeded},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

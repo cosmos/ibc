@@ -50,6 +50,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	)
 	switch {
 	case errors.Is(err, v2.ErrWriteAckNotFoundForPacket):
+		metrics.packetExecution(ctx, tr, "recv", recvTxHash, executionMissing)
 		// the recv tx exists but does not contain this packet's write ack.
 		// this happens when a packet times out while its batch accumulates:
 		// clear the recv tx and error so the packet is retried and then timed
@@ -57,6 +58,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		if errClear := p.storage.ClearPacketRecvTx(ctx, tr.Key()); errClear != nil {
 			return nil, errors.Wrapf(errClear, "clearing recv tx %s", recvTxHash)
 		}
+		metrics.txRetry(ctx, tr, relayTypeSendToRecv, recvTxHash)
 
 		return nil, errors.Errorf("write ack for transfer not found in recv tx %s", recvTxHash)
 	case errors.Is(err, v2.ErrWriteAckDecoding):
@@ -66,6 +68,9 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		ackStatus = v2.WriteAckStatusUnknown
 	case err != nil:
 		return nil, errors.Wrapf(err, "finding write ack in recv tx %s", recvTxHash)
+	}
+	if err == nil {
+		metrics.packetExecution(ctx, tr, "recv", recvTxHash, executionSucceeded)
 	}
 
 	status := writeAckStatusFromV2(ackStatus)

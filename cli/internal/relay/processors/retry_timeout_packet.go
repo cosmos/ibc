@@ -42,7 +42,9 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 	}
 
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.TimeoutTxHash, *tr.TimeoutTxTime)
-	if err != nil {
+	if errors.Is(err, v2.ErrTxReverted) {
+		metrics.packetExecution(ctx, tr, "timeout", *tr.TimeoutTxHash, executionReverted)
+	} else if err != nil {
 		return nil, errors.Wrapf(err, "checking if timeout tx %s should be retried", *tr.TimeoutTxHash)
 	}
 
@@ -58,8 +60,10 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 			return nil, errors.Wrapf(err, "checking timeout event in tx %s", *tr.TimeoutTxHash)
 		}
 		if executed {
+			metrics.packetExecution(ctx, tr, "timeout", *tr.TimeoutTxHash, executionSucceeded)
 			return tr, nil
 		}
+		metrics.packetExecution(ctx, tr, "timeout", *tr.TimeoutTxHash, executionMissing)
 	}
 
 	if err := p.storage.ClearPacketTimeoutTx(ctx, tr.Key()); err != nil {

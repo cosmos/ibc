@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/pkg/errors"
 
 	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
@@ -69,6 +70,7 @@ type TxSubmitter struct {
 	lowestUnminedNoncePendingSince time.Time
 	lastAttemptedFeeCap            *big.Int
 	lastAttemptedTipCap            *big.Int
+	warnings                       *lru.Cache[transactionWarning, struct{}]
 }
 
 // ErrBusy leaves the packet available for a later dispatch.
@@ -100,15 +102,31 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	if err != nil {
 		return nil, errors.Wrapf(err, "decompressing signer public key for chain %q", chainID)
 	}
+	warnings, err := lru.New[transactionWarning, struct{}](10000)
+	if err != nil {
+		return nil, err
+	}
 	c := &TxSubmitter{
-		chainID: chainID, eth: eth, signer: chainSigner,
+		warnings: warnings,
+		chainID:  chainID, eth: eth, signer: chainSigner,
 		address: crypto.PubkeyToAddress(*pub), ethSigner: types.LatestSignerForChainID(id), opts: opts,
 	}
 	metrics.setWallet(chainID, c.address.Hex(), eth)
 	return c, nil
 }
 
-func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
+func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (_ *v2.Submission, err error) {
+	defer func() {
+		metrics.attempt(ctx, c.chainID, c.address.Hex(), err)
+		if err != nil {
+			level := slog.LevelWarn
+			if errors.Is(err, ErrBusy) {
+				level = slog.LevelInfo
+			}
+			slog.Log(ctx, level, "Transaction submission unsuccessful",
+				"chainID", c.chainID, "sender", c.address.Hex(), "err", err.Error())
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -145,13 +163,15 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 				c.lowestUnminedNoncePendingSince = time.Now()
 			}
 			metrics.startTx(c.chainID, c.address.Hex(), tx.Hash().Hex())
-			slog.Debug("Transaction broadcast", "chainID", c.chainID, "nonce", nonce, "txHash", tx.Hash())
+			slog.InfoContext(ctx, "Transaction submitted", c.transactionAttributes(tx, head.BaseFee)...)
 			return &v2.Submission{
 				TxHash:         tx.Hash().Hex(),
 				SubmittedAt:    submittedAt,
 				RelayerAddress: c.address.Hex(),
 			}, nil
 		}
+		slog.WarnContext(ctx, "Transaction broadcast rejected or unconfirmed",
+			append(c.transactionAttributes(tx, head.BaseFee), "err", chainsevm.ExplainRevert(err).Error())...)
 		if !isReplacementUnderpriced(err) {
 			return nil, errors.Wrapf(err, "broadcasting transaction %s at nonce %d", tx.Hash(), nonce)
 		}
@@ -160,6 +180,16 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		}
 		nextFee, nextTip := capFees(bump(fee), bump(tip), feeCeiling)
 		if nextFee.Cmp(fee) == 0 && nextTip.Cmp(tip) == 0 {
+			slog.WarnContext(
+				ctx,
+				"Transaction replacement fee ceiling reached",
+				append(
+					c.transactionAttributes(tx, head.BaseFee),
+					"feeCeilingWei",
+					feeCeiling.String(),
+					"err",
+					err.Error(),
+				)...)
 			return nil, errors.Wrapf(err,
 				"fee ceiling %s wei (%dx fresh estimate) reached for nonce %d",
 				feeCeiling, feeCeilingMultiplier, nonce)
@@ -222,6 +252,8 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 	switch {
 	case errors.Is(err, ethereum.NotFound):
 		if time.Since(sentAt) >= c.opts.PendingTxTimeout {
+			c.warnTransaction(ctx, txHash, "receipt_missing", "Transaction still unconfirmed at retry threshold",
+				"submittedAt", sentAt, "pendingDuration", time.Since(sentAt).String())
 			metrics.forgetTx(c.chainID, txHash)
 			return true, nil
 		}
@@ -230,6 +262,12 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 		return false, errors.Wrapf(err, "getting receipt for tx %s", txHash)
 	default:
 		metrics.endTx(c.chainID, receipt)
-		return receipt.Status != types.ReceiptStatusSuccessful, nil
+		if receipt.Status != types.ReceiptStatusSuccessful {
+			c.warnTransaction(ctx, txHash, "tx_reverted", "Transaction reverted",
+				"blockNumber", receipt.BlockNumber, "gasUsed", receipt.GasUsed,
+				"effectiveGasPriceWei", decimalString(receipt.EffectiveGasPrice), "revertReason", "unavailable")
+			return true, v2.ErrTxReverted
+		}
+		return false, nil
 	}
 }

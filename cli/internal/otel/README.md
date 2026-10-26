@@ -4,8 +4,151 @@
 
 # Observability
 
-See [Observability and metrics](../../../docs/6-ibc-cli/8-observability-and-metrics.md)
-for metric modes, names, labels, and semantics.
+## Metric Modes
+
+IBC supports two metric modes:
+
+- `simple` exposes a Prometheus-compatible `/metrics` endpoint for direct scraping. It is
+  intended for local development and straightforward Prometheus deployments.
+- `otel` configures the OpenTelemetry SDK from a YAML file and exports metrics to an OTEL
+  collector. It is intended for deployments that need configurable metric pipelines and
+  observability backends.
+
+Metrics are best-effort: failures while setting up the metrics pipeline are logged and
+tolerated, so they do not prevent IBC from running.
+
+## Available Metrics
+
+Default OpenTelemetry Go runtime metrics and ConnectRPC RPC metrics from
+  [otelconnect](https://github.com/connectrpc/otelconnect-go) are also exposed when observability is enabled.
+
+[OTEL host instrumentation](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/host)
+also exports `process.cpu.time` (user/system CPU seconds for this process) and
+host-wide CPU, memory, and network metrics in both metric modes. Use the rate of
+`process.cpu.time` for per-process CPU usage; host-wide metrics describe the same
+machine across processes and should not be summed across service runtimes.
+
+### Signer metrics
+
+Shared label: `{otel_scope_name="ibc.signer"}`
+
+
+| metric               | type           | labels                                  | notes                                                                                                                  |
+| -------------------- | -------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `signer_operation_*` | histogram (ms) | `signer`, `type`, `result`, `operation` | Sign latency. `type` is `remote`, `local_ecdsa`, or `local_eddsa`. `operation` is `sign`. `result` is `ok` or `error`. |
+
+### Attestor metrics
+
+Shared label: `{otel_scope_name="ibc.attestor"}`
+
+| metric                 | type           | labels                                                  | notes                                                                                                                                     |
+| ---------------------- | -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `attestor_operation_*` | histogram (ms) | `operation`, `chain_id`, `attestor`, `result`, `caller` | Latency. `operation`: `latest_height`, `state_attestation`, `packet_attestation`. `result`: `ok` / `error`. `caller`: `rpc` or `internal` |
+| `latest_height`        | gauge          | `chain_id`, `attestor`, `caller`                        | Last successful height. Not written on error. Same `caller` values as above.                                                              |
+
+### Prover metrics
+
+Shared label: `{otel_scope_name="ibc.prover"}`
+
+| metric                   | type           | labels                                                                                  | notes                                                                                                    |
+| ------------------------ | -------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `prover_operation_*`     | histogram (ms) | `operation`, `chain_id`, `client_id`, `type`, `result`; `proof_kind` on `packet_proofs` | `operation`: `latest_provable_height`, `client_update_payloads`, `packet_proofs`. `type` is the client's on-chain type, including for ends proven by a ProverService. |
+| `latest_provable_height` | gauge          | `chain_id`, `client_id`                                                                 | Recorded only when `latest_provable_height` succeeds.                                                    |
+| `packet_batch_size_*`    | histogram      | `chain_id`, `client_id`, `type`, `proof_kind`                                           | Packet count on PacketProofs. Default histogram buckets.                                                 |
+
+
+`proof_kind`: `packet_commitment`, `acknowledgement`, `receipt_absence`, `unknown`.
+
+Attestation prover metric (`otel_scope_name="ibc.prover.attestation"`):
+
+| Metric | Type | Labels | Notes |
+| --- | --- | --- | --- |
+| `attestation_data_matches_total` | counter | `chain_id`, `client_id`, `attestor`, `result` | Whether returned data matches the expected claim (`true|false`). |
+
+### Relayer metrics
+
+Shared label: `{otel_scope_name="ibc.relayer"}`
+
+- `processor`: `recv`, `ack`, or `timeout`.
+- Batch `chain_id`: destination for `recv`; source for `ack` and `timeout`.
+- Transaction `chain_id`: chain receiving the transaction.
+- Transaction `client_id`: client updated by the transaction; destination for `recv`, source for `ack` and `timeout`.
+- Processor `type`: `send_to_recv`, `send_to_timeout`, or `recv_to_ack`.
+
+In metrics that label both packet sides, `chain_id` / `client_id` refer to the packet's **source** side and
+`dest_chain_id` / `dest_client_id` to its destination.
+
+Confirmations count only successful receipts for transactions broadcast by this process.
+Confirmations and retries are deduplicated independently in a cache of 10,000 transactions by chain and tx hash.
+Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
+EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
+Collections inside that threshold re-emit the last observed value. A failed query is logged and reported as `-1`.
+
+| package     | metric                          | type               | labels                                                              | notes                                                          |
+| ----------- | ------------------------------- | ------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- |
+| pipeline    | `packets_total`                 | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `state` | +1 per packet status transition                                |
+| pipeline    | `batch_size_*`                  | histogram          | `chain_id`, `processor`, `result`                                   | Packet count in the batch; `batch_size_count` counts batches   |
+| processors  | `relays_completed_total`        | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per completed leg                                           |
+| processors  | `relay_duration_*`              | histogram (s)      | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | Wall time of that leg                                          |
+| processors  | `transactions_submitted_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
+| processors  | `transactions_confirmed_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
+| processors  | `transaction_retries_total`     | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
+| processors | `relay_packet_execution_total` | counter | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `processor`, `result` | Observed packet execution attempts; `result`: `executed`, `missing_event`, `tx_reverted` |
+| txsubmitter | `txsubmitter_attempts_total` | counter | `chain_id`, `wallet`, `result` | +1 per completed Submit call; `result`: `ok`, `deferred` (capacity), `error`. Internal fee replacements do not add attempts. |
+| txsubmitter | `evm_gas_spent`                 | observable counter | `chain_id`, `wallet`                                                | Cumulative mined cost of txs this submitter sent, including failed txs, in native-token units |
+| txsubmitter | `evm_gas_balance`               | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
+| watcher     | `watcher_events_total`          | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |
+| watcher | `watcher_subscription_up` | gauge | `chain_id` | 1 while subscribed; 0 before the initial subscription, during reconnection, and after shutdown. Only configured auto-relay watchers emit it. |
+| dispatch | `dispatcher_last_success_timestamp_seconds` | gauge | none | Unix timestamp of the last completed successful poll, including empty polls. Initially 0; errors and blocked polls leave it unchanged. |
+| dispatch    | `packets_pending`               | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
+| dispatch    | `excessive_relay_latency_total` | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per poll while a packet is pending past its leg threshold   |
+
+`excessive_relay_latency_total` counts packets still pending past a per-leg threshold, using the
+same `type` values as processor metrics (`send_to_recv`, `send_to_timeout`, `recv_to_ack`). It is an
+event counter, not a failure gauge: a packet that remains stuck increments on every dispatcher poll,
+so alerts should be built on `rate()`. The threshold is hard-coded for now (60m pending; timeouts 5m
+past the packet timeout, with a 15m source-finality guard) and can move to config in the future.
+
+`relay_packet_execution_total` records receipt observations, including transactions discovered from
+other relayers. A matching WriteAcknowledgement, AckPacket, or TimeoutPacket event counts as `executed`.
+An application-error acknowledgement still counts as an executed recv. A successful receipt missing
+the packet's event counts as `missing_event`; a failed receipt counts as `tx_reverted`. Pending
+receipts, RPC/decoding errors, and simulations add no execution result. These are observations of
+mined receipts, not finality guarantees. A bounded cache deduplicates the last 100,000
+(chain, transaction, packet, processor) observations. Restarts or eviction can allow recounting;
+the counters are operational telemetry, not a durable transaction ledger.
+
+For dispatcher freshness, use `time() - dispatcher_last_success_timestamp_seconds` per instance.
+An empty successful poll advances this timestamp; a blocked pipeline or failed database operation
+does not. The subscription gauge describes subscription lifecycle state, not proof that an otherwise
+connected endpoint is delivering every event. Missing series must be monitored separately from zero.
+
+### Transaction diagnostic logs
+
+Successful submissions log at INFO with `chainID`, `txHash`, `sender`, `nonce`, `gasLimit`,
+`maxFeePerGasWei`, `maxPriorityFeePerGasWei`, `baseFeePerGasWei`, and `minedNonce`.
+EIP-1559 fee fields are decimal strings in wei; the fee cap is not the eventual effective gas price.
+Rejected or uncertain broadcasts and fee-ceiling exhaustion log the attempted fees and RPC error.
+Submission errors and capacity deferrals include the chain, sender, and detailed error in logs;
+the attempts metric has no reason label.
+
+Receipt timeouts log `submittedAt`, `pendingDuration`, and `retryReason=receipt_missing` at WARN.
+Mined reverts log the transaction hash, block number, gas used, and effective gas price at WARN.
+Standard receipts contain no revert data, so these logs mark `revertReason=unavailable`; use the
+hash and block to investigate with tracing. RPC errors containing revert data are decoded using
+the known contract ABIs. Warnings are deduplicated per submitter by transaction hash and reason
+within a 10,000-entry cache. No raw transaction payloads are persisted.
+
+### EVM client metrics
+
+Shared label: `{otel_scope_name="ibc.evm_client"}`
+
+| metric                | type           | labels                                    | notes |
+| --------------------- | -------------- | ----------------------------------------- | ----- |
+| `evm_operation_dur_*` | histogram (ms) | `chain_id`, `operation`, `result`, `code` | go-ethereum call latency on the HTTP endpoint, for both the chain client and the tx submitter. `operation` is the JSON-RPC method the call issues. `result` is `ok` or `error`. `code` is empty on success, `http_<status>` or `jsonrpc_<code>` when go-ethereum reports one, and `other` for any other failure. |
+
+A `null` result such as a receipt that is not found yet is an answer, not a failure, so it counts as `ok`.
+The websocket endpoint used for subscriptions is not instrumented.
 
 ## Guide on creating new metrics
 

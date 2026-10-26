@@ -38,6 +38,7 @@ const (
 type instrumentation struct {
 	PacketsPending        metric.Int64Gauge
 	ExcessiveRelayLatency metric.Int64Counter
+	LastSuccess           metric.Float64Gauge
 
 	routesFromPrevCall map[processors.Route]struct{}
 	mu                 sync.Mutex
@@ -56,7 +57,12 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
+	lastSuccess, err := m.Float64Gauge("dispatcher_last_success_timestamp_seconds")
+	if err != nil {
+		return nil, err
+	}
 	return &instrumentation{
+		LastSuccess:           lastSuccess,
 		PacketsPending:        packetsPending,
 		ExcessiveRelayLatency: excessiveRelayLatency,
 		routesFromPrevCall:    make(map[processors.Route]struct{}),

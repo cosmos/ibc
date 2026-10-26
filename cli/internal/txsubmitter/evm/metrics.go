@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
@@ -52,6 +53,7 @@ type instrumentation struct {
 	// This helps to convert cumulativeGasCostWei's bigInt to float64 only when requested by telemetry.
 	EVMGasSpent metric.Float64ObservableCounter
 	GasBalance  metric.Float64ObservableGauge
+	Attempts    metric.Int64Counter
 
 	txOwners map[transactionKey]chainWallet
 	wallets  map[chainWallet]*walletMetrics
@@ -71,7 +73,12 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
+	attempts, err := m.Int64Counter("txsubmitter_attempts_total")
+	if err != nil {
+		return nil, err
+	}
 	instruments := &instrumentation{
+		Attempts:    attempts,
 		EVMGasSpent: evmGasSpent,
 		GasBalance:  gasBalance,
 		txOwners:    make(map[transactionKey]chainWallet),
@@ -89,6 +96,24 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	}
 
 	return instruments, nil
+}
+
+const (
+	submissionResultOK       = "ok"
+	submissionResultDeferred = "deferred"
+	submissionResultError    = "error"
+)
+
+func (m *instrumentation) attempt(ctx context.Context, chainID, wallet string, err error) {
+	result := submissionResultOK
+	if errors.Is(err, ErrBusy) {
+		result = submissionResultDeferred
+	} else if err != nil {
+		result = submissionResultError
+	}
+	m.Attempts.Add(context.WithoutCancel(ctx), 1, metric.WithAttributes(
+		otel.AttrChainID.String(chainID), otel.AttrWallet.String(wallet), otel.AttrResult.String(result),
+	))
 }
 
 func (m *instrumentation) setWallet(chainID, wallet string, client balanceClient) {
