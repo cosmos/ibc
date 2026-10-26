@@ -218,6 +218,9 @@ is disabled.
 from `otelFile` or from `OTEL_CONFIG_FILE`.
 <!-- [cli/internal/config/config.go: Observability.ConfigFile] -->
 
+See [Observability and metrics](8-observability-and-metrics.md) for metric names,
+labels, and semantics.
+
 ## `chains`
 
 `chains` lists every chain used elsewhere in the file.

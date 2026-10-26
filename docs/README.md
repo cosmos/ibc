@@ -59,3 +59,4 @@ IBC CLI is an all-in-one binary for deploying and running an IBC connection.
 - [Configuration](6-ibc-cli/5-configuration.md): Every key in `ibc.yml`.
 - [CLI commands](6-ibc-cli/6-cli-commands.md): Every command and flag.
 - [API](6-ibc-cli/7-api.md): The gRPC services.
+- [Observability and metrics](6-ibc-cli/8-observability-and-metrics.md): Metric modes, names, labels, and semantics.

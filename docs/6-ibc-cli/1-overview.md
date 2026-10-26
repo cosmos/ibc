@@ -148,6 +148,9 @@ The IBC CLI also validates the file with the `ibc config validate` command.
 
 The [configuration reference](5-configuration.md) carries every key and its default. [CLI commands](6-cli-commands.md) and the [API reference](7-api.md) cover the rest of the surface.
 
+See [Observability and metrics](8-observability-and-metrics.md) for metric export modes
+and the metrics reference.
+
 ## Next steps
 
 - [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md) brings up two chains and moves a token between them.
