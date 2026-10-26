@@ -3,12 +3,17 @@
 package besu
 
 import (
+	"crypto/ecdsa"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
 	clibesu "github.com/cosmos/ibc/cli/besu"
@@ -24,7 +29,7 @@ func TestBesuOperatorConfigEnvironmentInvariants(t *testing.T) {
 	cfg := newBesuOperatorConfig(clibesu.QBFT, chainID, blockPeriodSecs, treasury)
 
 	require.Equal(t, uint64(chainID), cfg.Genesis.Config.ChainID)
-	require.Equal(t, 1, cfg.Blockchain.Nodes.Count)
+	require.Equal(t, validatorCount, cfg.Blockchain.Nodes.Count)
 	require.Nil(t, cfg.Genesis.Config.IBFT2)
 	require.Equal(t, blockPeriodSecs, cfg.Genesis.Config.QBFT.BlockPeriodSeconds)
 	require.Equal(t, 2*blockPeriodSecs, cfg.Genesis.Config.QBFT.RequestTimeoutSeconds)
@@ -53,34 +58,90 @@ func TestBesuOperatorConfigIBFT2(t *testing.T) {
 	require.NotContains(t, keys, "qbft")
 }
 
-func TestPrepareBesuNodeDir(t *testing.T) {
-	t.Run("stages complete generated output", func(t *testing.T) {
+func TestPrepareBesuNodeDirs(t *testing.T) {
+	t.Run("stages a data dir per validator", func(t *testing.T) {
 		chainDir := t.TempDir()
 		writeGeneratedBesuFile(t, chainDir, "genesis.json", "genesis")
-		writeGeneratedBesuFile(t, chainDir, filepath.Join("keys", "validator-1", "key"), "key")
+		keys := writeGeneratedValidatorKeys(t, chainDir, validatorCount)
 
-		dataDir, err := prepareBesuNodeDir(chainDir)
+		validators, err := prepareBesuNodeDirs(chainDir, 0)
 		require.NoError(t, err)
 		require.FileExists(t, filepath.Join(chainDir, "genesis.json"))
-		require.FileExists(t, filepath.Join(dataDir, "key"))
+		var want, got []common.Address
+		for _, key := range keys {
+			want = append(want, crypto.PubkeyToAddress(key.PublicKey))
+		}
+		for _, v := range validators {
+			got = append(got, crypto.PubkeyToAddress(v.key.PublicKey))
+			require.FileExists(t, filepath.Join(v.dataDir, "key"))
+		}
+		require.ElementsMatch(t, want, got)
+	})
+
+	t.Run("stages followers after the validators on new keys", func(t *testing.T) {
+		chainDir := t.TempDir()
+		writeGeneratedBesuFile(t, chainDir, "genesis.json", "genesis")
+		keys := writeGeneratedValidatorKeys(t, chainDir, validatorCount)
+
+		nodes, err := prepareBesuNodeDirs(chainDir, 2)
+		require.NoError(t, err)
+		require.Len(t, nodes, validatorCount+2)
+		var validators []common.Address
+		for _, key := range keys {
+			validators = append(validators, crypto.PubkeyToAddress(key.PublicKey))
+		}
+		for i, n := range nodes {
+			require.Equal(t, i < validatorCount, slices.Contains(validators, n.address()))
+			require.FileExists(t, filepath.Join(n.dataDir, "key"))
+		}
 	})
 
 	t.Run("rejects missing genesis", func(t *testing.T) {
 		chainDir := t.TempDir()
-		writeGeneratedBesuFile(t, chainDir, filepath.Join("keys", "validator-1", "key"), "key")
+		writeGeneratedValidatorKeys(t, chainDir, validatorCount)
 
-		_, err := prepareBesuNodeDir(chainDir)
+		_, err := prepareBesuNodeDirs(chainDir, 0)
 		require.ErrorContains(t, err, "copy besu genesis")
+	})
+
+	t.Run("rejects a wrong validator count", func(t *testing.T) {
+		chainDir := t.TempDir()
+		writeGeneratedBesuFile(t, chainDir, "genesis.json", "genesis")
+		writeGeneratedValidatorKeys(t, chainDir, validatorCount-1)
+
+		_, err := prepareBesuNodeDirs(chainDir, 0)
+		require.ErrorContains(t, err, "validator key dirs")
 	})
 
 	t.Run("rejects missing validator key", func(t *testing.T) {
 		chainDir := t.TempDir()
 		writeGeneratedBesuFile(t, chainDir, "genesis.json", "genesis")
-		require.NoError(t, os.MkdirAll(filepath.Join(chainDir, "networkFiles", "keys", "validator-1"), 0o755))
+		writeGeneratedValidatorKeys(t, chainDir, validatorCount-1)
+		require.NoError(t, os.MkdirAll(filepath.Join(chainDir, "networkFiles", "keys", "0xffff"), 0o755))
 
-		_, err := prepareBesuNodeDir(chainDir)
-		require.ErrorContains(t, err, "copy validator key")
+		_, err := prepareBesuNodeDirs(chainDir, 0)
+		require.ErrorContains(t, err, "read validator key")
 	})
+}
+
+// writeGeneratedValidatorKeys writes keys the way Besu's operator does: one
+// dir per validator named by address, holding a 0x-prefixed hex key.
+func writeGeneratedValidatorKeys(t *testing.T, chainDir string, n int) []*ecdsa.PrivateKey {
+	t.Helper()
+	keys := make([]*ecdsa.PrivateKey, n)
+	for i := range keys {
+		key, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		keys[i] = key
+		address := strings.ToLower(crypto.PubkeyToAddress(key.PublicKey).Hex())
+		writeGeneratedBesuFile(
+			t,
+			chainDir,
+			filepath.Join("keys", address, "key"),
+			hexutil.Encode(crypto.FromECDSA(key)),
+		)
+	}
+	return keys
 }
 
 func writeGeneratedBesuFile(t *testing.T, chainDir, relativePath, contents string) {
@@ -88,4 +149,20 @@ func writeGeneratedBesuFile(t *testing.T, chainDir, relativePath, contents strin
 	path := filepath.Join(chainDir, "networkFiles", relativePath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+}
+
+// Peers dial a node by its public key, without the leading uncompressed-point
+// byte, at its IP on the chain's network.
+func TestEnode(t *testing.T) {
+	key, err := crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
+	require.NoError(t, err)
+	require.Equal(t,
+		"enode://79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"+
+			"483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8@172.17.0.2:30303",
+		enode(key, "172.17.0.2"))
+}
+
+func TestVotingAPI(t *testing.T) {
+	require.Equal(t, "qbft", votingAPI(clibesu.QBFT))
+	require.Equal(t, "ibft", votingAPI(clibesu.IBFT2))
 }

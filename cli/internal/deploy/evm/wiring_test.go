@@ -195,18 +195,6 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	require.NotEmpty(t, report.Failed())
 }
 
-// The PUBLIC_ROLE grant happens inside ProvisionCore and is asserted
-// end-to-end by the e2e module's deploy test; this pins the selector set.
-func TestPublicRelayingSelectors(t *testing.T) {
-	selectors, err := publicRelayingSelectors()
-	require.NoError(t, err)
-	require.Len(t, selectors, len(publicRelayingMethods))
-
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	require.NoError(t, err)
-	require.Equal(t, [4]byte(routerABI.Methods["recvPacket"].ID), selectors[0])
-}
-
 // fakeRPCError mimics go-ethereum's rpc.jsonError: a message plus optional
 // structured revert data.
 type fakeRPCError struct{ msg, data string }

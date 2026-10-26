@@ -22,17 +22,6 @@ import (
 // evmMerklePrefix is the empty prefix EVM counterparties use.
 var evmMerklePrefix = [][]byte{{}}
 
-// publicRelayingMethods are opened to PUBLIC_ROLE so any relayer EOA can
-// submit packets and client updates.
-var publicRelayingMethods = []string{
-	"recvPacket",
-	"ackPacket",
-	"timeoutPacket",
-	"updateClient",
-	"multicall",
-	"submitMisbehaviour",
-}
-
 // Custom-error selectors for the getters that revert when absent, so their
 // reverts can be classified as not-found.
 var (
@@ -154,24 +143,6 @@ func (d *Driver) Head(ctx context.Context) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 	return header.Number.Uint64(), header.Time, nil
-}
-
-// publicRelayingSelectors resolves the relaying method selectors that
-// ProvisionCore binds to AccessManager's PUBLIC_ROLE.
-func publicRelayingSelectors() ([][4]byte, error) {
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	if err != nil {
-		return nil, err
-	}
-	selectors := make([][4]byte, 0, len(publicRelayingMethods))
-	for _, name := range publicRelayingMethods {
-		method, ok := routerABI.Methods[name]
-		if !ok {
-			return nil, fmt.Errorf("router ABI has no method %q", name)
-		}
-		selectors = append(selectors, [4]byte(method.ID))
-	}
-	return selectors, nil
 }
 
 // Verify checks the manifest against live chain state.

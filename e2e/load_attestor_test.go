@@ -158,7 +158,9 @@ type attestablePacket struct {
 func newLoadTestAttestor(t *testing.T) *loadTestAttestor {
 	// ARRANGE
 	// Given attested setup
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 
 	// Given signers
