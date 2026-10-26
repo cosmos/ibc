@@ -371,7 +371,7 @@ func (d *deployCLI) sendIFT(t *testing.T, route e2etest.Route, ift, to, amount s
 	require.NoErrorf(t, json.Unmarshal(stdout, &send), "tx ift send stdout: %s", stdout)
 
 	router := d.manifest(t, chainID).Core.Router
-	block, sequence := sentPacket(ctx, t, chain.RPCURL(), router, send.TxHash)
+	block, sequence := sentPacket(ctx, t, chain.RPCURL(), router, d.clientID(), send.TxHash)
 	return e2etest.PacketTx{
 		RouteID:           route.ID,
 		Source:            route.Source,
@@ -612,16 +612,16 @@ func assertPublicRelaying(ctx context.Context, t testing.TB, rpcURL string, m de
 }
 
 // sentPacket returns the block and sequence of the one packet the router
-// sent in txHash.
-func sentPacket(ctx context.Context, t testing.TB, rpcURL, router, txHash string) (uint64, uint64) {
+// sent over clientID in txHash.
+func sentPacket(ctx context.Context, t testing.TB, rpcURL, router, clientID, txHash string) (uint64, uint64) {
 	t.Helper()
 	client, err := ethclient.DialContext(ctx, rpcURL)
 	require.NoError(t, err)
 	defer client.Close()
 	receipt, err := client.TransactionReceipt(ctx, common.HexToHash(txHash))
 	require.NoError(t, err)
-	sequences, err := e2etest.SendPacketSequences(common.HexToAddress(router), receipt)
+	packets, err := e2etest.SentPackets(common.HexToAddress(router), clientID, receipt)
 	require.NoError(t, err)
-	require.Lenf(t, sequences, 1, "SendPacket events in %s", txHash)
-	return receipt.BlockNumber.Uint64(), sequences[0]
+	require.Lenf(t, packets, 1, "packets sent over client %q in %s", clientID, txHash)
+	return receipt.BlockNumber.Uint64(), packets[0].Sequence
 }

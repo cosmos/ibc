@@ -48,17 +48,13 @@ type TransferRequest struct {
 
 // Transfer drives ICS20 Transfer on a single directed route.
 type Transfer struct {
-	routeID        RouteID
-	source         endpoint
-	destination    endpoint
-	sender         evm.Account
-	sourceToken    common.Address
-	sourceICS20    common.Address
-	sourceRouter   common.Address
-	destRouter     common.Address
-	destICS20      common.Address
-	sourceClientID string
-	destClientID   string
+	sourceRoute
+	destination  endpoint
+	sourceToken  common.Address
+	sourceICS20  common.Address
+	destRouter   common.Address
+	destICS20    common.Address
+	destClientID string
 }
 
 type PreparedTransfer struct {
@@ -163,25 +159,12 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack ICS20 sendTransfer: %w", err)
 	}
-	receipt, sequence, err := send(
-		ctx,
-		p.app.source.evm,
-		p.app.sender,
-		p.app.sourceICS20,
-		data,
-		sendPacketSequence(p.app.sourceRouter),
-	)
+	sent, err := p.app.send(ctx, p.app.sourceICS20, data, 1)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send Transfer on route %q: %w", p.app.routeID, err)
 	}
 	return &TransferSend{
-		sendResult: newSendResult(
-			p.app.routeID,
-			p.app.source,
-			p.app.sourceClientID,
-			receipt,
-			sequence,
-		),
+		sendResult:        sent[0],
 		app:               p.app,
 		receiver:          p.request.Receiver,
 		amount:            new(big.Int).Set(p.request.Amount),
@@ -283,81 +266,22 @@ func (t *TransferSend) VerifyCommitmentPresent(ctx context.Context) error {
 	return nil
 }
 
-func (t *TransferSend) successfulReceipt(
-	ctx context.Context,
-	target endpoint,
-	action string,
-	txHash string,
-) (*types.Receipt, error) {
-	receipt, err := target.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
-	if err != nil {
-		return nil, fmt.Errorf(
-			"e2etest: fetch Transfer packet %s %s transaction %s: %w",
-			t.packetTx.reference(), action, txHash, err,
-		)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return nil, fmt.Errorf(
-			"e2etest: Transfer packet %s %s transaction %s failed",
-			t.packetTx.reference(), action, txHash,
-		)
-	}
-	return receipt, nil
-}
-
-// VerifyAcknowledgementWritten checks that txHash succeeded with one WriteAcknowledgement for this packet.
+// VerifyAcknowledgementWritten checks that txHash succeeded with a WriteAcknowledgement for this packet.
 func (t *TransferSend) VerifyAcknowledgementWritten(ctx context.Context, txHash string) error {
-	receipt, err := t.successfulReceipt(ctx, t.app.destination, "receive", txHash)
+	ids, err := writeAcknowledgementPacketIDs(ctx, t.app.destination, t.app.destRouter, txHash)
 	if err != nil {
 		return err
 	}
-
-	parser := mustBinding(ics26router.NewContractFilterer(t.app.destRouter, nil))
-	events, err := receiptEvents(receipt, t.app.destRouter, parser.ParseWriteAcknowledgement)
-	if err != nil {
-		return fmt.Errorf("e2etest: decode WriteAcknowledgement: %w", err)
-	}
-	matches := 0
-	for _, event := range events {
-		if event.Packet.SourceClient == t.app.sourceClientID && event.Packet.Sequence == t.packetTx.Sequence {
-			matches++
-		}
-	}
-	if matches != 1 {
-		return fmt.Errorf(
-			"e2etest: Transfer packet %s receive transaction %s emitted %d matching "+
-				"WriteAcknowledgement events, want 1",
-			t.packetTx.reference(), txHash, matches,
-		)
-	}
-	return nil
+	return t.packetTx.emittedBy(ids, "WriteAcknowledgement", txHash)
 }
 
-// VerifyAcknowledgementExecuted checks that txHash succeeded with one AckPacket for this packet.
+// VerifyAcknowledgementExecuted checks that txHash succeeded with an AckPacket for this packet.
 func (t *TransferSend) VerifyAcknowledgementExecuted(ctx context.Context, txHash string) error {
-	receipt, err := t.successfulReceipt(ctx, t.app.source, "acknowledgement", txHash)
+	ids, err := ackPacketIDs(ctx, t.app.source, t.app.sourceRouter, txHash)
 	if err != nil {
 		return err
 	}
-
-	parser := mustBinding(ics26router.NewContractFilterer(t.app.sourceRouter, nil))
-	events, err := receiptEvents(receipt, t.app.sourceRouter, parser.ParseAckPacket)
-	if err != nil {
-		return fmt.Errorf("e2etest: decode AckPacket: %w", err)
-	}
-	matches := 0
-	for _, event := range events {
-		if event.Packet.SourceClient == t.app.sourceClientID && event.Packet.Sequence == t.packetTx.Sequence {
-			matches++
-		}
-	}
-	if matches != 1 {
-		return fmt.Errorf(
-			"e2etest: Transfer packet %s acknowledgement transaction %s emitted %d matching AckPacket events, want 1",
-			t.packetTx.reference(), txHash, matches,
-		)
-	}
-	return nil
+	return t.packetTx.emittedBy(ids, "AckPacket", txHash)
 }
 
 func getCommitment(
@@ -431,9 +355,11 @@ func (t *TransferSend) VerifyNotMinted(ctx context.Context) error {
 
 // VerifyRefunded waits for the source sender balance to be restored after timeout.
 func (t *TransferSend) VerifyRefunded(ctx context.Context, txHash string) error {
-	if err := verifyPacketTimeout(
-		ctx, t.app.source, t.app.sourceRouter, t.app.sourceClientID, t.packetTx, txHash,
-	); err != nil {
+	ids, err := timeoutPacketIDs(ctx, t.app.source, t.app.sourceRouter, txHash)
+	if err != nil {
+		return err
+	}
+	if err := t.packetTx.emittedBy(ids, "TimeoutPacket", txHash); err != nil {
 		return err
 	}
 	return awaitBalance(
@@ -546,69 +472,4 @@ func isICS20DenomNotFound(err error) bool {
 	copy(selector[:], revertData)
 	contractErr, lookupErr := ics20ABI.ErrorByID(selector)
 	return lookupErr == nil && contractErr.Name == "ICS20DenomNotFound"
-}
-
-// verifyPacketTimeout checks that txHash succeeded with one TimeoutPacket for the packet.
-func verifyPacketTimeout(
-	ctx context.Context,
-	source endpoint,
-	router common.Address,
-	sourceClientID string,
-	packetTx PacketTx,
-	txHash string,
-) error {
-	receipt, err := source.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
-	if err != nil {
-		return fmt.Errorf("e2etest: fetch packet %s timeout transaction %s: %w", packetTx.reference(), txHash, err)
-	}
-	if receipt.Status != types.ReceiptStatusSuccessful {
-		return fmt.Errorf("e2etest: packet %s timeout transaction %s failed", packetTx.reference(), txHash)
-	}
-
-	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
-	events, err := receiptEvents(receipt, router, parser.ParseTimeoutPacket)
-	if err != nil {
-		return fmt.Errorf("e2etest: decode TimeoutPacket: %w", err)
-	}
-	matches := 0
-	for _, event := range events {
-		if event.Packet.SourceClient == sourceClientID && event.Packet.Sequence == packetTx.Sequence {
-			matches++
-		}
-	}
-	if matches != 1 {
-		return fmt.Errorf(
-			"e2etest: packet %s timeout transaction %s emitted %d matching TimeoutPacket events, want 1",
-			packetTx.reference(), txHash, matches,
-		)
-	}
-	return nil
-}
-
-func sendPacketSequence(router common.Address) func(*types.Receipt) (uint64, bool, error) {
-	return func(receipt *types.Receipt) (uint64, bool, error) {
-		sequences, err := SendPacketSequences(router, receipt)
-		if err != nil {
-			return 0, false, err
-		}
-		if len(sequences) == 0 {
-			return 0, false, nil
-		}
-		return sequences[0], true, nil
-	}
-}
-
-// SendPacketSequences returns every SendPacket sequence emitted by the router
-// in one receipt, in log order
-func SendPacketSequences(router common.Address, receipt *types.Receipt) ([]uint64, error) {
-	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
-	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
-	if err != nil {
-		return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
-	}
-	sequences := make([]uint64, len(events))
-	for i, event := range events {
-		sequences[i] = event.Packet.Sequence
-	}
-	return sequences, nil
 }
