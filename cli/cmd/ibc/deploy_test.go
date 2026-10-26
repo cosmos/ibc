@@ -5,8 +5,11 @@ package main
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
@@ -51,6 +55,147 @@ func TestResolveDeployerAlias(t *testing.T) {
 
 	chain.Deployer = ""
 	require.Empty(t, resolveDeployerAlias(chain, ""))
+}
+
+func TestDeployCorePopulateConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		populate   bool
+		dryRun     bool
+		noManifest bool
+		failCode   bool
+		wantErr    bool
+	}{
+		{name: "without flag"},
+		{name: "populate existing deployment", populate: true},
+		{name: "dry run existing deployment", populate: true, dryRun: true},
+		{name: "dry run fresh deployment", populate: true, dryRun: true, noManifest: true},
+		{name: "failed precheck", populate: true, failCode: true, wantErr: true},
+		{name: "failed deployment", populate: true, noManifest: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := setupRenderConfigTest(t)
+			previousChain, previousDeployer := flagDeployChain, flagDeployDeployer
+			previousPopulate, previousDryRun := flagDeployCorePopulate, flagDeployDryRun
+			t.Cleanup(func() {
+				flagDeployChain, flagDeployDeployer = previousChain, previousDeployer
+				flagDeployCorePopulate, flagDeployDryRun = previousPopulate, previousDryRun
+			})
+			flagDeployChain, flagDeployDeployer = "1", ""
+			flagDeployCorePopulate, flagDeployDryRun = tc.populate, tc.dryRun
+			flagDeployManifestDir = filepath.Join(home, "records")
+			globalFlags.Config = "operator.yml"
+
+			rpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					ID     json.RawMessage `json:"id"`
+					Method string          `json:"method"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Error(err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				response := map[string]any{"jsonrpc": "2.0", "id": req.ID}
+				switch {
+				case req.Method == "eth_chainId":
+					response["result"] = "0x1"
+				case req.Method == "eth_getCode" && !tc.failCode:
+					response["result"] = "0x6000"
+				default:
+					response["error"] = map[string]any{"code": -32000, "message": "blocked by test RPC"}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Error(err)
+				}
+			}))
+			t.Cleanup(rpc.Close)
+
+			key, _ := newLocalSignerConfig(t, "deployer")
+			cfg := config.DefaultConfig()
+			cfg.Server.ListenAddress = "127.0.0.1:4567"
+			cfg.DB.URL = "operator.db"
+			cfg.Signers = config.Signers{key}
+			cfg.Chains = config.Chains{
+				{
+					ChainID:  "1",
+					Deployer: key.Alias,
+					EVM:      &config.EVMChainConfig{RPC: rpc.URL, WS: "ws://localhost:8546"},
+				},
+				{ChainID: "2", EVM: &config.EVMChainConfig{RPC: "http://localhost:8745"}},
+			}
+			cfg.Relayer.Connections = []config.ConnectionConfig{
+				{
+					Alias: "existing-route",
+					ClientA: config.ClientEnd{
+						ChainID:  "1",
+						ClientID: "a",
+						Signer:   key.Alias,
+						Type:     config.ClientTypeAttestation,
+					},
+					ClientB: config.ClientEnd{
+						ChainID:  "2",
+						ClientID: "b",
+						Signer:   key.Alias,
+						Type:     config.ClientTypeBesu,
+					},
+				},
+			}
+			cfg.Attestors = config.Attestors{{
+				Name: "watcher", Type: config.AttestorTypeLocal, ChainID: "2", Signer: key.Alias, FinalityOffset: 7,
+			}}
+			path := filepath.Join(home, globalFlags.Config)
+			require.NoError(t, cfg.StoreToFile(path))
+			cfg, err := config.LoadFromFile(path, true)
+			require.NoError(t, err)
+			original, err := os.ReadFile(path)
+			require.NoError(t, err)
+
+			m := manifest.New("1", "evm")
+			m.Core.Router = "0x0000000000000000000000000000000000000001"
+			m.Core.Multicall = "0x0000000000000000000000000000000000000002"
+			if !tc.noManifest {
+				require.NoError(t, m.Save(flagDeployManifestDir))
+			}
+			cmd := &cobra.Command{}
+			cmd.SetContext(t.Context())
+			output := captureStdout(t, func() { err = deployCore(cmd, nil) })
+			if tc.wantErr {
+				require.ErrorContains(t, err, "blocked by test RPC")
+			} else {
+				require.NoError(t, err)
+				var steps []deploy.StepResult
+				require.NoError(t, json.Unmarshal([]byte(output), &steps))
+				require.Len(t, steps, 2)
+				for _, step := range steps {
+					if tc.noManifest {
+						require.Equal(t, deploy.ActionPlanned, step.Action)
+					} else {
+						require.Equal(t, deploy.ActionSkipped, step.Action)
+					}
+				}
+			}
+
+			if !tc.populate || tc.dryRun || tc.wantErr {
+				unchanged, readErr := os.ReadFile(path)
+				require.NoError(t, readErr)
+				require.Equal(t, original, unchanged)
+				return
+			}
+			loaded, err := config.LoadFromFile(path, true)
+			require.NoError(t, err)
+			cfg.Chains[0].EVM.ICS26Router = m.Core.Router
+			cfg.Chains[0].EVM.IBCMulticall = m.Core.Multicall
+			require.Equal(t, cfg, loaded)
+			populated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.NoError(t, deployCore(cmd, nil))
+			repeated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, populated, repeated)
+		})
+	}
 }
 
 func TestStatusChains(t *testing.T) {

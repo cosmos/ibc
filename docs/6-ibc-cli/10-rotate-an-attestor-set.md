@@ -8,7 +8,7 @@ Replace the tutorial's attestor for chain 41002 by migrating to a replacement cl
 ## Before you begin
 
 Complete [Deploy IBC and send a token](2-tutorial-deploy-ibc-and-send-a-token.md).
-Keep its relayer running, including both local attestors.
+Keep its relayer running, including the local attestor for 41002.
 Run every command from the `cli` directory of your IBC clone.
 You need [Foundry](https://getfoundry.sh/introduction/installation), [Bun](https://bun.com/docs/installation), and the tutorial's deployer admin key.
 
@@ -94,11 +94,6 @@ In `~/.ibc/ibc.yml`, replace the `attestors` section with:
 
 ```yaml
 attestors:
-- name: attestor-41001
-  type: local
-  chainId: "41001"
-  signer: attestor-41001
-  finalityOffset: 1
 - name: attestor-41002-replacement
   type: local
   chainId: "41002"

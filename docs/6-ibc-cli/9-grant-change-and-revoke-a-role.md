@@ -1,9 +1,9 @@
 ---
 title: "Grant, change, and revoke a role"
-description: "Grant, change, and revoke access manager roles through a practical relayer key rotation example."
+description: "Configure permissioned relaying, rotate a relayer key, and transfer access manager admin authority."
 ---
 
-This guide demonstrates access manager role changes by rotating a relayer key.
+This guide demonstrates access manager role changes by restricting relaying, rotating a relayer key, and transferring admin authority.
 
 ## Before you begin
 
@@ -15,9 +15,11 @@ Run commands from `cli`, using the tutorial's home and configuration.
 Install [Foundry](https://getfoundry.sh/introduction/installation) for the `cast` commands.
 The tutorial deploys one access manager on 41001 and another on 41002.
 The `deployer` key administers both.
-This guide uses `RELAYER_ROLE`; see [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) for the other available roles.
+This guide uses `RELAYER_ROLE` and `ADMIN_ROLE`; see [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) for the other available roles.
 
-## 1. Grant the relayer role
+## Restrict relaying
+
+### 1. Grant the relayer role
 
 Read the values again if you opened a fresh terminal:
 
@@ -74,7 +76,7 @@ done
 Every query must return `true`, then `0`.
 Continue only after all checks pass, so relaying stays authorized.
 
-## 2. Require the role for relaying
+### 2. Require the role for relaying
 
 Compute the selectors that identify the four router functions and `multicall`:
 
@@ -136,9 +138,11 @@ Both queries must return `1`.
 Stop if any assignment returns another role.
 
 For permissioning only, run `unset DEPLOYER_KEY` and stop here.
-Continue below to replace the key.
+Continue below to replace the relayer key.
 
-## 3. Authorize the replacement key
+## Rotate relayer keys
+
+### 1. Authorize the replacement key
 
 Create the replacement signer and read its address:
 
@@ -183,7 +187,7 @@ cast call "$AM_B" "hasRole(uint64,address)(bool,uint32)" 1 "$NEW_RELAYER" --rpc-
 
 Both queries must return `true`, then `0`.
 
-## 4. Switch to the replacement signer
+### 2. Switch to the replacement key
 
 Update both connection ends in `~/.ibc/ibc.yml`.
 If you customized the attestors, edit only the connection's two `signer` fields to `relayer-next` and skip the command below. Otherwise, run:
@@ -213,7 +217,7 @@ Restart with the same home, configuration, and database:
 
 Wait for the `Readiness` log.
 
-### Verify a transfer
+#### Verify a transfer
 
 Back in your working terminal, read the token address:
 
@@ -233,7 +237,7 @@ Poll for `PACKET_STATE_SUCCEEDED`:
 ./bin/ibc relayer packets --chain-id 41001 --tx-hash "$TX" | jq -r '.packets[0].state'
 ```
 
-## 5. Revoke the old key's role
+### 3. Revoke the old key's role
 
 Revoke role `1` from the old key on both chains.
 
@@ -272,4 +276,71 @@ Then clear the admin key:
 
 ```bash
 unset DEPLOYER_KEY
+```
+
+## Transfer admin authority
+
+Role `0` is `ADMIN_ROLE`. Multiple addresses can hold it.
+Grant it to the replacement before revoking the deployer's admin role, so an admin remains available.
+
+Create a replacement admin key for this local example:
+
+```bash
+./bin/ibc keys new ecdsa admin-replacement --populate-config
+```
+
+```bash
+AM_A=$(./bin/ibc deploy show 41001 | jq -r '.targetData.accessManager')
+AM_B=$(./bin/ibc deploy show 41002 | jq -r '.targetData.accessManager')
+OLD_ADMIN=$(./bin/ibc keys show deployer | jq -er '.evmAddress')
+NEW_ADMIN=$(./bin/ibc keys show admin-replacement | jq -er '.evmAddress')
+DEPLOYER_KEY=$(./bin/ibc keys show deployer --private | jq -er '.privateKey')
+NEW_ADMIN_KEY=$(./bin/ibc keys show admin-replacement --private | jq -er '.privateKey')
+```
+
+Fund the replacement on both chains:
+
+```bash
+cast send "$NEW_ADMIN" --value 1ether --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
+```
+
+```bash
+cast send "$NEW_ADMIN" --value 1ether --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
+```
+
+Grant admin authority with zero execution delay:
+
+```bash
+cast send "$AM_A" "grantRole(uint64,address,uint32)" 0 "$NEW_ADMIN" 0 --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
+```
+
+```bash
+cast send "$AM_B" "grantRole(uint64,address,uint32)" 0 "$NEW_ADMIN" 0 --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
+```
+
+Use the replacement key to revoke the deployer's admin role:
+
+```bash
+cast send "$AM_A" "revokeRole(uint64,address)" 0 "$OLD_ADMIN" --rpc-url http://localhost:8545 --private-key "$NEW_ADMIN_KEY"
+```
+
+```bash
+cast send "$AM_B" "revokeRole(uint64,address)" 0 "$OLD_ADMIN" --rpc-url http://localhost:8745 --private-key "$NEW_ADMIN_KEY"
+```
+
+Successful transactions establish that the replacement can administer both access managers.
+Check the old admin's membership:
+
+```bash
+cast call "$AM_A" "hasRole(uint64,address)(bool,uint32)" 0 "$OLD_ADMIN" --rpc-url http://localhost:8545
+```
+
+```bash
+cast call "$AM_B" "hasRole(uint64,address)(bool,uint32)" 0 "$OLD_ADMIN" --rpc-url http://localhost:8745
+```
+
+Both queries must return `false`, then `0`.
+
+```bash
+unset DEPLOYER_KEY NEW_ADMIN_KEY
 ```
