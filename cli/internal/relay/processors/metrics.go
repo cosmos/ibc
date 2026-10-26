@@ -105,6 +105,11 @@ func (m *instrumentation) txConfirmed(ctx context.Context, chainID, clientID, tx
 	m.TransactionsConfirmed.Add(ctx, 1, txMetricAttributes(chainID, clientID))
 }
 
+// txDropped forgets a submitted transaction that will not be confirmed.
+func (m *instrumentation) txDropped(chainID, txHash string) {
+	m.submittedTransactions.Delete(txKey(chainID, txHash))
+}
+
 // one txHash might carry multiple transfers
 func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType, txHash string) {
 	chainID := tr.SourceChainID

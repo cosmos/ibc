@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -69,9 +70,10 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 	}
 }
 
-// relayPackets generates a client update payload and per-packet proofs for events at
-// proofHeight, asks txBuilder for the resulting transaction, and submits it
-// via txSubmitter
+// relayPackets generates client update payloads and per-packet proofs for
+// events at proofHeight, asks txBuilder for the resulting transaction, and
+// submits it via txSubmitter. All updates but the last are first submitted
+// one per transaction, and the last goes with the packets.
 func relayPackets(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -132,28 +134,68 @@ func relayPackets(
 		return nil, errors.Wrap(err, "waiting for chain")
 	}
 
-	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
-		ClientID: clientID,
-		Payloads: clientUpdatePayloads,
-	}, items)
+	relay := clientRelay{
+		logger:      logger,
+		chainClient: chainClient,
+		txBuilder:   txBuilder,
+		txSubmitter: txSubmitter,
+		clientID:    clientID,
+	}
+
+	// More than one update steps the client across validator set changes.
+	// All but the last go in transactions of their own, each mined before the
+	// next is built, so however long the chain, no transaction outgrows the
+	// size and gas limits a node accepts.
+	last := max(len(clientUpdatePayloads)-1, 0)
+	for i, payload := range clientUpdatePayloads[:last] {
+		if err = relay.sendUpdate(ctx, payload); err != nil {
+			return nil, errors.Wrapf(err, "client update %d of %d", i+1, len(clientUpdatePayloads))
+		}
+	}
+
+	submission, err := relay.send(ctx, clientUpdatePayloads[last:], items)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Info("Relayed packets", "txHash", submission.TxHash)
+
+	return submission, nil
+}
+
+// updateTxPollInterval is how often an update-only transaction is checked
+// for inclusion before the next one is built.
+const updateTxPollInterval = time.Second
+
+// clientRelay builds, simulates and submits relay transactions for one client.
+type clientRelay struct {
+	logger      *slog.Logger
+	chainClient chains.Client
+	txBuilder   txbuilder.TxBuilder
+	txSubmitter txsubmitter.TxSubmitter
+	clientID    string
+}
+
+// send builds, simulates and submits one relay transaction.
+func (r clientRelay) send(ctx context.Context, payloads [][]byte, items []v2.PacketRelayItem) (*v2.Submission, error) {
+	relayTxs, err := r.txBuilder.BuildRelayTxs(v2.ClientUpdate{ClientID: r.clientID, Payloads: payloads}, items)
 	if err != nil {
 		return nil, errors.Wrap(err, "building relay tx")
 	}
-
 	if len(relayTxs) != 1 {
 		return nil, errors.Errorf("expected exactly one relay tx, got %d", len(relayTxs))
 	}
 
 	relayTx := relayTxs[0]
-	simulation, err := txSubmitter.SimulateRelayTx(ctx, relayTx)
+	simulation, err := r.txSubmitter.SimulateRelayTx(ctx, relayTx)
 	if err != nil {
 		return nil, errors.Wrap(err, "simulating relay tx")
 	}
-	if err = validateRelaySimulation(ctx, logger, simulation); err != nil {
+	if err = validateRelaySimulation(ctx, r.logger, simulation); err != nil {
 		return nil, err
 	}
 
-	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
+	submission, err := r.txSubmitter.Submit(ctx, v2.TxIntent{
 		To:   common.BytesToAddress(relayTx.To).Hex(),
 		Data: relayTx.Data,
 	})
@@ -161,11 +203,52 @@ func relayPackets(
 		return nil, errors.Wrap(err, "submitting relay tx")
 	}
 
-	logger.Info("Relayed packets", "txHash", submission.TxHash)
-
-	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
+	metrics.txSubmitted(ctx, r.chainClient.ChainID(), r.clientID, submission.TxHash)
 
 	return submission, nil
+}
+
+// sendUpdate submits payload in a transaction of its own and waits for it to
+// be mined. An update the client already holds is sent all the same: while
+// it is still pending, resending it is what replaces a stalled transaction.
+func (r clientRelay) sendUpdate(ctx context.Context, payload []byte) error {
+	submission, err := r.send(ctx, [][]byte{payload}, nil)
+	if err != nil {
+		return err
+	}
+	r.logger.Info("Submitted client update tx", "txHash", submission.TxHash)
+
+	return r.waitForInclusion(ctx, submission)
+}
+
+// waitForInclusion polls until submission is mined successfully, failing if
+// it reverted, stayed pending past the tx submitter's retry expiry, or could
+// not be looked up. The next attempt then resends the update.
+func (r clientRelay) waitForInclusion(ctx context.Context, submission *v2.Submission) error {
+	ticker := time.NewTicker(updateTxPollInterval)
+	defer ticker.Stop()
+
+	for {
+		retry, err := r.txSubmitter.ShouldRetry(ctx, submission.TxHash, submission.SubmittedAt)
+		switch {
+		case errors.Is(err, v2.ErrTxNotFound):
+		case err != nil:
+			metrics.txDropped(r.chainClient.ChainID(), submission.TxHash)
+			return errors.Wrapf(err, "checking client update tx %s", submission.TxHash)
+		case retry:
+			metrics.txDropped(r.chainClient.ChainID(), submission.TxHash)
+			return errors.Errorf("client update tx %s reverted or was not mined in time", submission.TxHash)
+		default:
+			metrics.txConfirmed(ctx, r.chainClient.ChainID(), r.clientID, submission.TxHash)
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // validateRelaySimulation refuses a transaction in which a client update
