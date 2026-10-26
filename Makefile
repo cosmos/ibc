@@ -30,6 +30,12 @@ lint-fix-gen: ## Lint generated Solidity Go binding packages and fix errors
 test-gen: ## Compile generated Solidity Go binding packages
 	go -C $(GEN_SOLIDITY_ABI_DIR) test ./...
 
+complexity: ## Fail on functions above the complexity thresholds that the baseline does not allow
+	./scripts/complexity.sh
+
+complexity-baseline: ## Record the functions above the complexity thresholds in .complexity-baseline.tsv
+	./scripts/complexity.sh --baseline
+
 vulncheck: ## Report known vulnerabilities in Go dependencies
 	@bindir="$$(mktemp -d)"; \
 	trap 'rm -rf "$$bindir"' EXIT INT TERM; \
@@ -74,5 +80,6 @@ run-all-checks: ## Run "all-in-one" code validation step.
 	$(MAKE) test-gen
 	$(MAKE) lint-license
 
-.PHONY: help lint-license lint-fix-license lint-gen lint-fix-gen test-gen vulncheck \
+.PHONY: help lint-license lint-fix-license lint-gen lint-fix-gen test-gen complexity \
+	complexity-baseline vulncheck \
 	vulncheck-json run-all-checks

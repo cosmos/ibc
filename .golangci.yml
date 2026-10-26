@@ -63,6 +63,21 @@ linters:
       max-blank-identifiers: 3
     misspell:
       locale: US
+    # Complexity thresholds. These linters are not enabled above: `make complexity` runs
+    # them on their own and fails only on functions above a threshold that are not listed
+    # in .complexity-baseline.tsv with their current score.
+    funlen:
+      lines: 100
+      statements: 60
+    gocognit:
+      min-complexity: 30
+    gocyclo:
+      min-complexity: 15
+    maintidx:
+      under: 20
+    nestif:
+      # reports at or above this, so 6 allows a complexity of 5
+      min-complexity: 6
     govet:
       # https://golangci-lint.run/docs/linters/configuration/#govet
       enable: [shadow]
