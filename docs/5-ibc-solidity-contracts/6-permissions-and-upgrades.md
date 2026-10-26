@@ -5,7 +5,7 @@ description: "Which roles gate the IBC-solidity contracts, who holds them on a d
 
 On a deployment of the [IBC-solidity contracts](1-overview.md), who may call the gated functions and who may replace the code depends on the contract.
 
-- **The [router](2-ics26-router.md) and [ICS27GMP](3-ics27-gmp-and-accounts.md)** share a single OpenZeppelin access manager, which holds the roles and decides which addresses may call the functions those roles gate. Its admin may also replace the code behind them.
+- **The [router](2-ics26-router.md), [ICS27GMP](3-ics27-gmp-and-accounts.md) and `IBCMulticall`** share a single OpenZeppelin access manager, which holds the roles and decides which addresses may call the functions those roles gate. Its admin may also replace the code behind them.
 - **Light clients** sit outside that manager. The attestation light client answers to [a role manager fixed when it was constructed](#permissions-on-a-light-client). No light client has an upgrade path: changing one means deploying a replacement that takes over its client ID.
 - **An IFT** answers to its own owner or authority, which may also replace its code.
 
@@ -13,7 +13,7 @@ Everything else about a deployment was fixed when each contract was constructed.
 
 ## The access manager and its roles
 
-The manager is OpenZeppelin's [`AccessManager`](https://docs.openzeppelin.com/contracts/5.x/access-control#access-management). Two contracts defer to it: the [router](2-ics26-router.md) and [ICS27GMP](3-ics27-gmp-and-accounts.md). Each is initialized with the manager's address as its `authority`, and `ibc deploy core` passes the same manager to both. A gated function on either one carries the `restricted` modifier, which asks the manager whether this caller may call this selector here. So changing who may call what requires a change to the manager.
+The manager is OpenZeppelin's [`AccessManager`](https://docs.openzeppelin.com/contracts/5.x/access-control#access-management). Three contracts defer to it: the [router](2-ics26-router.md), [ICS27GMP](3-ics27-gmp-and-accounts.md), and `IBCMulticall`, the batching contract the IBC CLI relayer sends its transactions through. Each is initialized with the manager's address as its `authority`, and `ibc deploy core` passes the same manager to all three. A gated function on either one carries the `restricted` modifier, which asks the manager whether this caller may call this selector here. So changing who may call what requires a change to the manager.
 
 All other contracts carry their own access control.
 
@@ -21,6 +21,7 @@ All other contracts carry their own access control.
 |----------|-----------------------------|--------|
 | [`ICS26Router`](2-ics26-router.md#roles-and-permissions) | The access manager | [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol) |
 | [`ICS27GMP`](3-ics27-gmp-and-accounts.md#roles-pausing-and-upgrades) | The access manager | [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol) |
+| `IBCMulticall` | The access manager | [IBCMulticall.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCMulticall.sol) |
 | [`ICS27Account`](3-ics27-gmp-and-accounts.md#the-account-contracts-functions) | ICS27GMP, the only outside address that may drive an account. The manager's admin still reaches the account code, through `ICS27GMP.upgradeAccountTo` | [ICS27Account.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Account.sol) |
 | [`AttestationLightClient`](5-attestation-light-client.md#roles-and-permissions) | Its own roles, fixed at construction | [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol) |
 | [`IFTOwnable`](4-ift-contracts.md#roles-and-permissions) | Its owner | [IFTOwnable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTOwnable.sol) |
@@ -31,7 +32,7 @@ All other contracts carry their own access control.
 | Role | ID | What it gates |
 |------|----|---------------|
 | `ADMIN_ROLE` | 0 | The proxy and beacon upgrade selectors, `migrateClient`, and every role grant by default |
-| `RELAYER_ROLE` | 1 | `recvPacket`, `ackPacket`, `timeoutPacket`, and `updateClient` on the [router](2-ics26-router.md) |
+| `RELAYER_ROLE` | 1 | `recvPacket`, `ackPacket`, `timeoutPacket`, and `updateClient` on the [router](2-ics26-router.md), and `multicall` on `IBCMulticall` |
 | `PAUSER_ROLE` | 2 | `pause` on ICS27GMP |
 | `UNPAUSER_ROLE` | 3 | `unpause` on ICS27GMP |
 | `ID_CUSTOMIZER_ROLE` | 6 | The custom-identifier forms of `addIBCApp` and `addClient` |
@@ -44,7 +45,9 @@ An admin makes both kinds of change, and both are calls on the manager rather th
 
 ## What a deployment assigns
 
-The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, and the relayer role gates nothing.
+The IBC CLI deploys the contract set, and `ibc deploy core` makes one assignment out of the role map above. It binds `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `multicall`, and `submitMisbehaviour` on the router to `PUBLIC_ROLE`, with no flag and no branch around the call. It deploys `IBCMulticall` and binds its `multicall` to `PUBLIC_ROLE` the same way. It never grants `RELAYER_ROLE`. So on a chain the IBC CLI brings up, any address may relay, directly or through `IBCMulticall`, and the relayer role gates nothing.
+
+The relayer sends each batch through `IBCMulticall`, so the router sees `IBCMulticall` as the caller, and that is the relayer address it reports to IBC applications. Because the router's relay functions are public, `IBCMulticall` needs no role of its own to call them. The contract's own documentation describes the locked-down alternative: `multicall` mapped to `RELAYER_ROLE`, and `RELAYER_ROLE` granted to `IBCMulticall` so it can call the router.
 
 The manager's constructor takes its first admin as an argument. `ibc deploy core` passes the deployer key and leaves it there, and the driver's own comment calls role hardening a follow-up. The rest of the manager's surface is in [OpenZeppelin's reference](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager).
 
@@ -75,11 +78,12 @@ A core contract is deployed as two contracts: logic that holds the code, and an 
 |----------|-------|--------------------------|
 | `ICS26Router` | UUPS behind an ERC1967 proxy | The access manager's admin, through `upgradeToAndCall` |
 | `ICS27GMP` | UUPS behind an ERC1967 proxy | The access manager's admin, through `upgradeToAndCall` |
+| `IBCMulticall` | UUPS behind an ERC1967 proxy | The access manager's admin, through `upgradeToAndCall` |
 | `ICS27Account` | Beacon proxy, one per account identifier | The access manager's admin, through `ICS27GMP.upgradeAccountTo` |
 | [`IFTOwnable`](4-ift-contracts.md) | UUPS behind an ERC1967 proxy | Its owner |
 | [`IFTAccessManaged`](4-ift-contracts.md) | UUPS behind an ERC1967 proxy | Its own authority |
 
-Both core contracts mark `_authorizeUpgrade` as `restricted`. The role map registers the upgrade selectors under the admin role, so no other role reaches them by default. The accounts move as one group. Their logic sits behind a single beacon that ICS27GMP owns, so one `upgradeAccountTo` call changes every account.
+The router, ICS27GMP, and `IBCMulticall` all mark `_authorizeUpgrade` as `restricted`. The role map registers the upgrade selectors under the admin role, so no other role reaches them by default. The accounts move as one group. Their logic sits behind a single beacon that ICS27GMP owns, so one `upgradeAccountTo` call changes every account.
 
 A contract deployed without a proxy holds its settings in constructor-set state, so it changes by replacement. Every light client is in that group, along with the Cosmos send-call constructor. The AccessManager is not proxied either, so its code changes by replacement, but its role grants and its selector map stay changeable by an admin.
 
