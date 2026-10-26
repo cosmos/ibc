@@ -161,7 +161,7 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 
 			chainClient := mocks.NewMockClient(t)
 			chainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-			chainClient.EXPECT().ChainID().Return("8453").Maybe()
+			chainClient.EXPECT().ChainID().Return("8453").Once()
 
 			mockProver := mocks.NewMockProver(t)
 			mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, uint64(100)).Return(payloads, nil).Once()

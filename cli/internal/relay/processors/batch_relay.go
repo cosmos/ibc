@@ -231,6 +231,7 @@ func (r clientRelay) waitForInclusion(ctx context.Context, submission *v2.Submis
 		retry, err := r.txSubmitter.ShouldRetry(ctx, submission.TxHash, submission.SubmittedAt)
 		switch {
 		case errors.Is(err, v2.ErrTxNotFound):
+			// still pending, poll again
 		case err != nil:
 			metrics.txDropped(r.chainID, submission.TxHash)
 			return errors.Wrapf(err, "checking client update tx %s", submission.TxHash)
