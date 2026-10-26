@@ -344,4 +344,3 @@ Both queries must return `false`, then `0`.
 ```bash
 unset DEPLOYER_KEY NEW_ADMIN_KEY
 ```
-

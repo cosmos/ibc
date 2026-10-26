@@ -670,5 +670,3 @@ Migrations run against the `db` block, so `--db` picks a different database for 
 
 - [Configuration](5-configuration.md) for the file these commands read.
 - [API](7-api.md) for the gRPC calls behind `relayer relay`, `relayer packets`, and the attestor queries.
-
-
