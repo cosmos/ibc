@@ -29,12 +29,17 @@ Run the following commands to create and validate the file:
 
 ```sh
 ibc config new
+```
+
+Populate the chains, signers, connections, and attestors you need before running the process-specific checks:
+
+```sh
 ibc config validate              # structural checks and cross-references
 ibc config validate relayer      # also check the file can run a relayer
 ibc config validate attestor     # also check the file can run a local attestor
 ```
 
-Every command loads the config file and runs the same structural checks: unknown fields are rejected, and cross-references (including a local attestor's `chainId` and `signer`) must resolve. `ibc config validate` reports those without starting a process. Pass `relayer` or `attestor` to add the sufficiency checks needed to run that process.
+`ibc config validate` rejects unknown fields and unresolved cross-references, including a local attestor's `chainId` and `signer`, without starting a process. Key-management commands and commands that write a draft configuration do not necessarily run these checks. Pass `relayer` or `attestor` to add the sufficiency checks needed to run that process.
 
 Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [cli/internal/config/file.go: LoadFromFile] -->
 
@@ -139,7 +144,7 @@ Some fields name something declared elsewhere in the file. The loader checks eac
 
 <!-- GEN:config:crossrefs END -->
 
-For example, `signer: attestor-dan-key` selects the signer whose alias is `attestor-dan-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. Any unresolved reference fails at load — including on `ibc config validate` — before a relayer or attestor process starts.
+For example, `signer: attestor-dan-key` selects the signer whose alias is `attestor-dan-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. `ibc config validate`, `ibc relayer run`, and `ibc attestor run` reject unresolved references.
 
 ## `server`
 
@@ -155,7 +160,7 @@ For example, `signer: attestor-dan-key` selects the signer whose alias is `attes
 
 <!-- GEN:config:server END -->
 
-Server reflection is always enabled. <!-- [cli/internal/bootstrap/bootstrap.go: rpcEnableReflection] --> <!-- [cli/internal/server/server.go: Server.start] -->
+Server reflection is always enabled. <!-- [cli/internal/bootstrap/bootstrap.go: rpcEnableReflection] --> <!-- [cli/internal/server/server.go: Server.Start] -->
 
 ## `logging`
 
@@ -239,7 +244,7 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 
 `ibc deploy core` deploys the router and multicall. <!-- [cli/internal/deploy/steps.go: CoreSteps] --> Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
-The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: resolveDeployerAlias] -->
+The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: deployerKeyHex] -->
 
 ## `relayer`
 
@@ -268,11 +273,11 @@ The deployer must be a local signer, because deployment requires direct access t
 
 <!-- GEN:config:relayer:connections END -->
 
-Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. The `ibc deploy client` subcommands do this by default. <!-- [cli/cmd/ibc/deploy.go: defaultClientID] -->
+Client identifiers are scoped to a chain, so both ends can use the same `clientId`. The `ibc deploy client` subcommands do this by default. <!-- [cli/cmd/ibc/deploy.go: defaultClientID] -->
 
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [cli/internal/config/relayer.go: RelayerConfig.validateConnectionIdentities] -->
 
-With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [cli/internal/relay/watcher/set.go: NewSetFromConfig] --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [cli/internal/config/config.go: Config.validateAutoRelay] --> Unset and `false` are the same input. <!-- [cli/internal/config/relayer.go: RelayerConfig.Validate] -->
+With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [cli/internal/relay/watcher/set.go: NewSetFromConfig] --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [cli/internal/config/config.go: Config.validateAutoRelay] --> Unset and `false` are the same input. <!-- [cli/internal/config/relayer.go: RelayerConfig.AutoRelayConnections] -->
 
 `remoteProver` is optional. Without it, the relayer proves an end with the built-in prover for its `type`; with it, the ProverService at `remoteProver.url` proves that end instead, and `type` may name a light client the IBC CLI does not implement. <!-- [cli/internal/relay/prover/prover.go: newProver] --> `ibc deploy render-config` never writes a `remoteProver` block, and keeps one you added. <!-- [cli/internal/config/patch.go: mergeConnections] -->
 
@@ -322,7 +327,7 @@ relayer:
         pendingTxTimeout: 3m
 ```
 
-Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: Options] -->
+Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: OptionsFromConfig] -->
 
 ## `attestors`
 

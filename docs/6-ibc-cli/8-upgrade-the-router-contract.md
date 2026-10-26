@@ -1,9 +1,9 @@
 ---
-title: "Upgrade the router contract"
-description: "Switch the router proxies on the tutorial's two chains to freshly deployed ICS26Router logic, then confirm the router runs it and packets still flow."
+title: "Upgrade an IBC contract"
+description: "Upgrade an IBC Solidity contract using the router as an example."
 ---
 
-This guide upgrades the router on a running two-chain IBC deployment to new logic (the implementation contract behind the router's proxy). The new logic is built from the same source the tutorial deployed, so the steps show the upgrade itself rather than a change in behavior. Each router keeps its address and its state, so the clients, the applications, and the running relayer need no change.
+This guide demonstrates a contract upgrade using the IBC router (`ICS26Router`) as an example. You will replace the implementation behind each router proxy on the tutorial's two chains while preserving each proxy's address and state. The new logic is built from the same source the tutorial deployed, so these steps demonstrate the upgrade without changing its behavior.
 
 ## Before you begin
 
@@ -17,7 +17,7 @@ You also need:
 
 - [Foundry](https://getfoundry.sh/introduction/installation), for `forge` and `cast`.
 - [Bun](https://bun.com/docs/installation), to install the dependencies the contracts import.
-- The access manager's admin key. The tutorial's deployer key holds that role with no [execution delay](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles), so each upgrade call runs immediately.
+- The access manager's admin key. The tutorial's deployer key holds that role.
 
 Run every command from the `cli` directory of your IBC clone.
 
@@ -36,6 +36,14 @@ DEPLOYER_KEY=$(./bin/ibc keys show deployer --private | jq -r '.privateKey')
 The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files. Run `unset DEPLOYER_KEY` when you finish, so the key does not stay in your shell.
 
 ## 2. Get the router source
+
+For a different target version, review the contracts repository's [upgradeability overview](https://github.com/cosmos/ibc-contracts/blob/main/UPGRADEABILITY.md#solidity-contracts) and [release policy](https://github.com/cosmos/ibc-contracts/blob/main/RELEASES.md#solidity-contracts).
+The policy defines minor Solidity releases as requiring a new initializer for storage changes.
+Patch releases require neither storage changes nor a new initializer.
+Major releases introduce API-breaking changes.
+
+Check the target release for required initialization and function-role changes.
+See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#proxies-and-upgrade-authority) for storage-layout and access-control considerations.
 
 This guide builds the new logic from the [ibc-contracts](https://github.com/cosmos/ibc-contracts) commit the IBC CLI pins, which is the source of the logic `ibc deploy core` deployed.
 
@@ -86,18 +94,21 @@ NEW_IMPL_A=$(forge create --root ../../ibc-contracts/ibc-solidity contracts/ICS2
 ```
 
 <Warning>
-Upgrade only to logic written for the state the proxy already holds. The proxy keeps its storage and runs the new code against it. No on-chain check compares the two storage layouts. Logic that lays out storage differently reads the wrong values for the router's clients, applications, and packet commitments.
+When changing contract versions, verify storage compatibility and follow the release's initialization or migration requirements. The upgrade transaction does not check storage compatibility.
 </Warning>
 
-The new logic is built from the same source as the logic the tutorial deployed, so its storage layout is the same.
-
 2. Switch the 41001 router to `NEW_IMPL_A`:
+
+Use empty call data, `0x`, because this example redeploys the same contract version.
+If your target release requires an initializer or migration function, encode that call and its arguments.
+Pass the encoded data instead of `0x` in both upgrade calls.
+With nonempty data, `upgradeToAndCall` executes that call in the same transaction.
 
 ```bash
 cast send "$ROUTER_A" "upgradeToAndCall(address,bytes)" "$NEW_IMPL_A" 0x --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
 ```
 
-The receipt it prints has a `status` line reading `1 (success)`. The final `0x` is empty call data, because this upgrade runs no migration.
+The receipt it prints has a `status` line reading `1 (success)`.
 
 3. Build and deploy the new logic on 41002:
 
@@ -111,7 +122,7 @@ NEW_IMPL_B=$(forge create --root ../../ibc-contracts/ibc-solidity contracts/ICS2
 cast send "$ROUTER_B" "upgradeToAndCall(address,bytes)" "$NEW_IMPL_B" 0x --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
 ```
 
-Packets in flight while only one chain is upgraded are still delivered, because both logic contracts are built from the same source.
+This example uses the same packet functions on both chains throughout the upgrade.
 
 ## 5. Verify the upgrade
 
@@ -125,7 +136,7 @@ cast implementation "$ROUTER_A" --rpc-url http://localhost:8545
 cast implementation "$ROUTER_B" --rpc-url http://localhost:8745
 ```
 
-They print the addresses in `NEW_IMPL_A` and `NEW_IMPL_B`, in lowercase, so each proxy now runs the new logic. The record from `./bin/ibc deploy show` still lists the original logic, so read the proxy for the current address.
+They must match `NEW_IMPL_A` and `NEW_IMPL_B`.
 
 2. Check that both routers still hold their clients and applications:
 
@@ -139,25 +150,17 @@ They print the addresses in `NEW_IMPL_A` and `NEW_IMPL_B`, in lowercase, so each
 ]
 ```
 
-3. Send a token across the upgraded routers:
+3. Send 10 tokens across the upgraded routers:
 
 ```bash
 TX=$(./bin/ibc tx ift send --chain 41001 --ift "$IFT_A" --client-id cli-41001-41002 --to deployer --from deployer --amount 10000000000000000000 | jq -r '.txHash') && echo "$TX"
 ```
 
-4. Check the transfer's state:
+4. Poll for `PACKET_STATE_SUCCEEDED`:
 
 ```bash
-./bin/ibc relayer packets --chain-id 41001 --tx-hash "$TX" | jq -r '.packets[0] | .sequenceNumber + " " + .state'
+./bin/ibc relayer packets --chain-id 41001 --tx-hash "$TX" | jq -r '.packets[0].state'
 ```
-
-It reads `PACKET_STATE_PENDING` for up to a minute, then:
-
-```
-2 PACKET_STATE_SUCCEEDED
-```
-
-Sequence 2 is the first packet both upgraded routers handled. These values assume the tutorial's transfer is the only one so far. Each earlier transfer, such as the one in [Grant, change, and revoke a role](9-grant-change-and-revoke-a-role.md), raises the sequence by one and the balance below by its amount.
 
 5. Confirm the tokens arrived on 41002:
 
@@ -165,8 +168,10 @@ Sequence 2 is the first packet both upgraded routers handled. These values assum
 ./bin/ibc query ift balance --chain 41002 --ift "$IFT_B" --address deployer | jq -r '.balance'
 ```
 
-```
-20000000000000000000
-```
+If the tutorial's transfer is the only earlier transfer, the balance is `20000000000000000000`: the tutorial's 10 tokens plus this transfer's 10. Each additional transfer raises the balance by its amount.
 
-That is the tutorial's 10 tokens plus this transfer's 10.
+Clear the admin key when finished:
+
+```bash
+unset DEPLOYER_KEY
+```

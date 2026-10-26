@@ -98,7 +98,7 @@ Validate config structure and cross-references.
 
 <!-- GEN:cli:cmd:config-validate END -->
 
-`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> Unknown fields and unresolved cross-references always fail at load. <!-- [cli/internal/config/file.go: LoadFromFile] -->
+`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> This command rejects unknown fields and unresolved cross-references. <!-- [cli/internal/config/file.go: LoadFromFile] -->
 
 ```bash
 ibc config validate
@@ -132,6 +132,10 @@ Import a private key into `<ibc-home>/keys/<name>`.
 
 <!-- GEN:cli:cmd:keys-import END -->
 
+```bash
+ibc keys import ecdsa deployer --private-key "$DEPLOYER_KEY" --populate-config
+```
+
 ### `ibc keys list`
 
 <!-- GEN:cli:cmd:keys-list START -->
@@ -156,6 +160,10 @@ Saves key into `<ibc-home>/keys/<name>` or prints to stdout if name is not provi
 
 <!-- GEN:cli:cmd:keys-new END -->
 
+```bash
+ibc keys new ecdsa relayer --populate-config
+```
+
 ### `ibc keys show`
 
 <!-- GEN:cli:cmd:keys-show START -->
@@ -170,6 +178,10 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 <!-- GEN:cli:cmd:keys-show END -->
 
+```bash
+ibc keys show relayer
+```
+
 > **Warning:** Do not run `keys show --private` on a shared or recorded terminal. The private key it prints controls every asset its address holds.
 
 ## `deploy`
@@ -178,7 +190,7 @@ Deploying a working connection between two chains takes `deploy core` on both, t
 
 `--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
-`--dry-run` prints the steps a command would take and submits nothing. <!-- [cli/internal/deploy/steps.go: RunSteps] -->
+`--dry-run` prints the steps a provisioning command would take and submits nothing. It has no effect on `deploy show`, `deploy status`, or `deploy render-config`; `render-config --populate-config` still writes the configuration. <!-- [cli/internal/deploy/steps.go: RunSteps] --> <!-- [cli/cmd/ibc/deploy.go: deployShow] --> <!-- [cli/cmd/ibc/deploy.go: deployStatus] --> <!-- [cli/cmd/ibc/deploy.go: deployRenderConfig] -->
 
 Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [cli/internal/deploy/steps.go: CoreSteps] -->
 
@@ -240,6 +252,8 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 <!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
 
 <!-- GEN:cli:cmd:deploy-client-besu END -->
+
+`--chain` is required.
 
 ```bash
 ibc deploy client besu --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
@@ -311,7 +325,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 <!-- GEN:cli:cmd:deploy-ift END -->
 
 ```bash
-ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --yes
+ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --yes
 ```
 
 ### `ibc deploy ift-bridge`
@@ -364,6 +378,10 @@ Print the existing config plus the settings to relay between two chains.
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
+```bash
+ibc deploy render-config 41001 41002
+```
+
 ### `ibc deploy show`
 
 <!-- GEN:cli:cmd:deploy-show START -->
@@ -381,6 +399,10 @@ Print the recorded deployment manifest for a chain.
 <!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-show END -->
+
+```bash
+ibc deploy show 41001
+```
 
 ### `ibc deploy status`
 
