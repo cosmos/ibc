@@ -11,6 +11,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
@@ -115,13 +116,14 @@ func TestNewSetFromConfig(t *testing.T) {
 		// ASSERT
 		require.ErrorContains(t, err, `unsupported client type "tendermint"`)
 	})
-	t.Run("remoteBadTLSConfigErrors", func(t *testing.T) {
+	t.Run("proverBadTLSConfigErrors", func(t *testing.T) {
 		// ARRANGE
 		conn := testConnection()
-		conn.ClientA.Type = config.ClientTypeRemote
-		conn.ClientA.Params = []byte(`{"url":"https://127.0.0.1:1","tls":{"caFile":"/nonexistent/ca.crt"}}`)
-		conn.ClientB.Type = config.ClientTypeRemote
-		conn.ClientB.Params = []byte(`{"url":"http://127.0.0.1:1"}`)
+		conn.ClientA.RemoteProver = &config.RemoteProverConfig{
+			URL: "https://127.0.0.1:1",
+			TLS: &config.TLSClientConfig{CAFile: "/nonexistent/ca.crt"},
+		}
+		conn.ClientB.RemoteProver = &config.RemoteProverConfig{URL: "http://127.0.0.1:1"}
 
 		clientSet := chains.NewClientSet(map[string]chains.Client{
 			conn.ClientA.ChainID: mocks.NewMockClient(t),
@@ -134,7 +136,7 @@ func TestNewSetFromConfig(t *testing.T) {
 		_, err := NewSetFromConfig(ctx, cfg, clientSet, nil, slog.Default())
 
 		// ASSERT
-		require.ErrorContains(t, err, "tls.caFile")
+		require.ErrorContains(t, err, "remoteProver: tls.caFile")
 	})
 }
 
@@ -162,4 +164,28 @@ func TestNewSetFromConfigBesu(t *testing.T) {
 		_, err := NewSetFromConfig(ctx, cfg, chains.NewClientSet(nil), nil, slog.Default())
 		require.ErrorContains(t, err, `no client for chain "1"`)
 	})
+}
+
+// An end with a remoteProver needs no chain client or attestors, and its type,
+// built-in or not, only labels its metrics.
+func TestNewSetFromConfigProver(t *testing.T) {
+	conn := testConnection()
+	conn.ClientA.Type = "op-stack"
+	conn.ClientA.RemoteProver = &config.RemoteProverConfig{URL: "http://prover:9090"}
+	conn.ClientB.Type = config.ClientTypeBesu
+	conn.ClientB.RemoteProver = &config.RemoteProverConfig{URL: "http://prover:9090"}
+	cfg := config.Config{Relayer: config.RelayerConfig{Connections: []config.ConnectionConfig{conn}}}
+
+	set, err := NewSetFromConfig(context.Background(), cfg, chains.NewClientSet(nil), nil, slog.Default())
+	require.NoError(t, err)
+
+	for _, end := range []config.ClientEnd{conn.ClientA, conn.ClientB} {
+		prover, ok := set.Get(end.ChainID, end.ClientID)
+		require.True(t, ok)
+
+		instrumented, ok := prover.(*instrumentedProver)
+		require.True(t, ok)
+		require.IsType(t, &remote.Prover{}, instrumented.Prover)
+		require.Equal(t, end.Type, instrumented.clientType)
+	}
 }

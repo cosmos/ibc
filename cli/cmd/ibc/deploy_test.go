@@ -278,7 +278,6 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 	require.Len(t, out.Connections, 1)
 	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientA.Type)
 	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientB.Type)
-	require.Empty(t, out.Connections[0].ClientA.Params)
 	require.Empty(t, out.Attestors, "besu clients need no attestors")
 }
 
