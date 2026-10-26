@@ -100,7 +100,7 @@ These are the packet-lifecycle calls a relayer makes to the router. Each carries
 | `ackPacket(MsgAckPacket calldata msg)` | Verifies that the destination chain stored the acknowledgement, deletes the packet commitment, and calls the sending application |
 | `timeoutPacket(MsgTimeoutPacket calldata msg)` | Verifies that no receipt exists on the destination chain, deletes the packet commitment, and calls the sending application |
 
-The router also inherits OpenZeppelin's `multicall`, which batches several calls into one transaction. A relayer uses it to put an `updateClient` call ahead of the packet calls it is relaying, so the client holds the proof height before any verification runs.
+The router also inherits OpenZeppelin's `multicall`, which batches several calls into one transaction. The IBC CLI relayer batches through a separate `IBCMulticall` contract instead, which calls the router in order: it puts an `updateClient` call ahead of the packet calls it is relaying, so the client holds the proof height before any verification runs.
 
 Each takes the reconstructed packet, one proof, and the height that proof was taken at. `ackPacket` also carries the acknowledgement bytes.
 
