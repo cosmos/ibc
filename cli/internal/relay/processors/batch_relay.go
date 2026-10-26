@@ -168,7 +168,15 @@ func relayPackets(
 	return submission, nil
 }
 
+// validateRelaySimulation refuses a transaction in which a client update
+// reports misbehavior, which would freeze the client, or in which no call of
+// the kind the transaction exists for can succeed.
 func validateRelaySimulation(ctx context.Context, logger *slog.Logger, simulation v2.RelaySimulation) error {
+	if slices.ContainsFunc(simulation.Operations, func(result v2.OperationResult) bool {
+		return result.Misbehavior
+	}) {
+		return errors.New("a client update would report misbehavior and freeze the client, not submitting it")
+	}
 	requiredType := v2.OperationTypeUpdate
 	if slices.ContainsFunc(simulation.Operations, func(result v2.OperationResult) bool {
 		return result.Type == v2.OperationTypePacket

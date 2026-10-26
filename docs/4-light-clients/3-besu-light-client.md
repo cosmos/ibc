@@ -60,7 +60,7 @@ The client freezes itself when it sees two validly sealed consensus states that 
 - **Double sign.** Two different consensus states at the same height.
 - **Time non-monotonicity.** A consensus state whose timestamp is not below that of a higher one.
 
-An update that would install such a state freezes the client instead and reports misbehaviour. The relayer submits its update in the same transaction as the packets, which then fail against the frozen client, so the whole transaction reverts and the client stays unfrozen. Anyone may also submit evidence through the router's `submitMisbehaviour`: either two stored heights whose timestamps run backwards, or two headers that each pass the same seal checks as an update. Evidence that proves nothing reverts.
+An update that would install such a state freezes the client instead and reports misbehaviour. The relayer simulates every transaction before submitting it and does not submit one in which an update reports misbehaviour, so each attempt fails with an error saying so instead of freezing the client. The check runs at simulation, so it cannot catch a conflicting state stored between simulation and inclusion. Anyone may also submit evidence through the router's `submitMisbehaviour`: either two stored heights whose timestamps run backwards, or two headers that each pass the same seal checks as an update. Evidence that proves nothing reverts.
 
 A frozen client rejects every update, proof and further evidence with `FrozenClientState`, and cannot be unfrozen, so every relay attempt fails with that error. Deploy a new client to restore the connection. The relayer does not watch for or submit misbehaviour evidence itself.
 
