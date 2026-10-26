@@ -132,6 +132,9 @@ type EVMChainConfig struct {
 	WS string `yaml:"ws,omitempty"`
 
 	ICS26Router string `yaml:"ics26Router"`
+
+	// IBCMulticall is the batching contract address, required to run the relayer.
+	IBCMulticall string `yaml:"ibcMulticall"`
 }
 
 // Attestors is the list of attestors, used both by the relayer
@@ -281,7 +284,18 @@ func (c Config) RelayerSufficiency() error {
 		return errPathf("relayer.connections", "no connections configured")
 	}
 
-	return c.validateRunnable()
+	if err := c.validateRunnable(); err != nil {
+		return err
+	}
+	for i, chain := range c.Chains {
+		if chain.EVM == nil {
+			continue
+		}
+		if _, err := ParseEVMAddress(chain.EVM.IBCMulticall); err != nil {
+			return errPath(fmt.Sprintf("chains[%d].evm.ibcMulticall", i), err)
+		}
+	}
+	return nil
 }
 
 // AttestorSufficiency validates the attestor server is runnable
@@ -476,7 +490,7 @@ func (c ChainConfig) Validate() error {
 	case chainType != ChainTypeEVM:
 		return fmt.Errorf("unsupported chain type %s", chainType)
 	case chainType == ChainTypeEVM:
-		// allow empty / zero ics26 router for general Validate()
+		// Defer contract address validation until runnable checks.
 		return errPath("evm", c.EVM.Validate(false))
 	}
 
@@ -492,17 +506,18 @@ func (c ChainConfig) Type() ChainType {
 	return ""
 }
 
-func (c EVMChainConfig) Validate(validateICS26Router bool) error {
+func (c EVMChainConfig) Validate(validateRouterAddress bool) error {
 	switch {
 	case c.RPC == "":
 		return errPathf("rpc", "required")
 	case c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://"):
 		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
-	case validateICS26Router:
-		return errPath("ics26Router", c.validateICS26Router())
-	default:
-		return nil
+	case validateRouterAddress:
+		if _, err := ParseEVMAddress(c.ICS26Router); err != nil {
+			return errPath("ics26Router", err)
+		}
 	}
+	return nil
 }
 
 // Validate validates the attestors list. Allows empty.
@@ -671,11 +686,6 @@ func (a Attestors) validateIdentities() error {
 	return nil
 }
 
-func (c EVMChainConfig) validateICS26Router() error {
-	_, err := ParseEVMAddress(c.ICS26Router)
-	return err
-}
-
 // ParseEVMAddress parses a required, nonzero hex EVM address.
 func ParseEVMAddress(s string) (common.Address, error) {
 	switch {
@@ -798,8 +808,7 @@ func (c Config) validateRunnable() error {
 		return errPathf("signers", "no signers configured")
 	}
 
-	// we allow empty / zero ics26 router for general Validate()
-	// but require it for runnable validation
+	// Router addresses are optional in drafts and required to run.
 	for i, chain := range c.Chains {
 		if chain.EVM == nil {
 			continue
@@ -818,12 +827,19 @@ func (c Config) validateRunnable() error {
 // for the operator to fill in by hand, keyed by YAML path for
 // PrintYAMLWithComments/StoreToFileWithComments.
 func CollectComments(cfg Config) map[string]string {
+	const fillIn = "TODO: fill in"
 	comments := map[string]string{}
 
 	for i, chain := range cfg.Chains {
-		if chain.EVM != nil && chain.EVM.ICS26Router == "" {
+		if chain.EVM == nil {
+			continue
+		}
+		if chain.EVM.ICS26Router == "" {
 			path := fmt.Sprintf("$.chains[%d].evm.ics26Router", i)
-			comments[path] = "TODO: fill in"
+			comments[path] = fillIn
+		}
+		if chain.EVM.IBCMulticall == "" {
+			comments[fmt.Sprintf("$.chains[%d].evm.ibcMulticall", i)] = fillIn
 		}
 	}
 

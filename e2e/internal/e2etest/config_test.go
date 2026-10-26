@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -189,7 +190,7 @@ func TestResolveEVMChainsIDs(t *testing.T) {
 		}
 		want := make([]environment.ChainSpec, len(ids))
 		for i, id := range ids {
-			want[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
+			want[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i), Consensus: besu.QBFT}
 		}
 		require.Equal(t, want, got.chains)
 	}

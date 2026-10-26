@@ -953,6 +953,96 @@ func (_c *MockClient_PacketCommitments_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
+// PacketRelayExecuted provides a mock function for the type MockClient
+func (_mock *MockClient) PacketRelayExecuted(ctx context.Context, txHash string, kind v2.RelayKind, sequence uint64, sourceClientID string, destClientID string) (bool, error) {
+	ret := _mock.Called(ctx, txHash, kind, sequence, sourceClientID, destClientID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PacketRelayExecuted")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, v2.RelayKind, uint64, string, string) (bool, error)); ok {
+		return returnFunc(ctx, txHash, kind, sequence, sourceClientID, destClientID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, v2.RelayKind, uint64, string, string) bool); ok {
+		r0 = returnFunc(ctx, txHash, kind, sequence, sourceClientID, destClientID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, v2.RelayKind, uint64, string, string) error); ok {
+		r1 = returnFunc(ctx, txHash, kind, sequence, sourceClientID, destClientID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_PacketRelayExecuted_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PacketRelayExecuted'
+type MockClient_PacketRelayExecuted_Call struct {
+	*mock.Call
+}
+
+// PacketRelayExecuted is a helper method to define mock.On call
+//   - ctx context.Context
+//   - txHash string
+//   - kind v2.RelayKind
+//   - sequence uint64
+//   - sourceClientID string
+//   - destClientID string
+func (_e *MockClient_Expecter) PacketRelayExecuted(ctx any, txHash any, kind any, sequence any, sourceClientID any, destClientID any) *MockClient_PacketRelayExecuted_Call {
+	return &MockClient_PacketRelayExecuted_Call{Call: _e.mock.On("PacketRelayExecuted", ctx, txHash, kind, sequence, sourceClientID, destClientID)}
+}
+
+func (_c *MockClient_PacketRelayExecuted_Call) Run(run func(ctx context.Context, txHash string, kind v2.RelayKind, sequence uint64, sourceClientID string, destClientID string)) *MockClient_PacketRelayExecuted_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 v2.RelayKind
+		if args[2] != nil {
+			arg2 = args[2].(v2.RelayKind)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_PacketRelayExecuted_Call) Return(b bool, err error) *MockClient_PacketRelayExecuted_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockClient_PacketRelayExecuted_Call) RunAndReturn(run func(ctx context.Context, txHash string, kind v2.RelayKind, sequence uint64, sourceClientID string, destClientID string) (bool, error)) *MockClient_PacketRelayExecuted_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // PacketWriteAckStatus provides a mock function for the type MockClient
 func (_mock *MockClient) PacketWriteAckStatus(ctx context.Context, recvTxHash string, sequence uint64, sourceClientID string, destClientID string) (v2.WriteAckStatus, error) {
 	ret := _mock.Called(ctx, recvTxHash, sequence, sourceClientID, destClientID)

@@ -13,7 +13,7 @@ import (
 )
 
 // waitForChainTimeout bounds how long batch delivery waits for the target
-// chain to catch up to the current time before gas estimation.
+// chain to catch up to the current time before simulation.
 const waitForChainTimeout = 2 * time.Minute
 
 // TxStorage persists batch delivery results transactionally.

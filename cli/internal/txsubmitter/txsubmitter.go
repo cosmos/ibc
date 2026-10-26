@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package txsubmitter signs and broadcasts transactions for the relayer.
+// Package txsubmitter simulates, signs, and broadcasts transactions for the relayer.
 package txsubmitter
 
 import (
@@ -15,9 +15,12 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// TxSubmitter signs and broadcasts transactions on a single chain;
+// TxSubmitter simulates, signs, and broadcasts transactions on a single chain;
 // implementations own nonce selection and gas pricing.
 type TxSubmitter interface {
+	// SimulateRelayTx returns decoded outcomes in execution order, including failures.
+	SimulateRelayTx(ctx context.Context, tx v2.RelayTx) (v2.RelaySimulation, error)
+
 	Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error)
 
 	// ShouldRetry reports whether a transaction submitted at sentAt is failed
@@ -27,6 +30,9 @@ type TxSubmitter interface {
 }
 
 var _ TxSubmitter = (*evm.TxSubmitter)(nil)
+
+// ErrBusy indicates that a submission should be retried when capacity is available.
+var ErrBusy = evm.ErrBusy
 
 // Set holds one tx submitter per (chain, signer) pair relayed by
 // the configured routes. A chain may carry several signers when different
@@ -68,14 +74,13 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 			return nil, errors.Errorf("unknown signer %q for chain %q", pair.SignerAlias, pair.ChainID)
 		}
 
-		opts := evm.ChainOptions{TxSubmissionDelay: evm.DefaultTxSubmissionDelay}
+		var opts evm.ChainOptions
 		if override, ok := cfg.Relayer.ChainOverride(pair.ChainID); ok {
-			if override.TxSubmissionDelay != nil {
-				opts.TxSubmissionDelay = *override.TxSubmissionDelay
-			}
 			if override.EVM != nil {
-				opts.GasFeeCapMultiplier = override.EVM.GasFeeCapMultiplier
-				opts.GasTipCapMultiplier = override.EVM.GasTipCapMultiplier
+				e := override.EVM
+				if e.PendingTxTimeout != nil {
+					opts.PendingTxTimeout = *e.PendingTxTimeout
+				}
 			}
 		}
 

@@ -56,6 +56,17 @@ type Client interface {
 	FindAckTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)
 	FindTimeoutTx(ctx context.Context, sourceClientID string, sequence uint64) (*v2.Tx, error)
 
+	// PacketRelayExecuted reports whether an ack or timeout transaction emitted
+	// the corresponding router event for this packet.
+	PacketRelayExecuted(
+		ctx context.Context,
+		txHash string,
+		kind v2.RelayKind,
+		sequence uint64,
+		sourceClientID string,
+		destClientID string,
+	) (bool, error)
+
 	// PacketWriteAckStatus extracts the write acknowledgement status for a
 	// packet from its recv transaction.
 	PacketWriteAckStatus(

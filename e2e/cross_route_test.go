@@ -22,7 +22,7 @@ func TestCrossRoutePacketsDoNotCollideBySequence(t *testing.T) {
 	)
 	// Both routes share destination chain-a and send sequence 1 to probe
 	// bare-seq collision.
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, chainA, chainB, chainC))
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, chainA, chainB, chainC))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

@@ -79,6 +79,7 @@ type TransferSend struct {
 	amount            *big.Int
 	sourceBefore      *big.Int
 	destinationBefore *big.Int
+	timeoutTimestamp  uint64
 }
 
 var errTransferAlreadySubmitted = errors.New("e2etest: prepared Transfer has already been submitted")
@@ -186,8 +187,11 @@ func (p *PreparedTransfer) Submit(ctx context.Context) (*TransferSend, error) {
 		amount:            new(big.Int).Set(p.request.Amount),
 		sourceBefore:      new(big.Int).Set(p.sourceBefore),
 		destinationBefore: new(big.Int).Set(p.destinationBefore),
+		timeoutTimestamp:  p.timeoutTimestamp,
 	}, nil
 }
+
+func (t *TransferSend) TimeoutTimestamp() uint64 { return t.timeoutTimestamp }
 
 // VerifyCommitmentCreated checks the source commitment at the send transaction's block.
 func (t *TransferSend) VerifyCommitmentCreated(ctx context.Context) error {

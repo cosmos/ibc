@@ -6,9 +6,12 @@ package manifest
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/cosmos/ibc/cli/internal/config"
 )
 
 const schemaVersion = 1
@@ -28,19 +31,62 @@ type Manifest struct {
 	TargetData             map[string]string `json:"targetData,omitempty"`
 }
 
-// Core holds the ICS26 routing endpoint. The address format is target-specific.
+// Core holds the routing and batching endpoints. The address format is target-specific.
 type Core struct {
-	Router string `json:"router"`
+	Router    string `json:"router"`
+	Multicall string `json:"multicall"`
 }
 
-// Client is one light client registered on the chain's router.
+// Client is one light client registered on the chain's router. The params
+// field that is set determines its type.
 type Client struct {
-	ClientID             string         `json:"clientId"`
-	Type                 string         `json:"type"`
-	Address              string         `json:"address"`
-	CounterpartyChainID  string         `json:"counterpartyChainId"`
-	CounterpartyClientID string         `json:"counterpartyClientId"`
-	Params               map[string]any `json:"params,omitempty"`
+	ClientID             string             `json:"clientId"`
+	Address              string             `json:"address"`
+	CounterpartyChainID  string             `json:"counterpartyChainId"`
+	CounterpartyClientID string             `json:"counterpartyClientId"`
+	Attestation          *AttestationParams `json:"attestation,omitempty"`
+	Besu                 *BesuParams        `json:"besu,omitempty"`
+}
+
+// AttestationParams are the constructor params of an attestation client.
+type AttestationParams struct {
+	Attestors        []string `json:"attestors"`
+	Threshold        uint8    `json:"threshold"`
+	InitialHeight    uint64   `json:"initialHeight"`
+	InitialTimestamp uint64   `json:"initialTimestamp"`
+}
+
+// BesuParams are the constructor params of a Besu client. Periods are in
+// seconds.
+type BesuParams struct {
+	Consensus         string     `json:"consensus"`
+	IBCRouter         string     `json:"ibcRouter"`
+	InitialHeight     uint64     `json:"initialHeight"`
+	InitialTimestamp  uint64     `json:"initialTimestamp"`
+	InitialStateRoot  string     `json:"initialStateRoot"`
+	InitialValidators []string   `json:"initialValidators"`
+	TrustingPeriod    uint64     `json:"trustingPeriod"`
+	MaxClockDrift     uint64     `json:"maxClockDrift"`
+	TrustLevel        TrustLevel `json:"trustLevel"`
+}
+
+// TrustLevel is the fraction of the trusted validators that must seal an
+// update.
+type TrustLevel struct {
+	Numerator   uint8 `json:"numerator"`
+	Denominator uint8 `json:"denominator"`
+}
+
+// Type is the client type c records params for, or "" if it records none.
+func (c Client) Type() config.ClientType {
+	switch {
+	case c.Attestation != nil:
+		return config.ClientTypeAttestation
+	case c.Besu != nil:
+		return config.ClientTypeBesu
+	default:
+		return ""
+	}
 }
 
 func New(chainID, target string) *Manifest {
@@ -63,6 +109,15 @@ func Load(dir, chainID string) (*Manifest, error) {
 	var m Manifest
 	if err := json.Unmarshal(bz, &m); err != nil {
 		return nil, err
+	}
+	for _, c := range m.Clients {
+		if c.Type() == "" {
+			return nil, fmt.Errorf(
+				"manifest %s: client %q records no params of a supported client type; "+
+					"remove it from the manifest and deploy a new client under another --client-id",
+				Path(dir, chainID), c.ClientID,
+			)
+		}
 	}
 	return &m, nil
 }
