@@ -30,7 +30,7 @@ func hexBytes(nodes [][]byte) []hexutil.Bytes {
 func fixtureProofResult(t *testing.T) (*proofResult, [][]byte, common.Hash) {
 	t.Helper()
 
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, besu.QBFT)
 
 	accountNodes, err := fixture.Membership.AccountProofNodes()
 	require.NoError(t, err)

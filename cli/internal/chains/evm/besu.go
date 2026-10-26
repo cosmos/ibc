@@ -6,18 +6,24 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/besu"
+	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// SealedHeader returns the Besu QBFT header at height.
+// SealedHeader returns the sealed Besu header at height, or the head at
+// v2.LatestBlock.
 func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
-	header, err := besu.ReadSealedHeader(ctx, c.eth, new(big.Int).SetUint64(height))
+	var number *big.Int
+	if height != v2.LatestBlock {
+		number = new(big.Int).SetUint64(height)
+	}
+	header, err := besu.ReadSealedHeader(ctx, c.eth, number)
 	if err != nil {
 		return nil, errors.Wrapf(err, "chain %s", c.chainID)
 	}
@@ -25,8 +31,8 @@ func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedH
 	return header, nil
 }
 
-// BesuQBFTClientState reads clientID's Besu QBFT light client state.
-func (c *Client) BesuQBFTClientState(
+// BesuClientState reads clientID's Besu light client state.
+func (c *Client) BesuClientState(
 	ctx context.Context,
 	clientID string,
 ) (besumsgs.IBesuLightClientMsgsClientState, error) {
@@ -45,14 +51,15 @@ func (c *Client) BesuQBFTClientState(
 	return state, nil
 }
 
-// BesuQBFTConsensusStateHash returns the hash of the consensus state clientID
+// BesuConsensusStateHash returns the hash of the consensus state clientID
 // stores at height. The contract reverts when it stores none.
-func (c *Client) BesuQBFTConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error) {
+func (c *Client) BesuConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error) {
 	lightClientAddr, err := c.lightClientAddress(ctx, clientID)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	// both Besu light clients share this ABI
 	lightClient, err := besuqbft.NewContractCaller(lightClientAddr, c.eth)
 	if err != nil {
 		return common.Hash{}, err

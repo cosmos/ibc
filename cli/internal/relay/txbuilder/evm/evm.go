@@ -2,28 +2,41 @@
 
 // Package evm implements txbuilder.TxBuilder for EVM chains: it packs an
 // ICS26Router.updateClient call plus one recvPacket/ackPacket/timeoutPacket
-// call per packet relay item into a single ICS26Router.multicall transaction.
+// call per packet relay item into an IBCMulticall batch.
 package evm
 
 import (
 	"math/big"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-var router = mustRouterBinding()
+var (
+	router    = mustRouterBinding()
+	multicall = mustMulticallBinding()
+)
 
 func mustRouterBinding() *ics26router.ContractTransactor {
 	bound, err := ics26router.NewContractTransactor(common.Address{}, nil)
 	if err != nil {
 		panic(errors.Wrap(err, "constructing ics26 router binding"))
+	}
+
+	return bound
+}
+
+func mustMulticallBinding() *ibcmulticall.ContractTransactor {
+	bound, err := ibcmulticall.NewContractTransactor(common.Address{}, nil)
+	if err != nil {
+		panic(errors.Wrap(err, "constructing ibc multicall binding"))
 	}
 
 	return bound
@@ -44,27 +57,28 @@ func calldata(call func(*bind.TransactOpts) (*types.Transaction, error)) ([]byte
 	return tx.Data(), nil
 }
 
-// TxBuilder implements txbuilder.TxBuilder for one EVM chain's ICS26Router.
+// TxBuilder builds relay transactions for one EVM chain's router and multicall.
 type TxBuilder struct {
-	router common.Address
+	router    common.Address
+	multicall common.Address
 }
 
-func New(router common.Address) *TxBuilder {
-	return &TxBuilder{router: router}
+func New(router, multicall common.Address) *TxBuilder {
+	return &TxBuilder{router: router, multicall: multicall}
 }
 
 // BuildRelayTxs packs the clientUpdate payloads and every packetRelayItems
-// entry into a single ICS26Router.multicall transaction. EVM router calldata
+// entry into a single multicall transaction. EVM router calldata
 // has no meaningful size limit for the batch sizes the relayer forms, so this
 // always returns exactly one tx. Provers rely on that: a batch's proofs are
-// built to be verified together in one transaction, in order (the Besu QBFT
+// built to be verified together in one transaction, in order (the Besu
 // prover carries the router account proof only in the first one, and the
 // light client caches the proven storage root for the rest of the transaction).
 func (c *TxBuilder) BuildRelayTxs(
 	clientUpdate v2.ClientUpdate,
 	packetRelayItems []v2.PacketRelayItem,
 ) ([]v2.RelayTx, error) {
-	calls := make([][]byte, 0, len(clientUpdate.Payloads)+len(packetRelayItems))
+	calls := make([]ibcmulticall.IIBCMulticallMsgsCall, 0, len(clientUpdate.Payloads)+len(packetRelayItems))
 
 	for _, payload := range clientUpdate.Payloads {
 		updateCall, err := packUpdateClient(clientUpdate.ClientID, payload)
@@ -72,7 +86,9 @@ func (c *TxBuilder) BuildRelayTxs(
 			return nil, err
 		}
 
-		calls = append(calls, updateCall)
+		calls = append(calls, ibcmulticall.IIBCMulticallMsgsCall{
+			Target: c.router, CallData: updateCall, AllowFailure: false,
+		})
 	}
 
 	for _, item := range packetRelayItems {
@@ -81,15 +97,18 @@ func (c *TxBuilder) BuildRelayTxs(
 			return nil, errors.Wrapf(err, "packing relay item for sequence %d", item.Packet.Sequence)
 		}
 
-		calls = append(calls, call)
+		calls = append(calls, ibcmulticall.IIBCMulticallMsgsCall{
+			Target: c.router, CallData: call, AllowFailure: true,
+		})
 	}
 
-	tx, err := packMulticall(calls)
+	data, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return multicall.Multicall(opts, calls)
+	})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "packing IBCMulticall")
 	}
-
-	return []v2.RelayTx{{To: c.router.Bytes(), Data: tx}}, nil
+	return []v2.RelayTx{{To: c.multicall.Bytes(), Data: data}}, nil
 }
 
 func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
@@ -187,20 +206,6 @@ func packTimeoutPacket(packet ics26router.IICS26RouterMsgsPacket, proof []byte, 
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "packing timeoutPacket call")
-	}
-
-	return packed, nil
-}
-
-// packMulticall wraps a batch of already-packed calls (one updateClient plus
-// one packet-operation call per packet) as a single multicall(bytes[]) call,
-// the one transaction the batch is actually submitted as.
-func packMulticall(calls [][]byte) ([]byte, error) {
-	packed, err := calldata(func(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return router.Multicall(opts, calls)
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "packing multicall")
 	}
 
 	return packed, nil

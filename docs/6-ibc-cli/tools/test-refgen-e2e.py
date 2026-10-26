@@ -434,8 +434,8 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/relayer.go",
-                 'GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`',
-                 'GasTipCapMultiplier *float64 `yaml:"-"`')
+                 'Enabled *bool `yaml:"enabled,omitempty"`',
+                 'Enabled *bool `yaml:"-"`')
         raises(box, "config", "FALLBACK_DOCS describes fields that are gone",
                "dead_description")
 
@@ -1094,6 +1094,16 @@ def _():
 func (c EVMChainConfig) Validate(validateICS26Router bool) error {""")
         assert _cell(box, "config:chains", "evm.rpc") == "**required**", \
             _cell(box, "config:chains", "evm.rpc")
+
+
+@case("a key required inside an optional block names the block")
+def _():
+    with Sandbox() as box:
+        # A bare `required` told readers every client end needs a remoteProver.
+        # `evm.rpc`, above, stays bare: its block cannot be left out.
+        key = "connections[].clientA.remoteProver.url, connections[].clientB.remoteProver.url"
+        assert _cell(box, "config:relayer:connections", key) == "**required** in `remoteProver`", \
+            _cell(box, "config:relayer:connections", key)
 
 
 @case("a new required key stops the page until a fixture carries it")

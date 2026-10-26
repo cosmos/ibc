@@ -176,6 +176,10 @@ func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*
 }
 
 func (p BatchAckPacket) Cancel(transfers []*Transfer, err error) {
+	if errors.Is(err, txsubmitter.ErrBusy) {
+		p.logger.Info("Deferring batch ack tx", "err", err)
+		return
+	}
 	for _, tr := range transfers {
 		tr.GetLogger().Error("Delivering batch ack tx", "err", err)
 	}

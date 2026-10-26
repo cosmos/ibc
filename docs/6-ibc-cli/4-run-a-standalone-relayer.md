@@ -19,7 +19,7 @@ The tutorial's keystore already holds a funded key, so this guide reuses it rath
 ./bin/ibc config new --config ibc-relayer2.yml
 ```
 
-2. Write its configuration, reading both router addresses from your deployment:
+2. Write its configuration, reading the router and multicall addresses from your deployment:
 
 ```bash
 cat > ~/.ibc/ibc-relayer2.yml <<EOF
@@ -35,11 +35,13 @@ chains:
     rpc: http://localhost:8545
     ws: ws://localhost:8546
     ics26Router: "$(./bin/ibc deploy show 41001 | jq -r '.core.router')"
+    ibcMulticall: "$(./bin/ibc deploy show 41001 | jq -er '.core.multicall')"
 - chainId: "41002"
   evm:
     rpc: http://localhost:8745
     ws: ws://localhost:8746
     ics26Router: "$(./bin/ibc deploy show 41002 | jq -r '.core.router')"
+    ibcMulticall: "$(./bin/ibc deploy show 41002 | jq -er '.core.multicall')"
 
 relayer:
   connections:
@@ -107,7 +109,7 @@ level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3002}"
 ```
 
-The relayer is running and waiting for packets. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
+The relayer is running and waiting for packets. The readiness log confirms startup; use the [gRPC health check](7-api.md#health-checks) to monitor ongoing API and database availability. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
 
 2. Back in your first terminal, send a transfer and keep the hash:
 

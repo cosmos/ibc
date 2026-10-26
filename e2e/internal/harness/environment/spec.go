@@ -10,6 +10,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
 )
@@ -82,10 +84,15 @@ func (c ManagedAnvil) validateChain() error {
 	return nil
 }
 
-// ManagedBesu declares an environment-owned Besu Chain.
+// ManagedBesu declares an environment-owned Besu Chain running Consensus.
 type ManagedBesu struct {
 	ID         ChainID
 	EVMChainID uint64
+	Consensus  besu.Consensus
+	// Followers is how many Besu nodes beyond the four genesis validators run
+	// the Chain. They sync from genesis and can be voted in through
+	// Chain.Validators.
+	Followers int
 }
 
 func (ManagedBesu) chainSpec() {}
@@ -99,6 +106,12 @@ func (c ManagedBesu) validateChain() error {
 	}
 	if c.EVMChainID == 0 {
 		return errorsf("chain %q: EVM chain id must be greater than zero", c.ID)
+	}
+	if err := c.Consensus.Validate(); err != nil {
+		return errorsf("chain %q: %v", c.ID, err)
+	}
+	if c.Followers < 0 {
+		return errorsf("chain %q: follower count must not be negative", c.ID)
 	}
 	return nil
 }
@@ -245,26 +258,28 @@ func (c NewClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance 
 func (c NewClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
 func (c NewClient) clientAttestors() []AttestorSpec      { return c.Attestors }
 
-// NewBesuQBFTClient declares a Besu QBFT IBC Client to create on its host IBC
-// Instance. It verifies the counterparty end's sealed Besu headers, so it needs
-// no Attestors; the counterparty Chain must run Besu QBFT. Authority follows
-// the same rule as NewClient. Periods are seconds; the contract rejects a zero
-// TrustingPeriod at deploy time.
-// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
-// Besu QBFT clients.
-const BesuQBFTTrustingPeriod = solidityibc.BesuQBFTTrustingPeriod
+// BesuTrustingPeriod is the trusting period, in seconds, e2e tests give Besu
+// clients.
+const BesuTrustingPeriod = solidityibc.BesuTrustingPeriod
 
-type NewBesuQBFTClient struct {
+// NewBesuClient declares a Besu IBC Client to create on its host IBC
+// Instance. It verifies the counterparty end's sealed Besu headers, so it needs
+// no Attestors; the counterparty Chain must run Besu, and its consensus picks
+// the contract. Authority follows the same rule as NewClient. Periods are
+// seconds; the contract rejects a zero TrustingPeriod at deploy time.
+// TrustLevel is besu.DefaultTrustLevel when zero.
+type NewBesuClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID
 	TrustingPeriod uint64
 	MaxClockDrift  uint64
+	TrustLevel     besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
-func (NewBesuQBFTClient) clientKind() clientkind.Kind            { return clientkind.BesuQBFT }
-func (c NewBesuQBFTClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
-func (c NewBesuQBFTClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
-func (NewBesuQBFTClient) clientAttestors() []AttestorSpec        { return nil }
+func (NewBesuClient) clientKind() clientkind.Kind            { return clientkind.Besu }
+func (c NewBesuClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
+func (c NewBesuClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
+func (NewBesuClient) clientAttestors() []AttestorSpec        { return nil }
 
 // ExistingClient identifies an already-created IBC Client by its protocol ID
 // and explicit kind. Attestors are only valid for attestation clients.
@@ -353,14 +368,14 @@ func validateClientSpec(connectionID ConnectionID, end string, spec ClientSpec) 
 				clientLabel(connectionID, end),
 			)
 		}
-	case NewBesuQBFTClient:
+	case NewBesuClient:
 		instance = declaration.IBCInstance
 		variantField = "authority"
 		variantValue = string(declaration.Authority)
 	case ExistingClient:
 		instance = declaration.IBCInstance
-		if declaration.Kind == clientkind.BesuQBFT && len(declaration.Attestors) != 0 {
-			return "", errorsf("IBC Client %q: besu-qbft does not use attestors", clientLabel(connectionID, end))
+		if declaration.Kind == clientkind.Besu && len(declaration.Attestors) != 0 {
+			return "", errorsf("IBC Client %q: besu does not use attestors", clientLabel(connectionID, end))
 		}
 		variantField = "id"
 		variantValue = declaration.ID
@@ -505,9 +520,9 @@ func (s Spec) validate() error {
 			}
 			// only Anvil is known not to be Besu; an attached Chain may be either
 			counterpartyChain := instanceChains[ends[1-i].declaration.clientIBCInstance()]
-			if end.declaration.clientKind() == clientkind.BesuQBFT && contains(anvilChains, counterpartyChain) {
+			if end.declaration.clientKind() == clientkind.Besu && contains(anvilChains, counterpartyChain) {
 				return errorsf(
-					"Besu QBFT IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
+					"Besu IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
 					label,
 					counterpartyChain,
 				)

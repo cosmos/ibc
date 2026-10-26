@@ -170,6 +170,10 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 }
 
 func (p BatchRecvPacket) Cancel(transfers []*Transfer, err error) {
+	if errors.Is(err, txsubmitter.ErrBusy) {
+		p.logger.Info("Deferring batch recv tx", "err", err)
+		return
+	}
 	for _, tr := range transfers {
 		tr.GetLogger().Error("Delivering batch recv tx", "err", err)
 	}

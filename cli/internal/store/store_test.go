@@ -371,8 +371,18 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Equal(t, recvTime, got.RecvTxTime.UTC())
 		assert.Equal(t, "0xrelayer", *got.RecvTxRelayerAddress)
 
+		require.NoError(
+			t,
+			s.UpdatePacketWriteAck(
+				ctx,
+				key,
+				WriteAck{TxHash: "0xrecv", TxTime: recvTime, Status: WriteAckStatusSuccess},
+			),
+		)
 		require.NoError(t, s.ClearPacketRecvTx(ctx, key))
 		got = fetch()
+		assert.Nil(t, got.WriteAckTxHash)
+		assert.Nil(t, got.WriteAckStatus)
 		assert.Nil(t, got.RecvTxHash)
 		assert.Nil(t, got.RecvTxTime)
 		assert.Nil(t, got.RecvTxRelayerAddress)

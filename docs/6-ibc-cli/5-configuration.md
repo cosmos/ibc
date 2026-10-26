@@ -65,10 +65,12 @@ chains:
       rpc: https://ethereum-rpc.example.com
       ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
 relayer:
   dispatchPollInterval: 3s
   clearOnStart: false
@@ -76,9 +78,7 @@ relayer:
   chainOverrides:
     - chainId: "1"
       evm:
-        gasFeeCapMultiplier: 1.5
-        gasTipCapMultiplier: 1.5
-      txSubmissionDelay: 2s
+        pendingTxTimeout: 2m
       packetBatchSize: 20
       packetBatchTimeout: 10s
       clearInterval: 15m
@@ -231,12 +231,13 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | **required** to run | Address of the ICS26 router on the chain. |
+| `evm.ibcMulticall` | `string` | **required** to relay | The batching contract address, required to run the relayer. |
 
 <!-- [config.go:L119](cli/internal/config/config.go#L119) -->
 
 <!-- GEN:config:chains END -->
 
-`ibc deploy core` deploys the router. <!-- [cli/internal/deploy/steps.go: RunSteps] --> Omit `ics26Router` before deployment, then fill it in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
+`ibc deploy core` deploys the router and multicall. <!-- [cli/internal/deploy/steps.go: CoreSteps] --> Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
 The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: resolveDeployerAlias] -->
 
@@ -254,11 +255,16 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.chainId, connections[].clientB.chainId` | `string` | **required** | The chain this end's client lives on. |
 | `connections[].clientA.signer, connections[].clientB.signer` | `string` | **required** | `signers` alias that submits relay transactions on this chain. |
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
-| `connections[].clientA.type, connections[].clientB.type` | `attestation` \| `besu-qbft` \| `remote` | **required** | Light client type. |
-| `connections[].clientA.params, connections[].clientB.params` | block | optional | This client type's settings, decoded per Type by ClientParams: empty for `attestation` and `besu-qbft`, and `{url: <ProverService endpoint>, tls: <optional>}` for `remote`, where it is required. |
+| `connections[].clientA.type, connections[].clientB.type` | `string` | **required** | The on-chain light client type: `attestation` or `besu`, or with a remoteProver any type, including ones the IBC CLI does not implement. |
+| `connections[].clientA.remoteProver.url, connections[].clientB.remoteProver.url` | `string` | **required** in `remoteProver` | The ProverService endpoint: an http(s):// URL, or a bare host:port dialed as http://. Without a query or fragment. |
+| `connections[].clientA.remoteProver.tls.caFile, connections[].clientB.remoteProver.tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
+| `connections[].clientA.remoteProver.tls.certFile, connections[].clientB.remoteProver.tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
+| `connections[].clientA.remoteProver.tls.keyFile, connections[].clientB.remoteProver.tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
+| `connections[].clientA.remoteProver.tls.serverName, connections[].clientB.remoteProver.tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
+| `connections[].clientA.remoteProver.tls.insecureSkipVerify, connections[].clientB.remoteProver.tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L74](cli/internal/config/relayer.go#L74) -->
+<!-- [relayer.go:L61](cli/internal/config/relayer.go#L61) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -267,6 +273,8 @@ Client identifiers are scoped to a chain, so both ends can use the same `clientI
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [cli/internal/config/relayer.go: RelayerConfig.validateConnectionIdentities] -->
 
 With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [cli/internal/relay/watcher/set.go: NewSetFromConfig] --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [cli/internal/config/config.go: Config.validateAutoRelay] --> Unset and `false` are the same input. <!-- [cli/internal/config/relayer.go: RelayerConfig.Validate] -->
+
+`remoteProver` is optional. Without it, the relayer proves an end with the built-in prover for its `type`; with it, the ProverService at `remoteProver.url` proves that end instead, and `type` may name a light client the IBC CLI does not implement. <!-- [cli/internal/relay/prover/prover.go: newProver] --> `ibc deploy render-config` never writes a `remoteProver` block, and keeps one you added. <!-- [cli/internal/config/patch.go: mergeConnections] -->
 
 ### Relay settings
 
@@ -280,7 +288,7 @@ The relayer uses these defaults unless you override them.
 | `clearOnStart` | `bool` | `true` | Runs a clearing pass at startup. Unset runs it. |
 | `clearInterval` | `duration` | `5m` | How often a clearing pass runs; a chainOverrides entry wins. |
 
-<!-- [relayer.go:L39](cli/internal/config/relayer.go#L39) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L21](cli/internal/config/relayer.go#L21) --> <!-- [relayer.go:L27](cli/internal/config/relayer.go#L27) -->
+<!-- [relayer.go:L27](cli/internal/config/relayer.go#L27) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L18](cli/internal/config/relayer.go#L18) --> <!-- [relayer.go:L24](cli/internal/config/relayer.go#L24) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -289,17 +297,17 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
-| `chainOverrides[].txSubmissionDelay` | `duration` | `2s` | Minimum delay between two transaction submissions on the chain. |
 | `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
-| `chainOverrides[].evm.gasFeeCapMultiplier` | `float64` | optional | Multiplies the fee cap the node suggests. |
-| `chainOverrides[].evm.gasTipCapMultiplier` | `float64` | optional | Multiplies the tip cap the node suggests. |
+| `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
 
-<!-- [relayer.go:L50](cli/internal/config/relayer.go#L50) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) -->
+<!-- [relayer.go:L38](cli/internal/config/relayer.go#L38) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
+
+Each EVM submission estimates its fee cap as twice the latest block's base fee plus the node's suggested tip. Replacement attempts increase the fee cap and tip by 20%, rounded up with a minimum increase of one wei, within a ceiling of four times that fresh estimate. The ceiling stays fixed during a submission's retries and is recalculated from fresh node data on the next submission. <!-- [cli/internal/txsubmitter/evm/txops.go: estimateFees] --> <!-- [cli/internal/txsubmitter/evm/txops.go: bump] --> <!-- [cli/internal/txsubmitter/evm/evm.go: TxSubmitter.Submit] -->
 
 Add an override only when a chain needs different behavior:
 
@@ -308,12 +316,10 @@ relayer:
   dispatchPollInterval: 5s
   chainOverrides:
     - chainId: "41002"
-      txSubmissionDelay: 3s
       packetBatchSize: 25
       packetBatchTimeout: 15s
       evm:
-        gasFeeCapMultiplier: 1.2
-        gasTipCapMultiplier: 1.1
+        pendingTxTimeout: 3m
 ```
 
 Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: Options] -->
@@ -334,7 +340,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L143](cli/internal/config/config.go#L143) -->
+<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -362,7 +368,7 @@ attestors:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L143](cli/internal/config/config.go#L143) -->
+<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -386,7 +392,7 @@ Local attestor names must be unique. Two local attestors for the same chain must
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -416,7 +422,7 @@ signers:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L172](cli/internal/config/config.go#L172) -->
+<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
 
 <!-- GEN:config:signers:remote END -->
 
@@ -424,7 +430,7 @@ The remote signer holds the key material and performs signing.
 
 ## TLS for remote services
 
-Remote signers, remote attestors, and remote provers all follow one rule: an `https://` address turns TLS on, and anything else connects in plaintext. That address is the signer's `grpc`, the attestor's `grpc`, or the prover's `params.url`. <!-- [cli/internal/config/tls.go: ResolveEndpoint] -->
+Remote signers, remote attestors, and remote provers all follow one rule: an `https://` address turns TLS on, and anything else connects in plaintext. That address is the signer's `grpc`, the attestor's `grpc`, or a client end's `remoteProver.url`. <!-- [cli/internal/config/tls.go: ResolveEndpoint] -->
 
 ```yaml
 attestors:
@@ -437,7 +443,7 @@ attestors:
       keyFile: /etc/ibc/tls/client.key
 ```
 
-Without a `tls` block, TLS trusts the system's CAs and presents no client certificate. Add a `tls` block, with the keys listed in the remote attestor and remote signer tables, to change that; a remote prover takes it as `params.tls`. A `tls` block on an address that isn't `https://` is rejected, since its settings would be ignored. <!-- [cli/internal/config/tls.go: validateEndpointTLS] -->
+Without a `tls` block, TLS trusts the system's CAs and presents no client certificate. Add a `tls` block, with the keys listed in the remote attestor and remote signer tables, to change that; a client end's `remoteProver` block takes it as `tls`. A `tls` block on an address that isn't `https://` is rejected, since its settings would be ignored. <!-- [cli/internal/config/tls.go: validateEndpointTLS] -->
 
 An `https://` address without a port uses 443, so `https://attestor.example.com` connects to port 443; write `https://host:port` for any other port. A bare `host:port` connects in plaintext: attestors and provers dial it as `http://host:port`, and signers pass it to gRPC as written. <!-- [cli/internal/config/tls.go: endpointURL] --> An attestor or prover URL may carry a path but not a query or fragment, since the RPC path is appended to it. For a signer, an `http://` or `https://` URL becomes the gRPC target `host:port`, with 80 or 443 when the port is omitted, and must not carry userinfo, a path, a query or a fragment, which a gRPC target can't express; other targets, such as `dns:///host:port`, are passed to gRPC as written. <!-- [cli/internal/network/tls.go: Endpoint.GRPCTarget] -->
 

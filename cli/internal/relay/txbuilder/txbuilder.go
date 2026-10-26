@@ -41,8 +41,7 @@ func (s *Set) Get(chainID string) (TxBuilder, bool) {
 	return builder, ok
 }
 
-// NewSetFromConfig builds a Set with one EVM TxBuilder per configured EVM
-// chain, bound to that chain's configured ICS26Router address.
+// NewSetFromConfig builds one EVM TxBuilder per configured chain, bound to its router and multicall.
 func NewSetFromConfig(cfg config.Config) (*Set, error) {
 	builders := make(map[string]TxBuilder, len(cfg.Chains))
 
@@ -57,7 +56,14 @@ func NewSetFromConfig(cfg config.Config) (*Set, error) {
 				)
 			}
 
-			builders[chainCfg.ChainID] = evm.New(common.HexToAddress(chainCfg.EVM.ICS26Router))
+			multicall, err := config.ParseEVMAddress(chainCfg.EVM.IBCMulticall)
+			if err != nil {
+				return nil, errors.Wrapf(err, "chain %q: invalid ibcMulticall", chainCfg.ChainID)
+			}
+			builders[chainCfg.ChainID] = evm.New(
+				common.HexToAddress(chainCfg.EVM.ICS26Router),
+				multicall,
+			)
 		default:
 			return nil, errors.Errorf(
 				"chain %q: unsupported chain type %q for tx building",

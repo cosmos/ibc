@@ -5,17 +5,17 @@ package besu_test
 import (
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
 )
 
 func TestUpdateClientRoundTrip(t *testing.T) {
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, besu.QBFT)
 	update := fixture.NonAdjacentUpdate
 
 	preimage := fixture.InitialConsensusState()
@@ -35,7 +35,7 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 }
 
 func TestMembershipProofRoundTrip(t *testing.T) {
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, besu.QBFT)
 	preimage := fixture.NonAdjacentUpdate.ExpectedConsensusState()
 
 	for _, m := range []besutest.MembershipFixture{fixture.Membership, fixture.NonMembership} {

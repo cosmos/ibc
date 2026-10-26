@@ -5,10 +5,10 @@ package evm
 import (
 	"context"
 	"crypto/sha256"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
 // Signer signs a 32-byte ECDSA digest.
@@ -34,7 +34,8 @@ func Digest(tag byte, data []byte) [32]byte {
 	return sha256.Sum256(signingInput[:])
 }
 
-// SignABI signs Digest(tag, data).
+// SignABI signs Digest(tag, data) in the form AttestationLightClient.sol
+// accepts.
 func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte, error) {
 	digest := Digest(tag, data)
 
@@ -43,50 +44,23 @@ func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte,
 		return nil, err
 	}
 
-	return normalizeSignature(signature)
+	_, signature, err = RecoverSigner(digest, signature)
+
+	return signature, err
 }
 
-// normalizeSignature converts the recovery ID from the signer's 0/1 form to
-// Solidity's 27/28 form. It accepts either form and does not mutate the input.
-func normalizeSignature(signature []byte) ([]byte, error) {
-	if len(signature) != 65 {
-		return nil, fmt.Errorf("invalid signature length %d, expected 65", len(signature))
-	}
-
-	normalized := append([]byte(nil), signature...)
-	switch normalized[64] {
-	case 0, 1:
-		normalized[64] += 27
-	case 27, 28:
-	default:
-		return nil, fmt.Errorf("invalid recovery ID %d", normalized[64])
-	}
-
-	return normalized, nil
-}
-
-// RecoverSigner recovers the address that produced sig (65-byte r||s||v)
-// over digest, the inverse of SignABI: it accepts either recovery-ID form
-// (crypto.SigToPub requires the signer's raw 0/1 form, but attestors sign
-// with Ethereum's legacy v of 27/28 via normalizeSignature above, and a
-// verifier only ever sees the signature on the wire, never picks the form
-// itself).
-func RecoverSigner(digest [32]byte, sig []byte) (common.Address, error) {
-	if len(sig) != 65 {
-		return common.Address{}, fmt.Errorf("signature must be 65 bytes, got %d", len(sig))
-	}
-
-	normalized := make([]byte, 65)
-	copy(normalized, sig)
-
-	if normalized[64] >= 27 {
-		normalized[64] -= 27
-	}
-
-	pub, err := crypto.SigToPub(digest[:], normalized)
+// RecoverSigner recovers the address that produced sig over digest, and
+// returns sig in the only form AttestationLightClient.sol accepts. sig may use
+// v of 0/1 or 27/28 and either s.
+func RecoverSigner(digest [32]byte, sig []byte) (common.Address, []byte, error) {
+	signer, canonical, err := ecrecover.Recover(digest[:], sig)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("recovering signer public key: %w", err)
+		return common.Address{}, nil, err
 	}
 
-	return crypto.PubkeyToAddress(*pub), nil
+	// AttestationLightClient.sol passes the signature to ECDSA.recover unchanged,
+	// which takes only v of 27/28.
+	canonical[64] += 27
+
+	return signer, canonical, nil
 }

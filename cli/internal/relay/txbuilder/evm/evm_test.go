@@ -5,11 +5,12 @@ package evm
 import (
 	"testing"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -74,154 +75,90 @@ func TestPackTimeoutPacket(t *testing.T) {
 	requireSelector(t, "timeoutPacket", packed)
 }
 
-func TestPackMulticall(t *testing.T) {
-	call1, err := packRecvPacket(testPacket(), []byte{0x01}, 100)
-	require.NoError(t, err)
-
-	call2, err := packUpdateClient("ethereum-0", []byte{0x01})
-	require.NoError(t, err)
-
-	packed, err := packMulticall([][]byte{call2, call1})
-	require.NoError(t, err)
-	requireSelector(t, "multicall", packed)
-
-	args, err := routerABI.Methods["multicall"].Inputs.Unpack(packed[4:])
-	require.NoError(t, err)
-	require.Len(t, args, 1)
-
-	calls, ok := args[0].([][]byte)
-	require.True(t, ok)
-	require.Equal(t, [][]byte{call2, call1}, calls)
+func TestBuildRelayTxs(t *testing.T) {
+	router, multicall := common.HexToAddress("0x1111"), common.HexToAddress("0x2222")
+	builder := New(router, multicall)
+	items := relayItems(3)
+	items[1].Kind, items[1].Acks = v2.RelayKindAck, [][]byte{{2}}
+	items[2].Kind = v2.RelayKindTimeout
+	for _, tc := range []struct {
+		name    string
+		updates [][]byte
+	}{
+		{"updates in order", [][]byte{{5}, {6}}},
+		{"no update needed", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			update := v2.ClientUpdate{ClientID: "client-0", Payloads: tc.updates}
+			txs, err := builder.BuildRelayTxs(update, items)
+			require.NoError(t, err)
+			require.Len(t, txs, 1)
+			require.Equal(t, multicall.Bytes(), txs[0].To)
+			calls := decodeMulticall(t, txs[0].Data)
+			require.Len(t, calls, len(tc.updates)+len(items))
+			methods := []string{"recvPacket", "ackPacket", "timeoutPacket"}
+			for i, call := range calls {
+				require.Equal(t, router, call.Target)
+				if i < len(tc.updates) {
+					require.False(t, call.AllowFailure)
+					requireSelector(t, "updateClient", call.CallData)
+					args, err := routerABI.Methods["updateClient"].Inputs.Unpack(call.CallData[4:])
+					require.NoError(t, err)
+					require.Equal(t, []any{update.ClientID, tc.updates[i]}, args)
+				} else {
+					require.True(t, call.AllowFailure)
+					requireSelector(t, methods[i-len(tc.updates)], call.CallData)
+				}
+			}
+		})
+	}
 }
 
-func TestBuildRelayTxs(t *testing.T) {
-	router := common.HexToAddress("0x1111111111111111111111111111111111111111")
-	client := New(router)
+func TestBuildRelayTxsInvalidInput(t *testing.T) {
+	router, multicall := common.HexToAddress("0x1111"), common.HexToAddress("0x2222")
+	for _, tc := range []struct {
+		name     string
+		kind     v2.RelayKind
+		payloads int
+		want     string
+	}{
+		{"missing acknowledgement", v2.RelayKindAck, 1, "no acknowledgement"},
+		{"unsupported kind", v2.RelayKindUnknown, 1, "unsupported relay kind"},
+		{"multiple payloads", v2.RelayKindRecv, 2, "only supports single-payload packets"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := relayItems(1)
+			items[0].Kind = tc.kind
+			items[0].Packet.Payloads = make([]channeltypesv2.Payload, tc.payloads)
+			txs, err := New(router, multicall).BuildRelayTxs(v2.ClientUpdate{}, items)
+			require.ErrorContains(t, err, tc.want)
+			require.Empty(t, txs)
+		})
+	}
+}
 
-	packet := channeltypesv2.Packet{
-		Sequence: 1, SourceClient: "base-0", DestinationClient: "ethereum-0", TimeoutTimestamp: 1234567890,
-		Payloads: []channeltypesv2.Payload{
-			{
-				SourcePort:      "transfer",
-				DestinationPort: "transfer",
-				Version:         "ics20-1",
-				Encoding:        "application/x-solidity-abi",
-				Value:           []byte{0xde, 0xad},
+func decodeMulticall(t *testing.T, data []byte) []ibcmulticall.IIBCMulticallMsgsCall {
+	t.Helper()
+	contractABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(data), 4)
+	require.Equal(t, contractABI.Methods["multicall"].ID, data[:4])
+	args, err := contractABI.Methods["multicall"].Inputs.Unpack(data[4:])
+	require.NoError(t, err)
+	return *abi.ConvertType(args[0], new([]ibcmulticall.IIBCMulticallMsgsCall)).(*[]ibcmulticall.IIBCMulticallMsgsCall)
+}
+
+func relayItems(count int) []v2.PacketRelayItem {
+	items := make([]v2.PacketRelayItem, count)
+	for i := range items {
+		items[i] = v2.PacketRelayItem{
+			Kind: v2.RelayKindRecv,
+			Packet: channeltypesv2.Packet{
+				Sequence: uint64(i + 1), SourceClient: "source-0", DestinationClient: "dest-0",
+				Payloads: []channeltypesv2.Payload{{SourcePort: "transfer", DestinationPort: "transfer"}},
 			},
-		},
+			Proof: []byte{1}, ProofHeight: 12,
+		}
 	}
-	clientUpdate := v2.ClientUpdate{ClientID: "ethereum-0", Payloads: [][]byte{{0x01}}}
-
-	callsOf := func(t *testing.T, txs []v2.RelayTx) [][]byte {
-		t.Helper()
-		require.Len(t, txs, 1)
-		requireSelector(t, "multicall", txs[0].Data)
-
-		args, err := routerABI.Methods["multicall"].Inputs.Unpack(txs[0].Data[4:])
-		require.NoError(t, err)
-		require.Len(t, args, 1)
-
-		calls, ok := args[0].([][]byte)
-		require.True(t, ok)
-
-		return calls
-	}
-
-	t.Run("recv", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-
-		txs, err := client.BuildRelayTxs(clientUpdate, items)
-		require.NoError(t, err)
-		calls := callsOf(t, txs)
-		require.Equal(t, router.Bytes(), txs[0].To)
-		require.Len(t, calls, 2)
-		requireSelector(t, "updateClient", calls[0])
-		args, err := routerABI.Methods["updateClient"].Inputs.Unpack(calls[0][4:])
-		require.NoError(t, err)
-		require.Equal(t, clientUpdate.Payloads[0], args[1])
-		requireSelector(t, "recvPacket", calls[1])
-	})
-
-	t.Run("several updates in order", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-		update := v2.ClientUpdate{ClientID: clientUpdate.ClientID, Payloads: [][]byte{{0x0a}, {0x0b}}}
-		txs, err := client.BuildRelayTxs(update, items)
-		require.NoError(t, err)
-
-		calls := callsOf(t, txs)
-		require.Len(t, calls, 3)
-		for i, payload := range update.Payloads {
-			requireSelector(t, "updateClient", calls[i])
-			args, err := routerABI.Methods["updateClient"].Inputs.Unpack(calls[i][4:])
-			require.NoError(t, err)
-			require.Equal(t, payload, args[1])
-		}
-		requireSelector(t, "recvPacket", calls[2])
-	})
-
-	t.Run("no update needed", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-		txs, err := client.BuildRelayTxs(v2.ClientUpdate{ClientID: clientUpdate.ClientID}, items)
-		require.NoError(t, err)
-
-		calls := callsOf(t, txs)
-		require.Len(t, calls, 1)
-		requireSelector(t, "recvPacket", calls[0])
-	})
-
-	t.Run("ackRequiresAckBytes", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindAck, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-
-		_, err := client.BuildRelayTxs(clientUpdate, items)
-		require.Error(t, err)
-	})
-
-	t.Run("ack", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindAck, Packet: packet, Acks: [][]byte{{0xac}}, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-
-		txs, err := client.BuildRelayTxs(clientUpdate, items)
-		require.NoError(t, err)
-		require.Len(t, txs, 1)
-	})
-
-	t.Run("timeout", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindTimeout, Packet: packet, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-
-		txs, err := client.BuildRelayTxs(clientUpdate, items)
-		require.NoError(t, err)
-		require.Len(t, txs, 1)
-	})
-
-	t.Run("unsupportedKind", func(t *testing.T) {
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindUnknown, Packet: packet},
-		}
-
-		_, err := client.BuildRelayTxs(clientUpdate, items)
-		require.Error(t, err)
-	})
-
-	t.Run("multiPayloadRejected", func(t *testing.T) {
-		multiPayloadPacket := packet
-		multiPayloadPacket.Payloads = append(multiPayloadPacket.Payloads, multiPayloadPacket.Payloads[0])
-
-		items := []v2.PacketRelayItem{
-			{Kind: v2.RelayKindRecv, Packet: multiPayloadPacket, Proof: []byte{0x02}, ProofHeight: 100},
-		}
-
-		_, err := client.BuildRelayTxs(clientUpdate, items)
-		require.ErrorContains(t, err, "only supports single-payload packets")
-	})
+	return items
 }

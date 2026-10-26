@@ -131,8 +131,8 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 
 	readiness, err := d.awaitReady(ctx, readyCh)
 	if err != nil {
-		// kill waits for the stderr drain, so the tail is complete.
-		killErr := d.kill()
+		// Kill waits for the stderr drain, so the tail is complete.
+		killErr := d.Kill()
 		return nil, errors.Join(
 			fmt.Errorf("%w; logs: %s", err, strings.TrimSpace(string(logs.tailSnapshot()))),
 			killErr,
@@ -145,7 +145,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 		connect.WithGRPC(),
 	)
 	if err := d.probePacketsEndpoint(ctx); err != nil {
-		return nil, errors.Join(err, d.kill())
+		return nil, errors.Join(err, d.Kill())
 	}
 	return d, nil
 }
@@ -211,18 +211,19 @@ func parseRelayerReadinessLog(line string) (result readyResult, matched bool) {
 }
 
 func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (relayerv2.ProcessReadiness, error) {
-	timer := time.NewTimer(defaultStartupTimeout)
-	defer timer.Stop()
+	startupCtx, cancel := context.WithTimeout(ctx, defaultStartupTimeout)
+	defer cancel()
 	select {
 	case res := <-readyCh:
 		if res.err != nil {
 			return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: %w", res.err)
 		}
+		if err := awaitHealth(startupCtx, res.readiness.HTTP, d.h.doneCh()); err != nil {
+			return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: %w", err)
+		}
 		return res.readiness, nil
-	case <-timer.C:
-		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: not ready within %s", defaultStartupTimeout)
-	case <-ctx.Done():
-		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: startup canceled: %w", ctx.Err())
+	case <-startupCtx.Done():
+		return relayerv2.ProcessReadiness{}, fmt.Errorf("ibc relayer run: not ready: %w", startupCtx.Err())
 	}
 }
 
@@ -348,7 +349,8 @@ func (d *Relayer) Stop(ctx context.Context) error {
 	return d.h.signalAndWait(ctx, syscall.SIGTERM, stopGrace)
 }
 
-func (d *Relayer) kill() error {
+// Kill terminates the process without allowing graceful shutdown.
+func (d *Relayer) Kill() error {
 	ctx, cancel := context.WithTimeout(context.Background(), killTimeout)
 	defer cancel()
 	return d.h.signalAndWait(ctx, syscall.SIGKILL, 0)

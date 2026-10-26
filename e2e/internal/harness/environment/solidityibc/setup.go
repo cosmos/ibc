@@ -3,28 +3,30 @@
 package solidityibc
 
 import (
+	"cmp"
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 	"slices"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besuqbft"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ibcerc20"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics20transfer"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27account"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics27gmp"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/erc1967proxy"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcerc20"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics20transfer"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27account"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc/cli/besu"
+	"github.com/cosmos/ibc/cli/routeraccess"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
@@ -177,7 +179,7 @@ const (
 	gmpPortID      = "gmpport"
 )
 
-// DeployAppStack deploys ICS20 Transfer and ICS27 GMP (with their logic
+// DeployAppStack deploys multicall, ICS20 Transfer and ICS27 GMP (with their logic
 // contracts), registers both ports on the router, and opens public relaying.
 func (s *Setup) DeployAppStack(
 	ctx context.Context,
@@ -230,6 +232,15 @@ func (s *Setup) DeployAppStack(
 	ics27Impl, err := s.deployVerified(ctx, authority, "ICS27GMP implementation",
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := ics27gmp.DeployContract(opts, s.backend)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+
+	multicallImpl, err := s.deployVerified(ctx, authority, "IBCMulticall implementation",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := ibcmulticall.DeployContract(opts, s.backend)
 			return address, transaction, deployErr
 		})
 	if err != nil {
@@ -301,6 +312,35 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, codeErr
 	}
 
+	multicallABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode IBCMulticall initialization: %w", err)
+	}
+	if multicallABI == nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode IBCMulticall initialization: upstream binding has no ABI")
+	}
+	multicallInit, err := multicallABI.Pack("initialize", instance.AccessManager)
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC encode IBCMulticall initialization: %w", err)
+	}
+
+	multicallProxy, err := s.deployVerified(ctx, authority, "initialized IBCMulticall proxy",
+		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+			address, transaction, _, deployErr := erc1967proxy.DeployContract(
+				opts,
+				s.backend,
+				multicallImpl,
+				multicallInit,
+			)
+			return address, transaction, deployErr
+		})
+	if err != nil {
+		return AppStack{}, err
+	}
+	if codeErr := s.requireCode(ctx, "IBCMulticall proxy", multicallProxy); codeErr != nil {
+		return AppStack{}, codeErr
+	}
+
 	router, err := ics26router.NewContract(instance.Router, s.backend)
 	if err != nil {
 		return AppStack{}, fmt.Errorf("solidity IBC register AppStack: bind ICS26Router: %w", err)
@@ -326,14 +366,7 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, err
 	}
 
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	if err != nil {
-		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: read ICS26Router ABI: %w", err)
-	}
-	if routerABI == nil {
-		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: upstream ICS26Router binding has no ABI")
-	}
-	selectors, err := publicRelayingSelectors(*routerABI)
+	selectors, err := routeraccess.PublicRelayingSelectors()
 	if err != nil {
 		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: %w", err)
 	}
@@ -346,7 +379,7 @@ func (s *Setup) DeployAppStack(
 			opts,
 			instance.Router,
 			selectors,
-			math.MaxUint64, // OZ AccessManager PUBLIC_ROLE
+			routeraccess.PublicRole,
 		)
 		return common.Address{}, transaction, sendErr
 	})
@@ -354,6 +387,26 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: %w", err)
 	}
 	if _, err = s.awaitMined(ctx, "open public relaying", tx); err != nil {
+		return AppStack{}, err
+	}
+
+	multicallSelector, err := methodSelector(*multicallABI, "multicall")
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public multicall: %w", err)
+	}
+	_, tx, err = s.send(ctx, authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
+		transaction, sendErr := manager.SetTargetFunctionRole(
+			opts,
+			multicallProxy,
+			[][4]byte{multicallSelector},
+			routeraccess.PublicRole,
+		)
+		return common.Address{}, transaction, sendErr
+	})
+	if err != nil {
+		return AppStack{}, fmt.Errorf("solidity IBC open public multicall: %w", err)
+	}
+	if _, err = s.awaitMined(ctx, "open public multicall", tx); err != nil {
 		return AppStack{}, err
 	}
 
@@ -380,30 +433,25 @@ func (s *Setup) DeployAppStack(
 		)
 	}
 
-	recvPacketSelector, err := methodSelector(*routerABI, "recvPacket")
-	if err != nil {
-		return AppStack{}, fmt.Errorf("solidity IBC verify public recvPacket: %w", err)
-	}
 	unrelated := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	permission, err := manager.CanCall(
-		&bind.CallOpts{Context: ctx},
-		unrelated,
-		instance.Router,
-		recvPacketSelector,
-	)
-	if err != nil {
-		return AppStack{}, fmt.Errorf("solidity IBC verify public recvPacket: query CanCall: %w", err)
-	}
-	if !permission.Immediate {
-		return AppStack{}, fmt.Errorf(
-			"solidity IBC verify public recvPacket: unrelated address cannot call immediately (delay %d)",
-			permission.Delay,
-		)
+	for _, selector := range selectors {
+		permission, err := manager.CanCall(&bind.CallOpts{Context: ctx}, unrelated, instance.Router, selector)
+		if err != nil {
+			return AppStack{}, fmt.Errorf("solidity IBC verify public relaying: query CanCall: %w", err)
+		}
+		if !permission.Immediate {
+			return AppStack{}, fmt.Errorf(
+				"solidity IBC verify public relaying: unrelated address cannot call %x immediately (delay %d)",
+				selector,
+				permission.Delay,
+			)
+		}
 	}
 
 	return AppStack{
 		ICS20Transfer: ics20Proxy,
 		ICS27GMP:      ics27Proxy,
+		IBCMulticall:  multicallProxy,
 	}, nil
 }
 
@@ -451,38 +499,38 @@ func (s *Setup) PrepareAttestationClient(
 		})
 }
 
-// PrepareBesuQBFTClient validates one Besu QBFT Client deployment without
-// submitting a transaction.
-func (s *Setup) PrepareBesuQBFTClient(
+// PrepareBesuClient validates one Besu Client deployment without submitting
+// a transaction.
+func (s *Setup) PrepareBesuClient(
 	ctx context.Context,
 	authority evm.Account,
 	router common.Address,
-	config BesuQBFTClientConfig,
+	config BesuClientConfig,
 ) (*PreparedClient, error) {
 	config = config.snapshot()
 	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("solidity IBC prepare %s Client: %w", clientkind.BesuQBFT, err)
+		return nil, fmt.Errorf("solidity IBC prepare Besu Client: %w", err)
 	}
-	return s.prepareClient(ctx, authority, router, clientkind.BesuQBFT, config.ID, config.CounterpartyClientID,
+	return s.prepareClient(ctx, authority, router, clientkind.Besu, config.ID, config.CounterpartyClientID,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
-			address, transaction, _, deployErr := besuqbft.DeployContract(
+			return besu.DeployLightClient(
 				opts,
 				s.backend,
-				besuqbft.IBesuLightClientMsgsClientState{
+				config.Consensus,
+				besumsgs.IBesuLightClientMsgsClientState{
 					IbcRouter:      config.CounterpartyRouter,
-					LatestHeight:   besuqbft.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
+					LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
 					TrustingPeriod: config.TrustingPeriod,
 					MaxClockDrift:  config.MaxClockDrift,
-					TrustLevel:     besu.DefaultTrustLevel,
+					TrustLevel:     cmp.Or(config.TrustLevel, besu.DefaultTrustLevel),
 				},
-				besuqbft.IBesuLightClientMsgsConsensusState{
+				besumsgs.IBesuLightClientMsgsConsensusState{
 					Timestamp:  config.InitialTimestamp,
 					StateRoot:  config.InitialStateRoot,
 					Validators: config.InitialValidators,
 				},
 				config.RoleManager,
 			)
-			return address, transaction, deployErr
 		})
 }
 
@@ -626,7 +674,7 @@ func (s *Setup) verifyClient(
 		}
 		client.Attestors = slices.Clone(set.AttestorAddresses)
 		client.MinRequiredSignatures = set.MinRequiredSigs
-	case clientkind.BesuQBFT:
+	case clientkind.Besu:
 		if _, err := besu.ReadClientState(ctx, s.backend, registered); err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 		}
@@ -872,19 +920,6 @@ func customAddClientSelector(routerABI abi.ABI) ([4]byte, error) {
 		}
 	}
 	return [4]byte{}, fmt.Errorf("upstream ICS26Router ABI has no custom addClient overload")
-}
-
-func publicRelayingSelectors(routerABI abi.ABI) ([][4]byte, error) {
-	names := []string{"recvPacket", "ackPacket", "timeoutPacket", "updateClient"}
-	selectors := make([][4]byte, 0, len(names))
-	for _, name := range names {
-		selector, err := methodSelector(routerABI, name)
-		if err != nil {
-			return nil, err
-		}
-		selectors = append(selectors, selector)
-	}
-	return selectors, nil
 }
 
 func methodSelector(contractABI abi.ABI, rawName string) ([4]byte, error) {

@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "The two gRPC services a running relayer and attestor serve, how to call them, and the prover service you can implement for them to call."
+description: "The relayer, attestation, and health APIs, how to call them, and the prover service you can implement for them to call."
 ---
 
 <!-- GEN:notice START -->
@@ -17,7 +17,7 @@ before opening a pull request.
 
 <!-- GEN:notice END -->
 
-The IBC CLI exposes two APIs: a relayer API and an attestation API.
+The IBC CLI exposes a relayer API and an attestation API, plus a shared health service.
 
 The relayer's API has two main parts:
 
@@ -28,7 +28,7 @@ The attestor's API serves the attestations a light client verifies. A relayer is
 
 Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`. <!-- [cli/internal/config/config.go: DefaultConfig] -->
 
-A third service is described at the end of this page, and the CLI does not serve it: `ProverService` is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. <!-- [cli/internal/relay/prover/prover.go: addGenerator] -->
+The `ProverService` described at the end of this page is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. The CLI does not serve it. <!-- [cli/internal/relay/prover/prover.go: addGenerator] -->
 
 To list running services:
 
@@ -37,12 +37,37 @@ grpcurl -plaintext localhost:3000 list
 ```
 
 ```
+grpc.health.v1.Health
 ibc.v2.relayer.RelayerApiService
 ```
 
 A process lists only the services it is running. The attestation service joins
 this list when the config gives it a local attestor to serve; the relayer above
 had none. <!-- [cli/internal/bootstrap/bootstrap.go: BuildRelayer] -->
+
+## Health checks
+
+Both relayers and standalone attestors expose the standard
+[`grpc.health.v1.Health`](https://grpc.io/docs/guides/health-checking/) service
+on their API address. `Check` is supported; `Watch` returns `UNIMPLEMENTED`.
+<!-- [cli/internal/server/server.go: New] -->
+
+With reflection enabled, check readiness using:
+
+```bash
+grpcurl -plaintext -d '{"service":""}' localhost:3000 grpc.health.v1.Health/Check
+```
+
+The request's `service` field selects the check:
+
+| Purpose | `service` | Checks |
+|---|---|---|
+| Readiness | `""` | Server serving and all registered services ready. The relayer pings its database with a one-second deadline; attestors have no dependency check. |
+| Liveness | `grpc.health.v1.Health` | Server serving, without checking dependencies. |
+
+<!-- [cli/internal/server/health.go: healthChecker.Check] -->
+<!-- [cli/internal/service/relayer/service.go: Service.CheckReady] -->
+<!-- [cli/internal/service/attestor/service.go: Service.CheckReady] -->
 
 ## Relayer service
 

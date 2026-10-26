@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -20,6 +18,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -623,9 +623,124 @@ func TestFindPacketTx(t *testing.T) {
 	})
 }
 
+func relayEventLog(t *testing.T, kind v2.RelayKind, packet ics26router.IICS26RouterMsgsPacket) *types.Log {
+	t.Helper()
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+	eventName := timeoutPacketEvent
+	args := []any{packet}
+	if kind == v2.RelayKindAck {
+		eventName = ackPacketEvent
+		args = append(args, []byte{0xac})
+	}
+	event := routerABI.Events[eventName]
+	data, err := event.Inputs.NonIndexed().Pack(args...)
+	require.NoError(t, err)
+	return &types.Log{
+		Address: common.HexToAddress(routerAddress),
+		Topics: []common.Hash{
+			event.ID,
+			crypto.Keccak256Hash([]byte(packet.SourceClient)),
+			common.BigToHash(new(big.Int).SetUint64(packet.Sequence)),
+		},
+		Data: data,
+	}
+}
+
+func TestPacketRelayExecuted(t *testing.T) {
+	for _, kind := range []v2.RelayKind{v2.RelayKindAck, v2.RelayKindTimeout} {
+		t.Run(kind.String(), func(t *testing.T) {
+			packet := testPacket()
+			wrongSequence, wrongSource, wrongDest := packet, packet, packet
+			wrongSequence.Sequence++
+			wrongSource.SourceClient = "other-source"
+			wrongDest.DestClient = "other-destination"
+			foreign := relayEventLog(t, kind, packet)
+			foreign.Address = common.HexToAddress("0xbad")
+			malformed := relayEventLog(t, kind, packet)
+			malformed.Data = []byte{0x01}
+			otherKind := v2.RelayKindAck
+			if kind == v2.RelayKindAck {
+				otherKind = v2.RelayKindTimeout
+			}
+
+			for _, tt := range []struct {
+				name    string
+				logs    []*types.Log
+				want    bool
+				wantErr bool
+			}{
+				{name: "wrongSequence", logs: []*types.Log{relayEventLog(t, kind, wrongSequence)}},
+				{name: "wrongSource", logs: []*types.Log{relayEventLog(t, kind, wrongSource)}},
+				{name: "wrongDestination", logs: []*types.Log{relayEventLog(t, kind, wrongDest)}},
+				{name: "wrongEmitter", logs: []*types.Log{foreign}},
+				{name: "wrongKind", logs: []*types.Log{relayEventLog(t, otherKind, packet)}},
+				{name: "noEvent", logs: []*types.Log{nil, {}}},
+				{name: "malformed", logs: []*types.Log{malformed}, wantErr: true},
+				{
+					name: "matchingLaterInBatch",
+					logs: []*types.Log{foreign, relayEventLog(t, kind, wrongSequence), relayEventLog(t, kind, packet)},
+					want: true,
+				},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					ctx := t.Context()
+					client, eth := newTestClient(t)
+					eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{
+						Status: types.ReceiptStatusSuccessful,
+						Logs:   tt.logs,
+					}, nil).Once()
+
+					executed, err := client.PacketRelayExecuted(ctx, txHash.Hex(), kind,
+						packet.Sequence, packet.SourceClient, packet.DestClient)
+					if tt.wantErr {
+						require.ErrorContains(t, err, "parsing")
+					} else {
+						require.NoError(t, err)
+					}
+					assert.Equal(t, tt.want, executed)
+				})
+			}
+		})
+	}
+}
+
+func TestPacketRelayExecutedReceiptError(t *testing.T) {
+	for _, receiptErr := range []error{ethereum.NotFound, assert.AnError} {
+		t.Run(receiptErr.Error(), func(t *testing.T) {
+			ctx := t.Context()
+			client, eth := newTestClient(t)
+			eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, receiptErr).Once()
+			packet := testPacket()
+			executed, err := client.PacketRelayExecuted(ctx, txHash.Hex(), v2.RelayKindAck,
+				packet.Sequence, packet.SourceClient, packet.DestClient)
+			if errors.Is(receiptErr, ethereum.NotFound) {
+				require.ErrorIs(t, err, v2.ErrTxNotFound)
+			} else {
+				require.ErrorIs(t, err, receiptErr)
+			}
+			assert.False(t, executed)
+		})
+	}
+}
+
 func TestPacketWriteAckStatus(t *testing.T) {
 	ctx := context.Background()
 	packet := testPacket()
+
+	t.Run("ignoresForeignEmitter", func(t *testing.T) {
+		client, eth := newTestClient(t)
+		foreign := writeAckLog(t, common.HexToAddress("0xbad"), packet, [][]byte{{0x01}})
+		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{Logs: []*types.Log{foreign}}, nil).Once()
+		_, err := client.PacketWriteAckStatus(
+			ctx,
+			txHash.Hex(),
+			packet.Sequence,
+			packet.SourceClient,
+			packet.DestClient,
+		)
+		require.ErrorIs(t, err, v2.ErrWriteAckNotFoundForPacket)
+	})
 
 	receiptWithAcks := func(t *testing.T, acks [][]byte) *types.Receipt {
 		t.Helper()
@@ -700,6 +815,72 @@ func TestPacketWriteAckStatus(t *testing.T) {
 
 		require.ErrorIs(t, err, v2.ErrTxNotFound)
 	})
+}
+
+func TestPacketWriteAckStatusLogAddress(t *testing.T) {
+	packet := testPacket()
+	routerAddr := common.HexToAddress(routerAddress)
+	appAddr := common.HexToAddress("0x0000000000000000000000000000000000000bad")
+	appAck := writeAckLog(t, appAddr, packet, [][]byte{{0x01}})
+	malformedAppAck := *appAck
+	malformedAppAck.Data = []byte{0xff}
+	malformedRouterAck := malformedAppAck
+	malformedRouterAck.Address = routerAddr
+
+	for _, tt := range []struct {
+		name       string
+		logs       []*types.Log
+		wantStatus v2.WriteAckStatus
+		wantErr    error
+	}{
+		{
+			name: "appSuccessBeforeRouterError",
+			logs: []*types.Log{
+				appAck,
+				writeAckLog(t, routerAddr, packet, [][]byte{errorAcknowledgement[:]}),
+			},
+			wantStatus: v2.WriteAckStatusError,
+		},
+		{
+			name: "malformedAppLogBeforeRouterSuccess",
+			logs: []*types.Log{
+				&malformedAppAck,
+				writeAckLog(t, routerAddr, packet, [][]byte{{0x01}}),
+			},
+			wantStatus: v2.WriteAckStatusSuccess,
+		},
+		{
+			name:       "appLogOnly",
+			logs:       []*types.Log{appAck},
+			wantStatus: v2.WriteAckStatusUnknown,
+			wantErr:    v2.ErrWriteAckNotFoundForPacket,
+		},
+		{
+			name:       "malformedAppLogOnly",
+			logs:       []*types.Log{&malformedAppAck},
+			wantStatus: v2.WriteAckStatusUnknown,
+			wantErr:    v2.ErrWriteAckNotFoundForPacket,
+		},
+		{
+			name:       "malformedRouterLog",
+			logs:       []*types.Log{&malformedRouterAck},
+			wantStatus: v2.WriteAckStatusUnknown,
+			wantErr:    v2.ErrWriteAckDecoding,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			client, eth := newTestClient(t)
+			eth.EXPECT().TransactionReceipt(ctx, txHash).Return(&types.Receipt{Logs: tt.logs}, nil).Once()
+
+			status, err := client.PacketWriteAckStatus(
+				ctx, txHash.String(), packet.Sequence, packet.SourceClient, packet.DestClient,
+			)
+
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, tt.wantStatus, status)
+		})
+	}
 }
 
 func TestGetAttestationSet(t *testing.T) {

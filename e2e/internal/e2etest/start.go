@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
@@ -206,6 +207,8 @@ func validateChainIDs(ids []environment.ChainID) error {
 	return nil
 }
 
+// evmChainSpecs runs Besu Chains on QBFT; tests choosing another consensus
+// set it on the returned Chains.
 func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environment.ChainSpec {
 	chains := make([]environment.ChainSpec, len(ids))
 	for i, id := range ids {
@@ -213,7 +216,11 @@ func evmChainSpecs(provider EVMProvider, ids []environment.ChainID) []environmen
 		case EVMProviderAnvil:
 			chains[i] = environment.ManagedAnvil{ID: id, EVMChainID: anvilChainIDBase + uint64(i)}
 		case EVMProviderBesu:
-			chains[i] = environment.ManagedBesu{ID: id, EVMChainID: besuChainIDBase + uint64(i)}
+			chains[i] = environment.ManagedBesu{
+				ID:         id,
+				EVMChainID: besuChainIDBase + uint64(i),
+				Consensus:  besu.QBFT,
+			}
 		}
 	}
 	return chains

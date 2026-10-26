@@ -10,14 +10,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
 )
 
@@ -99,25 +101,29 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 	// the constructor rejects an expired initial state, so trust the current head
 	head, err := backend.Client().HeaderByNumber(ctx, nil)
 	require.NoError(t, err)
-	qbft, err := setup.PrepareBesuQBFTClient(ctx, clientAuthority, instance.Router, BesuQBFTClientConfig{
-		ID: "qbft-b", CounterpartyClientID: "qbft-a", CounterpartyRouter: instance.Router,
-		InitialHeight: 1, InitialTimestamp: head.Time, TrustingPeriod: BesuQBFTTrustingPeriod,
-		InitialValidators: []common.Address{attestor.Address()},
-	})
-	require.NoError(t, err)
-	qbftClient, err := qbft.Deploy(ctx)
-	require.NoError(t, err)
-	attachedQBFT, err := setup.AttachClient(
-		ctx,
-		instance.Router,
-		qbftClient.ID,
-		qbftClient.CounterpartyClientID,
-		"besu-qbft",
-	)
-	require.NoError(t, err)
-	require.Equal(t, qbftClient, attachedQBFT)
-	_, err = setup.AttachClient(ctx, instance.Router, qbftClient.ID, qbftClient.CounterpartyClientID, "attestation")
-	require.Error(t, err)
+	for _, consensus := range []besu.Consensus{besu.QBFT, besu.IBFT2} {
+		prepared, prepareErr := setup.PrepareBesuClient(ctx, clientAuthority, instance.Router, BesuClientConfig{
+			Consensus: consensus, ID: string(consensus) + "-b", CounterpartyClientID: string(consensus) + "-a",
+			CounterpartyRouter: instance.Router, InitialHeight: 1, InitialTimestamp: head.Time,
+			TrustingPeriod: BesuTrustingPeriod, InitialValidators: []common.Address{attestor.Address()},
+		})
+		require.NoError(t, prepareErr)
+		besuClient, deployErr := prepared.Deploy(ctx)
+		require.NoError(t, deployErr)
+		attached, attachErr := setup.AttachClient(
+			ctx,
+			instance.Router,
+			besuClient.ID,
+			besuClient.CounterpartyClientID,
+			clientkind.Besu,
+		)
+		require.NoError(t, attachErr)
+		require.Equal(t, besuClient, attached)
+		_, attachErr = setup.AttachClient(
+			ctx, instance.Router, besuClient.ID, besuClient.CounterpartyClientID, "attestation",
+		)
+		require.Error(t, attachErr)
+	}
 
 	// Duplicate registration is rejected by a read-only vacancy check before a
 	// second light-client contract is deployed.

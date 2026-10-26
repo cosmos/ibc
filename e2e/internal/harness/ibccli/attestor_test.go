@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
@@ -82,6 +83,7 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	require.NoError(t, err)
 	var config fileConfig
 	require.NoError(t, yaml.Unmarshal(configData, &config))
+	require.NotContains(t, string(configData), "ibcMulticall:")
 	require.Equal(t, observabilityConfig{
 		Metrics:  true,
 		Type:     observabilityTypeOTEL,
@@ -343,7 +345,19 @@ func runAttestorHelper() error {
 	mux := http.NewServeMux()
 	path, handler := attestorv2.NewAttestationServiceHandler(helperAttestationService{})
 	mux.Handle(path, handler)
-	server := &http.Server{Handler: mux}
+	healthServer := grpc.NewServer()
+	defer healthServer.Stop()
+	healthpb.RegisterHealthServer(healthServer, testHealthService{check: func(
+		context.Context, *healthpb.HealthCheckRequest,
+	) (*healthpb.HealthCheckResponse, error) {
+		fmt.Fprintln(os.Stderr, "helper health checked")
+		return &healthpb.HealthCheckResponse{Status: healthpb.HealthCheckResponse_SERVING}, nil
+	}})
+	mux.Handle("/grpc.health.v1.Health/", healthServer)
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+	server := &http.Server{Handler: mux, Protocols: protocols}
 	child := exec.Command("sleep", "60")
 	if err := child.Start(); err != nil {
 		return fmt.Errorf("helper start descendant: %w", err)

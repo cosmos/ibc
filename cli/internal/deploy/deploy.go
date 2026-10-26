@@ -8,18 +8,11 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
-)
-
-// Client types the deploy engine can provision, named as the relayer config
-// does.
-const (
-	ClientTypeAttestation = string(config.ClientTypeAttestation)
-	ClientTypeBesuQBFT    = string(config.ClientTypeBesuQBFT)
 )
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under
@@ -34,38 +27,33 @@ type CoreParams struct {
 
 // ClientParams are the constructor inputs of one client type.
 type ClientParams interface {
-	ClientType() string
+	clientParams()
 }
 
-// AttestationParams are the constructor inputs for an attestation client.
-type AttestationParams struct {
-	Attestors        []string
-	Threshold        uint8
-	InitialHeight    uint64
-	InitialTimestamp uint64
-}
+// AttestationParams are the constructor inputs for an attestation client,
+// recorded in the manifest as they are.
+type AttestationParams manifest.AttestationParams
 
-// ClientType implements ClientParams.
-func (AttestationParams) ClientType() string { return ClientTypeAttestation }
+func (AttestationParams) clientParams() {}
 
-// BesuQBFTParams are the constructor inputs for a Besu QBFT client. Periods
-// are in seconds.
-type BesuQBFTParams struct {
+// BesuParams are the constructor inputs for a Besu client verifying a chain
+// that runs Consensus, which picks the contract. Periods are in seconds.
+type BesuParams struct {
+	Consensus             besu.Consensus
 	IBCRouter             common.Address
 	InitialHeight         uint64
 	InitialConsensusState besumsgs.IBesuLightClientMsgsConsensusState
 	TrustingPeriod        uint64
 	MaxClockDrift         uint64
+	TrustLevel            besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
-// ClientType implements ClientParams.
-func (BesuQBFTParams) ClientType() string { return ClientTypeBesuQBFT }
+func (BesuParams) clientParams() {}
 
-// BesuQBFTSource is implemented by targets whose chain runs Besu QBFT and can
-// serve the consensus state of their head, which a new client tracking them
-// starts trusting.
-type BesuQBFTSource interface {
-	BesuQBFTHead(ctx context.Context) (height uint64, state besumsgs.IBesuLightClientMsgsConsensusState, err error)
+// BesuSource is implemented by targets whose chain runs Besu and can serve
+// their sealed head, which a new client tracking them starts trusting.
+type BesuSource interface {
+	BesuHead(ctx context.Context) (*besu.ParsedHeader, error)
 }
 
 // ClientSpec describes one light client to provision and register.
@@ -76,13 +64,16 @@ type ClientSpec struct {
 	Params               ClientParams
 }
 
-// Type is the client type Params construct.
-func (s ClientSpec) Type() string { return s.Params.ClientType() }
-
 // CoreRef is the result of provisioning the core stack.
 type CoreRef struct {
 	Router     string
 	TargetData map[string]string
+}
+
+// MulticallRef is the deployed multicall proxy and its implementation.
+type MulticallRef struct {
+	Address        string
+	Implementation string
 }
 
 // ClientRef is the result of provisioning a light client contract.
@@ -167,6 +158,8 @@ func (r Report) Failed() []Check {
 type Target interface {
 	// ProvisionCore deploys the core routing stack.
 	ProvisionCore(ctx context.Context, p CoreParams) (CoreRef, error)
+	// ProvisionMulticall deploys a multicall governed by the core's access manager.
+	ProvisionMulticall(ctx context.Context, accessManager string) (MulticallRef, error)
 	// ProvisionClient deploys a light client governed by router, without
 	// registering it.
 	ProvisionClient(ctx context.Context, router string, spec ClientSpec) (ClientRef, error)
@@ -183,8 +176,6 @@ type Target interface {
 	// Verify checks a manifest's recorded deployment against live chain
 	// state.
 	Verify(ctx context.Context, m *manifest.Manifest) (Report, error)
-	// SupportedClientTypes lists the client types ProvisionClient accepts.
-	SupportedClientTypes() []string
 	// ProvisionGMP deploys the ICS27-GMP app (account logic + impl + proxy).
 	ProvisionGMP(ctx context.Context, router, accessManager string) (GMPRef, error)
 	// RegisterApp registers app on the router under port.
