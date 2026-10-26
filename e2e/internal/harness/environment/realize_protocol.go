@@ -384,6 +384,7 @@ func prepareConnections(
 						InitialValidators:    trusted.Validators,
 						TrustingPeriod:       client.TrustingPeriod,
 						MaxClockDrift:        client.MaxClockDrift,
+						TrustLevel:           client.TrustLevel,
 						RoleManager:          router,
 					},
 				)

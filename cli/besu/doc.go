@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package besu provides header parsing, storage slot derivation and ABI
-// encoding for Besu light-client payloads. Consensus verification belongs to
+// Package besu provides header parsing and sealing, storage slot derivation
+// and ABI encoding for Besu light-client payloads. Consensus verification belongs to
 // the contract, simulated by the transaction submitter.
 //
 // Wire types and codecs are generated upstream. The contract stores only

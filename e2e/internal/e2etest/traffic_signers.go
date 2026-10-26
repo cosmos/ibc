@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
@@ -61,9 +62,8 @@ func (s Signer) BroadcastTx(
 	evm *environment.EVM,
 	to common.Address,
 	data []byte,
-) error {
-	_, err := evm.BroadcastTx(ctx, s.account, &to, data, nil)
-	return err
+) (*types.Receipt, error) {
+	return evm.BroadcastTx(ctx, s.account, &to, data, nil)
 }
 
 // String renders only the public signer address.

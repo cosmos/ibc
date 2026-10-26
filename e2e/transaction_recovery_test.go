@@ -253,7 +253,7 @@ type transactionRecovery struct {
 // cleanup for the returned context and resources.
 func setupTransactionRecovery(t *testing.T, amount int64) (context.Context, *transactionRecovery) {
 	t.Helper()
-	spec, runtime := attestedMesh(
+	spec, runtime := e2etest.AttestedMesh(
 		e2etest.EVMChains(t, e2etest.EVMRequirements{
 			Provider: e2etest.EVMProviderAnvil, ControlledMining: true,
 		}, e2etest.ChainA, e2etest.ChainB),

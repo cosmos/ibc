@@ -11,7 +11,7 @@ while [ "$#" -gt 0 ]; do
 		--dry-run) dry_run=1 ;;
 		-h|--help)
 			printf 'Usage: %s [--dry-run]\n\n' "$0"
-			printf 'Stops leaked e2e relayer and attestor daemons and removes e2e Docker containers by label.\n'
+			printf 'Stops leaked e2e relayer and attestor daemons and removes e2e Docker containers and networks by label.\n'
 			printf 'Daemons are matched by harness-only config or private-home markers, so a developer'"'"'s\n'
 			printf 'own unrelated "ibc relayer run" or "ibc attestor run" is left alone.\n'
 			exit 0
@@ -78,6 +78,22 @@ docker_sweep() {
 		if [ "$dry_run" -eq 0 ]; then
 			# shellcheck disable=SC2086
 			docker rm -f $containers >/dev/null 2>&1 || true
+		fi
+	fi
+
+	# Networks go after containers; Docker refuses to remove a network with attached endpoints.
+	local networks
+	networks="$(docker network ls -q --filter label=ibc-cli-e2e=true 2>/dev/null)"
+	if [ -z "$networks" ]; then
+		note "no e2e Docker networks found"
+	else
+		note "remove e2e Docker networks:"
+		for id in $networks; do
+			docker network ls --format '  {{.ID}} {{.Name}}' --filter "id=$id" || true
+		done
+		if [ "$dry_run" -eq 0 ]; then
+			# shellcheck disable=SC2086
+			docker network rm $networks >/dev/null 2>&1 || true
 		fi
 	fi
 }

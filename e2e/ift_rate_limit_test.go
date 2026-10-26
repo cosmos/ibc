@@ -31,7 +31,9 @@ func TestIFTTransfer_RecvRateLimitRefund(t *testing.T) {
 
 	// ARRANGE
 	ctx := t.Context()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	route := e2etest.ManualAtoB(e2etest.ChainA, e2etest.ChainB)
@@ -131,7 +133,7 @@ func testIFTRefundRateLimit(t *testing.T, timeout time.Duration) {
 
 	// ARRANGE
 	ctx := t.Context()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
@@ -269,5 +271,6 @@ func setIFTRateLimit(t *testing.T, chain *environment.Chain, deployment *e2etest
 		big.NewInt(int64(rateLimitWindow/time.Second)),
 	)
 	require.NoError(t, err)
-	require.NoError(t, sender.BroadcastTx(t.Context(), client, apps.IFT, data))
+	_, err = sender.BroadcastTx(t.Context(), client, apps.IFT, data)
+	require.NoError(t, err)
 }
