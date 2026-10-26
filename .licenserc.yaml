@@ -25,6 +25,9 @@ header:
     - "**/*.json.tmpl"
     - "**/*.jsonc"
     - "**/*.svg"
+    - "**/*.pdf"
+    - "**/*.png"
+    - "**/*.jpg"
     - "**/*.excalidraw"
     - "**/bun.lock"
     # Failing inputs Go fuzzing records, which must start with "go test fuzz v1".
