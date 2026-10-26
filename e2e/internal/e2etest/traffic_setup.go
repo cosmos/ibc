@@ -301,6 +301,10 @@ func deployApps(
 	}
 
 	for _, route := range routes {
+		require.NotEmpty(t, route.ID, "e2etest: route from %q to %q has no id", route.Source, route.Destination)
+		_, duplicate := deployment.routes[route.ID]
+		require.False(t, duplicate, "e2etest: route id %q is used more than once", route.ID)
+		require.NotEqual(t, route.Source, route.Destination, "e2etest: route %q connects a Chain to itself", route.ID)
 		sourceClient, destClient, err := resolveRouteClients(env, route)
 		require.NoError(t, err, "e2etest: resolve clients for route %q", route.ID)
 		deployment.routes[route.ID] = RouteClients{

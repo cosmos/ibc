@@ -52,12 +52,18 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 	}, func(_ *node.Config, ec *ethconfig.Config) {
 		ec.Genesis.Config = &conf
 	})
-	t.Cleanup(func() { _ = sim.Close() })
 
-	// auto-mine so bind.WaitMined returns
+	// auto-mine so bind.WaitMined returns. Close only after the miner exits:
+	// Commit on a closed backend dereferences a nil beacon.
 	stop := make(chan struct{})
-	t.Cleanup(func() { close(stop) })
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		close(stop)
+		<-done
+		_ = sim.Close()
+	})
 	go func() {
+		defer close(done)
 		for {
 			select {
 			case <-stop:

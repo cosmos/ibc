@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 )
 
@@ -34,18 +33,14 @@ type GMPRequest struct {
 // GMP drives ICS27 GMP and its default Counter and TestERC20 targets on a
 // single directed route.
 type GMP struct {
-	routeID        RouteID
-	source         endpoint
-	destination    endpoint
-	sender         evm.Account
-	sourceGMP      common.Address
-	sourceRouter   common.Address
-	counter        common.Address
-	sourceClientID string
-	destClientID   string
-	destGMP        common.Address
-	destToken      common.Address
-	defaultCall    []byte
+	sourceRoute
+	destination  endpoint
+	sourceGMP    common.Address
+	counter      common.Address
+	destClientID string
+	destGMP      common.Address
+	destToken    common.Address
+	defaultCall  []byte
 }
 
 // Token returns the destination-chain TestERC20 bound to this GMP.
@@ -91,19 +86,12 @@ func (g *GMP) Call(ctx context.Context, request GMPRequest) (*GMPCall, error) {
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: pack GMP sendCall: %w", err)
 	}
-	receipt, sequence, err := send(
-		ctx,
-		g.source.evm,
-		g.sender,
-		g.sourceGMP,
-		data,
-		sendPacketSequence(g.sourceRouter),
-	)
+	sent, err := g.send(ctx, g.sourceGMP, data, 1)
 	if err != nil {
 		return nil, fmt.Errorf("e2etest: send GMP on route %q: %w", g.routeID, err)
 	}
 	return &GMPCall{
-		sendResult: newSendResult(g.routeID, g.source, g.sourceClientID, receipt, sequence),
+		sendResult: sent[0],
 		app:        g,
 		before:     before,
 	}, nil
@@ -130,9 +118,11 @@ func (c *GMPCall) VerifyCounterUnchanged(ctx context.Context) error {
 
 // VerifyTimeoutExecuted checks that txHash succeeded with a TimeoutPacket for this packet.
 func (c *GMPCall) VerifyTimeoutExecuted(ctx context.Context, txHash string) error {
-	return verifyPacketTimeout(
-		ctx, c.app.source, c.app.sourceRouter, c.app.sourceClientID, c.packetTx, txHash,
-	)
+	ids, err := timeoutPacketIDs(ctx, c.app.source, c.app.sourceRouter, txHash)
+	if err != nil {
+		return err
+	}
+	return c.packetTx.emittedBy(ids, "TimeoutPacket", txHash)
 }
 
 func (g *GMP) count(ctx context.Context) (*big.Int, error) {
