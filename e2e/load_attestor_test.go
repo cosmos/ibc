@@ -4,7 +4,6 @@ package e2e_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -14,8 +13,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
@@ -230,31 +227,13 @@ func (ts *loadTestAttestor) sendPackets(count int) []*e2etest.TransferSend {
 func newAttestablePacket(t *testing.T, send *e2etest.TransferSend) attestablePacket {
 	t.Helper()
 
-	filterer, err := ics26router.NewContractFilterer(common.Address{}, nil)
+	encoded, err := attestoribc.EncodePacket(routerPacket(send.Packet()))
 	require.NoError(t, err)
 
-	tx := send.PacketTx()
-	for _, log := range send.Receipt().Logs {
-		event, err := filterer.ParseSendPacket(*log)
-		if errors.Is(err, bind.ErrNoEventSignature) || errors.Is(err, bind.ErrEventSignatureMismatch) {
-			continue
-		}
-		require.NoError(t, err)
-		if event.Packet.SourceClient != tx.SourceClientID || event.Packet.Sequence != tx.Sequence {
-			continue
-		}
-
-		encoded, err := attestoribc.EncodePacket(routerPacket(event.Packet))
-		require.NoError(t, err)
-
-		return attestablePacket{
-			height:  tx.SourceBlockNumber,
-			encoded: encoded,
-		}
+	return attestablePacket{
+		height:  send.PacketTx().SourceBlockNumber,
+		encoded: encoded,
 	}
-
-	require.FailNowf(t, "no matching SendPacket event", "packet %s", tx)
-	return attestablePacket{}
 }
 
 func routerPacket(p ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
