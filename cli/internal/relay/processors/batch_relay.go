@@ -71,9 +71,8 @@ func proofKindFor(relayKind v2.RelayKind) v2.ProofKind {
 }
 
 // relayPackets generates client update payloads and per-packet proofs for
-// events at proofHeight, asks txBuilder for the resulting transaction, and
-// submits it via txSubmitter. All updates but the last are first submitted
-// one per transaction, and the last goes with the packets.
+// events at proofHeight, asks txBuilder for the resulting transactions, and
+// submits them via txSubmitter.
 func relayPackets(
 	ctx context.Context,
 	logger *slog.Logger,
@@ -136,9 +135,9 @@ func relayPackets(
 
 	relay := clientRelay{
 		logger:      logger,
-		chainClient: chainClient,
 		txBuilder:   txBuilder,
 		txSubmitter: txSubmitter,
+		chainID:     chainClient.ChainID(),
 		clientID:    clientID,
 	}
 
@@ -170,9 +169,9 @@ const updateTxPollInterval = time.Second
 // clientRelay builds, simulates and submits relay transactions for one client.
 type clientRelay struct {
 	logger      *slog.Logger
-	chainClient chains.Client
 	txBuilder   txbuilder.TxBuilder
 	txSubmitter txsubmitter.TxSubmitter
+	chainID     string
 	clientID    string
 }
 
@@ -203,7 +202,7 @@ func (r clientRelay) send(ctx context.Context, payloads [][]byte, items []v2.Pac
 		return nil, errors.Wrap(err, "submitting relay tx")
 	}
 
-	metrics.txSubmitted(ctx, r.chainClient.ChainID(), r.clientID, submission.TxHash)
+	metrics.txSubmitted(ctx, r.chainID, r.clientID, submission.TxHash)
 
 	return submission, nil
 }
@@ -233,13 +232,13 @@ func (r clientRelay) waitForInclusion(ctx context.Context, submission *v2.Submis
 		switch {
 		case errors.Is(err, v2.ErrTxNotFound):
 		case err != nil:
-			metrics.txDropped(r.chainClient.ChainID(), submission.TxHash)
+			metrics.txDropped(r.chainID, submission.TxHash)
 			return errors.Wrapf(err, "checking client update tx %s", submission.TxHash)
 		case retry:
-			metrics.txDropped(r.chainClient.ChainID(), submission.TxHash)
+			metrics.txDropped(r.chainID, submission.TxHash)
 			return errors.Errorf("client update tx %s reverted or was not mined in time", submission.TxHash)
 		default:
-			metrics.txConfirmed(ctx, r.chainClient.ChainID(), r.clientID, submission.TxHash)
+			metrics.txConfirmed(ctx, r.chainID, r.clientID, submission.TxHash)
 			return nil
 		}
 
@@ -260,11 +259,11 @@ func validateRelaySimulation(ctx context.Context, logger *slog.Logger, simulatio
 	}) {
 		return errors.New("a client update would report misbehavior and freeze the client, not submitting it")
 	}
-	requiredType := v2.OperationTypeUpdate
+	requiredType, requiredKind := v2.OperationTypeUpdate, "client update"
 	if slices.ContainsFunc(simulation.Operations, func(result v2.OperationResult) bool {
 		return result.Type == v2.OperationTypePacket
 	}) {
-		requiredType = v2.OperationTypePacket
+		requiredType, requiredKind = v2.OperationTypePacket, "packet"
 	}
 	var failures []string
 	canSucceed := false
@@ -288,5 +287,5 @@ func validateRelaySimulation(ctx context.Context, logger *slog.Logger, simulatio
 		}
 		return nil
 	}
-	return errors.Errorf("no packet calls can currently succeed: %s", details)
+	return errors.Errorf("no %s calls can currently succeed: %s", requiredKind, details)
 }

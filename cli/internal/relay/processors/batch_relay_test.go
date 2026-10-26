@@ -21,6 +21,7 @@ import (
 func TestValidateRelaySimulation(t *testing.T) {
 	update := v2.OperationResult{Type: v2.OperationTypeUpdate, Success: true}
 	misbehavior := v2.OperationResult{Type: v2.OperationTypeUpdate, Success: true, Misbehavior: true}
+	failedUpdate := v2.OperationResult{Type: v2.OperationTypeUpdate, FailureReason: "boom"}
 	packet := v2.OperationResult{Type: v2.OperationTypePacket, Success: true}
 	failedPacket := v2.OperationResult{Type: v2.OperationTypePacket, FailureReason: "boom"}
 
@@ -33,6 +34,7 @@ func TestValidateRelaySimulation(t *testing.T) {
 		{"update only", []v2.OperationResult{update}, ""},
 		{"one packet succeeds", []v2.OperationResult{packet, failedPacket}, ""},
 		{"no packet succeeds", []v2.OperationResult{update, failedPacket}, "no packet calls"},
+		{"update only fails", []v2.OperationResult{failedUpdate}, "no client update calls"},
 		{"misbehavior with packets", []v2.OperationResult{misbehavior, packet}, "would report misbehavior"},
 		{"misbehavior after another update", []v2.OperationResult{update, misbehavior}, "would report misbehavior"},
 	} {
