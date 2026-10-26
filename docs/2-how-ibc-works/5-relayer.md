@@ -48,7 +48,7 @@ What a proof contains depends on the client type it is built for and the relayer
 
 ## Submitting the transaction
 
-The relayer attempts to batch multiple packets into the same transaction submitted to the router's `multicall`. The transaction carries the `updateClient` calls the prover returns, usually one and none when the client already trusts the proof height, then one call per packet. Each update carries one client update payload, and every packet call carries a proof. The updates go first because the client rejects a proof at any height it holds no consensus timestamp for.
+The relayer attempts to batch multiple packets into the same transaction submitted to the router's `multicall`. The transaction carries the `updateClient` calls the prover returns, usually one, none when the client already trusts the proof height, and more when a Besu client must step across validator set changes, then one call per packet. Each update carries one client update payload, and every packet call carries a proof. The updates go first because the client rejects a proof at any height it holds no consensus timestamp for.
 
 The chain a transaction is submitted on depends on the relay commitment type:
 

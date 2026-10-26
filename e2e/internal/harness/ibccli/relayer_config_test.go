@@ -35,18 +35,18 @@ chains:
         rpc: http://chain-1
         ws: ws://chain-1
         ics26Router: router-1
+        ibcMulticall: multicall-1
     - chainId: "2"
       evm:
         rpc: http://chain-2
         ics26Router: router-2
+        ibcMulticall: multicall-2
 relayer:
     dispatchPollInterval: 100ms
     chainOverrides:
         - chainId: "1"
-          txSubmissionDelay: 10ms
           packetBatchSize: 1
         - chainId: "2"
-          txSubmissionDelay: 10ms
           packetBatchSize: 1
     connections:
         - alias: client-1-client-2
@@ -118,6 +118,7 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	cfg.ClearInterval = 2 * time.Second
 	cfg.Chains[0].PacketBatchSize = 7
 	cfg.Chains[0].PacketBatchTimeout = 250 * time.Millisecond
+	cfg.Chains[0].PendingTxTimeout = 5 * time.Second
 	cfg.Attestors = []RelayerAttestor{
 		{Name: "alice", Type: RelayerAttestorLocal, ChainID: "2", KeyFile: "/tmp/alice.key"},
 		{Name: "bob", Type: RelayerAttestorRemote, GRPC: "bob:8080"},
@@ -128,8 +129,9 @@ func TestBuildRelayerConfigOverrides(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "2s", file.Relayer.ClearInterval)
 	require.Equal(t, chainOverrideFileConfig{
-		ChainID: "1", TxSubmissionDelay: "10ms", PacketBatchSize: 7,
+		ChainID: "1", PacketBatchSize: 7,
 		PacketBatchTimeout: 250 * time.Millisecond,
+		EVM:                &relayerEVMFileConfig{PendingTxTimeout: 5 * time.Second},
 	}, file.Relayer.ChainOverrides[0])
 	require.Equal(t, []signerConfig{
 		{Alias: "tx", Type: RelayerSignerRemote, GRPC: "kms:9090", RemoteKeyID: "relay-key"},
@@ -175,8 +177,14 @@ func testRelayerConfig() RelayerConfig {
 	return RelayerConfig{
 		DBPath: "/tmp/ibc.db", SignerAlias: "tx", SignerKeyFile: "/tmp/default.key", FinalityOffset: 3,
 		Chains: []RelayerChain{
-			{ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1", ICS26Router: "router-1"},
-			{ChainID: "2", RPC: "http://chain-2", ICS26Router: "router-2"},
+			{
+				ChainID: "1", RPC: "http://chain-1", WS: "ws://chain-1",
+				ICS26Router: "router-1", IBCMulticall: "multicall-1",
+			},
+			{
+				ChainID: "2", RPC: "http://chain-2",
+				ICS26Router: "router-2", IBCMulticall: "multicall-2",
+			},
 		},
 		Connections: []RelayerConnection{
 			{
@@ -194,13 +202,13 @@ func testRelayerConfig() RelayerConfig {
 
 func TestClientTypesPerEnd(t *testing.T) {
 	cfg := testRelayerConfig()
-	cfg.Connections[0].A.ClientType = clientkind.BesuQBFT
-	cfg.Connections[0].B.ClientType = clientkind.BesuQBFT
+	cfg.Connections[0].A.ClientType = clientkind.Besu
+	cfg.Connections[0].B.ClientType = clientkind.Besu
 
 	file, err := buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientB.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientB.Type)
 	require.Nil(t, file.Relayer.Connections[0].ClientA.Params)
 	require.Empty(t, file.Attestors)
 	require.Equal(t, []signerConfig{
@@ -211,7 +219,7 @@ func TestClientTypesPerEnd(t *testing.T) {
 	cfg.Connections[0].B.ClientType = clientkind.Attestation
 	file, err = buildRelayerFileConfig(cfg)
 	require.NoError(t, err)
-	require.Equal(t, clientkind.BesuQBFT, file.Relayer.Connections[0].ClientA.Type)
+	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 
 	// a prover URL overrides both ends

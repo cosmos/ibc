@@ -139,10 +139,10 @@ func TestIFTTransfer_MultiAttestorQuorum(t *testing.T) {
 
 func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	destinationAttestorID := meshAttestorFor(route.Destination, route.Source)
+	destinationAttestorID := e2etest.MeshAttestorFor(route.Destination, route.Source)
 	destinationAttestorKey := runtime.Authorities[environment.AuthorityID(destinationAttestorID)].PrivateKeyHex
 
 	env := e2etest.Start(t, spec, runtime)
@@ -181,7 +181,8 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 	updateClient, err := routerABI.Pack("updateClient", destinationClient.ID(), proof)
 	require.NoError(t, err)
 	router := common.HexToAddress(string(destinationClient.IBCInstance().Locator()))
-	require.NoError(t, sender.BroadcastTx(ctx, destinationEVM, router, updateClient))
+	_, err = sender.BroadcastTx(ctx, destinationEVM, router, updateClient)
+	require.NoError(t, err)
 
 	frozenState := attestedClientState(t, destinationEVM, clientAddress)
 	require.True(t, frozenState.IsFrozen)
@@ -207,13 +208,13 @@ func TestAttestedClient_MisbehaviourFreeze(t *testing.T) {
 // when the source chain is far ahead of the destination.
 func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
-	sourceAttestor, err := env.Attestor(meshAttestorFor(route.Source, route.Destination))
+	sourceAttestor, err := env.Attestor(e2etest.MeshAttestorFor(route.Source, route.Destination))
 	require.NoError(t, err)
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 	iftApp := e2etest.NewIFT(t, env, deployment, sender, route)
@@ -275,7 +276,9 @@ func TestIFTTimeout_RefundUsesFinalizedDestinationAnchor(t *testing.T) {
 
 func TestIFTTransfer_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -300,7 +303,9 @@ func TestIFTTransfer_AutoRelay(t *testing.T) {
 
 func TestIFTTransfer_TwoTokensSameClientPair(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -351,7 +356,7 @@ func TestIFTTransfer_TwoTokensSameClientPair(t *testing.T) {
 
 func TestIFTTimeout_Refund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
@@ -382,7 +387,7 @@ func TestIFTTimeout_Refund(t *testing.T) {
 
 func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
@@ -463,7 +468,9 @@ func TestIFTTimeout_WaitsForFinality(t *testing.T) {
 // destination mint rejects, forcing an error acknowledgement and a refund.
 func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -493,7 +500,9 @@ func TestIFTTransfer_ErrorAck_Refund(t *testing.T) {
 // bridge unregistered, so onRecvPacket hits IFTBridgeNotFound.
 func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -522,7 +531,9 @@ func TestIFTTransfer_ErrorAck_UnregisteredBridge(t *testing.T) {
 // cleared by its own acknowledgement.
 func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -560,7 +571,9 @@ func TestIFTTransfer_MultiPacketPending(t *testing.T) {
 // from that one transaction — none missing, none duplicated.
 func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -609,7 +622,7 @@ func TestIFTTransfer_MultiPacketSingleTx(t *testing.T) {
 
 func TestRelay_FilteredSequences(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
@@ -659,7 +672,7 @@ func TestRelay_FilteredSequences(t *testing.T) {
 
 func TestRelay_FilteredTimeoutSequences(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
@@ -782,7 +795,9 @@ func withBatchOverride(cfg *ibccli.RelayerConfig) {
 // packet.
 func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -859,7 +874,7 @@ func TestIFTTransfer_BatchedRecvAck(t *testing.T) {
 // in batches
 func TestIFTTransfer_BatchedTimeout(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)

@@ -25,17 +25,18 @@ chains:
       # ws is required by any client end that enables autoRelay
       ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ws: wss://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
 
 relayer:
   # relay specific chain settings
   chainOverrides:
     - chainId: "1"
-      txSubmissionDelay: 5s
       packetBatchSize: 50
 
   # each connection is relayed bidirectionally: clientA's counterparty is

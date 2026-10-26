@@ -434,8 +434,8 @@ def _():
 def _():
     with Sandbox() as box:
         box.edit("cli/internal/config/relayer.go",
-                 'GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`',
-                 'GasTipCapMultiplier *float64 `yaml:"-"`')
+                 'Enabled *bool `yaml:"enabled,omitempty"`',
+                 'Enabled *bool `yaml:"-"`')
         raises(box, "config", "FALLBACK_DOCS describes fields that are gone",
                "dead_description")
 

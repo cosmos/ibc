@@ -38,9 +38,7 @@ func TestRelayerConfig(t *testing.T) {
 		require.NotNil(t, chain.AbandonUnrecoverablePackets)
 		assert.True(t, *chain.AbandonUnrecoverablePackets)
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
-		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
-		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
-		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
+		assert.Equal(t, 2*time.Minute, *chain.EVM.PendingTxTimeout)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
 
@@ -213,26 +211,26 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: "relayer.chainOverrides[0].clearInterval: must be positive",
 			},
 			{
-				name: "negative tx submission delay",
-				patch: func(c *Config) {
-					delay := -time.Second
-					c.Relayer.ChainOverrides[0].TxSubmissionDelay = &delay
-				},
-				errContains: ".txSubmissionDelay: must not be negative",
-			},
-			{
 				name: "missing router contract is allowed -- it's a deploy output, not operator input",
 				patch: func(c *Config) {
 					c.Chains[0].EVM.ICS26Router = ""
 				},
 			},
 			{
-				name: "zero gas multiplier",
+				name: "zero pending transaction timeout",
 				patch: func(c *Config) {
-					zero := 0.0
-					c.Relayer.ChainOverrides[0].EVM.GasFeeCapMultiplier = &zero
+					zero := time.Duration(0)
+					c.Relayer.ChainOverrides[0].EVM.PendingTxTimeout = &zero
 				},
-				errContains: ".gasFeeCapMultiplier: must be positive",
+				errContains: ".pendingTxTimeout: must be positive",
+			},
+			{
+				name: "negative pending transaction timeout",
+				patch: func(c *Config) {
+					negative := -time.Second
+					c.Relayer.ChainOverrides[0].EVM.PendingTxTimeout = &negative
+				},
+				errContains: ".pendingTxTimeout: must be positive",
 			},
 			{
 				name: "client missing clientId",
@@ -430,8 +428,8 @@ func TestClientEndParams(t *testing.T) {
 		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
 		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
 		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuQBFTParams{}},
-		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
+		{name: "besu", doc: "type: besu\n", wantParams: &BesuParams{}},
+		{name: "besu takes no params", doc: "type: besu\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
 		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

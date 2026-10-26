@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Instance is one initialized ICS26 router installation. The router address is
@@ -24,6 +27,7 @@ type Instance struct {
 type AppStack struct {
 	ICS20Transfer common.Address // ERC1967 proxy
 	ICS27GMP      common.Address // ERC1967 proxy
+	IBCMulticall  common.Address // ERC1967 proxy
 }
 
 // Client is a light client registered with one Instance, with the attestation
@@ -50,15 +54,17 @@ type AttestationClientConfig struct {
 	RoleManager           common.Address
 }
 
-// BesuQBFTClientConfig contains the immutable constructor inputs for a Besu
-// QBFT light client. The initial trusted state describes the counterparty
-// chain at InitialHeight; RoleManager restricts proof submission to that
-// address (the host router), a zero value permits anyone.
-// BesuQBFTTrustingPeriod is the trusting period, in seconds, e2e tests give
-// Besu QBFT clients. Clients trust the current head, so it outlasts any run.
-const BesuQBFTTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
+// BesuTrustingPeriod is the trusting period, in seconds, e2e tests give Besu
+// clients. Clients trust the current head, so it outlasts any run.
+const BesuTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
 
-type BesuQBFTClientConfig struct {
+// BesuClientConfig contains the immutable constructor inputs for a Besu light
+// client verifying a chain that runs Consensus. The initial trusted state
+// describes the counterparty chain at InitialHeight; RoleManager restricts
+// proof submission to that address (the host router), a zero value permits
+// anyone. TrustLevel is besu.DefaultTrustLevel when zero.
+type BesuClientConfig struct {
+	Consensus            besu.Consensus
 	ID                   string
 	CounterpartyClientID string
 	CounterpartyRouter   common.Address
@@ -68,15 +74,19 @@ type BesuQBFTClientConfig struct {
 	InitialValidators    []common.Address
 	TrustingPeriod       uint64
 	MaxClockDrift        uint64
+	TrustLevel           besumsgs.IBesuLightClientMsgsTrustThreshold
 	RoleManager          common.Address
 }
 
-func (c BesuQBFTClientConfig) snapshot() BesuQBFTClientConfig {
+func (c BesuClientConfig) snapshot() BesuClientConfig {
 	c.InitialValidators = slices.Clone(c.InitialValidators)
 	return c
 }
 
-func (c BesuQBFTClientConfig) validate() error {
+func (c BesuClientConfig) validate() error {
+	if err := c.Consensus.Validate(); err != nil {
+		return err
+	}
 	if !validCustomClientID(c.ID) {
 		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", c.ID)
 	}

@@ -165,6 +165,10 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 }
 
 func (p BatchTimeoutPacket) Cancel(transfers []*Transfer, err error) {
+	if errors.Is(err, txsubmitter.ErrBusy) {
+		p.logger.Info("Deferring batch timeout tx", "err", err)
+		return
+	}
 	for _, tr := range transfers {
 		tr.GetLogger().Error("Delivering batch timeout tx", "err", err)
 	}

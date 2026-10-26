@@ -96,6 +96,7 @@ type ChainDeployment struct {
 	ICS20Transfer          common.Address
 	ICS27GMP               common.Address
 	ICS26Router            common.Address
+	IBCMulticall           common.Address
 }
 
 // RouteClients holds the protocol client IDs and light client kinds for one
@@ -249,10 +250,12 @@ func deployApps(
 		ics20 := common.HexToAddress(string(instance.ICS20TransferAddress()))
 		ics27 := common.HexToAddress(string(instance.ICS27GMPAddress()))
 		router := common.HexToAddress(string(instance.Locator()))
+		multicall := common.HexToAddress(string(instance.IBCMulticallAddress()))
 		require.False(
 			t,
-			ics20 == (common.Address{}) || ics27 == (common.Address{}) || router == (common.Address{}),
-			"e2etest: Chain %q is missing the ICS20/ICS27 app stack",
+			ics20 == (common.Address{}) || ics27 == (common.Address{}) || router == (common.Address{}) ||
+				multicall == (common.Address{}),
+			"e2etest: Chain %q is missing the ICS20/ICS27/multicall stack",
 			id,
 		)
 
@@ -293,6 +296,7 @@ func deployApps(
 			ICS20Transfer:          ics20,
 			ICS27GMP:               ics27,
 			ICS26Router:            router,
+			IBCMulticall:           multicall,
 		}
 	}
 
@@ -407,9 +411,10 @@ func buildConfig(
 		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
 		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
 		relayerChain := ibccli.RelayerChain{
-			ChainID:     options.ChainIDs[string(id)],
-			RPC:         rpc,
-			ICS26Router: apps.ICS26Router.Hex(),
+			ChainID:      options.ChainIDs[string(id)],
+			RPC:          rpc,
+			ICS26Router:  apps.ICS26Router.Hex(),
+			IBCMulticall: apps.IBCMulticall.Hex(),
 		}
 		if chain.WSURL() != "" {
 			ws, wsErr := driver.ChainWS(string(id))
