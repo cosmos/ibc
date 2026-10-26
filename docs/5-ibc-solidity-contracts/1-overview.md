@@ -25,13 +25,15 @@ flowchart TB
     IFT["IFT token"]
     GMP["ICS27GMP"]
     ACC["ICS27Account<br/>one per account identifier"]
+    MC["IBCMulticall"]
     R["ICS26Router<br/>client registry + commitment store"]
     ALC["AttestationLightClient"]
 
     IFT -- "sendCall" --> GMP
     GMP -- "executes from" --> ACC
     GMP <-- "sendPacket / callbacks" --> R
-    REL -- "updateClient, recvPacket,<br/>ackPacket, timeoutPacket" --> R
+    REL -- "multicall" --> MC
+    MC -- "updateClient, recvPacket,<br/>ackPacket, timeoutPacket" --> R
     R -- "updateClient, verify" --> ALC
 ```
 
@@ -46,6 +48,7 @@ Documented in [core](2-ics26-router.md).
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
 | ICS26Router | Deployed contract | Packet router: holds the application and client registries, drives send, receive, acknowledge, and timeout | [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol) |
+| IBCMulticall | Deployed contract | Batches a relayer's calls to the router, so a failed packet delivery does not revert the rest of the batch | [IBCMulticall.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCMulticall.sol) |
 | ICS02ClientUpgradeable | Abstract base, compiled into ICS26Router | The light client registry: client identifiers, their client contracts, and their counterparty information | [ICS02ClientUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS02ClientUpgradeable.sol) |
 | IBCStoreUpgradeable | Abstract base, compiled into ICS26Router | The provable store of packet commitments, receipts, and acknowledgements | [IBCStoreUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCStoreUpgradeable.sol) |
 | ICS24Host | Library | Commitment path and commitment-hash generators, plus the universal error acknowledgement | [ICS24Host.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS24Host.sol) |
@@ -99,11 +102,11 @@ Documented in [access control](6-permissions-and-upgrades.md).
 
 Deployment splits three ways:
 
-- **An operator** stands up the core: an AccessManager, then ICS26Router and the applications, then one light client per counterparty, each registered on the router with `addClient`.
+- **An operator** stands up the core: an AccessManager, then ICS26Router, IBCMulticall, and the applications, then one light client per counterparty, each registered on the router with `addClient`.
 - **A token issuer** deploys its own IFT, initialized with an already-deployed ICS27GMP address plus the token's name and symbol, and one send-call constructor registered per counterparty client it bridges to.
 - **The contracts themselves** create the rest. ICS27GMP makes an account proxy for each `(clientId, sender, salt)` on first use, behind the beacon it creates over the account logic it was handed. The ICS02 precompile is chain-native at `0x...0807`, so only its wrapper is deployed.
 
-The IBC CLI deploys the contract set. `ibc deploy core` stands up the access manager and the router on one chain. `ibc deploy client` deploys a light client tracking one counterparty and registers it. A connection between two chains takes four of those invocations, two per chain.
+The IBC CLI deploys the contract set. `ibc deploy core` stands up the access manager, the router, and IBCMulticall on one chain. `ibc deploy client` deploys a light client tracking one counterparty and registers it. A connection between two chains takes four of those invocations, two per chain.
 
 [Permissions and upgrades](6-permissions-and-upgrades.md) has what each deployment fixes for good and who can change it later.
 
