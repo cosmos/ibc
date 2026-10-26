@@ -311,7 +311,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 <!-- GEN:cli:cmd:deploy-ift END -->
 
 ```bash
-ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --yes
+ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --yes
 ```
 
 ### `ibc deploy ift-bridge`
