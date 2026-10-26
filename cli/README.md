@@ -12,14 +12,14 @@ between them.
 
 ## Prerequisites
 
-- [Go](https://go.dev/doc/install) 1.26.9 or later
+- [Go](https://go.dev/doc/install) 1.26.10 or later
 
 ## Support
 
 | | Supported |
 | --- | --- |
 | Chain types | `evm` |
-| Light client types | `attestation`, `besu-qbft` |
+| Light client types | `attestation`, `besu` |
 
 ## CLI Commands
 

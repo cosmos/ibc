@@ -15,7 +15,7 @@ import (
 )
 
 func TestUpdateClientRoundTrip(t *testing.T) {
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, besu.QBFT)
 	update := fixture.NonAdjacentUpdate
 
 	preimage := fixture.InitialConsensusState()
@@ -35,7 +35,7 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 }
 
 func TestMembershipProofRoundTrip(t *testing.T) {
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, besu.QBFT)
 	preimage := fixture.NonAdjacentUpdate.ExpectedConsensusState()
 
 	for _, m := range []besutest.MembershipFixture{fixture.Membership, fixture.NonMembership} {

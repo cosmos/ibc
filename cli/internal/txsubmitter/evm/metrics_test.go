@@ -20,7 +20,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 func TestEVMGasSpent(t *testing.T) {
@@ -30,11 +29,11 @@ func TestEVMGasSpent(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		_, reader := installTestMetrics(t)
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
-		txHash := submitTestTransaction(ctx, t, txSubmitter, eth)
+		txSubmitter, eth := newSubmitter(t)
+		require.NoError(t, submit(t, txSubmitter))
+		txHash := eth.sent[0].Hash().Hex()
 		receipt := successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000))
-		eth.EXPECT().TransactionReceipt(ctx, common.HexToHash(txHash)).Return(receipt, nil).Twice()
-		expectBalance(t, eth, txSubmitter.address.String(), big.NewInt(0))
+		eth.receipt = receipt
 
 		// ACT
 		for range 2 {
@@ -59,11 +58,9 @@ func TestEVMGasSpent(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		_, reader := installTestMetrics(t)
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
+		txSubmitter, eth := newSubmitter(t)
 		foreignHash := common.HexToHash("0x01").String()
-		eth.EXPECT().TransactionReceipt(ctx, common.HexToHash(foreignHash)).
-			Return(successfulReceipt(t, foreignHash, 21_000, big.NewInt(2_000_000_000)), nil).Once()
-		expectBalance(t, eth, txSubmitter.address.String(), big.NewInt(0))
+		eth.receipt = successfulReceipt(t, foreignHash, 21_000, big.NewInt(2_000_000_000))
 
 		// ACT
 		retry, err := txSubmitter.ShouldRetry(ctx, foreignHash, time.Now())
@@ -200,23 +197,25 @@ func TestEVMGasSpent(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		_, reader := installTestMetrics(t)
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
-		txHash := submitTestTransaction(ctx, t, txSubmitter, eth)
-		expectBalance(t, eth, txSubmitter.address.String(), big.NewInt(0))
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).Return(nil, ethereum.NotFound).Once()
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).
-			Return(&types.Header{Time: uint64(time.Now().Unix())}, nil).Once()
+		txSubmitter, eth := newSubmitter(t)
+		require.NoError(t, submit(t, txSubmitter))
+		txHash := eth.sent[0].Hash().Hex()
+		eth.receiptErr = ethereum.NotFound
 
 		// ACT #1
-		retry, err := txSubmitter.ShouldRetry(ctx, txHash, time.Now().Add(-retryExpiry-time.Second))
+		retry, err := txSubmitter.ShouldRetry(
+			ctx,
+			txHash,
+			time.Now().Add(-txSubmitter.opts.PendingTxTimeout-time.Second),
+		)
 
 		// ASSERT #1
 		require.NoError(t, err)
 		assert.True(t, retry)
 
 		// ARRANGE #2
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).
-			Return(successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000)), nil).Once()
+		eth.receiptErr = nil
+		eth.receipt = successfulReceipt(t, txHash, 21_000, big.NewInt(2_000_000_000))
 
 		// ACT #2
 		retry, err = txSubmitter.ShouldRetry(ctx, txHash, time.Now())
@@ -233,28 +232,22 @@ func TestEVMGasSpent(t *testing.T) {
 		// ARRANGE
 		ctx := context.Background()
 		_, reader := installTestMetrics(t)
-		txSubmitter, eth, _ := newTestTxSubmitter(t, ChainOptions{TxSubmissionDelay: time.Millisecond})
-		expectBalance(t, eth, txSubmitter.address.String(), big.NewInt(0))
-		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: big.NewInt(100)}, nil).Once()
-		eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
-		eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return([]byte{0x60}, nil).Once()
-		eth.EXPECT().EstimateGas(ctx, mock.Anything).Return(21_000, nil).Once()
-		eth.EXPECT().PendingNonceAt(ctx, mock.Anything).Return(7, nil).Once()
+		txSubmitter, eth := newSubmitter(t)
 		var sent *types.Transaction
-		eth.EXPECT().SendTransaction(ctx, mock.Anything).Run(func(_ context.Context, tx *types.Transaction) {
+		eth.send = func(tx *types.Transaction) error {
 			sent = tx
-		}).Return(errors.New("broadcast failed")).Once()
+			return errors.New("broadcast failed")
+		}
 
 		// ACT #1
-		_, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
+		_, err := txSubmitter.Submit(ctx, testIntent())
 
 		// ASSERT #1
 		require.ErrorContains(t, err, "broadcast failed")
 		require.NotNil(t, sent)
 
 		// ARRANGE #2
-		eth.EXPECT().TransactionReceipt(ctx, mock.Anything).
-			Return(successfulReceipt(t, sent.Hash().String(), 21_000, big.NewInt(2_000_000_000)), nil).Once()
+		eth.receipt = successfulReceipt(t, sent.Hash().String(), 21_000, big.NewInt(2_000_000_000))
 
 		// ACT #2
 		retry, err := txSubmitter.ShouldRetry(ctx, sent.Hash().String(), time.Now())
@@ -407,27 +400,6 @@ func installTestMetrics(t *testing.T) (*instrumentation, *sdkmetric.ManualReader
 	})
 
 	return instruments, reader
-}
-
-func submitTestTransaction(
-	ctx context.Context,
-	t *testing.T,
-	txSubmitter *TxSubmitter,
-	eth *mocks.MockTxSubmitterETHClient,
-) string {
-	t.Helper()
-
-	eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&types.Header{BaseFee: big.NewInt(100)}, nil).Once()
-	eth.EXPECT().SuggestGasTipCap(ctx).Return(big.NewInt(10), nil).Once()
-	eth.EXPECT().PendingCodeAt(ctx, mock.Anything).Return([]byte{0x60}, nil).Once()
-	eth.EXPECT().EstimateGas(ctx, mock.Anything).Return(21_000, nil).Once()
-	eth.EXPECT().PendingNonceAt(ctx, mock.Anything).Return(7, nil).Once()
-	eth.EXPECT().SendTransaction(ctx, mock.Anything).Return(nil).Once()
-
-	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{To: toAddress, Data: []byte{0x01}})
-	require.NoError(t, err)
-
-	return submission.TxHash
 }
 
 func collectEVMGasSpent(

@@ -15,3 +15,6 @@ GO-2026-4479
 # golang.org/x/crypto/openpgp is unmaintained and unsafe by design, so it has no fixed
 # release. Reachable through cli/internal/types.
 GO-2026-5932
+
+# Is already fixed in https://github.com/cosmos/evm/security/advisories/GHSA-mjfq-3qr2-6g84 version 0.6.0
+GO-2025-3684

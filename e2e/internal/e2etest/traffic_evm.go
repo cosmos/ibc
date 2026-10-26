@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/testerc20"
@@ -71,14 +72,35 @@ func receiptEvents[T any](
 	return events, nil
 }
 
-func transactionEventSequences[T any](
+// SentPackets returns the packets the router sent over sourceClientID in one
+// receipt, in log order.
+func SentPackets(
+	router common.Address,
+	sourceClientID string,
+	receipt *types.Receipt,
+) ([]ics26router.IICS26RouterMsgsPacket, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
+	events, err := receiptEvents(receipt, router, parser.ParseSendPacket)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: decode SendPacket: %w", err)
+	}
+	var packets []ics26router.IICS26RouterMsgsPacket
+	for _, event := range events {
+		if event.Packet.SourceClient == sourceClientID {
+			packets = append(packets, event.Packet)
+		}
+	}
+	return packets, nil
+}
+
+func transactionEventPacketIDs[T any](
 	ctx context.Context,
 	target endpoint,
 	contract common.Address,
 	txHash string,
 	parse func(types.Log) (*T, error),
-	sequence func(*T) uint64,
-) ([]uint64, error) {
+	packet func(*T) ics26router.IICS26RouterMsgsPacket,
+) ([]PacketID, error) {
 	receipt, err := target.evm.AwaitTransactionReceipt(ctx, common.HexToHash(txHash))
 	if err != nil {
 		return nil, fmt.Errorf("fetch transaction %s: %w", txHash, err)
@@ -90,11 +112,61 @@ func transactionEventSequences[T any](
 	if err != nil {
 		return nil, err
 	}
-	sequences := make([]uint64, len(events))
+	ids := make([]PacketID, len(events))
 	for i, event := range events {
-		sequences[i] = sequence(event)
+		p := packet(event)
+		ids[i] = PacketID{SourceClientID: p.SourceClient, Sequence: p.Sequence}
 	}
-	return sequences, nil
+	return ids, nil
+}
+
+// writeAcknowledgementPacketIDs returns the IDs of the packets a receive
+// transaction wrote acknowledgements for.
+func writeAcknowledgementPacketIDs(
+	ctx context.Context,
+	target endpoint,
+	router common.Address,
+	txHash string,
+) ([]PacketID, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
+	ids, err := transactionEventPacketIDs(
+		ctx, target, router, txHash, parser.ParseWriteAcknowledgement,
+		func(event *ics26router.ContractWriteAcknowledgement) ics26router.IICS26RouterMsgsPacket {
+			return event.Packet
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read WriteAcknowledgement events: %w", err)
+	}
+	return ids, nil
+}
+
+// ackPacketIDs returns the IDs of the packets an acknowledgement transaction
+// acknowledged.
+func ackPacketIDs(ctx context.Context, target endpoint, router common.Address, txHash string) ([]PacketID, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
+	ids, err := transactionEventPacketIDs(
+		ctx, target, router, txHash, parser.ParseAckPacket,
+		func(event *ics26router.ContractAckPacket) ics26router.IICS26RouterMsgsPacket { return event.Packet },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read AckPacket events: %w", err)
+	}
+	return ids, nil
+}
+
+// timeoutPacketIDs returns the IDs of the packets a timeout transaction timed
+// out.
+func timeoutPacketIDs(ctx context.Context, target endpoint, router common.Address, txHash string) ([]PacketID, error) {
+	parser := mustBinding(ics26router.NewContractFilterer(router, nil))
+	ids, err := transactionEventPacketIDs(
+		ctx, target, router, txHash, parser.ParseTimeoutPacket,
+		func(event *ics26router.ContractTimeoutPacket) ics26router.IICS26RouterMsgsPacket { return event.Packet },
+	)
+	if err != nil {
+		return nil, fmt.Errorf("e2etest: read TimeoutPacket events: %w", err)
+	}
+	return ids, nil
 }
 
 // NewAddress generates a fresh, unfunded EVM address for use as a test
@@ -154,29 +226,42 @@ func deployContract(
 	return receipt.ContractAddress, nil
 }
 
-func send(
-	ctx context.Context,
-	client *environment.EVM,
-	sender evm.Account,
-	to common.Address,
-	data []byte,
-	sequenceFromReceipt func(*types.Receipt) (uint64, bool, error),
-) (*types.Receipt, uint64, error) {
-	receipt, err := client.BroadcastTx(ctx, sender, &to, data, nil)
+// send broadcasts data to the source application and returns the packets the
+// transaction sent over the route's client, in log order. It fails unless there
+// are exactly want of them.
+func (r sourceRoute) send(ctx context.Context, to common.Address, data []byte, want int) ([]sendResult, error) {
+	receipt, err := r.source.evm.BroadcastTx(ctx, r.sender, &to, data, nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("e2etest: broadcast transaction: %w", err)
+		return nil, fmt.Errorf("e2etest: broadcast transaction: %w", err)
 	}
-	sequence, found, err := sequenceFromReceipt(receipt)
+	packets, err := SentPackets(r.sourceRouter, r.sourceClientID, receipt)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	if !found {
-		return nil, 0, fmt.Errorf(
-			"e2etest: source transaction %s emitted no application send event",
+	if len(packets) != want {
+		return nil, fmt.Errorf(
+			"e2etest: source transaction %s sent %d packets over client %q, want %d",
 			receipt.TxHash.Hex(),
+			len(packets),
+			r.sourceClientID,
+			want,
 		)
 	}
-	return receipt, sequence, nil
+	sent := make([]sendResult, len(packets))
+	for k, packet := range packets {
+		sent[k] = sendResult{
+			packetTx: PacketTx{
+				RouteID:           r.routeID,
+				Source:            r.source.chain.ID(),
+				SourceClientID:    packet.SourceClient,
+				SourceTxHash:      receipt.TxHash.Hex(),
+				SourceBlockNumber: receipt.BlockNumber.Uint64(),
+				Sequence:          packet.Sequence,
+			},
+			packet: packet,
+		}
+	}
+	return sent, nil
 }
 
 func awaitBalance(

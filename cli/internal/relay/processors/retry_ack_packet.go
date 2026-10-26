@@ -18,16 +18,22 @@ type ClearAckTxStorage interface {
 	ClearPacketAckTx(ctx context.Context, key store.PacketKey) error
 }
 
-// RetryAckPacket clears a stuck or failed ack tx so the ack is redelivered on
-// the next run.
+// RetryAckPacket clears transactions that failed, stalled, or did not acknowledge
+// this packet so it can be retried.
 type RetryAckPacket struct {
+	chains      ChainClients
 	txSubmitter txsubmitter.TxSubmitter
 	storage     ClearAckTxStorage
 	route       Route
 }
 
-func NewRetryAckPacket(txSubmitter txsubmitter.TxSubmitter, storage ClearAckTxStorage, route Route) RetryAckPacket {
-	return RetryAckPacket{txSubmitter: txSubmitter, storage: storage, route: route}
+func NewRetryAckPacket(
+	chains ChainClients,
+	txSubmitter txsubmitter.TxSubmitter,
+	storage ClearAckTxStorage,
+	route Route,
+) RetryAckPacket {
+	return RetryAckPacket{chains: chains, txSubmitter: txSubmitter, storage: storage, route: route}
 }
 
 func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -42,7 +48,18 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 
 	if !retry {
 		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.AckTxHash)
-		return tr, nil
+		client, ok := p.chains.Get(p.route.SourceChainID)
+		if !ok {
+			return nil, errors.Errorf("no configured chain client for source chain %s", p.route.SourceChainID)
+		}
+		executed, err := client.PacketRelayExecuted(ctx, *tr.AckTxHash, v2.RelayKindAck,
+			tr.PacketSequenceNumber, tr.PacketSourceClientID, tr.PacketDestinationClientID)
+		if err != nil {
+			return nil, errors.Wrapf(err, "checking ack event in tx %s", *tr.AckTxHash)
+		}
+		if executed {
+			return tr, nil
+		}
 	}
 
 	if err := p.storage.ClearPacketAckTx(ctx, tr.Key()); err != nil {

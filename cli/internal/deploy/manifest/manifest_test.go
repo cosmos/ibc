@@ -3,9 +3,12 @@
 package manifest
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/cli/internal/config"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -15,34 +18,64 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, m)
 
+	attestation := Client{
+		ClientID:             "cli-2",
+		Address:              "0x1",
+		CounterpartyChainID:  "2",
+		CounterpartyClientID: "cli-1",
+		Attestation: &AttestationParams{
+			Attestors:        []string{"0xa1", "0xa2"},
+			Threshold:        2,
+			InitialHeight:    5,
+			InitialTimestamp: 500,
+		},
+	}
+	besu := Client{
+		ClientID:             "cli-3",
+		Address:              "0x3",
+		CounterpartyChainID:  "3",
+		CounterpartyClientID: "cli-1",
+		Besu: &BesuParams{
+			Consensus:         "qbft",
+			IBCRouter:         "0xrouter",
+			InitialHeight:     112,
+			InitialTimestamp:  1788192445,
+			InitialStateRoot:  "0xroot",
+			InitialValidators: []string{"0xv1", "0xv2"},
+			TrustingPeriod:    1209600,
+			MaxClockDrift:     15,
+			TrustLevel:        TrustLevel{Numerator: 2, Denominator: 3},
+		},
+	}
 	m = New("1", "evm")
 	m.Core.Router = "0xabc"
 	m.TargetData = map[string]string{"accessManager": "0xdef"}
-	m.UpsertClient(
-		Client{
-			ClientID:             "cli-2",
-			Type:                 "attestation",
-			Address:              "0x1",
-			CounterpartyChainID:  "2",
-			CounterpartyClientID: "cli-1",
-		},
-	)
+	m.UpsertClient(attestation)
+	m.UpsertClient(besu)
 	require.NoError(t, m.Save(dir))
 
 	got, err := Load(dir, "1")
 	require.NoError(t, err)
 	require.Equal(t, "0xabc", got.Core.Router)
 	require.Equal(t, 1, got.SchemaVersion)
-
-	c, ok := got.Client("cli-2")
-	require.True(t, ok)
-	require.Equal(t, "0x1", c.Address)
+	require.Equal(t, []Client{attestation, besu}, got.Clients)
+	require.Equal(t, config.ClientTypeAttestation, got.Clients[0].Type())
+	require.Equal(t, config.ClientTypeBesu, got.Clients[1].Type())
 
 	// upsert replaces, not duplicates
-	got.UpsertClient(Client{ClientID: "cli-2", Type: "attestation", Address: "0x2"})
-	require.Len(t, got.Clients, 1)
-	c, _ = got.Client("cli-2")
+	got.UpsertClient(Client{ClientID: "cli-2", Address: "0x2", Attestation: &AttestationParams{}})
+	require.Len(t, got.Clients, 2)
+	c, _ := got.Client("cli-2")
 	require.Equal(t, "0x2", c.Address)
+}
+
+func TestLoadRejectsClientWithoutParams(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"chainId": "1", "clients": [{"clientId": "cli-2", "type": "besu-qbft", "params": {"trustingPeriod": 1}}]}`
+	require.NoError(t, os.WriteFile(Path(dir, "1"), []byte(legacy), 0o600))
+
+	_, err := Load(dir, "1")
+	require.ErrorContains(t, err, `client "cli-2" records no params`)
 }
 
 func TestTokenAndBridgeHelpers(t *testing.T) {

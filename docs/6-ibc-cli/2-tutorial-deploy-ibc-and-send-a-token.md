@@ -17,7 +17,7 @@ By the end, you'll have the following:
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.26.9 or later
+- [Go](https://go.dev/doc/install) v1.26.10 or later
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
@@ -72,7 +72,7 @@ The config is stored in `~/.ibc/ibc.yml` by default.
 
 This is the home directory for everything that follows: the config, the keystore, the deployment records, and the relayer's database.
 
-2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router and the GMP app. It is also the default owner of any token you deploy. 
+2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router, multicall, and the GMP app. It is also the default owner of any token you deploy.
 
 Passing `--populate-config` adds each key to the config as a named signer. Later commands then name a key by alias instead of by path.
 
@@ -123,7 +123,7 @@ The `--deployer` flag names the key that signs deployments on that chain, so you
 
 With both chains registered, deploy the IBC contracts on each. 
 
-1. Deploy the IBC core on each chain. This deploys the ICS26 router and the access manager:
+1. Deploy the IBC core on each chain. This deploys the ICS26 router, multicall, and the access manager:
 
 ```bash
 ./bin/ibc deploy core --chain 41001 --yes
@@ -133,22 +133,33 @@ With both chains registered, deploy the IBC contracts on each.
 ./bin/ibc deploy core --chain 41002 --yes
 ```
 
-Each run sends four transactions: an access manager, the router implementation, the router behind a proxy, and one call that opens the packet-delivery methods to any caller. Your deployer key is the access manager's admin.
+Each fresh deployment sends seven transactions: an access manager, implementations and proxies for the router and multicall, and two calls that open their relay entrypoints to any caller. Your deployer key is the access manager's admin.
 
 ```
 level=INFO msg="would execute" dryRun=true step="core stack on chain 41001"
+level=INFO msg="would execute" dryRun=true step="multicall on chain 41001"
 level=INFO msg=executing dryRun=false step="core stack on chain 41001"
 level=INFO msg="transaction mined" label="deploy AccessManager" tx=0xa1c9fe97... block=38 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router implementation" tx=0x23988e80... block=39 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router proxy" tx=0x064d03a3... block=40 chain=41001
 level=INFO msg="transaction mined" label=setTargetFunctionRole tx=0x2fb39d8a... block=41 chain=41001
+level=INFO msg=executing dryRun=false step="multicall on chain 41001"
+level=INFO msg="transaction mined" label="deploy IBCMulticall implementation" tx=0x... block=42 chain=41001
+level=INFO msg="transaction mined" label="deploy IBCMulticall proxy" tx=0x... block=43 chain=41001
+level=INFO msg="transaction mined" label="set multicall role" tx=0x... block=44 chain=41001
 [
   {
     "name": "core stack on chain 41001",
     "action": "executed"
+  },
+  {
+    "name": "multicall on chain 41001",
+    "action": "executed"
   }
 ]
 ```
+
+Rerunning skips contracts already recorded and deployed, and resumes any unfinished deployment steps.
 
 2. Deploy an attestation light client on each chain. Each deployment tracks the state of the other chain:
 
@@ -228,7 +239,7 @@ Next, you'll need to configure the relayer to start sending packets between the 
   --populate-config
 ```
 
-This merges the deployed router addresses, connection, and local attestors into your existing config, preserving settings such as `server`, `db`, and `signers`. It prints the complete config and prompts for confirmation before writing it to `~/.ibc/ibc.yml`.
+This merges the deployed router and multicall addresses, connection, and local attestors into your existing config, preserving settings such as `server`, `db`, and `signers`. It prints the complete config and prompts for confirmation before writing it to `~/.ibc/ibc.yml`.
 
 The two signer flags select the key that submits relay transactions on each chain. Set both for this new connection; each is checked against your configured signers. You imported `relayer` in step 3 of section 2.
 

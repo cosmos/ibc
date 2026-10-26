@@ -217,6 +217,16 @@ func isHTTPURL(addr string) bool {
 	return usesTLS(addr) || strings.HasPrefix(strings.ToLower(addr), "http://")
 }
 
+// checkEndpointAddr validates a remote attestor's or prover's address: a bare
+// host:port, dialed as http://, or an http(s):// URL, see checkHTTPURL.
+func checkEndpointAddr(addr string) error {
+	if strings.Contains(addr, "://") && !isHTTPURL(addr) {
+		return errors.New("must be a bare host:port or an http(s):// URL")
+	}
+
+	return checkHTTPURL(endpointURL(addr), false)
+}
+
 // checkHTTPURL validates an http(s):// addr: it must parse and name a host,
 // and carry no query or fragment, which would swallow the RPC path appended
 // to it. targetOnly also rejects userinfo and a path, which a gRPC target

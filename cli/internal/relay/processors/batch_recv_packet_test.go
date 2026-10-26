@@ -114,6 +114,13 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+		v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}).Return(v2.RelaySimulation{
+		Operations: []v2.OperationResult{
+			{Type: v2.OperationTypeUpdate, Success: true},
+			{Type: v2.OperationTypePacket, Success: true},
+		},
+	}, nil).Once()
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
@@ -214,6 +221,13 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+		v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}).Return(v2.RelaySimulation{
+		Operations: []v2.OperationResult{
+			{Type: v2.OperationTypeUpdate, Success: true},
+			{Type: v2.OperationTypePacket, Success: true},
+		},
+	}, nil).Once()
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),
@@ -322,6 +336,13 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		Return([]v2.RelayTx{{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}}, nil)
 
 	txSubmitter := mocks.NewMockTxSubmitter(t)
+	txSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+		v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0x01}}).Return(v2.RelaySimulation{
+		Operations: []v2.OperationResult{
+			{Type: v2.OperationTypeUpdate, Success: true},
+			{Type: v2.OperationTypePacket, Success: true},
+		},
+	}, nil).Once()
 	txSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
 		TxHash:         "0xrecv",
 		SubmittedAt:    time.Now().UTC(),

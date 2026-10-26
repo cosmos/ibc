@@ -680,8 +680,8 @@ DEFAULTS_FUNC = r"^func [A-Z]\w*\(\s*\)\s*\*?" + CONFIG_ROOT + r"\s*\{"
 # The constant names it: a package that moves costs nothing, and a constant
 # that is renamed or deleted is a real change that says so by name.
 DEFAULT_CONSTS = {
+    ("RelayerEVMConfig", "pendingTxTimeout"): [("", "DefaultPendingTxTimeout")],
     ("RelayerConfig", "dispatchPollInterval"): [("", "DefaultPollInterval")],
-    ("RelayerChainOverride", "txSubmissionDelay"): [("", "DefaultTxSubmissionDelay")],
     ("RelayerChainOverride", "packetBatchSize"): [("", "DefaultBatchSize")],
     ("RelayerChainOverride", "packetBatchTimeout"): [
         ("receive and acknowledge", "DefaultBatchTimeout"),
@@ -717,17 +717,13 @@ FALLBACK_DOCS = {
     ("SignerConfig", "type"): ("Whether the key is a file on disk or a key held by a remote signer.", "febf1ab4"),
     ("RelayerConfig", "dispatchPollInterval"): ("How often the dispatcher polls the store for unfinished packets.", "893f79b1"),
     ("RelayerChainOverride", "chainId"): ("The chain these settings apply to.", "69a3e543"),
-    ("RelayerChainOverride", "txSubmissionDelay"): ("Minimum delay between two transaction submissions on the chain.", "5691fa23"),
     ("RelayerChainOverride", "packetBatchSize"): ("How many packets the relayer puts in one transaction.", "b4f4f14c"),
     ("RelayerChainOverride", "packetBatchTimeout"): ("How long the relayer waits to fill a batch before submitting it.", "84d8816e"),
-    ("RelayerEVMConfig", "gasFeeCapMultiplier"): ("Multiplies the fee cap the node suggests.", "b9de0a8d"),
-    ("RelayerEVMConfig", "gasTipCapMultiplier"): ("Multiplies the tip cap the node suggests.", "634e0708"),
     ("ConnectionConfig", "alias"): ("Name for the connection, unique in the file.", "7e352d14"),
     ("AutoRelayConfig", "enabled"): ("Whether the relayer carries packets leaving this end without being asked.", "d693129e"),
     ("ClientEnd", "chainId"): ("The chain this end's client lives on.", "69a3e543"),
     ("ClientEnd", "signer"): ("`signers` alias that submits relay transactions on this chain.", "00fd3d36"),
     ("ClientEnd", "clientId"): ("The light client's id on this chain.", "bb596da7"),
-    ("ClientEnd", "type"): ("Light client type.", "85b1564f"),
 }
 
 # Explicit skips only. Unexported struct fields and yaml:"-" tags are dropped
@@ -741,20 +737,11 @@ NO_NAMED_DEFAULT = {
     # nil and false are the same input: a connection end without it is not
     # auto-relayed (relayer.go:L127)
     ("AutoRelayConfig", "enabled"),
-    ("RelayerEVMConfig", "gasFeeCapMultiplier"),
-    ("RelayerEVMConfig", "gasTipCapMultiplier"),
     # unset inherits relayer.clearInterval rather than any one value
     # (relayer.go, ClearIntervalFor)
     ("RelayerChainOverride", "clearInterval"),
     # unset is false (relayer.go, AbandonUnrecoverablePacketsFor)
     ("RelayerChainOverride", "abandonUnrecoverablePackets"),
-}
-
-# What a reader writes where the Go type says nothing useful. `params` is a
-# raw block whose shape is fixed by the sibling `type` key, which no reading of
-# the field alone can recover.
-OPAQUE_TYPES = {
-    ("ClientEnd", "params"): "block",
 }
 
 GO_TYPES = {"string": "string", "uint": "uint", "uint64": "uint64", "int": "int",
@@ -1466,7 +1453,6 @@ def parse_go_config():
 RULELESS_VALIDATORS = {
     "Attestors", "Chains", "Signers",        # check cross-references, delegate the rest
     "Config", "ServerConfig",
-    "AttestationParams", "BesuQBFTParams",   # `return nil`, satisfies an interface
 }
 
 
@@ -1801,16 +1787,14 @@ def _type_cell(go, field, model):
         return "list"
     if t in model["structs"] or t in model["aliases"]:
         return "block"
-    if (go, field["yaml"]) in OPAQUE_TYPES:
-        return OPAQUE_TYPES[(go, field["yaml"])]
     # Everything else was published as whatever Go calls it, which put
     # `yaml.RawMessage` in a column a reader writes values into. A type this
     # tool cannot describe is one it must not name.
     _problem("unreadable_type",
              f"{go}.{field['go']} has type `{t}`, which is neither a Go type a "
              "reader writes, a block, nor a set of constants -- so the column "
-             "would publish the Go type name. Give it an entry in OPAQUE_TYPES "
-             "saying what a reader writes there.",
+             "would publish the Go type name. Give the field a type "
+             "this tool can describe.",
              struct=go, field=field["yaml"], go_type=t)
     return UNREADABLE
 
@@ -2241,6 +2225,13 @@ def probe_requiredness(model, binary, membership=None):
                         not any(q == path for _i, q, _n, _t, _v in p2)
                         for p2 in elsewhere):
                     condition = _sibling_discriminator(paths, path)
+                # A key required inside a block the file can leave out is
+                # required only once that block is written.
+                block = path.rsplit(".", 1)[0]
+                if (answer and condition is None and block != path
+                        and not block.endswith("]")
+                        and _probe_validate(binary, _yaml_without(text, block)) is None):
+                    condition = ("in", block.rpartition(".")[2])
                 break
             out[(sec["region"], key)] = (answer, condition)
     return out
@@ -2304,6 +2295,8 @@ def _requirement(go, field, model, parent=None, probed=None, variant=None):
         return UNREADABLE, None
     if not probed:
         return "optional", None
+    if isinstance(variant, tuple):
+        return f"**required** in `{variant[1]}`", None
     if variant in ("run", "relay", "attest"):
         # required by a running process, not by the file being well formed
         return ("**required** to run" if variant == "run"

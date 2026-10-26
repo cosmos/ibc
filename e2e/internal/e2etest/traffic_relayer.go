@@ -185,9 +185,6 @@ func watchPacketState(
 }
 
 func packetWaitPolicy(relayer *ibccli.Relayer, packet PacketTx) (ibccli.WaitPolicy, error) {
-	if packet.RouteID == "" {
-		return ibccli.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
-	}
 	policy, ok := relayer.WaitPolicy(string(packet.RouteID))
 	if !ok {
 		return ibccli.WaitPolicy{}, fmt.Errorf(

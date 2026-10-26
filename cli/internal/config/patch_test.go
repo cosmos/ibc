@@ -131,6 +131,8 @@ func TestReconcileDeploymentPreservesSemanticIdentities(t *testing.T) {
 	original.Attestors[0].FinalityOffset = 42
 	cfg, _, err := cfg.ReconcileDeployment(original)
 	require.NoError(t, err)
+	// Deploy never renders a remoteProver, so only the operator can have added it.
+	cfg.Relayer.Connections[0].ClientA.RemoteProver = &RemoteProverConfig{URL: "http://prover:8080"}
 	incoming := deploymentConfig()
 	incoming.Connections[0].ClientA, incoming.Connections[0].ClientB = incoming.Connections[0].ClientB, incoming.Connections[0].ClientA
 	incoming.Connections[0].ClientA.Signer = ""
@@ -187,7 +189,7 @@ func TestReconcileDeploymentRejectsClientTypeChange(t *testing.T) {
 			}
 			// Exercise the transition policy without claiming another on-chain
 			// client type is currently supported by deployment tooling.
-			incoming.Connections[0].ClientA.Type = ClientType("future-client-type")
+			incoming.Connections[0].ClientA.Type = "future-client-type"
 			_, _, err = cfg.ReconcileDeployment(incoming)
 			require.ErrorContains(
 				t,
@@ -195,22 +197,11 @@ func TestReconcileDeploymentRejectsClientTypeChange(t *testing.T) {
 				`client "cli-1-2" on chain "1" has type "attestation", manifest has "future-client-type"`,
 			)
 			require.ErrorContains(t, err, "automatic client-type changes are not supported")
-			require.ErrorContains(t, err, "explicitly update the client's type and compatible params")
+			require.ErrorContains(t, err, "explicitly update the client's type in the config")
 			require.Equal(t, "0xrouter1", cfg.Chains[0].EVM.ICS26Router)
 			require.Equal(t, ClientTypeAttestation, cfg.Relayer.Connections[0].ClientA.Type)
 		})
 	}
-}
-
-func TestReconcileDeploymentPreservesRemoteProver(t *testing.T) {
-	cfg, _, err := DefaultConfig().ReconcileDeployment(deploymentConfig())
-	require.NoError(t, err)
-	cfg.Relayer.Connections[0].ClientA.Type = ClientTypeRemote
-	cfg.Relayer.Connections[0].ClientA.Params = []byte("url: http://prover:8080")
-	merged, conflicts, err := cfg.ReconcileDeployment(deploymentConfig())
-	require.NoError(t, err)
-	require.Empty(t, conflicts)
-	require.Equal(t, cfg, merged)
 }
 
 func TestReconcileDeploymentResolvesDraftAttestor(t *testing.T) {
