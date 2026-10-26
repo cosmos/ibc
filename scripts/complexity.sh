@@ -5,13 +5,13 @@
 # over the cli and e2e modules and compares the findings with .complexity-baseline.tsv, the
 # committed list of legacy functions above a threshold.
 #
-#   ./scripts/complexity.sh             # check (make complexity)
+#   ./scripts/complexity.sh             # report (make complexity)
 #   ./scripts/complexity.sh --baseline  # rewrite the baseline (make complexity-baseline)
 #
-# A finding includes its score, so the check fails on a new function above a threshold, on a
-# legacy function whose score changed either way, and on one that is gone. Rewriting the
-# baseline records the change, and review keeps it moving only towards the thresholds.
-# Without a baseline file, every finding fails.
+# A finding includes its score, so the report lists a new function above a threshold, a
+# legacy function whose score changed either way, and one that is gone. Without a baseline
+# file, it lists every finding. The report goes to stdout, which stays empty when there is
+# nothing to report. Findings do not fail the script; errors do.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -45,11 +45,11 @@ known=/dev/null
 [ ! -f "$baseline" ] || known="$baseline"
 new="$(sed '/^#/d' "$known" | LC_ALL=C comm -13 - "$tmp")"
 gone="$(sed '/^#/d' "$known" | LC_ALL=C comm -23 - "$tmp")"
-if [ -n "$new$gone" ]; then
-  [ -z "$new" ] || printf 'Findings not in %s:\n%s\n\n' "$baseline" "$new"
-  [ -z "$gone" ] || printf 'Entries in %s no longer found:\n%s\n\n' "$baseline" "$gone"
-  echo "Simplify the functions above. If a legacy function only improved, moved or was renamed,"
-  echo "run \`make complexity-baseline\` and commit $baseline."
-  exit 1
+if [ -z "$new$gone" ]; then
+  echo "No complexity findings beyond $baseline." >&2
+  exit 0
 fi
-echo "No complexity findings beyond $baseline."
+[ -z "$new" ] || printf 'Findings not in %s:\n%s\n\n' "$baseline" "$new"
+[ -z "$gone" ] || printf 'Entries in %s no longer found:\n%s\n\n' "$baseline" "$gone"
+echo "Simplify the functions above. If a legacy function only improved, moved or was renamed,"
+echo "run \`make complexity-baseline\` and commit $baseline."

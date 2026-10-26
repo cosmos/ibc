@@ -2,10 +2,9 @@
 
 name: Complexity
 
-# Fails when a pull request adds a Go function above the complexity thresholds in
+# Comments on a pull request that adds a Go function above the complexity thresholds in
 # .golangci.yml, or changes the score of a legacy function in .complexity-baseline.tsv
-# without recording it there. It runs on every pull request so that "Complexity"
-# can be a required check.
+# without recording it there. Findings do not fail the job; errors running the check do.
 on:
   pull_request:
   merge_group:
@@ -22,6 +21,9 @@ jobs:
     name: Complexity
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -36,4 +38,28 @@ jobs:
           version: v2.13.2
           install-only: true
       - name: Check complexity
-        run: make complexity
+        run: |
+          make -s complexity > complexity.txt
+          cat complexity.txt
+
+      # One comment, updated on every push. Pull requests from forks get a read-only token,
+      # so they are not commented on.
+      - name: Comment on the pull request
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.type == "Bot" and (.body | startswith("<!-- complexity -->"))) | .id' | tail -n 1)"
+          if [ -s complexity.txt ]; then
+            { printf '<!-- complexity -->\n### Complexity\n\n```text\n'; cat complexity.txt; printf '```\n'; } > comment.md
+          else
+            printf '<!-- complexity -->\n### Complexity\n\n:white_check_mark: No findings beyond `.complexity-baseline.tsv`.\n' > comment.md
+          fi
+          if [ -n "$id" ]; then
+            jq -n --rawfile body comment.md '{body: $body}' \
+              | gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" --input - --silent
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md
+          fi

@@ -64,7 +64,7 @@ linters:
     misspell:
       locale: US
     # Complexity thresholds. These linters are not enabled above: `make complexity` runs
-    # them on their own and fails only on functions above a threshold that are not listed
+    # them on their own and reports only functions above a threshold that are not listed
     # in .complexity-baseline.tsv with their current score.
     funlen:
       lines: 100

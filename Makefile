@@ -30,7 +30,7 @@ lint-fix-gen: ## Lint generated Solidity Go binding packages and fix errors
 test-gen: ## Compile generated Solidity Go binding packages
 	go -C $(GEN_SOLIDITY_ABI_DIR) test ./...
 
-complexity: ## Fail on functions above the complexity thresholds that the baseline does not allow
+complexity: ## Report functions above the complexity thresholds that the baseline does not list
 	./scripts/complexity.sh
 
 complexity-baseline: ## Record the functions above the complexity thresholds in .complexity-baseline.tsv
