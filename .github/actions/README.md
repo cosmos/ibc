@@ -34,43 +34,16 @@ Within this repository the release workflow uses the actions by local path (`./.
 
 A build job puts its release files in `out/assets` and calls `attest-release-assets`. Give each job of a matrix a distinct `platform`. Then a single job, after every build job, calls `publish-draft-release`. It must run for a tag push, because it verifies the assets against `GITHUB_REF` and `GITHUB_WORKFLOW_REF`.
 
-For example, the ibc-go source archive:
+The calls look like this; the build jobs before them are in each repository's release workflow: cosmos/ibc's [`build`](../workflows/release.yml), cosmos/ibc-go's [`build`](https://github.com/cosmos/ibc-go/blob/main/.github/workflows/release.yml) (a source archive, with `sbom-dir`) and cosmos/ibc-contracts' [`build`](https://github.com/cosmos/ibc-contracts/blob/main/.github/workflows/release.yml) (a different toolchain per component). Copy their structure rather than writing a shorter version.
 
 ```yaml
-  build:
-    needs: [validate-tag]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    env:
-      NAME: ${{ needs.validate-tag.outputs.name }}
-      PATHS: ${{ needs.validate-tag.outputs.paths }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - name: Collect assets
-        run: |
-          mkdir -p out/assets src
-          # shellcheck disable=SC2086
-          git archive --format=tar --prefix="${NAME}/" "$GITHUB_SHA" -- $PATHS \
-            | gzip -n > "out/assets/${NAME}.tar.gz"
-          tar -xzf "out/assets/${NAME}.tar.gz" -C src
+      # In the build job, after putting the release files in out/assets
       - uses: cosmos/ibc/.github/actions/attest-release-assets@<commit-sha> # main
         with:
           name: ${{ env.NAME }}
           sbom-dir: src/${{ env.NAME }}
 
-  release:
-    needs: [validate-tag, build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    steps:
+      # In the release job, which needs every build job
       - uses: cosmos/ibc/.github/actions/publish-draft-release@<commit-sha> # main
         with:
           name: ${{ needs.validate-tag.outputs.name }}

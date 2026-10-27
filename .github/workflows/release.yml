@@ -60,11 +60,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Checked before any job pushes or attests an image, so a re-run after the release is
-          # published with its assets pushes nothing and cannot move the published image tag. A
+          # published with its assets pushes nothing and cannot move a published image tag. A
           # release published before its first run finished has no assets yet, so it continues and
           # the release job attaches them. The by-tag endpoint returns published releases only: a
           # 404 means there is none, and any other failure fails the step instead of reading as
-          # "not published".
+          # "not published". Same check as in publish-manifest; change both together.
           log="${RUNNER_TEMP}/release-lookup.log"
           if ! published_assets=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets | length' 2> "$log"); then
             if ! grep -q 'HTTP 404' "$log"; then
@@ -274,6 +274,9 @@ jobs:
       attestations: write
       artifact-metadata: write
     timeout-minutes: 10
+    env:
+      # The image is tagged with the pushed tag.
+      IMAGE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -300,7 +303,7 @@ jobs:
         run: |
           metadata="${RUNNER_TEMP}/index-metadata.json"
           sources=()
-          # One file per image matrix job, so a platform added there is included here too.
+          # One file per image matrix job, so a platform added to that matrix is included here too.
           for file in "${RUNNER_TEMP}"/image-digest/*; do
             digest=$(< "$file")
             sources+=("${IMAGE_NAME}@${digest}")
@@ -361,7 +364,7 @@ jobs:
             echo "::error::Tagging would push ${tagged}, not the signed index ${DIGEST}"
             exit 1
           fi
-          docker buildx imagetools create --tag "${IMAGE_NAME}:${TAG}" "${IMAGE_NAME}@${DIGEST}"
+          docker buildx imagetools create --tag "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}@${DIGEST}"
 
   # Waits for publish-manifest as well, so a draft release always comes with a signed image.
   release:
