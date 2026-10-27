@@ -34,7 +34,10 @@ type proofResult struct {
 	StorageProof []storageProofResult `json:"storageProof"`
 }
 
+// storageProofResult is one slot's proof. Key is the slot as the node
+// returns it: Besu drops its leading zeros.
 type storageProofResult struct {
+	Key   string          `json:"key"`
 	Proof []hexutil.Bytes `json:"proof"`
 }
 
@@ -47,13 +50,6 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots []comm
 		return RouterProof{}, errors.Wrapf(err, "getting router proof at height %d on chain %s", height, c.chainID)
 	}
 
-	if len(storageProofs) != len(slots) {
-		return RouterProof{}, errors.Errorf(
-			"router proof at height %d on chain %s: %d storage proofs returned for %d slots",
-			height, c.chainID, len(storageProofs), len(slots),
-		)
-	}
-
 	return RouterProof{AccountProof: accountProof, StorageProofs: storageProofs}, nil
 }
 
@@ -62,7 +58,9 @@ func newRPCClient(client *rpc.Client) *rpcClient {
 }
 
 // GetProof calls eth_getProof directly: go-ethereum only offers it through
-// gethclient, which imports most of go-ethereum's node internals.
+// gethclient, which imports most of go-ethereum's node internals. Storage
+// proofs are matched to keys by the key each carries, since nodes need not
+// answer in request order: Besu sorts them by key.
 func (c *rpcClient) GetProof(
 	ctx context.Context,
 	account common.Address,
@@ -82,9 +80,17 @@ func (c *rpcClient) GetProof(
 		return nil, nil, err
 	}
 
-	storageProofs := make([][][]byte, len(result.StorageProof))
-	for i, storage := range result.StorageProof {
-		storageProofs[i] = proofNodes(storage.Proof)
+	byKey := make(map[common.Hash][][]byte, len(result.StorageProof))
+	for _, storage := range result.StorageProof {
+		byKey[common.HexToHash(storage.Key)] = proofNodes(storage.Proof)
+	}
+	storageProofs := make([][][]byte, len(keys))
+	for i, key := range keys {
+		proof, ok := byKey[key]
+		if !ok {
+			return nil, nil, errors.Errorf("no storage proof returned for key %s", key)
+		}
+		storageProofs[i] = proof
 	}
 
 	return proofNodes(result.AccountProof), storageProofs, nil

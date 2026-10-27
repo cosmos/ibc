@@ -2,17 +2,18 @@
 
 module github.com/cosmos/ibc/cli
 
-go 1.26.6
+go 1.26.10
 
 require (
 	connectrpc.com/connect v1.20.0
+	connectrpc.com/grpchealth v1.5.0
 	connectrpc.com/grpcreflect v1.3.0
 	connectrpc.com/otelconnect v0.9.0
 	github.com/cometbft/cometbft v0.39.3
+	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261020123802-f564e6339cfd
 	github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
-	github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20261006113229-b9ceb3c5518a
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
@@ -23,6 +24,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
+	go.opentelemetry.io/contrib/instrumentation/host v0.68.0
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.68.0
 	go.opentelemetry.io/contrib/otelconf v0.25.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.67.0
@@ -150,7 +152,6 @@ require (
 	github.com/zondax/ledger-go v1.0.1 // indirect
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/host v0.68.0 // indirect
 	go.opentelemetry.io/contrib/propagators/autoprop v0.70.0 // indirect
 	go.opentelemetry.io/contrib/propagators/aws v1.45.0 // indirect
 	go.opentelemetry.io/contrib/propagators/b3 v1.45.0 // indirect
@@ -349,7 +350,7 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/text v0.42.0 // indirect

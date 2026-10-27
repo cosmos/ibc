@@ -17,7 +17,7 @@ import (
 	"github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
-	"github.com/cosmos/ibc/cli/internal/relay/prover/besuqbft"
+	"github.com/cosmos/ibc/cli/internal/relay/prover/besubft"
 	"github.com/cosmos/ibc/cli/internal/relay/prover/remote"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -38,18 +38,21 @@ type Prover interface {
 
 	// PacketProofs proves each packet's membership or non-membership at
 	// height, one proof per packet with indices aligned to packets. Returns
-	// an error if a proof cannot be generated for any packet
+	// an error if a proof cannot be generated for any packet. Acknowledgements
+	// must align with packets for acknowledgement proofs; pass nil for other kinds.
 	PacketProofs(
 		ctx context.Context,
 		height uint64,
 		kind v2.ProofKind,
 		packets []channeltypesv2.Packet,
+		acknowledgements []channeltypesv2.Acknowledgement,
 	) ([][]byte, error)
 }
 
 var (
 	_ Prover = (*attestation.Generator)(nil)
-	_ Prover = (*besuqbft.Generator)(nil)
+	_ Prover = (*besubft.Generator)(nil)
+	_ Prover = (*remote.Prover)(nil)
 )
 
 // Key identifies one configured light client by the chain it lives on and
@@ -128,6 +131,39 @@ func addGenerator(
 ) error {
 	logger = logger.With("module", "prover", "chainID", client.ChainID, "clientID", client.ClientID)
 
+	prover, err := newProver(ctx, client, clientCounterparty, clientSet, attestors, logger)
+	if err != nil {
+		return errors.Wrapf(err, "connection %q", connAlias)
+	}
+
+	generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
+		prover,
+		client.ChainID,
+		client.ClientID,
+		client.Type,
+	)
+
+	return nil
+}
+
+// newProver builds the built-in prover for client's type, or a remote one when
+// client sets a RemoteProver.
+func newProver(
+	ctx context.Context,
+	client, clientCounterparty config.ClientEnd,
+	clientSet *chains.ClientSet,
+	attestors []attestor.Attestor,
+	logger *slog.Logger,
+) (Prover, error) {
+	if client.RemoteProver != nil {
+		endpoint, err := config.ResolveEndpoint(client.RemoteProver.EndpointURL(), client.RemoteProver.TLS, logger)
+		if err != nil {
+			return nil, errors.Wrap(err, "remoteProver")
+		}
+
+		return remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger), nil
+	}
+
 	switch client.Type {
 	case config.ClientTypeAttestation:
 		meteredAttestors := make([]attestor.Attestor, len(attestors))
@@ -135,55 +171,20 @@ func addGenerator(
 			meteredAttestors[i] = attestor.MetricsWrapper(a)
 		}
 
-		gen, err := attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
-		if err != nil {
-			return err
-		}
-
-		meteredProver := metricsWrapper(gen, client.ChainID, client.ClientID, client.Type)
-		generators[Key(client.ChainID, client.ClientID)] = meteredProver
-
-		return nil
-	case config.ClientTypeBesuQBFT:
-		gen, err := besuQBFTGenerator(ctx, client, clientCounterparty, clientSet)
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		generators[Key(client.ChainID, client.ClientID)] = metricsWrapper(
-			gen,
-			client.ChainID,
-			client.ClientID,
-			client.Type,
-		)
-
-		return nil
-	case config.ClientTypeRemote:
-		params, err := client.ClientParams()
-		if err != nil {
-			return errors.Wrapf(err, "connection %q", connAlias)
-		}
-
-		remoteParams, ok := params.(*config.RemoteParams)
-		if !ok {
-			return errors.Errorf("connection %q: %T is not remote prover params", connAlias, params)
-		}
-
-		prover := remote.NewFromURL(remoteParams.URL, client.ChainID, client.ClientID, logger)
-		meteredProver := metricsWrapper(prover, client.ChainID, client.ClientID, client.Type)
-		generators[Key(client.ChainID, client.ClientID)] = meteredProver
-
-		return nil
+		return attestation.ResolveGenerator(ctx, client, clientCounterparty, clientSet, meteredAttestors, logger)
+	case config.ClientTypeBesu:
+		return besuGenerator(ctx, client, clientCounterparty, clientSet, logger)
 	default:
-		return errors.Errorf("connection %q: unsupported client type %q for proof generation", connAlias, client.Type)
+		return nil, errors.Errorf("unsupported client type %q for proof generation", client.Type)
 	}
 }
 
-func besuQBFTGenerator(
+func besuGenerator(
 	ctx context.Context,
 	self, counterparty config.ClientEnd,
 	clientSet *chains.ClientSet,
-) (*besuqbft.Generator, error) {
+	logger *slog.Logger,
+) (*besubft.Generator, error) {
 	host, err := evmClient(clientSet, self.ChainID)
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func besuQBFTGenerator(
 		return nil, err
 	}
 
-	return besuqbft.NewGenerator(ctx, self.ClientID, host, counterpartyClient)
+	return besubft.NewGenerator(ctx, self.ClientID, host, counterpartyClient, logger)
 }
 
 // evmClient returns chainID's EVM client from clientSet.

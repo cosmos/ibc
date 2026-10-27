@@ -133,7 +133,7 @@ func mockRelay(
 	client.EXPECT().TxPacketEvents(mock.Anything, mock.Anything).Return(events, nil).Once()
 	mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(height, time.Now(), nil).Once()
 	mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, height).Return([][]byte{{0x01}}, nil).Once()
-	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything).
+	mockProver.EXPECT().PacketProofs(mock.Anything, height, mock.Anything, mock.Anything, mock.Anything).
 		Return(make([][]byte, len(events)), nil).Once()
 	txBuilder.EXPECT().BuildRelayTxs(mock.Anything, mock.Anything).
 		Return([]v2.RelayTx{{To: common.HexToAddress(to).Bytes(), Data: []byte{0xca, 0x11}}}, nil).Once()
@@ -243,6 +243,53 @@ func runPipeline(t *testing.T, deps Deps, opts Options, tr *processors.Transfer)
 func TestPipelineLifecycle(t *testing.T) {
 	ctx := context.Background()
 
+	for _, tc := range []struct {
+		name    string
+		result  v2.RelaySimulation
+		err     error
+		wantErr string
+	}{
+		{name: "simulationErrorStopsSubmission", err: assert.AnError, wantErr: "simulating relay tx"},
+		{
+			name: "failedPacketStopsSubmission",
+			result: v2.RelaySimulation{
+				Operations: []v2.OperationResult{
+					{Type: v2.OperationTypeUpdate, Success: true},
+					{Type: v2.OperationTypePacket, FailureReason: "RateLimitExceeded()"},
+				},
+			},
+			wantErr: "no packet calls can currently succeed: call[1]: RateLimitExceeded()",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// ARRANGE
+			env, deps := newPipelineEnv(t)
+			tr := env.createPacket(t, time.Now().Add(time.Hour))
+			env.dstClient.EXPECT().IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+				Return(false, nil).Once()
+			env.srcClient.EXPECT().IsPacketCommitted(mock.Anything, testRoute.SourceClientID, uint64(42)).
+				Return(true, nil).Once()
+			env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
+			env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
+			mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
+			env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+			env.dstTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+				v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0xca, 0x11}}).
+				Return(tc.result, tc.err).Once()
+
+			// ACT
+			out := runPipeline(t, deps, fastOpts(), tr)
+
+			// ASSERT
+			require.ErrorContains(t, out.ProcessingError, tc.wantErr)
+			if tc.err != nil {
+				require.ErrorIs(t, out.ProcessingError, tc.err)
+			}
+			require.Nil(t, env.storedPacket(t, out).RecvTxHash)
+			env.dstTxSubmitter.AssertNotCalled(t, "Submit", mock.Anything, mock.Anything)
+		})
+	}
+
 	t.Run("recvToWriteAckSuccessComplete", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
@@ -264,7 +311,20 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		env.dstTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+			v2.RelayTx{
+				To:   common.HexToAddress("0xrouter").Bytes(),
+				Data: []byte{0xca, 0x11},
+			}).
+			Return(v2.RelaySimulation{
+				Operations: []v2.OperationResult{
+					{Type: v2.OperationTypeUpdate, Success: true},
+					{Type: v2.OperationTypePacket, Success: true},
+				},
+			}, nil).Once()
+		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, v2.TxIntent{
+			To: common.HexToAddress("0xrouter").Hex(), Data: []byte{0xca, 0x11},
+		}).Return(&v2.Submission{
 			TxHash:         recvTxHash,
 			SubmittedAt:    time.Now().UTC(),
 			RelayerAddress: "0xrelayer",
@@ -284,10 +344,25 @@ func TestPipelineLifecycle(t *testing.T) {
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		env.srcTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+			v2.RelayTx{
+				To:   common.HexToAddress("0xrouter").Bytes(),
+				Data: []byte{0xca, 0x11},
+			}).
+			Return(v2.RelaySimulation{
+				Operations: []v2.OperationResult{
+					{Type: v2.OperationTypeUpdate, Success: true},
+					{Type: v2.OperationTypePacket, Success: true},
+				},
+			}, nil).Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, v2.TxIntent{
+			To: common.HexToAddress("0xrouter").Hex(), Data: []byte{0xca, 0x11},
+		}).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, ackTxHash, v2.RelayKindAck,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
@@ -323,7 +398,20 @@ func TestPipelineLifecycle(t *testing.T) {
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
 		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		env.dstTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+			v2.RelayTx{
+				To:   common.HexToAddress("0xrouter").Bytes(),
+				Data: []byte{0xca, 0x11},
+			}).
+			Return(v2.RelaySimulation{
+				Operations: []v2.OperationResult{
+					{Type: v2.OperationTypeUpdate, Success: true},
+					{Type: v2.OperationTypePacket, Success: true},
+				},
+			}, nil).Once()
+		env.dstTxSubmitter.EXPECT().Submit(mock.Anything, v2.TxIntent{
+			To: common.HexToAddress("0xrouter").Hex(), Data: []byte{0xca, 0x11},
+		}).Return(&v2.Submission{
 			TxHash: recvTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, recvTxHash, mock.Anything).Return(false, nil).Once()
@@ -341,10 +429,25 @@ func TestPipelineLifecycle(t *testing.T) {
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		env.srcTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+			v2.RelayTx{
+				To:   common.HexToAddress("0xrouter").Bytes(),
+				Data: []byte{0xca, 0x11},
+			}).
+			Return(v2.RelaySimulation{
+				Operations: []v2.OperationResult{
+					{Type: v2.OperationTypeUpdate, Success: true},
+					{Type: v2.OperationTypePacket, Success: true},
+				},
+			}, nil).Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, v2.TxIntent{
+			To: common.HexToAddress("0xrouter").Hex(), Data: []byte{0xca, 0x11},
+		}).Return(&v2.Submission{
 			TxHash: ackTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, mock.Anything).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, ackTxHash, v2.RelayKindAck,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 
@@ -382,10 +485,25 @@ func TestPipelineLifecycle(t *testing.T) {
 		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
 		mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
 		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, mock.Anything).Return(&v2.Submission{
+		env.srcTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
+			v2.RelayTx{
+				To:   common.HexToAddress("0xrouter").Bytes(),
+				Data: []byte{0xca, 0x11},
+			}).
+			Return(v2.RelaySimulation{
+				Operations: []v2.OperationResult{
+					{Type: v2.OperationTypeUpdate, Success: true},
+					{Type: v2.OperationTypePacket, Success: true},
+				},
+			}, nil).Once()
+		env.srcTxSubmitter.EXPECT().Submit(mock.Anything, v2.TxIntent{
+			To: common.HexToAddress("0xrouter").Hex(), Data: []byte{0xca, 0x11},
+		}).Return(&v2.Submission{
 			TxHash: timeoutTxHash, SubmittedAt: time.Now().UTC(), RelayerAddress: "0xrelayer",
 		}, nil).Once()
 		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, timeoutTxHash, mock.Anything).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, timeoutTxHash, v2.RelayKindTimeout,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
 
 		out := runPipeline(t, deps, fastOpts(), tr)
 

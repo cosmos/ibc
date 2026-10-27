@@ -18,6 +18,7 @@ Interacts with: [AttestationLightClient](5-attestation-light-client.md), [ICS27G
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
 | ICS26Router | Deployed contract | The packet router itself | [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol) |
+| IBCMulticall | Deployed contract | Batches a relayer's calls to the router, so a failed packet delivery does not revert the rest of the batch | [IBCMulticall.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCMulticall.sol) |
 | ICS02ClientUpgradeable | Abstract base, compiled into ICS26Router | The light client and counterparty registry | [ICS02ClientUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS02ClientUpgradeable.sol) |
 | IBCStoreUpgradeable | Abstract base, compiled into ICS26Router | The provable commitment store | [IBCStoreUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCStoreUpgradeable.sol) |
 | ICS24Host | Library | Commitment paths, commitment hashes, and the universal error acknowledgement constant | [ICS24Host.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS24Host.sol) |
@@ -37,15 +38,15 @@ flowchart LR
 
 ## Registering an application
 
-Every IBC application is registered on a port by whoever deploys it, and implements three router-only callbacks. A port belongs permanently to the first application registered on it.
+Every IBC application is registered on a port, and implements three router-only callbacks. A port belongs permanently to the first application registered on it.
 
 | Function | What it does |
 |---|---|
-| `addIBCApp(address app)` | Registers an application under its own address, as a hex string, for a port identifier. Permissionless. |
+| `addIBCApp(address app)` | Registers an application under its own address, as a hex string, for a port identifier. Role-gated. The ibc-contracts deployment script, [`DeployAccessManagerWithRoles`](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/scripts/deployments/DeployAccessManagerWithRoles.sol), opens it to every address. |
 | `addIBCApp(string calldata portId, address app)` | Registers an application under a custom port identifier. Role-gated. |
 | `getIBCApp(string calldata portId)` | Returns the application registered on a port. |
 
-The role map names `ID_CUSTOMIZER_ROLE` for the role-gated function. The port that function picks must pass identifier validation, and it must not parse as an address, so a chosen name can never collide with one derived from a contract address. Custom identifiers may not start with `client-` or `channel-`, so a chosen name can never collide with a generated one.
+The role map names `ID_CUSTOMIZER_ROLE` for the custom-port function. The port that function picks must pass identifier validation, and it must not parse as an address, so a chosen name can never collide with one derived from a contract address. Custom identifiers may not start with `client-` or `channel-`, so a chosen name can never collide with a generated one.
 
 Either function reverts if the port already exists.
 
@@ -100,7 +101,7 @@ These are the packet-lifecycle calls a relayer makes to the router. Each carries
 | `ackPacket(MsgAckPacket calldata msg)` | Verifies that the destination chain stored the acknowledgement, deletes the packet commitment, and calls the sending application |
 | `timeoutPacket(MsgTimeoutPacket calldata msg)` | Verifies that no receipt exists on the destination chain, deletes the packet commitment, and calls the sending application |
 
-The router also inherits OpenZeppelin's `multicall`, which batches several calls into one transaction. A relayer uses it to put an `updateClient` call ahead of the packet calls it is relaying, so the client holds the proof height before any verification runs.
+The router also inherits OpenZeppelin's `multicall`, which batches several calls into one transaction. The IBC CLI relayer batches through a separate `IBCMulticall` contract instead, which calls the router in order: it puts an `updateClient` call ahead of the packet calls it is relaying, so the client holds the proof height before any verification runs.
 
 Each takes the reconstructed packet, one proof, and the height that proof was taken at. `ackPacket` also carries the acknowledgement bytes.
 
@@ -134,11 +135,11 @@ The failures differ in what becomes of the packet. A revert with a reason settle
 
 ## Client and counterparty registry
 
-The router carries the client registry it inherits from ICS02ClientUpgradeable. Anyone may register a client there, while keeping one fresh and replacing one are both gated.
+The router carries the client registry it inherits from ICS02ClientUpgradeable. Registering a client, keeping one fresh, and replacing one are all role-gated.
 
 | Function | What it does |
 |---|---|
-| `addClient(CounterpartyInfo calldata counterpartyInfo, address client)` | Registers a client under a generated identifier and returns it. Permissionless. |
+| `addClient(CounterpartyInfo calldata counterpartyInfo, address client)` | Registers a client under a generated identifier and returns it. Role-gated. The ibc-contracts deployment script opens it to every address. |
 | `addClient(string calldata clientId, CounterpartyInfo calldata counterpartyInfo, address client)` | Registers a client under a custom identifier. Role-gated. |
 | `updateClient(string calldata clientId, bytes calldata updateMsg)` | Forwards an opaque update to the client contract. Role-gated. |
 | `migrateClient(string calldata clientId, CounterpartyInfo calldata counterpartyInfo, address client)` | Replaces the client contract and counterparty info under the same identifier. Admin-gated by default. |
@@ -147,7 +148,7 @@ The router carries the client registry it inherits from ICS02ClientUpgradeable. 
 | `getCounterparty(string calldata clientId)` | Returns the counterparty identifier and merkle prefix. |
 | `getNextClientSeq()` | Returns the next sequential client number. |
 
-Two things are stored per client identifier: the address of a light-client contract, and counterparty info, which is the counterparty's own client identifier plus its merkle prefix. The permissionless registration generates the identifier as `client-` plus a counter, and the role-gated overload lets an ID customizer supply one instead.
+Two things are stored per client identifier: the address of a light-client contract, and counterparty info, which is the counterparty's own client identifier plus its merkle prefix. The generated-identifier overload builds the identifier as `client-` plus a counter. The custom-identifier overload lets an ID customizer supply one instead.
 
 Misbehaviour submission is open to any address, and the router forwards the evidence to the client registered under the identifier. What comes of it is the client's decision. A client that has gone wrong is replaced under its own identifier: an admin-gated `migrateClient` swaps in a new client contract and counterparty info.
 
@@ -238,12 +239,13 @@ Each gate below is a function selector granted to a role in an external OpenZepp
 |---|---|---|
 | Relayer | `recvPacket`, `timeoutPacket`, `ackPacket`, `updateClient` | Assigned in the deployment's role map |
 | ID customizer | `addIBCApp(string,address)` and the custom-identifier `addClient` | Assigned in the deployment's role map |
+| Public | `addIBCApp(address)` and the generated-identifier `addClient` | Every address, once the deployment assigns them to `PUBLIC_ROLE` |
 | Admin | `migrateClient` and the UUPS upgrade authorization | A security council paired with a governance admin, in the security model the repository documents |
 
 Authorization itself happens outside the router. One external `AccessManager` is passed as `authority` at initialization, and a deployment decides which selectors it binds to which role. The router only asks the access manager whether the caller holds the role assigned to the selector, so who may relay is a deployment decision rather than a property of the contract.
 
 <Note>
-On a chain the IBC CLI brings up, any address may relay. `ibc deploy core` binds the router's relaying calls to the public role, and it never grants the relayer role. The selectors it binds are listed under [the access manager and its roles](6-permissions-and-upgrades.md#the-access-manager-and-its-roles).
+On a chain the IBC CLI brings up, any address may relay. `ibc deploy core` binds the router's relaying calls to the public role, and it never grants the relayer role. It leaves `addIBCApp(address)` and the generated-identifier `addClient` unassigned, so only the admin may register an application or a client. The selectors it binds are listed under [what a deployment assigns](6-permissions-and-upgrades.md#what-a-deployment-assigns).
 </Note>
 
 ## Deployment and upgrade

@@ -29,7 +29,7 @@ How a chain decides what to believe.
 
 - [The attestation light client](4-light-clients/1-attestation-light-client.md): Accepts what a quorum of attestors signs.
 - [Attestors](4-light-clients/2-attestors.md): The services that sign, and the keys trusted.
-- [The Besu QBFT light client](4-light-clients/3-besu-qbft-light-client.md): Verifies sealed Besu headers and storage proofs.
+- [The Besu QBFT and IBFT 2.0 light clients](4-light-clients/3-besu-light-client.md): Verify sealed Besu headers and storage proofs.
 
 ## IBC-solidity contracts
 
@@ -53,6 +53,9 @@ IBC CLI is an all-in-one binary for deploying and running an IBC connection.
 - [Deploy IBC and send a token](6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md): Deploy IBC on two chains and send a token.
 - [Run a standalone attestor](6-ibc-cli/3-run-a-standalone-attestor.md): An attestor in its own process.
 - [Run a standalone relayer](6-ibc-cli/4-run-a-standalone-relayer.md): Connect a relayer to an existing connection.
+- [Upgrade an IBC contract](6-ibc-cli/8-upgrade-the-router-contract.md): Contract upgrade procedure using the router as an example.
+- [Grant, change, and revoke a role](6-ibc-cli/9-grant-change-and-revoke-a-role.md): Restrict relaying, rotate the signer, and revoke the old key's role.
+- [Rotate an attestor set](6-ibc-cli/10-rotate-an-attestor-set.md): Replace an attestor by deploying a new client and migrating.
 
 ### Reference
 

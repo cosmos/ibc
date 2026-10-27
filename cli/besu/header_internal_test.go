@@ -15,11 +15,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCommitSealDigestRecoversValidators checks the digest against the
-// header's own validator set: with a wrong digest the fixture's seals would
-// recover to addresses outside it. besutest imports this package, so the
-// fixture is read directly.
+// TestCommitSealDigestRecoversValidators checks each consensus's digest
+// against the header's own validator set. besutest imports this package, so
+// the fixtures are read directly.
 func TestCommitSealDigestRecoversValidators(t *testing.T) {
+	for _, consensus := range Consensuses {
+		t.Run(string(consensus), func(t *testing.T) {
+			testCommitSealDigestRecoversValidators(t, consensus)
+		})
+	}
+}
+
+func testCommitSealDigestRecoversValidators(t *testing.T, consensus Consensus) {
 	type update struct {
 		HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
 		ExpectedValidators []common.Address `json:"expectedValidators"`
@@ -28,7 +35,7 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 		AdjacentUpdate    update `json:"adjacentUpdate"`
 		NonAdjacentUpdate update `json:"nonAdjacentUpdate"`
 	}
-	raw, err := os.ReadFile("besutest/testdata/qbft.json")
+	raw, err := os.ReadFile("besutest/testdata/" + string(consensus) + ".json")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &fixture))
 
@@ -41,7 +48,7 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 		require.NoError(t, rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals))
 		require.NotEmpty(t, seals)
 
-		digest, err := commitSealDigest(&header, extraItems)
+		digest, err := commitSealDigest(&header, extraItems, consensus)
 		require.NoError(t, err)
 
 		var previous common.Address
@@ -56,3 +63,7 @@ func TestCommitSealDigestRecoversValidators(t *testing.T) {
 		}
 	}
 }
+
+// CommitSealDigest exposes commitSealDigest to FuzzParseSealedHeader, which is
+// in besu_test so it can seed from besutest.
+var CommitSealDigest = commitSealDigest

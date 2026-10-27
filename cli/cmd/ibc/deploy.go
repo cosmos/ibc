@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +21,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/evm"
@@ -30,6 +34,7 @@ import (
 const (
 	flagNameTrustingPeriod = "trusting-period"
 	flagNameMaxClockDrift  = "max-clock-drift"
+	flagNameTrustLevel     = "trust-level"
 )
 
 var (
@@ -37,6 +42,7 @@ var (
 	flagDeployDeployer        string
 	flagDeployDryRun          bool
 	flagDeployYes             bool
+	flagDeployCorePopulate    bool
 	flagDeployChain           string
 	flagDeployCounterparty    string
 	flagDeployClientID        string
@@ -47,6 +53,7 @@ var (
 	flagDeployTimestamp       uint64
 	flagDeployTrustingPeriod  time.Duration
 	flagDeployMaxClockDrift   time.Duration
+	flagDeployTrustLevel      string
 
 	flagDeployRenderSignerA  string
 	flagDeployRenderSignerB  string
@@ -55,6 +62,8 @@ var (
 	flagDeployIFTName        string
 	flagDeployIFTSymbol      string
 	flagDeployIFTOwner       string
+	flagDeployIFTCapacity    string
+	flagDeployIFTWindow      time.Duration
 	flagDeployBridgeChainA   string
 	flagDeployBridgeIFTA     string
 	flagDeployBridgeChainB   string
@@ -88,11 +97,11 @@ var (
 		RunE:  deployAttestationClient,
 	}
 
-	cmdDeployClientBesuQBFT = &cobra.Command{
-		Use:   "besu-qbft",
-		Short: "Deploy and register a Besu QBFT light client trusting the counterparty head",
+	cmdDeployClientBesu = &cobra.Command{
+		Use:   "besu",
+		Short: "Deploy and register a Besu light client for the counterparty's consensus, trusting its head",
 		Args:  cobra.NoArgs,
-		RunE:  deployBesuQBFTClient,
+		RunE:  deployBesuClient,
 	}
 
 	cmdDeployStatus = &cobra.Command{
@@ -124,7 +133,11 @@ var (
 	cmdDeployIFT = &cobra.Command{
 		Use:   keyIFT,
 		Short: "Deploy an IFT token on one chain",
-		RunE:  deployIFT,
+		Long: "Deploy an IFT token on one chain and set its rate limit, which IFT requires before any transfer. " +
+			"Rerunning with a different rate limit updates it. " +
+			"With an --owner other than the deployer no limit is set and the rate-limit flags are rejected: " +
+			"the owner must call setIFTRateLimit before any transfer.",
+		RunE: deployIFT,
 	}
 
 	cmdDeployIFTBridge = &cobra.Command{
@@ -272,7 +285,30 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
+	if runErr := planThenRun(
+		cmd.Context(),
+		deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain),
+	); runErr != nil {
+		return runErr
+	}
+	if !flagDeployCorePopulate || flagDeployDryRun {
+		return nil
+	}
+
+	m, err := manifest.Load(flagDeployManifestDir, flagDeployChain)
+	if err != nil {
+		return err
+	}
+	if m == nil || m.Core.Router == "" || m.Core.Multicall == "" {
+		return errors.Errorf("core manifest for chain %s has no router or multicall recorded", flagDeployChain)
+	}
+	merged, _, err := cfg.ReconcileDeployment(config.DeploymentConfig{
+		Chains: []config.ChainConfig{renderedChain(cfg, m)},
+	})
+	if err != nil {
+		return err
+	}
+	return populateRenderedConfig(merged)
 }
 
 // clientSpec resolves the client ids for --chain tracking
@@ -346,42 +382,68 @@ func attestationParams(
 	}, nil
 }
 
-// besuQBFTParams reads the besu-qbft flags and trusts the counterparty head.
-func besuQBFTParams(
+// besuParams reads the Besu client flags and trusts the counterparty head,
+// whose commit seals decide the consensus the client verifies.
+func besuParams(
 	ctx context.Context,
 	counterpartyRouter string,
 	counterpartyTarget deploy.Target,
-) (deploy.BesuQBFTParams, error) {
+) (deploy.BesuParams, error) {
 	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "--%s", flagNameTrustingPeriod)
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameTrustingPeriod)
 	}
 	if trustingPeriod == 0 {
-		return deploy.BesuQBFTParams{}, errors.Errorf("--%s must be positive", flagNameTrustingPeriod)
+		return deploy.BesuParams{}, errors.Errorf("--%s must be positive", flagNameTrustingPeriod)
 	}
 	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
+	}
+	level, err := trustLevel(flagDeployTrustLevel)
+	if err != nil {
+		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameTrustLevel)
 	}
 	router, err := config.ParseEVMAddress(counterpartyRouter)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
+		return deploy.BesuParams{}, errors.Wrap(err, "counterparty evm.ics26Router")
 	}
-	source, ok := counterpartyTarget.(deploy.BesuQBFTSource)
+	source, ok := counterpartyTarget.(deploy.BesuSource)
 	if !ok {
-		return deploy.BesuQBFTParams{}, errors.New("counterparty cannot serve a besu-qbft consensus state")
+		return deploy.BesuParams{}, errors.New("counterparty cannot serve a besu consensus state")
 	}
-	height, state, err := source.BesuQBFTHead(ctx)
+	head, err := source.BesuHead(ctx)
 	if err != nil {
-		return deploy.BesuQBFTParams{}, errors.Wrap(err, "read counterparty head")
+		return deploy.BesuParams{}, errors.Wrap(err, "read counterparty head")
 	}
-	return deploy.BesuQBFTParams{
+	return deploy.BesuParams{
+		Consensus:             head.Consensus,
 		IBCRouter:             router,
-		InitialHeight:         height,
-		InitialConsensusState: state,
+		InitialHeight:         head.Height,
+		InitialConsensusState: head.ConsensusState(),
 		TrustingPeriod:        trustingPeriod,
 		MaxClockDrift:         maxClockDrift,
+		TrustLevel:            level,
 	}, nil
+}
+
+// defaultTrustLevel is the --trust-level default, besu.DefaultTrustLevel as n/d.
+var defaultTrustLevel = fmt.Sprintf("%d/%d", besu.DefaultTrustLevel.Numerator, besu.DefaultTrustLevel.Denominator)
+
+// trustLevel parses n/d, which the contract accepts from one third to one.
+func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
+	numerator, denominator, _ := strings.Cut(s, "/")
+	n, errN := strconv.ParseUint(numerator, 10, 8)
+	d, errD := strconv.ParseUint(denominator, 10, 8)
+	switch {
+	case errN != nil || errD != nil:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("want n/d, each at most 255, got %q", s)
+	case d == 0:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("denominator must not be zero, got %q", s)
+	case n > d || 3*n < d:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 1, got %q", s)
+	}
+	return besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: uint8(n), Denominator: uint8(d)}, nil
 }
 
 // wholeSeconds converts a duration into the contract's seconds, truncating
@@ -405,14 +467,14 @@ func deployAttestationClient(cmd *cobra.Command, _ []string) error {
 	return deployClient(cmd, attestationParams)
 }
 
-func deployBesuQBFTClient(cmd *cobra.Command, _ []string) error {
+func deployBesuClient(cmd *cobra.Command, _ []string) error {
 	return deployClient(cmd, func(
 		ctx context.Context, cfg config.Config, counterpartyChainID string, counterpartyTarget deploy.Target,
 	) (deploy.ClientParams, error) {
 		// newTarget already checked that the counterparty is a configured EVM chain
 		counterparty, _ := cfg.Chain(counterpartyChainID)
-		params, err := besuQBFTParams(ctx, counterparty.EVM.ICS26Router, counterpartyTarget)
-		return params, errors.Wrapf(err, "besu-qbft client tracking chain %s", counterpartyChainID)
+		params, err := besuParams(ctx, counterparty.EVM.ICS26Router, counterpartyTarget)
+		return params, errors.Wrapf(err, "besu client tracking chain %s", counterpartyChainID)
 	})
 }
 
@@ -557,15 +619,9 @@ func deployShow(_ *cobra.Command, args []string) error {
 
 // attestorsFromClient projects one client's on-chain attestor addresses into
 // attestors
-func attestorsFromClient(cfg config.Config, c manifest.Client, watchedChainID string) config.Attestors {
-	addresses, _ := c.Params["attestors"].([]any)
-
-	out := make(config.Attestors, 0, len(addresses))
-	for _, raw := range addresses {
-		address, ok := raw.(string)
-		if !ok {
-			continue
-		}
+func attestorsFromClient(cfg config.Config, p manifest.AttestationParams, watchedChainID string) config.Attestors {
+	out := make(config.Attestors, 0, len(p.Attestors))
+	for _, address := range p.Attestors {
 		alias, _ := signerAliasForAddress(cfg, address)
 		out = append(out, config.AttestorConfig{
 			ChainID: watchedChainID,
@@ -614,7 +670,7 @@ func signerAliasForAddress(cfg config.Config, address string) (string, bool) {
 }
 
 // renderedChain copies the operated-on chain's config (if declared) and sets
-// its router to the deployed address, so the emitted chains[] entry is
+// its router and multicall to the deployed addresses, so the emitted chains[] entry is
 // ready to relay against.
 func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	chain, _ := cfg.Chain(m.ChainID)
@@ -626,6 +682,7 @@ func renderedChain(cfg config.Config, m *manifest.Manifest) config.ChainConfig {
 	}
 
 	evm.ICS26Router = m.Core.Router
+	evm.IBCMulticall = m.Core.Multicall
 	chain.EVM = &evm
 
 	return chain
@@ -638,7 +695,7 @@ func renderedClientEnd(m *manifest.Manifest, c manifest.Client, signer string) c
 		ChainID:   m.ChainID,
 		Signer:    signer,
 		ClientID:  c.ClientID,
-		Type:      config.ClientType(c.Type),
+		Type:      c.Type(),
 		AutoRelay: config.AutoRelayConfig{Enabled: &autoRelay},
 	}
 }
@@ -667,11 +724,13 @@ func renderRelayConfig(
 			ClientA: renderedClientEnd(a, ca, signerA),
 			ClientB: renderedClientEnd(b, cb, signerB),
 		})
-		if ca.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, ca, b.ChainID))
+		if ca.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *ca.Attestation, b.ChainID))
 		}
-		if cb.Type == deploy.ClientTypeAttestation {
-			out.Attestors = appendUniqueAttestors(out.Attestors, seenAttestors, attestorsFromClient(cfg, cb, a.ChainID))
+		if cb.Attestation != nil {
+			out.Attestors = appendUniqueAttestors(
+				out.Attestors, seenAttestors, attestorsFromClient(cfg, *cb.Attestation, a.ChainID))
 		}
 	}
 	if len(out.Connections) == 0 {
@@ -828,23 +887,67 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" {
 		return errors.New("--chain is required")
 	}
+	if flagDeployIFTCapacity == "" && flagDeployIFTOwner == "" {
+		return errIFTCapacityRequired
+	}
 	chain, ok := cfg.Chain(flagDeployChain)
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagDeployChain)
 	}
+	deployer, err := deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+	if err != nil {
+		return err
+	}
 	owner := flagDeployIFTOwner
 	if owner == "" {
-		owner, err = deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
-		if err != nil {
-			return err
-		}
+		owner = deployer
+	}
+	if !common.IsHexAddress(owner) {
+		return errors.Errorf("invalid --owner %q", owner)
+	}
+	rateLimit, err := iftRateLimit(owner, deployer, cmd.Flags().Changed("rate-limit-window"))
+	if err != nil {
+		return err
 	}
 	target, err := newTarget(cmd.Context(), cfg, flagDeployChain, flagDeployDeployer, true)
 	if err != nil {
 		return err
 	}
-	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol}
+	spec := deploy.IFTSpec{Owner: owner, Name: flagDeployIFTName, Symbol: flagDeployIFTSymbol, RateLimit: rateLimit}
 	return planThenRun(cmd.Context(), deploy.IFTSteps(target, flagDeployManifestDir, flagDeployChain, spec))
+}
+
+// maxIFTCapacity is the largest capacity the contract stores (uint208).
+var maxIFTCapacity = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 208), big.NewInt(1))
+
+var errIFTCapacityRequired = errors.New("--rate-limit-capacity is required")
+
+// iftRateLimit resolves the rate limit `deploy ift` sets from its flags. Only
+// the owner can set it, so a token owned by someone other than the deployer
+// gets none.
+func iftRateLimit(owner, deployer string, windowSet bool) (*deploy.IFTRateLimit, error) {
+	if common.HexToAddress(owner) != common.HexToAddress(deployer) {
+		if flagDeployIFTCapacity != "" || windowSet {
+			return nil, errors.Errorf(
+				"--owner %s is not the deployer %s: only the owner can set the rate limit", owner, deployer)
+		}
+		slog.Warn("IFT owner is not the deployer: the owner must call setIFTRateLimit before any transfer succeeds",
+			"owner", owner)
+		return nil, nil
+	}
+	if flagDeployIFTCapacity == "" {
+		return nil, errIFTCapacityRequired
+	}
+
+	window, err := wholeSeconds(flagDeployIFTWindow)
+	if err != nil || window == 0 {
+		return nil, errors.Errorf("invalid --rate-limit-window %s: must be at least 1s", flagDeployIFTWindow)
+	}
+	capacity := parseIFTAmount(flagDeployIFTCapacity)
+	if capacity == nil || capacity.Sign() == 0 || capacity.Cmp(maxIFTCapacity) > 0 {
+		return nil, errors.Errorf("invalid --rate-limit-capacity %q: must be a positive uint208", flagDeployIFTCapacity)
+	}
+	return &deploy.IFTRateLimit{Capacity: capacity, Window: window}, nil
 }
 
 // deployIFTBridge registers both sides of an IFT bridge in one invocation:
@@ -859,10 +962,13 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 	if flagDeployBridgeChainA == flagDeployBridgeChainB {
 		return errors.New("--chain-a and --chain-b must differ")
 	}
-	for _, addr := range []string{flagDeployBridgeIFTA, flagDeployBridgeIFTB} {
-		if !common.IsHexAddress(addr) {
-			return errors.Errorf("invalid IFT address %q", addr)
-		}
+	iftA, err := normalizeIFTAddress(cfg, flagDeployBridgeChainA, flagDeployBridgeIFTA)
+	if err != nil {
+		return err
+	}
+	iftB, err := normalizeIFTAddress(cfg, flagDeployBridgeChainB, flagDeployBridgeIFTB)
+	if err != nil {
+		return err
 	}
 	clientID := flagDeployBridgeClientID
 	if clientID == "" {
@@ -880,10 +986,25 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainB)
 	}
 	stepsA := deploy.IFTBridgeSteps(
-		targetA, flagDeployManifestDir, flagDeployBridgeChainA, flagDeployBridgeIFTA, flagDeployBridgeCtorA,
-		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTB})
+		targetA, flagDeployManifestDir, flagDeployBridgeChainA, iftA, flagDeployBridgeCtorA,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: iftB})
 	stepsB := deploy.IFTBridgeSteps(
-		targetB, flagDeployManifestDir, flagDeployBridgeChainB, flagDeployBridgeIFTB, flagDeployBridgeCtorB,
-		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTA})
+		targetB, flagDeployManifestDir, flagDeployBridgeChainB, iftB, flagDeployBridgeCtorB,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: iftA})
 	return planThenRun(cmd.Context(), append(stepsA, stepsB...))
+}
+
+func normalizeIFTAddress(cfg config.Config, chainID, address string) (string, error) {
+	chain, ok := cfg.Chain(chainID)
+	if !ok {
+		return "", errors.Errorf("chain %q not declared in config", chainID)
+	}
+	if chain.Type() != config.ChainTypeEVM {
+		return address, nil
+	}
+	if !common.IsHexAddress(address) {
+		return "", errors.Errorf("invalid IFT address %q", address)
+	}
+	// GMP identifies EVM senders by their checksummed address string.
+	return common.HexToAddress(address).Hex(), nil
 }

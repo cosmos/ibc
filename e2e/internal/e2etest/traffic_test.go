@@ -69,17 +69,13 @@ func TestRouteWaitPolicy(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, routeWaitPolicy(tt.source, tt.destination))
+			require.Equal(t, tt.want, RouteWaitPolicy(tt.source, tt.destination))
 		})
 	}
 }
 
 func TestAwaitStateRequiresRouteWaitPolicy(t *testing.T) {
-	_, err := AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{Sequence: 7},
-		relayerv2.PacketState_PACKET_STATE_PENDING)
-	require.EqualError(t, err, "e2etest: packet sequence 7 has no route id")
-
-	_, err = AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{RouteID: "missing", Sequence: 7},
+	_, err := AwaitState(context.Background(), &ibccli.Relayer{}, PacketTx{RouteID: "missing", Sequence: 7},
 		relayerv2.PacketState_PACKET_STATE_PENDING)
 	require.EqualError(t, err, `e2etest: packet missing-7 has no wait policy for route "missing"`)
 }

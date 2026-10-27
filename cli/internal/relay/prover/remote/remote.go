@@ -6,6 +6,7 @@ package remote
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
+	"github.com/cosmos/ibc/cli/internal/network"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -38,18 +40,18 @@ func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *s
 	}
 }
 
-// NewFromURL dials url with a client that can negotiate h2c, which gRPC
-// requires over plaintext.
-func NewFromURL(url, chainID, clientID string, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(), url, chainID, clientID, logger)
+// NewFromEndpoint dials endpoint with a client that can negotiate h2c, which
+// gRPC requires over plaintext.
+func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger *slog.Logger) *Prover {
+	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, logger)
 }
 
-func newHTTPClient() *http.Client {
+func newHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	return &http.Client{Transport: &http.Transport{Protocols: protocols}}
+	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig}}
 }
 
 func (p *Prover) target() *proverv2.Client {
@@ -97,7 +99,11 @@ func (p *Prover) PacketProofs(
 	height uint64,
 	kind v2.ProofKind,
 	packets []channeltypesv2.Packet,
+	acknowledgements []channeltypesv2.Acknowledgement,
 ) ([][]byte, error) {
+	if kind == v2.ProofKindAcknowledgement && len(acknowledgements) != len(packets) {
+		return nil, errors.New("acknowledgement count must match packet count")
+	}
 	protoKind, err := proofKindToProto(kind)
 	if err != nil {
 		return nil, err
@@ -107,10 +113,11 @@ func (p *Prover) PacketProofs(
 	defer cancel()
 
 	res, err := p.client.PacketProofs(ctx, connect.NewRequest(&proverv2.PacketProofsRequest{
-		Client:  p.target(),
-		Height:  height,
-		Kind:    protoKind,
-		Packets: packetsToProto(packets),
+		Client:           p.target(),
+		Height:           height,
+		Kind:             protoKind,
+		Packets:          packetsToProto(packets),
+		Acknowledgements: acknowledgementsToProto(acknowledgements),
 	}))
 	if err != nil {
 		return nil, errors.Wrap(err, "remote prover: packet proofs")
@@ -177,5 +184,13 @@ func payloadsToProto(payloads []channeltypesv2.Payload) []*proverv2.Payload {
 		}
 	}
 
+	return out
+}
+
+func acknowledgementsToProto(acks []channeltypesv2.Acknowledgement) []*proverv2.Acknowledgement {
+	out := make([]*proverv2.Acknowledgement, len(acks))
+	for i, ack := range acks {
+		out[i] = &proverv2.Acknowledgement{AppAcknowledgements: ack.AppAcknowledgements}
+	}
 	return out
 }

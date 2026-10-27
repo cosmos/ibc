@@ -45,6 +45,7 @@ type ChainClients interface {
 
 // Store queries used by the relayer gRPC handlers.
 type Store interface {
+	Ping(ctx context.Context) error
 	ListPackets(ctx context.Context, filter store.PacketFilter, page store.Page) ([]store.Packet, error)
 	Transact(ctx context.Context, call func(store.Repository) error) error
 }
@@ -178,6 +179,11 @@ func New(
 		dispatcher: dispatcher,
 		watchers:   watchers,
 	}
+}
+
+// CheckReady checks database reachability.
+func (s *Service) CheckReady(ctx context.Context) error {
+	return s.store.Ping(ctx)
 }
 
 // Start begins the background relay dispatch loop and the packet watchers.

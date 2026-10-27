@@ -11,15 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/erc1967proxy"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/evmiftsendcall"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/erc1967proxy"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/evmiftsendcall"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
@@ -43,6 +43,11 @@ var initialTokenSupply = mustBigInt("1000000000000000000000000")
 // for each test actor before deployment.
 func RequiredSignerBalance() *big.Int {
 	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
+}
+
+// Coins converts $counts * 10^18 wei
+func Coins(coins int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(coins), big.NewInt(weiPerEther))
 }
 
 // ProtocolAuthorityAddress is the deployer funded for IBC Instance realization.
@@ -91,6 +96,7 @@ type ChainDeployment struct {
 	ICS20Transfer          common.Address
 	ICS27GMP               common.Address
 	ICS26Router            common.Address
+	IBCMulticall           common.Address
 }
 
 // RouteClients holds the protocol client IDs and light client kinds for one
@@ -244,10 +250,12 @@ func deployApps(
 		ics20 := common.HexToAddress(string(instance.ICS20TransferAddress()))
 		ics27 := common.HexToAddress(string(instance.ICS27GMPAddress()))
 		router := common.HexToAddress(string(instance.Locator()))
+		multicall := common.HexToAddress(string(instance.IBCMulticallAddress()))
 		require.False(
 			t,
-			ics20 == (common.Address{}) || ics27 == (common.Address{}) || router == (common.Address{}),
-			"e2etest: Chain %q is missing the ICS20/ICS27 app stack",
+			ics20 == (common.Address{}) || ics27 == (common.Address{}) || router == (common.Address{}) ||
+				multicall == (common.Address{}),
+			"e2etest: Chain %q is missing the ICS20/ICS27/multicall stack",
 			id,
 		)
 
@@ -288,10 +296,15 @@ func deployApps(
 			ICS20Transfer:          ics20,
 			ICS27GMP:               ics27,
 			ICS26Router:            router,
+			IBCMulticall:           multicall,
 		}
 	}
 
 	for _, route := range routes {
+		require.NotEmpty(t, route.ID, "e2etest: route from %q to %q has no id", route.Source, route.Destination)
+		_, duplicate := deployment.routes[route.ID]
+		require.False(t, duplicate, "e2etest: route id %q is used more than once", route.ID)
+		require.NotEqual(t, route.Source, route.Destination, "e2etest: route %q connects a Chain to itself", route.ID)
 		sourceClient, destClient, err := resolveRouteClients(env, route)
 		require.NoError(t, err, "e2etest: resolve clients for route %q", route.ID)
 		deployment.routes[route.ID] = RouteClients{
@@ -375,6 +388,7 @@ func buildConfig(
 	dbPath string,
 ) (ibccli.RelayerConfig, ibccli.RelayerOptions) {
 	t.Helper()
+
 	config := ibccli.RelayerConfig{
 		DBPath:         dbPath,
 		SignerAlias:    relayerSignerAlias,
@@ -382,12 +396,17 @@ func buildConfig(
 		FinalityOffset: ibccli.HarnessFinalityOffset,
 		ClearOnStart:   false,
 		ClearInterval:  5 * time.Second,
+		Observability:  env.ObservabilityEnabled(),
 	}
+
+	chains := env.Chains()
 	options := ibccli.RelayerOptions{
-		ChainIDs:     make(map[string]string, len(env.Chains())),
-		WaitPolicies: make(map[string]ibccli.WaitPolicy, len(routes)),
+		ChainIDs:      make(map[string]string, len(chains)),
+		WaitPolicies:  make(map[string]ibccli.WaitPolicy, len(routes)),
+		Observability: env.ObservabilityEnabled(),
 	}
-	for _, id := range env.Chains() {
+
+	for _, id := range chains {
 		chain, err := env.Chain(id)
 		require.NoError(t, err, "e2etest: resolve Chain %q", id)
 		rpc, err := driver.ChainRPC(string(id))
@@ -396,9 +415,10 @@ func buildConfig(
 		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
 		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
 		relayerChain := ibccli.RelayerChain{
-			ChainID:     options.ChainIDs[string(id)],
-			RPC:         rpc,
-			ICS26Router: apps.ICS26Router.Hex(),
+			ChainID:      options.ChainIDs[string(id)],
+			RPC:          rpc,
+			ICS26Router:  apps.ICS26Router.Hex(),
+			IBCMulticall: apps.IBCMulticall.Hex(),
 		}
 		if chain.WSURL() != "" {
 			ws, wsErr := driver.ChainWS(string(id))
@@ -429,7 +449,7 @@ func buildConfig(
 		if err != nil {
 			t.Fatalf("e2etest: resolve route %q destination Chain %q: %v", route.ID, route.Destination, err)
 		}
-		options.WaitPolicies[string(route.ID)] = routeWaitPolicy(source.Timing(), destination.Timing())
+		options.WaitPolicies[string(route.ID)] = RouteWaitPolicy(source.Timing(), destination.Timing())
 
 		sourceChain := options.ChainIDs[string(route.Source)]
 		destinationChain := options.ChainIDs[string(route.Destination)]
@@ -472,7 +492,9 @@ func mergeRelayerConnection(
 	config.Connections = append(config.Connections, connection)
 }
 
-func routeWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
+// RouteWaitPolicy is the end-to-end packet wait policy for a route between
+// Chains with the given timings.
+func RouteWaitPolicy(source, destination environment.Timing) ibccli.WaitPolicy {
 	return ibccli.WaitPolicy{
 		CompletionBudget: source.CompletionBudget + destination.CompletionBudget,
 		StatusPoll:       max(source.PollInterval, destination.PollInterval),

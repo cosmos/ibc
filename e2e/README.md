@@ -2,15 +2,15 @@
 
 # Repository E2E Test Surface
 
-This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients and, between two Besu chains, through Besu QBFT light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
+This repository-level surface hosts one black-box acceptance package. Its tests drive IBC CLI through its public CLI, config, readiness, relay, and status contracts, and relay real IBC packets through attestation light clients and, on connections that track a Besu chain, through Besu QBFT and IBFT 2.0 light clients; the quorum test additionally exercises 2-of-3 quorum loss and recovery.
 
-`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation and Besu QBFT light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
+`internal/harness/environment` realizes Chains and protocol resources, including the IBC contract stack, attestation and Besu light clients, and attestor processes. `internal/e2etest` deploys a test ERC20, a Counter target, and an IFT token per Chain and binds ICS20 transfers, ICS27 GMP calls, and IFT transfers to routes. Tests deploy the applications and start the relayer explicitly, so process restarts, manual relay, fault injection, and teardown remain visible in the behavior under test.
 
 ## Acceptance coverage
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-Besu QBFT light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestDeployBesuQBFTConnection` deploys the clients through `ibc deploy client besu-qbft`. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
+Besu light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestTransferBesuIBFT2_AutoRelay` repeats the transfer on IBFT 2.0 chains. `TestDeployBesuQBFTIBFT2Connection` deploys a besu connection between a QBFT and an IBFT 2.0 chain with `ibc deploy client besu` alone, so each client detects a different consensus, and relays an IFT transfer over it; `TestDeployMixedBesuQBFTAttestationConnection` does the same for the production shape, a besu client on one end and an attestation client on the other, relaying a round trip so each client type proves both a receive and an acknowledgement. `TestTransferBesuQBFT_ValidatorTurnover` and `TestTransferBesuIBFT2_ValidatorTurnover` run the source chain with three follower nodes and, before any packet is relayed, vote the followers in as validators and three of the four genesis validators out, so the relayer must step the destination's client across the set changes to relay a transfer. Their clients are deployed at a trust level of one half through `NewBesuClient.TrustLevel`, since at the default two thirds the client cannot follow the removals. `ManagedBesu.Followers` adds the follower nodes and `Chain.Validators` votes through them. `TestBesuQBFTClient_DoubleSignFreeze` and `TestBesuQBFTClient_TimeNonMonotonicityFreeze` submit headers sealed by a quorum of the source validators as misbehaviour evidence, one pair for each kind the client detects, and require the frozen client to reject updates and leave the next transfer pending. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
 
 ## Running the acceptance tests
 
@@ -31,11 +31,11 @@ export DOCKER_HOST="$(docker context inspect | jq -r '.[0].Endpoints.docker.Host
 
 Execution modes choose providers from each test's declared requirements:
 
-| Mode | Provider policy | Unresolved requirement |
-|---|---|---|
-| `fast` (default) | Prefer Anvil | Skip |
-| `complete` | Prefer Anvil | Fail |
-| `production` | Prefer Besu, then Anvil | Fail |
+| Mode             | Provider policy         | Unresolved requirement |
+| ---------------- | ----------------------- | ---------------------- |
+| `fast` (default) | Prefer Anvil            | Skip                   |
+| `complete`       | Prefer Anvil            | Fail                   |
+| `production`     | Prefer Besu, then Anvil | Fail                   |
 
 Portable EVM tests therefore use Anvil in fast and complete modes and Besu in production mode.
 Tests requiring controlled mining or node lifecycle use Anvil in every mode because Besu does not
@@ -50,7 +50,7 @@ make -C e2e test E2E_FLAGS='-run TestIFTTransfer_AutoRelay -count=1'
 make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 -count=1'
 ```
 
-`-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. After a hard crash, use
+`-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`. After a hard crash, use
 `make -C e2e clean-dry-run` and then `make -C e2e clean`.
 
 Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
@@ -62,7 +62,7 @@ The setup sequence is deliberately explicit:
 ```go
 func TestTransfer_AutoRelay(t *testing.T) {
     t.Parallel()
-    spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+    spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
     env := e2etest.Start(t, spec, runtime)
     sender := e2etest.NewSigner(t)
     relayerSigner := e2etest.NewSigner(t)
@@ -92,7 +92,7 @@ Declare capabilities instead of naming a provider. For example, a controlled-min
 ```go
 chains := e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true},
     e2etest.ChainA, e2etest.ChainB)
-spec, runtime := attestedMesh(chains)
+spec, runtime := e2etest.AttestedMesh(chains)
 env := e2etest.Start(t, spec, runtime)
 
 chainB, err := env.Chain(e2etest.ChainB)
@@ -113,8 +113,14 @@ interval-only, so a transaction may wait up to one second for inclusion.
 `Environment` owns and cleans up only managed resources. An attached EVM remains caller-owned even
 when the harness can connect to it, and connectivity does not grant mining or node-lifecycle control.
 
-Bootstrapping a Besu QBFT light client reads validators from the sealed block header through
-the `ETH` RPC API; it does not require the `QBFT` RPC API.
+Managed Besu runs four validators on a Docker network of its own, so a block needs three of the
+four seals; the first validator serves RPC. `ManagedBesu.Followers` adds nodes that sync from
+genesis and can be voted in. `Chain.Validators` votes, and its `Keys` returns the genesis
+validators' keys, which lets a test seal headers the chain never produced, such as misbehaviour
+evidence.
+
+Bootstrapping a Besu light client reads validators from the sealed block header through
+the `ETH` RPC API; it does not require the `QBFT` or `IBFT` RPC API.
 
 ## Provider and topology matrix
 
@@ -130,9 +136,47 @@ make -C e2e check-matrix
 Regenerate the matrix after changing test requirements or topology. The check compares generated
 output without modifying the committed file.
 
+## Besu light-client fixtures
+
+`cli/besu/besutest/testdata/{qbft,ibft2}.json` are the fixtures the Besu light-client tests read,
+here and in ibc-contracts' `ibc-solidity/test/besu-bft`. The harness generates them, so they come
+from the Besu image it boots (`DefaultDockerImage` in `chain/evm/besu`, or `BESU_DOCKER_IMAGE`):
+
+```sh
+make -C e2e generate-besu-fixtures
+make -C e2e generate-besu-fixtures IBC_CONTRACTS=<ibc-contracts checkout>  # also copies them there
+```
+
+`TestGenerateBesuFixtures`, in `besufixtures/` outside the acceptance package and matrix, boots
+two chains per consensus, sends a transfer and captures from the sending chain the trusted
+header two blocks below the send, an adjacent and a non-adjacent update to the send, and
+membership and non-membership proofs at the send. It reseals headers with the validator keys
+for the updates the client must reject: the send's header sealed short of quorum, the send's
+header with another state root, and the next header with validators mostly new. It skips
+unless `BESU_FIXTURES_DIR` names the directory to write to.
+
 ## Extending the graph
 
-`attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains; `qbftMesh` builds the same graph with Besu QBFT Clients and no Attestors, and requires every chain to run Besu. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+`e2etest.AttestedMesh` builds a fully connected attested mesh over the given chains; `e2etest.BesuMesh` builds the same graph over Besu chains with Besu Clients and no Attestors; each Client detects its counterparty's consensus, and `e2etest.BesuChains` sets each chain's consensus. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+
+## Load Testing
+
+Load tests use the `TestLoad*` naming convention and are disabled by default. 
+Enable them with `E2E_LOAD=true`, `E2E_LOAD=1`, or `-e2e.load`:
+
+```sh
+make -C e2e test E2E_LOAD=true E2E_FLAGS='-run TestLoad_RelayerBurst -count=1 -v -parallel 1'
+# make -C e2e test E2E_FLAGS='-e2e.load -run TestLoad_RelayerBurst -count=1 -v -parallel 1'
+```
+
+`-e2e.load` overrides `E2E_LOAD`.
+
+Load mode starts the local OTEL stack and automatically configures attestors and relayers to export metrics.
+Grafana is available at http://localhost:3001
+
+`service_runtime` label indicates which binary is being metered.
+
+See [the local OTEL documentation](../cli/scripts/otel/README.md) for more details.
 
 ## Debugging
 

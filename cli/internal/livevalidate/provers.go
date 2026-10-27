@@ -18,8 +18,8 @@ import (
 // checkProvers resolves every configured attestor (local and remote) and
 // builds a prover for every client end of every configured connection, which
 // confirms against on-chain state that attestation ends can satisfy their
-// attestor quorum and that besu-qbft ends prove the configured counterparty
-// router.
+// attestor quorum and that Besu ends prove the configured counterparty
+// router. Ends with a remoteProver are left to their ProverService.
 func checkProvers(ctx context.Context, cfg config.Config, clientSet *chains.ClientSet) error {
 	signers, err := signer.NewSetFromConfig(ctx, cfg.Signers)
 	if err != nil {

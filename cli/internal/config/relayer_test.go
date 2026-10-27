@@ -38,9 +38,7 @@ func TestRelayerConfig(t *testing.T) {
 		require.NotNil(t, chain.AbandonUnrecoverablePackets)
 		assert.True(t, *chain.AbandonUnrecoverablePackets)
 		assert.Equal(t, "0x0000000000000000000000000000000000000001", config.Chains[0].EVM.ICS26Router)
-		assert.Equal(t, 2*time.Second, *chain.TxSubmissionDelay)
-		//nolint:testifylint // exact literal from the fixture; a tolerance would mask decoding drift
-		assert.Equal(t, 1.5, *chain.EVM.GasFeeCapMultiplier)
+		assert.Equal(t, 2*time.Minute, *chain.EVM.PendingTxTimeout)
 		assert.Equal(t, 20, *chain.PacketBatchSize)
 		assert.Equal(t, 10*time.Second, *chain.PacketBatchTimeout)
 
@@ -213,26 +211,26 @@ func TestRelayerConfig(t *testing.T) {
 				errContains: "relayer.chainOverrides[0].clearInterval: must be positive",
 			},
 			{
-				name: "negative tx submission delay",
-				patch: func(c *Config) {
-					delay := -time.Second
-					c.Relayer.ChainOverrides[0].TxSubmissionDelay = &delay
-				},
-				errContains: ".txSubmissionDelay: must not be negative",
-			},
-			{
 				name: "missing router contract is allowed -- it's a deploy output, not operator input",
 				patch: func(c *Config) {
 					c.Chains[0].EVM.ICS26Router = ""
 				},
 			},
 			{
-				name: "zero gas multiplier",
+				name: "zero pending transaction timeout",
 				patch: func(c *Config) {
-					zero := 0.0
-					c.Relayer.ChainOverrides[0].EVM.GasFeeCapMultiplier = &zero
+					zero := time.Duration(0)
+					c.Relayer.ChainOverrides[0].EVM.PendingTxTimeout = &zero
 				},
-				errContains: ".gasFeeCapMultiplier: must be positive",
+				errContains: ".pendingTxTimeout: must be positive",
+			},
+			{
+				name: "negative pending transaction timeout",
+				patch: func(c *Config) {
+					negative := -time.Second
+					c.Relayer.ChainOverrides[0].EVM.PendingTxTimeout = &negative
+				},
+				errContains: ".pendingTxTimeout: must be positive",
 			},
 			{
 				name: "client missing clientId",
@@ -247,13 +245,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Connections[0].ClientA.ChainID = ""
 				},
 				errContains: ".chainId: required",
-			},
-			{
-				name: "unsupported client type",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.Type = "tendermint"
-				},
-				errContains: `.clientA.type: unknown client type: "tendermint"`,
 			},
 			{
 				name: "duplicate client",
@@ -306,14 +297,6 @@ func TestRelayerConfig(t *testing.T) {
 					c.Relayer.Connections[0].ClientA.Signer = ""
 				},
 				errContains: ".signer: required",
-			},
-			{
-				name: "remote client params decode error",
-				patch: func(c *Config) {
-					c.Relayer.Connections[0].ClientA.Type = ClientTypeRemote
-					c.Relayer.Connections[0].ClientA.Params = yaml.RawMessage("endpoint: http://prover:9090\n")
-				},
-				errContains: "relayer.connections[0].clientA.params:",
 			},
 		} {
 			t.Run(tt.name, func(t *testing.T) {
@@ -410,29 +393,25 @@ func TestConnectionConfigSourceEnd(t *testing.T) {
 	}
 }
 
-// Params are checked by Validate, not by parsing, so commands that load a
-// config without validating it still work.
-func TestClientEndParams(t *testing.T) {
+// A remoteProver relays a light client the IBC CLI does not implement, so it
+// lifts the restriction to built-in types.
+func TestClientEndType(t *testing.T) {
 	t.Parallel()
 
 	const base = "chainId: \"1\"\nsigner: relayer\nclientId: c-0\n"
 
 	for _, tt := range []struct {
-		name       string
-		doc        string
-		wantURL    string
-		wantParams ClientParams
-		wantErr    string
+		name    string
+		doc     string
+		wantErr string
 	}{
-		{name: "remote", doc: "type: remote\nparams:\n  url: http://prover:9090\n", wantURL: "http://prover:9090"},
-		{name: "remote without params", doc: "type: remote\n", wantErr: "params.url: required"},
-		{name: "remote with empty url", doc: "type: remote\nparams:\n  url: \"\"\n", wantErr: "params.url: required"},
-		{name: "remote with misspelled key", doc: "type: remote\nparams:\n  endpoint: http://prover:9090\n", wantErr: "params:"},
-		{name: "attestation", doc: "type: attestation\n", wantParams: &AttestationParams{}},
-		{name: "attestation takes no params", doc: "type: attestation\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "besu-qbft", doc: "type: besu-qbft\n", wantParams: &BesuQBFTParams{}},
-		{name: "besu-qbft takes no params", doc: "type: besu-qbft\nparams:\n  url: http://prover:9090\n", wantErr: "params:"},
-		{name: "unknown type", doc: "type: someFutureClient\n", wantErr: "someFutureClient"},
+		{name: "attestation", doc: "type: attestation\n"},
+		{name: "besu", doc: "type: besu\n"},
+		{name: "built-in type with remoteProver", doc: "type: besu\nremoteProver:\n  url: http://prover:9090\n"},
+		{name: "any type with remoteProver", doc: "type: tendermint\nremoteProver:\n  url: http://prover:9090\n"},
+		{name: "unknown type", doc: "type: tendermint\n", wantErr: "set remoteProver"},
+		{name: "missing type", doc: "remoteProver:\n  url: http://prover:9090\n", wantErr: "type: required"},
+		{name: "remoteProver errors carry its path", doc: "type: tendermint\nremoteProver:\n  url: grpc://prover:9090\n", wantErr: "remoteProver.url: must be a bare host:port"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -446,16 +425,6 @@ func TestClientEndParams(t *testing.T) {
 			}
 
 			require.NoError(t, client.Validate())
-
-			params, err := client.ClientParams()
-			require.NoError(t, err)
-
-			if tt.wantURL == "" {
-				require.IsType(t, tt.wantParams, params)
-				return
-			}
-
-			require.Equal(t, tt.wantURL, params.(*RemoteParams).URL)
 		})
 	}
 }

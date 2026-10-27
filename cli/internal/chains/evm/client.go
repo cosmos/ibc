@@ -9,12 +9,11 @@ import (
 	"crypto/sha256"
 	"log/slog"
 	"math/big"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/attestation"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -26,6 +25,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -47,12 +48,15 @@ type ETHClient interface {
 	bind.ContractBackend
 
 	BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error)
+	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
+	EstimateGasAtBlock(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) (uint64, error)
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error)
 	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
 
 	// GetProof is eth_getProof for account at blockNumber, or the head when
-	// nil: the account proof nodes and one storage proof per key, in key order.
+	// nil: the account proof nodes and one storage proof per key, in the
+	// order of keys.
 	GetProof(
 		ctx context.Context,
 		account common.Address,
@@ -72,17 +76,55 @@ type Client struct {
 	logger        *slog.Logger
 }
 
-// Dial connects to the chain's HTTP JSON-RPC endpoint. Every call is recorded in metrics.
+// nodeTransport keeps connections to each node open for reuse. go-ethereum's
+// default HTTP client keeps two idle per host, so concurrent calls beyond two
+// each open and close a connection, and under load the closed connections
+// hold every local port in TIME_WAIT.
+var nodeTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = 256
+	return transport
+}()
+
+// Dial verifies the endpoint's chain ID, then records subsequent calls in metrics.
 func Dial(chainID, rpcURL string) (ETHClient, error) {
-	rpcClient, err := rpc.Dial(rpcURL)
+	client, err := dialRPC(chainID, rpcURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return newMeteredClient(chainID, client), nil
+}
+
+func dialRPC(chainID, rpcURL string) (*rpcClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := rpc.DialOptions(
+		ctx,
+		rpcURL,
+		rpc.WithHTTPClient(&http.Client{Transport: nodeTransport}),
+	)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}
 
-	return newMeteredClient(chainID, newRPCClient(rpcClient)), nil
+	client := newRPCClient(conn)
+	actual, err := client.ChainID(ctx)
+	if err != nil {
+		client.Close()
+		return nil, errors.Wrapf(err, "querying chain ID for chain %s", chainID)
+	}
+	if actual.String() != chainID {
+		client.Close()
+		return nil, errors.Errorf("rpc reports chain ID %s, configured chain ID is %s", actual, chainID)
+	}
+
+	return client, nil
 }
 
-// New dials the chain.
+// New dials the chain and verifies each endpoint's chain ID.
 func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := Dial(chainID, rpcURL)
 	if err != nil {
@@ -93,12 +135,12 @@ func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 
 	if wsURL != "" {
 		// ws is not metered
-		dialed, errDial := rpc.Dial(wsURL)
+		dialed, errDial := dialRPC(chainID, wsURL)
 		if errDial != nil {
 			return nil, errors.Wrapf(errDial, "dialing websocket for chain %s", chainID)
 		}
 
-		ws = newRPCClient(dialed)
+		ws = dialed
 	}
 
 	return NewWithClients(chainID, eth, ws, ics26RouterAddress)
@@ -876,6 +918,65 @@ func (c *Client) txSender(ctx context.Context, hash common.Hash) (string, error)
 	return sender.String(), nil
 }
 
+func (c *Client) PacketRelayExecuted(
+	ctx context.Context,
+	txHash string,
+	kind v2.RelayKind,
+	sequence uint64,
+	sourceClientID string,
+	destClientID string,
+) (bool, error) {
+	var eventName string
+	switch kind {
+	case v2.RelayKindAck:
+		eventName = ackPacketEvent
+	case v2.RelayKindTimeout:
+		eventName = timeoutPacketEvent
+	default:
+		return false, errors.Errorf("unsupported relay kind %v", kind)
+	}
+
+	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
+	if errors.Is(err, ethereum.NotFound) {
+		return false, v2.ErrTxNotFound
+	}
+	if err != nil {
+		return false, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+	}
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		return false, nil
+	}
+
+	eventID := c.routerABI.Events[eventName].ID
+	for _, log := range receipt.Logs {
+		if log == nil || len(log.Topics) == 0 || log.Address != c.routerAddress || log.Topics[0] != eventID {
+			continue
+		}
+
+		var packet ics26router.IICS26RouterMsgsPacket
+		switch kind {
+		case v2.RelayKindAck:
+			event, err := c.router.ParseAckPacket(*log)
+			if err != nil {
+				return false, errors.Wrapf(err, "parsing %s from tx %s", eventName, txHash)
+			}
+			packet = event.Packet
+		case v2.RelayKindTimeout:
+			event, err := c.router.ParseTimeoutPacket(*log)
+			if err != nil {
+				return false, errors.Wrapf(err, "parsing %s from tx %s", eventName, txHash)
+			}
+			packet = event.Packet
+		}
+
+		if packet.Sequence == sequence && packet.SourceClient == sourceClientID && packet.DestClient == destClientID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (c *Client) PacketWriteAckStatus(
 	ctx context.Context,
 	recvTxHash string,
@@ -899,7 +1000,7 @@ func (c *Client) PacketWriteAckStatus(
 
 	for _, log := range receipt.Logs {
 		switch {
-		case log == nil, len(log.Topics) == 0:
+		case log == nil, len(log.Topics) == 0, log.Address != c.routerAddress:
 			continue
 		case log.Topics[0] != c.routerABI.Events[writeAckEvent].ID:
 			continue

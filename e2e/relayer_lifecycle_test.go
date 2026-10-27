@@ -21,7 +21,9 @@ func TestAutoRelay_PacketIsClearedOnRestart(t *testing.T) {
 
 	// ARRANGE
 	// Given attested setup
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 
 	// Given signers
@@ -65,7 +67,9 @@ func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
 
 	// ARRANGE
 	// Given attested setup
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 
 	// Given signers
@@ -112,7 +116,9 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 
 	// ARRANGE
 	// Given attested setup
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 
 	// Given signers
@@ -178,7 +184,7 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 
 func TestManualRelay_RequestSurvivesRestart(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)

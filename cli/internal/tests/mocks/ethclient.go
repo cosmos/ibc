@@ -328,6 +328,78 @@ func (_c *MockETHClient_EstimateGas_Call) RunAndReturn(run func(ctx context.Cont
 	return _c
 }
 
+// EstimateGasAtBlock provides a mock function for the type MockETHClient
+func (_mock *MockETHClient) EstimateGasAtBlock(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) (uint64, error) {
+	ret := _mock.Called(ctx, call, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EstimateGasAtBlock")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ethereum.CallMsg, *big.Int) (uint64, error)); ok {
+		return returnFunc(ctx, call, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ethereum.CallMsg, *big.Int) uint64); ok {
+		r0 = returnFunc(ctx, call, blockNumber)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ethereum.CallMsg, *big.Int) error); ok {
+		r1 = returnFunc(ctx, call, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockETHClient_EstimateGasAtBlock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EstimateGasAtBlock'
+type MockETHClient_EstimateGasAtBlock_Call struct {
+	*mock.Call
+}
+
+// EstimateGasAtBlock is a helper method to define mock.On call
+//   - ctx context.Context
+//   - call ethereum.CallMsg
+//   - blockNumber *big.Int
+func (_e *MockETHClient_Expecter) EstimateGasAtBlock(ctx any, call any, blockNumber any) *MockETHClient_EstimateGasAtBlock_Call {
+	return &MockETHClient_EstimateGasAtBlock_Call{Call: _e.mock.On("EstimateGasAtBlock", ctx, call, blockNumber)}
+}
+
+func (_c *MockETHClient_EstimateGasAtBlock_Call) Run(run func(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int)) *MockETHClient_EstimateGasAtBlock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 ethereum.CallMsg
+		if args[1] != nil {
+			arg1 = args[1].(ethereum.CallMsg)
+		}
+		var arg2 *big.Int
+		if args[2] != nil {
+			arg2 = args[2].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockETHClient_EstimateGasAtBlock_Call) Return(v uint64, err error) *MockETHClient_EstimateGasAtBlock_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *MockETHClient_EstimateGasAtBlock_Call) RunAndReturn(run func(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) (uint64, error)) *MockETHClient_EstimateGasAtBlock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FilterLogs provides a mock function for the type MockETHClient
 func (_mock *MockETHClient) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
 	ret := _mock.Called(ctx, q)
@@ -548,6 +620,78 @@ func (_c *MockETHClient_HeaderByNumber_Call) Return(header *types.Header, err er
 }
 
 func (_c *MockETHClient_HeaderByNumber_Call) RunAndReturn(run func(ctx context.Context, number *big.Int) (*types.Header, error)) *MockETHClient_HeaderByNumber_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// NonceAt provides a mock function for the type MockETHClient
+func (_mock *MockETHClient) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
+	ret := _mock.Called(ctx, account, blockNumber)
+
+	if len(ret) == 0 {
+		panic("no return value specified for NonceAt")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, *big.Int) (uint64, error)); ok {
+		return returnFunc(ctx, account, blockNumber)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, common.Address, *big.Int) uint64); ok {
+		r0 = returnFunc(ctx, account, blockNumber)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, common.Address, *big.Int) error); ok {
+		r1 = returnFunc(ctx, account, blockNumber)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockETHClient_NonceAt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'NonceAt'
+type MockETHClient_NonceAt_Call struct {
+	*mock.Call
+}
+
+// NonceAt is a helper method to define mock.On call
+//   - ctx context.Context
+//   - account common.Address
+//   - blockNumber *big.Int
+func (_e *MockETHClient_Expecter) NonceAt(ctx any, account any, blockNumber any) *MockETHClient_NonceAt_Call {
+	return &MockETHClient_NonceAt_Call{Call: _e.mock.On("NonceAt", ctx, account, blockNumber)}
+}
+
+func (_c *MockETHClient_NonceAt_Call) Run(run func(ctx context.Context, account common.Address, blockNumber *big.Int)) *MockETHClient_NonceAt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 common.Address
+		if args[1] != nil {
+			arg1 = args[1].(common.Address)
+		}
+		var arg2 *big.Int
+		if args[2] != nil {
+			arg2 = args[2].(*big.Int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockETHClient_NonceAt_Call) Return(v uint64, err error) *MockETHClient_NonceAt_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *MockETHClient_NonceAt_Call) RunAndReturn(run func(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)) *MockETHClient_NonceAt_Call {
 	_c.Call.Return(run)
 	return _c
 }

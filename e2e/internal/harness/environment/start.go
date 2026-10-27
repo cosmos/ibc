@@ -103,13 +103,14 @@ func start(ctx context.Context, spec Spec, runtime Runtime, d drivers) (*Environ
 	}
 
 	return &Environment{
-		chains:      chains,
-		instances:   instances,
-		connections: connections,
-		attestors:   attestors,
-		effects:     effects,
-		ws:          ws,
-		lease:       lease,
+		chains:        chains,
+		instances:     instances,
+		connections:   connections,
+		attestors:     attestors,
+		effects:       effects,
+		ws:            ws,
+		lease:         lease,
+		observability: ibccli.ObservabilityEnabled(ctx),
 	}, nil
 }
 
@@ -388,12 +389,14 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 }
 
 func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcquisition, error) {
-	adapter, err := besu.StartQBFT(ctx, besu.Spec{
+	adapter, err := besu.Start(ctx, besu.Spec{
 		ID:          string(spec.ID),
 		ChainID:     spec.EVMChainID,
+		Consensus:   spec.Consensus,
 		WorkDir:     filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
 		RunID:       ws.runID,
 		BlockPeriod: besuBlockPeriod,
+		Followers:   spec.Followers,
 	})
 	if err != nil {
 		return chainAcquisition{}, err
@@ -407,6 +410,7 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 			timing:     blockTiming(besuBlockPeriod),
 			impl:       adapter,
 			funding:    &Funding{controller: adapter},
+			validators: &Validators{controller: adapter},
 		},
 		description: fmt.Sprintf("stop Chain %q", spec.ID),
 		release:     func(context.Context) error { return adapter.Stop() },

@@ -1,6 +1,6 @@
 ---
 title: "API"
-description: "The two gRPC services a running relayer and attestor serve, how to call them, and the prover service you can implement for them to call."
+description: "The relayer, attestation, and health APIs, how to call them, and the prover service you can implement for them to call."
 ---
 
 <!-- GEN:notice START -->
@@ -17,7 +17,7 @@ before opening a pull request.
 
 <!-- GEN:notice END -->
 
-The IBC CLI exposes two APIs: a relayer API and an attestation API.
+The IBC CLI exposes a relayer API and an attestation API, plus a shared health service.
 
 The relayer's API has two main parts:
 
@@ -28,7 +28,7 @@ The attestor's API serves the attestations a light client verifies. A relayer is
 
 Both services listen on `server.listenAddr`, defaulting to `0.0.0.0:3000`. <!-- [cli/internal/config/config.go: DefaultConfig] -->
 
-A third service is described at the end of this page, and the CLI does not serve it: `ProverService` is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. <!-- [cli/internal/relay/prover/prover.go: addGenerator] -->
+The `ProverService` described at the end of this page is one you implement and the relayer calls, to support a light client the CLI has no built-in prover for. The CLI does not serve it. <!-- [cli/internal/relay/prover/prover.go: addGenerator] -->
 
 To list running services:
 
@@ -37,12 +37,37 @@ grpcurl -plaintext localhost:3000 list
 ```
 
 ```
+grpc.health.v1.Health
 ibc.v2.relayer.RelayerApiService
 ```
 
 A process lists only the services it is running. The attestation service joins
 this list when the config gives it a local attestor to serve; the relayer above
 had none. <!-- [cli/internal/bootstrap/bootstrap.go: BuildRelayer] -->
+
+## Health checks
+
+Both relayers and standalone attestors expose the standard
+[`grpc.health.v1.Health`](https://grpc.io/docs/guides/health-checking/) service
+on their API address. `Check` is supported; `Watch` returns `UNIMPLEMENTED`.
+<!-- [cli/internal/server/server.go: New] -->
+
+With reflection enabled, check readiness using:
+
+```bash
+grpcurl -plaintext -d '{"service":""}' localhost:3000 grpc.health.v1.Health/Check
+```
+
+The request's `service` field selects the check:
+
+| Purpose | `service` | Checks |
+|---|---|---|
+| Readiness | `""` | Server serving and all registered services ready. The relayer pings its database with a one-second deadline; attestors have no dependency check. |
+| Liveness | `grpc.health.v1.Health` | Server serving, without checking dependencies. |
+
+<!-- [cli/internal/server/health.go: healthChecker.Check] -->
+<!-- [cli/internal/service/relayer/service.go: Service.CheckReady] -->
+<!-- [cli/internal/service/attestor/service.go: Service.CheckReady] -->
 
 ## Relayer service
 
@@ -66,7 +91,7 @@ Relay tracks the packets emitted by a source transaction and submits the transac
 |---|---|---|
 | `tx_hash` | `string` | The transaction that sent the packets, on the source chain. |
 | `source_chain_id` | `string` | The chain that transaction was sent on. |
-| `selection` | oneof: `all_packets` or `selected_packets` | Selection is required and controls only this relayer instance; IBC relaying remains permissionless. |
+| `selection` | oneof: `all_packets` or `selected_packets` | Selection is required and controls only this relayer instance. |
 
 <!-- [relayer.proto:L18](proto/cli/relayer.proto#L18) -->
 
@@ -84,7 +109,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 |---|---|---|
 | `packets` | `PacketSelector[]` | The packets to relay. At least one. |
 
-<!-- [relayer.proto:L37](proto/cli/relayer.proto#L37) -->
+<!-- [relayer.proto:L36](proto/cli/relayer.proto#L36) -->
 
 <!-- GEN:api:msg:SelectedPackets END -->
 
@@ -97,7 +122,7 @@ Field names in these tables are the schema's. The JSON encoding uses lowerCamelC
 | `source_client_id` | `string` | The client the packet was sent on. |
 | `sequence_number` | `uint64` | The packet's number on that client. |
 
-<!-- [relayer.proto:L41](proto/cli/relayer.proto#L41) -->
+<!-- [relayer.proto:L40](proto/cli/relayer.proto#L40) -->
 
 <!-- GEN:api:msg:PacketSelector END -->
 
@@ -113,7 +138,7 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 |---|---|---|
 | `packets` | `ObservedPacket[]` | Every send packet in the transaction, including those this relayer will not deliver. |
 
-<!-- [relayer.proto:L46](proto/cli/relayer.proto#L46) -->
+<!-- [relayer.proto:L45](proto/cli/relayer.proto#L45) -->
 
 <!-- GEN:api:msg:RelayResponse END -->
 
@@ -127,7 +152,7 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 | `sequence_number` | `uint64` | The packet's number on that client. |
 | `selection` | `PacketSelection` | Whether this relayer took the packet. See the values below. |
 
-<!-- [relayer.proto:L52](proto/cli/relayer.proto#L52) -->
+<!-- [relayer.proto:L51](proto/cli/relayer.proto#L51) -->
 
 <!-- GEN:api:msg:ObservedPacket END -->
 
@@ -141,7 +166,7 @@ A `selected_packets` request fails if any packet it names is absent or has no co
 | `PACKET_SELECTION_NOT_SELECTED` | Configured and routed, but this request did not select it. |
 | `PACKET_SELECTION_UNCONFIGURED` | No configured client or route, so this relayer skips it. |
 
-<!-- [relayer.proto:L58](proto/cli/relayer.proto#L58) -->
+<!-- [relayer.proto:L57](proto/cli/relayer.proto#L57) -->
 
 <!-- GEN:api:enum:PacketSelection END -->
 
@@ -172,7 +197,7 @@ Packets lists the packets this relayer is aware of, most recent first.
 | `limit` | `uint32` | Zero applies the default of 100; values above 1000 are capped. |
 | `cursor` | `string` | Opaque next_cursor from a previous response. Empty starts at the newest packet. |
 
-<!-- [relayer.proto:L69](proto/cli/relayer.proto#L69) -->
+<!-- [relayer.proto:L68](proto/cli/relayer.proto#L68) -->
 
 <!-- GEN:api:msg:PacketsRequest END -->
 
@@ -192,7 +217,7 @@ Every field is optional, and a request with none returns everything the relayer 
 | `source_tx_hash` | `string` (optional) | Only packets sent by this transaction. |
 | `sequence_number` | `uint64` (optional) | Only packets with this sequence number. |
 
-<!-- [relayer.proto:L78](proto/cli/relayer.proto#L78) -->
+<!-- [relayer.proto:L77](proto/cli/relayer.proto#L77) -->
 
 <!-- GEN:api:msg:PacketFilter END -->
 
@@ -206,7 +231,7 @@ Every field is optional, and a request with none returns everything the relayer 
 | `has_more` | `bool` | More `packets` match beyond this page. |
 | `next_cursor` | `string` | Cursor for the next page, set only when `has_more`. |
 
-<!-- [relayer.proto:L88](proto/cli/relayer.proto#L88) -->
+<!-- [relayer.proto:L87](proto/cli/relayer.proto#L87) -->
 
 <!-- GEN:api:msg:PacketsResponse END -->
 
@@ -219,14 +244,14 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | Field | Type | Description |
 |---|---|---|
 | `state` | `PacketState` | Where the packet got to. See the states below. |
-| `sequence_number` | `uint64` | Together with `source_client_id`, identifies the packet. |
-| `source_client_id` | `string` | Together with `sequence_number`, identifies the packet. |
+| `sequence_number` | `uint64` | Together with `source_client_id` and `send_tx`.chain_id, identifies the packet. |
+| `source_client_id` | `string` | Together with `sequence_number` and `send_tx`.chain_id, identifies the packet. |
 | `send_tx` | `TransactionInfo` | The source-chain SendPacket transaction. Always present. |
 | `recv_tx` | `TransactionInfo` | The destination-chain receive transaction, once submitted or discovered. |
 | `ack_tx` | `TransactionInfo` | The source-chain acknowledgement transaction. Present for succeeded and rejected packets, and may be present while pending. |
 | `timeout_tx` | `TransactionInfo` | The source-chain timeout transaction. Present for timed-out packets, and may be present while pending. |
 
-<!-- [relayer.proto:L119](proto/cli/relayer.proto#L119) -->
+<!-- [relayer.proto:L118](proto/cli/relayer.proto#L118) -->
 
 <!-- GEN:api:msg:PacketStatus END -->
 
@@ -239,7 +264,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `tx_hash` | `string` | The transaction's hash. |
 | `chain_id` | `string` | The chain it was submitted to. |
 
-<!-- [relayer.proto:L114](proto/cli/relayer.proto#L114) -->
+<!-- [relayer.proto:L113](proto/cli/relayer.proto#L113) -->
 
 <!-- GEN:api:msg:TransactionInfo END -->
 
@@ -258,7 +283,7 @@ Results are paged. Ask again with `next_cursor` while `has_more` is set.
 | `PACKET_STATE_REJECTED` | The packet completed with an error acknowledgement on the source chain. |
 | `PACKET_STATE_RELAY_FAILED` | A permanent error prevents the relayer from processing the packet. |
 
-<!-- [relayer.proto:L96](proto/cli/relayer.proto#L96) -->
+<!-- [relayer.proto:L95](proto/cli/relayer.proto#L95) -->
 
 <!-- GEN:api:enum:PacketState END -->
 
@@ -418,7 +443,7 @@ Returns the latest height the attestor will generate attestations for.
 
 <!-- GEN:api:msg:LatestHeightResponse END -->
 
-Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts, which sits closer to the head. <!-- [cli/internal/service/attestor/local.go: LocalAttestor.LatestHeight] -->
+Offset zero attests up to the chain's `finalized` tag. Above zero, the attestor reads `latest` and subtracts `finalityOffset`. <!-- [cli/internal/service/attestor/local.go: LocalAttestor.LatestHeight] -->
 
 ### `Info`
 
@@ -524,7 +549,7 @@ LatestProvableHeight returns the highest height a subsequent ClientUpdatePayload
 <!-- GEN:api:msg:LatestProvableHeightResponse END -->
 
 The relayer calls this first and proves at the height it returns, so a prover
-paces the relayer by holding the height back until it can prove at it. <!-- [cli/internal/relay/processors/batch_relay.go: relayPackets] -->
+paces the relayer by holding the height back until it can prove at it. <!-- [cli/internal/relay/processors/batch_recv_packet.go: BatchRecvPacket.Process] -->
 
 ### `ClientUpdatePayloads`
 
@@ -577,6 +602,7 @@ PacketProofs proves each packet's membership or non-membership at a height, one 
 | `height` | `uint64` | The counterparty height to prove at. |
 | `kind` | `ProofKind` | Which commitment to prove for every packet in this request. |
 | `packets` | `Packet[]` | The packets to prove, all under the same `kind` and `height`. |
+| `acknowledgements` | `Acknowledgement[]` | One acknowledgement per packet, in packet order; only for acknowledgement proofs. |
 
 <!-- [prover.proto:L65](proto/cli/prover.proto#L65) -->
 
@@ -588,7 +614,7 @@ PacketProofs proves each packet's membership or non-membership at a height, one 
 |---|---|---|
 | `proofs` | `bytes[]` | One proof per requested packet, in request order. The proofs of one response are submitted together in one transaction, in this order, so a prover may carry material the batch shares only in the first proof. |
 
-<!-- [prover.proto:L76](proto/cli/prover.proto#L76) -->
+<!-- [prover.proto:L78](proto/cli/prover.proto#L78) -->
 
 <!-- GEN:api:msg:PacketProofsResponse END -->
 
@@ -605,7 +631,7 @@ material the whole batch shares (such as an account proof) only in the first pro
 | `PROOF_KIND_ACKNOWLEDGEMENT` | The packet was received and acknowledged. Proven to acknowledge it. |
 | `PROOF_KIND_RECEIPT_ABSENCE` | The packet was never received. Proven to time it out. |
 
-<!-- [prover.proto:L83](proto/cli/prover.proto#L83) -->
+<!-- [prover.proto:L85](proto/cli/prover.proto#L85) -->
 
 <!-- GEN:api:enum:ProofKind END -->
 
@@ -623,7 +649,7 @@ The packet a proof is requested for.
 | `timeout_timestamp` | `uint64` | When the packet stops being receivable, in seconds. |
 | `payloads` | `Payload[]` | The packet's application payloads. |
 
-<!-- [prover.proto:L93](proto/cli/prover.proto#L93) -->
+<!-- [prover.proto:L95](proto/cli/prover.proto#L95) -->
 
 <!-- GEN:api:msg:Packet END -->
 
@@ -637,9 +663,23 @@ The packet a proof is requested for.
 | `encoding` | `string` | How `value` is encoded. |
 | `value` | `bytes` | The application data. |
 
-<!-- [prover.proto:L106](proto/cli/prover.proto#L106) -->
+<!-- [prover.proto:L113](proto/cli/prover.proto#L113) -->
 
 <!-- GEN:api:msg:Payload END -->
+
+### `Acknowledgement`
+
+The acknowledgement supplied for a packet when requesting an acknowledgement proof.
+
+<!-- GEN:api:msg:Acknowledgement START -->
+
+| Field | Type | Description |
+|---|---|---|
+| `app_acknowledgements` | `bytes[]` | The packet's encoded application acknowledgements. |
+
+<!-- [prover.proto:L108](proto/cli/prover.proto#L108) -->
+
+<!-- GEN:api:msg:Acknowledgement END -->
 
 ## Next steps
 

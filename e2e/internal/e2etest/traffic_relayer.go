@@ -27,15 +27,27 @@ func AwaitState(
 	if err != nil {
 		return nil, err
 	}
-	return awaitPacketState(
-		ctx,
-		packet,
-		want,
-		policy,
-		func(ctx context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
-			return observeStatus(ctx, relayer, packet)
-		},
-	)
+
+	return AwaitStateWithPolicy(ctx, relayer, packet, want, policy)
+}
+
+// AwaitStateWithPolicy alias to AwaitState with custom wait policy
+func AwaitStateWithPolicy(
+	ctx context.Context,
+	relayer *ibccli.Relayer,
+	packet PacketTx,
+	want relayerv2.PacketState,
+	policy ibccli.WaitPolicy,
+) (*relayerv2.PacketStatus, error) {
+	if relayer == nil {
+		return nil, errors.New("e2etest: relayer is required")
+	}
+
+	observe := func(ctx context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error) {
+		return observeStatus(ctx, relayer, packet)
+	}
+
+	return awaitPacketState(ctx, packet, want, policy, observe)
 }
 
 type packetStatusObserver func(context.Context) (*relayerv2.PacketStatus, relayerv2.PacketState, bool, error)
@@ -173,9 +185,6 @@ func watchPacketState(
 }
 
 func packetWaitPolicy(relayer *ibccli.Relayer, packet PacketTx) (ibccli.WaitPolicy, error) {
-	if packet.RouteID == "" {
-		return ibccli.WaitPolicy{}, fmt.Errorf("e2etest: packet sequence %d has no route id", packet.Sequence)
-	}
 	policy, ok := relayer.WaitPolicy(string(packet.RouteID))
 	if !ok {
 		return ibccli.WaitPolicy{}, fmt.Errorf(

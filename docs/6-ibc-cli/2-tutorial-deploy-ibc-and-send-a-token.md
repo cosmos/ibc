@@ -3,7 +3,7 @@ title: "Deploy IBC and send a token"
 description: "Bring up two chains, deploy IBC on both, and move an Interchain Fungible Token from one to the other."
 ---
 
-This tutorial walks you through all the steps to deploy and run IBC on two EVM chains using IBC CLI.
+This tutorial deploys IBC on two local Besu chains and transfers a token between them. It uses an attestation light client in one direction and a Besu consensus light client for the other.
 
 By the end, you'll have the following:
 
@@ -11,13 +11,13 @@ By the end, you'll have the following:
 - IBC contracts deployed on two local Besu chains
 - IBC connections established between the chains
 - A relayer running
-- Attestors running 
+- An attestor running
 - An Interchain Fungible Token that can be transferred between the chains
 
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) installed and running
-- [Go](https://go.dev/doc/install) v1.26.6 or later
+- [Go](https://go.dev/doc/install) v1.26.10 or later
 - [jq](https://jqlang.org/download/) installed
 - [Git](https://git-scm.com/downloads) installed
 
@@ -72,7 +72,7 @@ The config is stored in `~/.ibc/ibc.yml` by default.
 
 This is the home directory for everything that follows: the config, the keystore, the deployment records, and the relayer's database.
 
-2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router and the GMP app. It is also the default owner of any token you deploy. 
+2. Import a deployer key from the accounts created during the chain setup. This key becomes the access manager's admin, which governs the IBC router, multicall, and the GMP app. It is also the default owner of any token you deploy.
 
 Passing `--populate-config` adds each key to the config as a named signer. Later commands then name a key by alias instead of by path.
 
@@ -95,11 +95,7 @@ Passing `--populate-config` adds each key to the config as a named signer. Later
 ./bin/ibc keys import ecdsa relayer --private-key 0xd46507376b3a8a4af4f1f934375df25213a09857a3ed1086ba284c82d387904b --populate-config
 ```
 
-4. Generate an attestor key for each chain. These sign attestations and never need funding. Never reuse an attestor key across clients, so each chain gets its own: see [Attestors](../4-light-clients/2-attestors.md#attestor-keys).
-
-```bash
-./bin/ibc keys new ecdsa attestor-41001 --populate-config
-```
+4. Generate an attestor key for chain 41002. It signs attestations and needs no funding. Never reuse an attestor key across clients: see [Attestors](../4-light-clients/2-attestors.md#attestor-keys).
 
 ```bash
 ./bin/ibc keys new ecdsa attestor-41002 --populate-config
@@ -123,48 +119,78 @@ The `--deployer` flag names the key that signs deployments on that chain, so you
 
 With both chains registered, deploy the IBC contracts on each. 
 
-1. Deploy the IBC core on each chain. This deploys the ICS26 router and the access manager:
+1. Deploy the IBC core on each chain. This deploys the ICS26 router, multicall, and the access manager:
 
 ```bash
-./bin/ibc deploy core --chain 41001 --yes
+./bin/ibc deploy core --chain 41001 --populate-config --yes
 ```
 
 ```bash
-./bin/ibc deploy core --chain 41002 --yes
+./bin/ibc deploy core --chain 41002 --populate-config --yes
 ```
 
-Each run sends four transactions: an access manager, the router implementation, the router behind a proxy, and one call that opens the packet-delivery methods to any caller. Your deployer key is the access manager's admin.
+Each fresh deployment sends seven transactions: an access manager, implementations and proxies for the router and multicall, and two calls that open their relay entrypoints to any caller. Your deployer key is the access manager's admin.
+
+The `--populate-config` flag writes each chain's router and multicall addresses to `~/.ibc/ibc.yml`.
 
 ```
 level=INFO msg="would execute" dryRun=true step="core stack on chain 41001"
+level=INFO msg="would execute" dryRun=true step="multicall on chain 41001"
 level=INFO msg=executing dryRun=false step="core stack on chain 41001"
 level=INFO msg="transaction mined" label="deploy AccessManager" tx=0xa1c9fe97... block=38 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router implementation" tx=0x23988e80... block=39 chain=41001
 level=INFO msg="transaction mined" label="deploy ICS26Router proxy" tx=0x064d03a3... block=40 chain=41001
 level=INFO msg="transaction mined" label=setTargetFunctionRole tx=0x2fb39d8a... block=41 chain=41001
+level=INFO msg=executing dryRun=false step="multicall on chain 41001"
+level=INFO msg="transaction mined" label="deploy IBCMulticall implementation" tx=0x... block=42 chain=41001
+level=INFO msg="transaction mined" label="deploy IBCMulticall proxy" tx=0x... block=43 chain=41001
+level=INFO msg="transaction mined" label="set multicall role" tx=0x... block=44 chain=41001
 [
   {
     "name": "core stack on chain 41001",
     "action": "executed"
+  },
+  {
+    "name": "multicall on chain 41001",
+    "action": "executed"
   }
 ]
+Wrote /Users/you/.ibc/ibc.yml
 ```
 
-2. Deploy an attestation light client on each chain. Each deployment tracks the state of the other chain:
+Rerunning skips contracts already recorded and deployed, and resumes any unfinished deployment steps.
+
+<Warning>
+These commands enable public relaying and make the deployer the access manager's admin.
+For production deployments, restrict relaying to authorized keys.
+Transfer admin authority to an appropriate account.
+Follow [Grant, change, and revoke a role](9-grant-change-and-revoke-a-role.md) for both procedures.
+</Warning>
+
+2. Deploy an attestation light client on 41001 to verify chain 41002:
 
 ```bash
 ./bin/ibc deploy client attestation --chain 41001 --counterparty-chain 41002 --attestors attestor-41002 --threshold 1 --yes
 ```
 
+The `--attestors` flag resolves the key alias to its address. That address becomes the client's attestation set on chain.
+
+The `--threshold 1` flag requires one signature for each proof. The set and threshold are fixed when the client is deployed.
+
+3. Deploy a Besu consensus light client on 41002 to verify chain 41001:
+
 ```bash
-./bin/ibc deploy client attestation --chain 41002 --counterparty-chain 41001 --attestors attestor-41001 --threshold 1 --yes
+./bin/ibc deploy client besu --chain 41002 --counterparty-chain 41001 --trusting-period 336h --yes
 ```
 
-The `--attestors` flag takes the aliases from step 4. Each resolves to that key's address, and those addresses become the client's attestation set on chain.
+This client verifies Besu validator signatures and storage proofs. It needs no attestor for 41001. The tutorial uses a 14-day trusting period: a trusted state older than that cannot authorize an update. See [Besu light client](../4-light-clients/3-besu-light-client.md) for the trust assumptions.
 
-The `--threshold` flag is how many of them must sign for the client to accept a proof. Both are fixed on chain when the client is deployed.
+Each client verifies the opposite chain:
 
-Note the crossed pairing. A client verifies the state of the chain it tracks, so the client on 41001 tracks 41002 and trusts the attestor watching 41002.
+| Client deployed on | Verifies chain | Client type |
+|---|---|---|
+| 41001 | 41002 | Attestation, trusting `attestor-41002` |
+| 41002 | 41001 | Besu consensus |
 
 Both sides share one client identifier, derived from the two chain IDs in sorted order, so it reads the same on either chain. Here it is `cli-41001-41002`, which will be used later to identify the connection.
 
@@ -185,16 +211,19 @@ The next steps deploy the General Message Passing (GMP) app and the Interchain F
 2. Deploy an IFT contract on each chain. This is the token that will be transferred between the chains:
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41001 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --chain 41001 --yes
 ```
 
 ```bash
-./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --chain 41002 --yes
+./bin/ibc deploy ift --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --chain 41002 --yes
 ```
 
 ```
 level=INFO msg="ift token deployed" chain=41001 symbol=DEMO address=0x6bbcD66DA283F6cD4e630b9fc6A91C37D5B2C7A8
+level=INFO msg="ift rate limit set" chain=41001 symbol=DEMO capacity=1000000000000000000000 window=86400
 ```
+
+An IFT token rejects every transfer until it has a rate limit, so `deploy ift` requires one: each direction lets up to `--rate-limit-capacity` base units through, refilling over `--rate-limit-window` (24 hours by default). Here that is 1000 tokens at 18 decimals. Rerunning with a different limit updates it.
 
 3. Use the following commands to read both token addresses out of the deployment records. These will be used in later steps:
 
@@ -222,14 +251,14 @@ Next, you'll need to configure the relayer to start sending packets between the 
 ```bash
 ./bin/ibc deploy render-config 41001 41002 \
   --signer-a relayer --signer-b relayer \
-  --populate-config
+  --populate-config --yes
 ```
 
-This merges the deployed router addresses, connection, and local attestors into your existing config, preserving settings such as `server`, `db`, and `signers`. It prints the complete config and prompts for confirmation before writing it to `~/.ibc/ibc.yml`.
+This merges the deployed router and multicall addresses, connection, and local attestor into your existing config. It preserves settings such as `server`, `db`, and `signers`. The `--yes` flag skips confirmation before writing `~/.ibc/ibc.yml`.
 
 The two signer flags select the key that submits relay transactions on each chain. Set both for this new connection; each is checked against your configured signers. You imported `relayer` in step 3 of section 2.
 
-The attestors section declares both of your attestor keys as `type: local`. This means the relayer will run the attestors in the same process.
+The connection uses `type: attestation` on 41001 and `type: besu` on 41002. The `attestors` section declares one local attestor for 41002, using signer `attestor-41002`. The relayer runs that attestor in the same process.
 
 2. Use the validate command to check the result against both chains before starting anything:
 
@@ -244,7 +273,7 @@ The attestors section declares both of your attestor keys as `type: local`. This
 }
 ```
 
-3. Now you'll need to open a new terminal to start the relayer and attestors. Leave your first terminal open. You'll come back to it in the next step.
+3. Open a new terminal in the `cli` directory to start the relayer and attestor. Leave your first terminal open for the transfer commands.
 
 ```bash
 # open a new terminal and start the relayer
@@ -257,7 +286,7 @@ level=INFO msg="Migrated database" module=bootstrap migrations_applied=4
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3000}"
 ```
 
-The readiness line is how you know it is up. "Dual mode" means the attestors are running inside this process, because the rendered configuration declared them local.
+The readiness line confirms that startup completed. For ongoing API readiness, use the [gRPC health check](7-api.md#health-checks), which also checks database reachability. "Dual mode" means the local attestor runs inside the relayer's process.
 
 Leave it running, and go back to your first terminal for the rest of the tutorial.
 
@@ -328,6 +357,8 @@ It will read `PACKET_STATE_PENDING` for up to a minute, then it should read `PAC
 
 This shows three transactions across two chains: the send you made, the receive on 41002, and the acknowledgement carried back to 41001.
 
+The receive uses a Besu proof of the send on 41001. The relayer proves the recorded acknowledgement on 41002 with an attestation. This transfer uses both client types.
+
 5. Confirm the tokens arrived on the destination chain:
 
 ```bash
@@ -356,7 +387,9 @@ Then check that the source chain was debited:
 }
 ```
 
-Congratulations! You've deployed IBC and transferred a token between two chains.
+## What you built
+
+Two local Besu chains now have IBC contracts and connected token contracts. One relayer hosts an attestor for 41002 and relays using both client types. Your first transfer moved 10 tokens from 41001 to 41002.
 
 ## Next steps
 

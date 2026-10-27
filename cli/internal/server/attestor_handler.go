@@ -22,6 +22,7 @@ type AttestorHandler struct {
 
 // AttestorService defines attestor business logic.
 type AttestorService interface {
+	CheckReady(ctx context.Context) error
 	LatestHeight(ctx context.Context, attestor string) (uint64, error)
 	StateAttestation(ctx context.Context, attestor string, height uint64) (attestor.Attestation, error)
 	PacketAttestation(
@@ -50,6 +51,10 @@ func (h *AttestorHandler) Register(opts ...connect.HandlerOption) (string, http.
 
 func (h *AttestorHandler) Name() string {
 	return proto.AttestationServiceName
+}
+
+func (h *AttestorHandler) CheckReady(ctx context.Context) error {
+	return h.service.CheckReady(ctx)
 }
 
 func (h *AttestorHandler) LatestHeight(

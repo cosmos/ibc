@@ -6,34 +6,22 @@ import (
 	"fmt"
 	"slices"
 	"time"
-
-	"github.com/goccy/go-yaml"
 )
 
-// Client types
+// Client types the IBC CLI proves itself.
 const (
-	ClientTypeAttestation ClientType = "attestation"
-	ClientTypeBesuQBFT    ClientType = "besu-qbft"
-	ClientTypeRemote      ClientType = "remote"
+	ClientTypeAttestation = "attestation"
+	ClientTypeBesu        = "besu"
 )
 
 // DefaultClearOnStart whether a clearing pass runs at startup when clearOnStart is unset.
 const DefaultClearOnStart = true
 
-// clientTypes are the values ClientEnd.Type accepts.
-var clientTypes = []ClientType{ClientTypeAttestation, ClientTypeBesuQBFT, ClientTypeRemote}
+// builtInClientTypes are the types the IBC CLI proves without a ProverService.
+var builtInClientTypes = []string{ClientTypeAttestation, ClientTypeBesu}
 
 // DefaultClearInterval how often a clearing pass runs when clearInterval is unset.
 const DefaultClearInterval = 5 * time.Minute
-
-// ClientParams is a client type's decoded params
-type ClientParams interface {
-	isClientParams()
-	Validate() error
-}
-
-// ClientType the light client type.
-type ClientType string
 
 // RelayerConfig the relayer block of the config.
 type RelayerConfig struct {
@@ -50,7 +38,6 @@ type RelayerConfig struct {
 type RelayerChainOverride struct {
 	ChainID            string            `yaml:"chainId"`
 	EVM                *RelayerEVMConfig `yaml:"evm,omitempty"`
-	TxSubmissionDelay  *time.Duration    `yaml:"txSubmissionDelay,omitempty"`
 	PacketBatchSize    *int              `yaml:"packetBatchSize,omitempty"`
 	PacketBatchTimeout *time.Duration    `yaml:"packetBatchTimeout,omitempty"`
 
@@ -65,8 +52,8 @@ type RelayerChainOverride struct {
 
 // RelayerEVMConfig EVM relaying settings.
 type RelayerEVMConfig struct {
-	GasFeeCapMultiplier *float64 `yaml:"gasFeeCapMultiplier,omitempty"`
-	GasTipCapMultiplier *float64 `yaml:"gasTipCapMultiplier,omitempty"`
+	// PendingTxTimeout sets how long to wait before retrying an unmined transaction or reusing a stalled nonce.
+	PendingTxTimeout *time.Duration `yaml:"pendingTxTimeout,omitempty"`
 }
 
 // ConnectionConfig one bidirectional IBC connection the relayer actively
@@ -80,15 +67,18 @@ type ConnectionConfig struct {
 // ClientEnd one side of a connection: a light client on chainId,
 // tracking the connection's other end as its counterparty
 type ClientEnd struct {
-	ChainID  string     `yaml:"chainId"`
-	Signer   string     `yaml:"signer"`
-	ClientID string     `yaml:"clientId"`
-	Type     ClientType `yaml:"type"`
+	ChainID  string `yaml:"chainId"`
+	Signer   string `yaml:"signer"`
+	ClientID string `yaml:"clientId"`
 
-	// Params is this client type's settings, decoded per Type by ClientParams:
-	// empty for `attestation` and `besu-qbft`, and
-	// `{url: <ProverService endpoint>}` for `remote`, where it is required.
-	Params yaml.RawMessage `yaml:"params,omitempty"`
+	// Type is the on-chain light client type: `attestation` or `besu`, or
+	// with a remoteProver any type, including ones the IBC CLI does not
+	// implement.
+	Type string `yaml:"type"`
+
+	// RemoteProver is a ProverService that generates this client's proofs instead
+	// of the built-in prover for Type.
+	RemoteProver *RemoteProverConfig `yaml:"remoteProver,omitempty"`
 
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
@@ -108,18 +98,15 @@ type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
 }
 
-// RemoteParams is the params block a remote client declares.
-type RemoteParams struct {
-	// URL is the ProverService endpoint.
+// RemoteProverConfig is a ProverService endpoint.
+type RemoteProverConfig struct {
+	// URL is the ProverService endpoint: an http(s):// URL, or a bare host:port
+	// dialed as http://. Without a query or fragment.
 	URL string `yaml:"url"`
+
+	// TLS settings for an https:// URL, see TLSClientConfig.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
-
-// AttestationParams is empty
-type AttestationParams struct{}
-
-// BesuQBFTParams is empty: the besu-qbft prover reads everything it needs from
-// the two chains and the light client itself.
-type BesuQBFTParams struct{}
 
 // Validate validates the relayer config. Allows empty blocks.
 func (c RelayerConfig) Validate() error {
@@ -189,8 +176,6 @@ func (c RelayerChainOverride) Validate() error {
 	switch {
 	case c.ChainID == "":
 		return errPathf("chainId", "required")
-	case c.TxSubmissionDelay != nil && *c.TxSubmissionDelay < 0:
-		return errPathf("txSubmissionDelay", "must not be negative")
 	case c.PacketBatchSize != nil && *c.PacketBatchSize <= 0:
 		return errPathf("packetBatchSize", "must be positive")
 	case c.PacketBatchTimeout != nil && *c.PacketBatchTimeout <= 0:
@@ -209,11 +194,8 @@ func (c RelayerChainOverride) Validate() error {
 }
 
 func (c RelayerEVMConfig) Validate() error {
-	switch {
-	case c.GasFeeCapMultiplier != nil && *c.GasFeeCapMultiplier <= 0:
-		return errPathf("gasFeeCapMultiplier", "must be positive")
-	case c.GasTipCapMultiplier != nil && *c.GasTipCapMultiplier <= 0:
-		return errPathf("gasTipCapMultiplier", "must be positive")
+	if c.PendingTxTimeout != nil && *c.PendingTxTimeout <= 0 {
+		return errPathf("pendingTxTimeout", "must be positive")
 	}
 
 	return nil
@@ -258,47 +240,39 @@ func (c ClientEnd) Validate() error {
 		return errPathf("clientId", "required")
 	case c.Signer == "":
 		return errPathf("signer", "required")
-	case !slices.Contains(clientTypes, c.Type):
-		return errPathf("type", "unknown client type: %q", c.Type)
+	case c.Type == "":
+		return errPathf("type", "required")
+	case c.RemoteProver == nil && !slices.Contains(builtInClientTypes, c.Type):
+		return errPathf(
+			"type",
+			"unknown client type: %q; set remoteProver for a light client the IBC CLI does not implement",
+			c.Type,
+		)
 	}
 
-	params, err := c.ClientParams()
-	if err != nil {
-		return errPath("params", err)
+	if c.RemoteProver == nil {
+		return nil
 	}
 
-	if err := params.Validate(); err != nil {
-		return errPath("params", err)
-	}
-
-	return nil
+	return errPath("remoteProver", c.RemoteProver.Validate())
 }
 
-// ClientParams decodes this client's params
-func (c ClientEnd) ClientParams() (ClientParams, error) {
-	switch c.Type {
-	case ClientTypeAttestation:
-		return decodeYAML[AttestationParams](c.Params)
-	case ClientTypeBesuQBFT:
-		return decodeYAML[BesuQBFTParams](c.Params)
-	case ClientTypeRemote:
-		return decodeYAML[RemoteParams](c.Params)
-	default:
-		return nil, errPathf("type", "unknown client type: %q", c.Type)
-	}
+// EndpointURL returns URL as a URL, see endpointURL.
+func (p RemoteProverConfig) EndpointURL() string {
+	return endpointURL(p.URL)
 }
 
-func (p RemoteParams) Validate() error {
+func (p RemoteProverConfig) Validate() error {
 	if p.URL == "" {
 		return errPathf("url", "required")
 	}
 
-	return nil
+	if err := errPath("url", checkEndpointAddr(p.URL)); err != nil {
+		return err
+	}
+
+	return validateEndpointTLS(p.URL, p.TLS)
 }
-
-func (AttestationParams) Validate() error { return nil }
-
-func (BesuQBFTParams) Validate() error { return nil }
 
 func (c RelayerConfig) validateChainOverrides() error {
 	chainIDs := make(map[string]struct{})
@@ -350,24 +324,6 @@ func (c RelayerConfig) validateConnectionIdentities() error {
 	}
 
 	return nil
-}
-
-func (RemoteParams) isClientParams()      {}
-func (AttestationParams) isClientParams() {}
-func (BesuQBFTParams) isClientParams()    {}
-
-func decodeYAML[T any](raw yaml.RawMessage) (*T, error) {
-	var params T
-
-	if len(raw) == 0 {
-		return &params, nil
-	}
-
-	if err := yaml.UnmarshalWithOptions(raw, &params, yaml.DisallowUnknownField()); err != nil {
-		return nil, err
-	}
-
-	return &params, nil
 }
 
 // ClearOnStartEnabled reports whether a clearing pass runs at startup, defaulting to true.

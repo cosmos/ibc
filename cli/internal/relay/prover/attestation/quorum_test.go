@@ -5,6 +5,7 @@ package attestation
 import (
 	"context"
 	"log/slog"
+	"math/big"
 	"testing"
 	"time"
 
@@ -51,7 +52,44 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", data),
 		}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
+		require.NoError(t, err)
+		require.Equal(t, data, result.AttestationData)
+		require.Len(t, result.Signatures, 2)
+	})
+
+	t.Run("wrongClaimQuorumRejected", func(t *testing.T) {
+		attestors := []attestor.Attestor{
+			signedAttestor(t, "a1", []byte("wrong claim")),
+			signedAttestor(t, "a2", []byte("wrong claim")),
+		}
+		_, err := New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
+		require.ErrorContains(t, err, "quorum not met")
+		require.ErrorContains(t, err, "attested data does not match expected claim")
+	})
+
+	t.Run("validQuorumWithWrongClaimQuorum", func(t *testing.T) {
+		attestors := []attestor.Attestor{
+			signedAttestor(t, "wrong1", []byte("wrong claim")),
+			signedAttestor(t, "wrong2", []byte("wrong claim")),
+			signedAttestor(t, "valid1", data),
+			signedAttestor(t, "valid2", data),
+		}
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -62,7 +100,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", data),
 		}
 
-		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		_, err := New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 	})
 
@@ -72,7 +110,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", []byte("a different claim entirely")),
 		}
 
-		_, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		_, err := New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(
 			t,
 			err,
@@ -82,17 +120,20 @@ func TestQueryQuorum(t *testing.T) {
 	})
 
 	t.Run("majorityQuorumMetDespiteFirstAttestorDisagreeing", func(t *testing.T) {
-		// a1 answers first (by configured order) with a stale/wrong claim; a2
-		// and a3 agree with each other and alone meet the threshold. Quorum
-		// must be reduced by grouping on value, not by anchoring to whichever
-		// response happens to come first.
 		attestors := []attestor.Attestor{
 			signedAttestor(t, "a1", []byte("stale claim")),
 			signedAttestor(t, "a2", data),
 			signedAttestor(t, "a3", data),
 		}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -109,7 +150,14 @@ func TestQueryQuorum(t *testing.T) {
 			erroring,
 		}
 
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -128,9 +176,53 @@ func TestQueryQuorum(t *testing.T) {
 		}
 
 		// threshold 2 still met by the two valid attestors despite the bad one
-		result, err := queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
+	})
+
+	// The light client rejects v of 0/1 and high s, so a proof must carry
+	// neither even when attestors return them.
+	t.Run("proofCarriesNormalizedSignatures", func(t *testing.T) {
+		key, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
+		highS, err := crypto.Sign(digest[:], key)
+		require.NoError(t, err)
+		n := crypto.S256().Params().N
+		new(big.Int).Sub(n, new(big.Int).SetBytes(highS[32:64])).FillBytes(highS[32:64])
+		highS[64] ^= 1
+
+		highSAttestor := attestor.NewMockAttestor(t)
+		highSAttestor.EXPECT().Name().Return("high-s").Maybe()
+		highSAttestor.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
+			attestor.Attestation{Height: 10, AttestedData: data, Signature: highS}, nil,
+		)
+
+		attestors := []attestor.Attestor{signedAttestor(t, "raw-v", data), highSAttestor}
+
+		result, err := New(
+			"client-chain",
+			"client-0",
+			attestors,
+			2,
+			nil,
+			slog.Default(),
+		).queryStateQuorum(ctx, 10, data)
+		require.NoError(t, err)
+		require.Len(t, result.Signatures, 2)
+		for _, sig := range result.Signatures {
+			require.Contains(t, []byte{27, 28}, sig[64])
+			r, s := new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:64])
+			require.True(t, crypto.ValidateSignatureValues(sig[64]-27, r, s, true), "s above n/2")
+		}
 	})
 
 	t.Run("duplicateSignerCountsOnce", func(t *testing.T) {
@@ -156,7 +248,7 @@ func TestQueryQuorum(t *testing.T) {
 			makeAttestor("a2-same-key"),
 		}
 
-		_, err = queryStateQuorum(ctx, slog.Default(), attestors, 2, 10)
+		_, err = New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(
 			t,
 			err,

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"gopkg.in/yaml.v3"
 
 	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
@@ -67,6 +68,7 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 		PrivateKeyHex: testPrivateKey,
 		RPCURL:        "http://127.0.0.1:8545",
 		ICS26Router:   "0x0000000000000000000000000000000000000001",
+		Observability: true,
 	})
 	require.NoError(t, err)
 	require.Equal(t, common.HexToAddress("0xE57bFE9F44b819898F47BF37E5AF72a0783e1141"), process.SignerAddress())
@@ -77,6 +79,17 @@ func TestStartProbesPublicEndpointAndStopsProcess(t *testing.T) {
 	configInfo, err := os.Stat(filepath.Join(workDir, configFilename))
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o600), configInfo.Mode().Perm())
+	configData, err := os.ReadFile(filepath.Join(workDir, configFilename))
+	require.NoError(t, err)
+	var config fileConfig
+	require.NoError(t, yaml.Unmarshal(configData, &config))
+	require.NotContains(t, string(configData), "ibcMulticall:")
+	require.Equal(t, observabilityConfig{
+		Metrics:  true,
+		Type:     observabilityTypeOTEL,
+		OtelFile: defaultOTELConfigPath(),
+	}, config.Observability)
+	require.FileExists(t, config.Observability.OtelFile)
 	workDirInfo, err := os.Stat(workDir)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), workDirInfo.Mode().Perm())
@@ -332,7 +345,19 @@ func runAttestorHelper() error {
 	mux := http.NewServeMux()
 	path, handler := attestorv2.NewAttestationServiceHandler(helperAttestationService{})
 	mux.Handle(path, handler)
-	server := &http.Server{Handler: mux}
+	healthServer := grpc.NewServer()
+	defer healthServer.Stop()
+	healthpb.RegisterHealthServer(healthServer, testHealthService{check: func(
+		context.Context, *healthpb.HealthCheckRequest,
+	) (*healthpb.HealthCheckResponse, error) {
+		fmt.Fprintln(os.Stderr, "helper health checked")
+		return &healthpb.HealthCheckResponse{Status: healthpb.HealthCheckResponse_SERVING}, nil
+	}})
+	mux.Handle("/grpc.health.v1.Health/", healthServer)
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+	server := &http.Server{Handler: mux, Protocols: protocols}
 	child := exec.Command("sleep", "60")
 	if err := child.Start(); err != nil {
 		return fmt.Errorf("helper start descendant: %w", err)
@@ -344,8 +369,8 @@ func runAttestorHelper() error {
 	); err != nil {
 		return fmt.Errorf("helper write descendant pid: %w", err)
 	}
-	childDone := make(chan error, 1)
-	go func() { childDone <- child.Wait() }()
+	childDone := make(chan struct{})
+	go func() { _ = child.Wait(); close(childDone) }()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)

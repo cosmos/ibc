@@ -6,30 +6,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ics26router"
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/ift"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
 // evmMerklePrefix is the empty prefix EVM counterparties use.
 var evmMerklePrefix = [][]byte{{}}
-
-// publicRelayingMethods are opened to PUBLIC_ROLE so any relayer EOA can
-// submit packets and client updates.
-var publicRelayingMethods = []string{
-	"recvPacket",
-	"ackPacket",
-	"timeoutPacket",
-	"updateClient",
-	"multicall",
-	"submitMisbehaviour",
-}
 
 // Custom-error selectors for the getters that revert when absent, so their
 // reverts can be classified as not-found.
@@ -154,24 +145,6 @@ func (d *Driver) Head(ctx context.Context) (uint64, uint64, error) {
 	return header.Number.Uint64(), header.Time, nil
 }
 
-// publicRelayingSelectors resolves the relaying method selectors that
-// ProvisionCore binds to AccessManager's PUBLIC_ROLE.
-func publicRelayingSelectors() ([][4]byte, error) {
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	if err != nil {
-		return nil, err
-	}
-	selectors := make([][4]byte, 0, len(publicRelayingMethods))
-	for _, name := range publicRelayingMethods {
-		method, ok := routerABI.Methods[name]
-		if !ok {
-			return nil, fmt.Errorf("router ABI has no method %q", name)
-		}
-		selectors = append(selectors, [4]byte(method.ID))
-	}
-	return selectors, nil
-}
-
 // Verify checks the manifest against live chain state.
 func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Report, error) {
 	var report deploy.Report
@@ -209,9 +182,9 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 		return report, err
 	}
 	for _, c := range m.Clients {
-		registered, isRegistered, err := d.ClientRegistered(ctx, m.Core.Router, c.ClientID)
-		if err != nil {
-			return report, err
+		registered, isRegistered, clientErr := d.ClientRegistered(ctx, m.Core.Router, c.ClientID)
+		if clientErr != nil {
+			return report, clientErr
 		}
 		check("client "+c.ClientID+" registered", isRegistered, "not registered on router")
 		if !isRegistered {
@@ -222,9 +195,9 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			strings.EqualFold(registered, c.Address),
 			fmt.Sprintf("router has %s, manifest has %s", registered, c.Address),
 		)
-		cp, err := contract.GetCounterparty(&bind.CallOpts{Context: ctx}, c.ClientID)
-		if err != nil {
-			return report, err
+		cp, clientErr := contract.GetCounterparty(&bind.CallOpts{Context: ctx}, c.ClientID)
+		if clientErr != nil {
+			return report, clientErr
 		}
 		check(
 			"client "+c.ClientID+" counterparty matches",
@@ -273,6 +246,29 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			)
 		}
 	}
+
+	if m.Core.Multicall == "" {
+		check("core multicall recorded", false, "manifest has no multicall")
+		return report, nil
+	}
+	multicallCode, err := d.HasCode(ctx, m.Core.Multicall)
+	if err != nil {
+		return report, err
+	}
+	check("multicall code present", multicallCode, "no contract code at "+m.Core.Multicall)
+	if !multicallCode {
+		return report, nil
+	}
+	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), d.backend)
+	if err != nil {
+		return report, err
+	}
+	authority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return report, err
+	}
+	check("multicall authority matches", strings.EqualFold(authority.Hex(), m.TargetData["accessManager"]),
+		fmt.Sprintf("multicall has %s, manifest has %s", authority, m.TargetData["accessManager"]))
 	return report, nil
 }
 
@@ -369,6 +365,36 @@ func (d *Driver) RegisterIFTBridge(ctx context.Context, iftAddr string, spec dep
 		return fmt.Errorf("registerIFTBridge %q: %w", spec.ClientID, err)
 	}
 	return d.awaitMined(ctx, "registerIFTBridge "+spec.ClientID, tx)
+}
+
+// SetIFTRateLimit sets an IFT token's rate limit.
+func (d *Driver) SetIFTRateLimit(ctx context.Context, iftAddr string, limit deploy.IFTRateLimit) error {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return err
+	}
+	opts, err := d.transactOpts(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := contract.SetIFTRateLimit(opts, limit.Capacity, new(big.Int).SetUint64(limit.Window))
+	if err != nil {
+		return fmt.Errorf("setIFTRateLimit: %w", err)
+	}
+	return d.awaitMined(ctx, "setIFTRateLimit", tx)
+}
+
+// IFTRateLimit reads an IFT token's configured rate limit.
+func (d *Driver) IFTRateLimit(ctx context.Context, iftAddr string) (deploy.IFTRateLimit, error) {
+	contract, err := ift.NewContract(common.HexToAddress(iftAddr), d.backend)
+	if err != nil {
+		return deploy.IFTRateLimit{}, err
+	}
+	limit, err := contract.GetIFTRateLimit(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return deploy.IFTRateLimit{}, fmt.Errorf("getIFTRateLimit: %w", err)
+	}
+	return deploy.IFTRateLimit{Capacity: limit.Capacity, Window: limit.Window.Uint64()}, nil
 }
 
 // IFTBridge queries the token for a bridge registered under clientID, returning

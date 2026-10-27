@@ -3,17 +3,25 @@
 package main
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"io"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/cosmos/solidity-ibc-eureka/packages/go-abigen/besumsgs"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
@@ -49,6 +57,147 @@ func TestResolveDeployerAlias(t *testing.T) {
 	require.Empty(t, resolveDeployerAlias(chain, ""))
 }
 
+func TestDeployCorePopulateConfig(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		populate   bool
+		dryRun     bool
+		noManifest bool
+		failCode   bool
+		wantErr    bool
+	}{
+		{name: "without flag"},
+		{name: "populate existing deployment", populate: true},
+		{name: "dry run existing deployment", populate: true, dryRun: true},
+		{name: "dry run fresh deployment", populate: true, dryRun: true, noManifest: true},
+		{name: "failed precheck", populate: true, failCode: true, wantErr: true},
+		{name: "failed deployment", populate: true, noManifest: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := setupRenderConfigTest(t)
+			previousChain, previousDeployer := flagDeployChain, flagDeployDeployer
+			previousPopulate, previousDryRun := flagDeployCorePopulate, flagDeployDryRun
+			t.Cleanup(func() {
+				flagDeployChain, flagDeployDeployer = previousChain, previousDeployer
+				flagDeployCorePopulate, flagDeployDryRun = previousPopulate, previousDryRun
+			})
+			flagDeployChain, flagDeployDeployer = "1", ""
+			flagDeployCorePopulate, flagDeployDryRun = tc.populate, tc.dryRun
+			flagDeployManifestDir = filepath.Join(home, "records")
+			globalFlags.Config = "operator.yml"
+
+			rpc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var req struct {
+					ID     json.RawMessage `json:"id"`
+					Method string          `json:"method"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Error(err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				response := map[string]any{"jsonrpc": "2.0", "id": req.ID}
+				switch {
+				case req.Method == "eth_chainId":
+					response["result"] = "0x1"
+				case req.Method == "eth_getCode" && !tc.failCode:
+					response["result"] = "0x6000"
+				default:
+					response["error"] = map[string]any{"code": -32000, "message": "blocked by test RPC"}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Error(err)
+				}
+			}))
+			t.Cleanup(rpc.Close)
+
+			key, _ := newLocalSignerConfig(t, "deployer")
+			cfg := config.DefaultConfig()
+			cfg.Server.ListenAddress = "127.0.0.1:4567"
+			cfg.DB.URL = "operator.db"
+			cfg.Signers = config.Signers{key}
+			cfg.Chains = config.Chains{
+				{
+					ChainID:  "1",
+					Deployer: key.Alias,
+					EVM:      &config.EVMChainConfig{RPC: rpc.URL, WS: "ws://localhost:8546"},
+				},
+				{ChainID: "2", EVM: &config.EVMChainConfig{RPC: "http://localhost:8745"}},
+			}
+			cfg.Relayer.Connections = []config.ConnectionConfig{
+				{
+					Alias: "existing-route",
+					ClientA: config.ClientEnd{
+						ChainID:  "1",
+						ClientID: "a",
+						Signer:   key.Alias,
+						Type:     config.ClientTypeAttestation,
+					},
+					ClientB: config.ClientEnd{
+						ChainID:  "2",
+						ClientID: "b",
+						Signer:   key.Alias,
+						Type:     config.ClientTypeBesu,
+					},
+				},
+			}
+			cfg.Attestors = config.Attestors{{
+				Name: "watcher", Type: config.AttestorTypeLocal, ChainID: "2", Signer: key.Alias, FinalityOffset: 7,
+			}}
+			path := filepath.Join(home, globalFlags.Config)
+			require.NoError(t, cfg.StoreToFile(path))
+			cfg, err := config.LoadFromFile(path, true)
+			require.NoError(t, err)
+			original, err := os.ReadFile(path)
+			require.NoError(t, err)
+
+			m := manifest.New("1", "evm")
+			m.Core.Router = "0x0000000000000000000000000000000000000001"
+			m.Core.Multicall = "0x0000000000000000000000000000000000000002"
+			if !tc.noManifest {
+				require.NoError(t, m.Save(flagDeployManifestDir))
+			}
+			cmd := &cobra.Command{}
+			cmd.SetContext(t.Context())
+			output := captureStdout(t, func() { err = deployCore(cmd, nil) })
+			if tc.wantErr {
+				require.ErrorContains(t, err, "blocked by test RPC")
+			} else {
+				require.NoError(t, err)
+				var steps []deploy.StepResult
+				require.NoError(t, json.Unmarshal([]byte(output), &steps))
+				require.Len(t, steps, 2)
+				for _, step := range steps {
+					if tc.noManifest {
+						require.Equal(t, deploy.ActionPlanned, step.Action)
+					} else {
+						require.Equal(t, deploy.ActionSkipped, step.Action)
+					}
+				}
+			}
+
+			if !tc.populate || tc.dryRun || tc.wantErr {
+				unchanged, readErr := os.ReadFile(path)
+				require.NoError(t, readErr)
+				require.Equal(t, original, unchanged)
+				return
+			}
+			loaded, err := config.LoadFromFile(path, true)
+			require.NoError(t, err)
+			cfg.Chains[0].EVM.ICS26Router = m.Core.Router
+			cfg.Chains[0].EVM.IBCMulticall = m.Core.Multicall
+			require.Equal(t, cfg, loaded)
+			populated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.NoError(t, deployCore(cmd, nil))
+			repeated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, populated, repeated)
+		})
+	}
+}
+
 func TestStatusChains(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Config{Chains: []config.ChainConfig{{ChainID: "1"}, {ChainID: "2"}}}
@@ -77,48 +226,57 @@ func TestRenderRelayConfig(t *testing.T) {
 	// connection share the same sorted "cli-<a>-<b>" name.
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
+	a.Core.Multicall = "0xmulticallA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation", Address: "0xca",
+		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{
-			"threshold": float64(2),
-			"attestors": []any{watcherAddress, "0xUnresolvedAddress"},
+		Attestation: &manifest.AttestationParams{
+			Threshold: 2,
+			Attestors: []string{watcherAddress, "0xUnresolvedAddress"},
 		},
 	})
 	// stray client tracking another chain must not pair
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-9", Type: "attestation",
+		ClientID:            "cli-1-9",
 		CounterpartyChainID: "9", CounterpartyClientID: "cli-1-9",
 	})
 	// a second, custom-named connection between the same chain pair --
 	// exercises the alias seqno suffix, and reuses the same attestor address
 	// watching chain 2 to exercise cross-connection attestor deduplication.
 	a.UpsertClient(manifest.Client{
-		ClientID: "custom-a", Type: "attestation", Address: "0xca2",
+		ClientID: "custom-a", Address: "0xca2",
 		CounterpartyChainID: "2", CounterpartyClientID: "custom-b",
-		Params: map[string]any{
-			"threshold": float64(2),
-			"attestors": []any{watcherAddress},
+		Attestation: &manifest.AttestationParams{
+			Threshold: 2,
+			Attestors: []string{watcherAddress},
 		},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
+	b.Core.Multicall = "0xmulticallB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation", Address: "0xcb",
+		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"threshold": float64(2)},
+		Attestation: &manifest.AttestationParams{Threshold: 2},
 	})
 	b.UpsertClient(manifest.Client{
-		ClientID: "custom-b", Type: "attestation", Address: "0xcb2",
+		ClientID: "custom-b", Address: "0xcb2",
 		CounterpartyChainID: "1", CounterpartyClientID: "custom-a",
 		// no configured attestors: must not surface as an attestors: entry
-		Params: map[string]any{"threshold": float64(2)},
+		Attestation: &manifest.AttestationParams{Threshold: 2},
 	})
 
 	unreferencedSigner, _ := newLocalSignerConfig(t, "unused-signer")
 	cfg := config.Config{
 		Chains: []config.ChainConfig{
-			{ChainID: "1", EVM: &config.EVMChainConfig{RPC: "http://a", ICS26Router: "0xstale"}},
+			{
+				ChainID: "1",
+				EVM: &config.EVMChainConfig{
+					RPC:          "http://a",
+					ICS26Router:  "0xstale",
+					IBCMulticall: "0xstaleMulticall",
+				},
+			},
 		},
 		Signers: config.Signers{watcherSigner, unreferencedSigner},
 	}
@@ -129,10 +287,12 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.Len(t, out.Chains, 2)
 	require.Equal(t, "1", out.Chains[0].ChainID)
 	require.Equal(t, "0xrouterA", out.Chains[0].EVM.ICS26Router)
+	require.Equal(t, "0xmulticallA", out.Chains[0].EVM.IBCMulticall)
 	require.Equal(t, "http://a", out.Chains[0].EVM.RPC)
-	// chain 2 is undeclared: minimal entry with just the router
+	// chain 2 is undeclared: minimal entry with the deployed addresses
 	require.Equal(t, "2", out.Chains[1].ChainID)
 	require.Equal(t, "0xrouterB", out.Chains[1].EVM.ICS26Router)
+	require.Equal(t, "0xmulticallB", out.Chains[1].EVM.IBCMulticall)
 	require.Empty(t, out.Chains[1].EVM.RPC)
 
 	require.Len(t, out.Connections, 2)
@@ -179,7 +339,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	mismatched := manifest.New("2", "evm")
 	mismatched.Core.Router = "0xrouterB"
 	mismatched.UpsertClient(manifest.Client{
-		ClientID: "cli-1", Type: "attestation",
+		ClientID:            "cli-1",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-other",
 	})
 	_, err = renderRelayConfig(cfg, a, mismatched, "signer-a", "signer-b")
@@ -193,17 +353,18 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation",
+		ClientID:            "cli-1-2",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
 		// unresolvable address: exercises the attestor signer TODO
-		Params: map[string]any{"attestors": []any{"0xUnresolvedAddress"}},
+		Attestation: &manifest.AttestationParams{Attestors: []string{"0xUnresolvedAddress"}},
 	})
 	b := manifest.New("2", "evm")
 	// chain 2's router is left blank on purpose: exercises the ics26Router
 	// TODO alongside the signer TODOs in the same render
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: "attestation",
+		ClientID:            "cli-1-2",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
+		Attestation: &manifest.AttestationParams{},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "", "")
@@ -219,6 +380,7 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainB`)
 	require.Contains(t, rendered, `ics26Router: "" # TODO: fill in`)
+	require.Contains(t, rendered, `ibcMulticall: "" # TODO: fill in`)
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias backing this attestor's key`)
 }
 
@@ -240,45 +402,53 @@ func captureStdout(t *testing.T, fn func()) string {
 	return string(bz)
 }
 
-func TestRenderRelayConfigBesuQBFT(t *testing.T) {
+func TestRenderRelayConfigBesu(t *testing.T) {
 	a := manifest.New("1", "evm")
 	a.Core.Router = "0xrouterA"
 	a.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xca",
+		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterB", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200, MaxClockDrift: 60},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
-		ClientID: "cli-1-2", Type: deploy.ClientTypeBesuQBFT, Address: "0xcb",
+		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Params: map[string]any{"ibcRouter": "0xrouterA", "trustingPeriod": float64(7200), "maxClockDrift": float64(60)},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200, MaxClockDrift: 60},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
 	require.NoError(t, err)
 	require.Len(t, out.Connections, 1)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientA.Type)
-	require.Equal(t, config.ClientTypeBesuQBFT, out.Connections[0].ClientB.Type)
-	require.Empty(t, out.Connections[0].ClientA.Params)
-	require.Empty(t, out.Attestors, "besu-qbft clients need no attestors")
+	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientA.Type)
+	require.Equal(t, config.ClientTypeBesu, out.Connections[0].ClientB.Type)
+	require.Empty(t, out.Attestors, "besu clients need no attestors")
 }
 
-func TestBesuQBFTParamsFlags(t *testing.T) {
-	previousPeriod, previousDrift := flagDeployTrustingPeriod, flagDeployMaxClockDrift
-	t.Cleanup(func() { flagDeployTrustingPeriod, flagDeployMaxClockDrift = previousPeriod, previousDrift })
+func TestBesuParamsFlags(t *testing.T) {
+	previousPeriod, previousDrift, previousLevel := flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel
+	t.Cleanup(func() {
+		flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = previousPeriod, previousDrift, previousLevel
+	})
 	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
-		name    string
-		period  time.Duration
-		drift   time.Duration
-		router  string
-		wantErr string
+		name      string
+		period    time.Duration
+		drift     time.Duration
+		level     string
+		router    string
+		wantLevel besumsgs.IBesuLightClientMsgsTrustThreshold
+		wantErr   string
 	}{
 		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
 		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
+		{
+			name: "trust level", period: 2 * time.Hour, level: "1/2", router: router,
+			wantLevel: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
+		},
+		{name: "bad trust level", period: 2 * time.Hour, level: "1/4", router: router, wantErr: "--trust-level: must be from 1/3 to 1"},
 		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},
 		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router: invalid EVM address"},
 		{
@@ -287,12 +457,15 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			flagDeployTrustingPeriod, flagDeployMaxClockDrift = tc.period, time.Minute
+			flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = tc.period, time.Minute, cmp.Or(
+				tc.level,
+				"2/3",
+			)
 			if tc.drift != 0 {
 				flagDeployMaxClockDrift = tc.drift
 			}
 			source := &besuHeadTarget{}
-			params, err := besuQBFTParams(t.Context(), tc.router, source)
+			params, err := besuParams(t.Context(), tc.router, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.False(t, source.called)
@@ -300,18 +473,104 @@ func TestBesuQBFTParamsFlags(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.True(t, source.called)
-			require.Equal(t, deploy.BesuQBFTParams{
+			require.Equal(t, deploy.BesuParams{
+				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
 				TrustingPeriod:        uint64(tc.period / time.Second),
 				MaxClockDrift:         60,
+				TrustLevel:            cmp.Or(tc.wantLevel, besu.DefaultTrustLevel),
 			}, params)
 		})
 	}
 
-	_, err := besuQBFTParams(t.Context(), router, &hostOnlyTarget{})
-	require.ErrorContains(t, err, "cannot serve a besu-qbft consensus state")
+	_, err := besuParams(t.Context(), router, &hostOnlyTarget{})
+	require.ErrorContains(t, err, "cannot serve a besu consensus state")
+}
+
+func TestIFTRateLimit(t *testing.T) {
+	const (
+		deployer = "0x00000000000000000000000000000000000000aA"
+		other    = "0x00000000000000000000000000000000000000bb"
+	)
+	for _, tc := range []struct {
+		name     string
+		owner    string
+		capacity string
+		window   time.Duration // zero means the flag was not given
+		want     *deploy.IFTRateLimit
+		wantErr  string
+	}{
+		{
+			name: "explicit", owner: deployer, capacity: "1000", window: time.Hour,
+			want: &deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 3600},
+		},
+		{
+			name: "default window", owner: deployer, capacity: "1000",
+			want: &deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 86400},
+		},
+		{
+			name: "owner spelled differently", owner: strings.ToLower(deployer[2:]), capacity: "1000",
+			want: &deploy.IFTRateLimit{Capacity: big.NewInt(1000), Window: 86400},
+		},
+		{name: "capacity required", owner: deployer, wantErr: "--rate-limit-capacity is required"},
+		{name: "other owner", owner: other},
+		{name: "other owner with capacity", owner: other, capacity: "1", wantErr: "only the owner"},
+		{name: "other owner with window", owner: other, window: time.Hour, wantErr: "only the owner"},
+		{name: "zero capacity", owner: deployer, capacity: "0", wantErr: "must be a positive uint208"},
+		{name: "malformed capacity", owner: deployer, capacity: "1e18", wantErr: "must be a positive uint208"},
+		{
+			name: "capacity overflow", owner: deployer, capacity: new(big.Int).Lsh(big.NewInt(1), 208).String(),
+			wantErr: "must be a positive uint208",
+		},
+		{name: "sub-second window", owner: deployer, capacity: "1", window: time.Millisecond, wantErr: "must be at least 1s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oldCapacity, oldWindow := flagDeployIFTCapacity, flagDeployIFTWindow
+			t.Cleanup(func() { flagDeployIFTCapacity, flagDeployIFTWindow = oldCapacity, oldWindow })
+			flagDeployIFTCapacity, flagDeployIFTWindow = tc.capacity, 24*time.Hour
+			if tc.window != 0 {
+				flagDeployIFTWindow = tc.window
+			}
+
+			got, err := iftRateLimit(tc.owner, deployer, tc.window != 0)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestNormalizeIFTAddress(t *testing.T) {
+	cfg := config.Config{Chains: config.Chains{
+		{ChainID: "1", EVM: &config.EVMChainConfig{}},
+		{ChainID: "2"},
+	}}
+	for _, expected := range []string{
+		"0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+		"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+	} {
+		for _, input := range []string{strings.ToLower(expected), expected} {
+			actual, err := normalizeIFTAddress(cfg, "1", input)
+			require.NoError(t, err)
+			require.Equal(t, expected, actual)
+		}
+	}
+
+	for _, input := range []string{"counterparty-token", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"} {
+		actual, err := normalizeIFTAddress(cfg, "2", input)
+		require.NoError(t, err)
+		require.Equal(t, input, actual)
+	}
+
+	_, err := normalizeIFTAddress(cfg, "1", "invalid")
+	require.ErrorContains(t, err, "invalid IFT address")
+	_, err = normalizeIFTAddress(cfg, "unknown", "counterparty-token")
+	require.ErrorContains(t, err, "not declared in config")
 }
 
 func TestWholeSeconds(t *testing.T) {
@@ -335,20 +594,61 @@ func TestWholeSeconds(t *testing.T) {
 	}
 }
 
+func TestTrustLevel(t *testing.T) {
+	for _, tc := range []struct {
+		s       string
+		want    besumsgs.IBesuLightClientMsgsTrustThreshold
+		wantErr string
+	}{
+		{s: "2/3", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}},
+		{s: "1/3", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 3}},
+		{s: "1/2", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}},
+		{s: "1/1", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 1}},
+		{s: "85/255", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 85, Denominator: 255}},
+		{s: "1/4", wantErr: "must be from 1/3 to 1"},
+		{s: "0/1", wantErr: "must be from 1/3 to 1"},
+		{s: "3/2", wantErr: "must be from 1/3 to 1"},
+		{s: "1/0", wantErr: "denominator must not be zero"},
+		{s: "0/0", wantErr: "denominator must not be zero"},
+		{s: "", wantErr: "want n/d"},
+		{s: "2", wantErr: "want n/d"},
+		{s: "0.5", wantErr: "want n/d"},
+		{s: "1/2/3", wantErr: "want n/d"},
+		{s: " 1/2", wantErr: "want n/d"},
+		{s: "-1/2", wantErr: "want n/d"},
+		{s: "256/256", wantErr: "want n/d"},
+	} {
+		got, err := trustLevel(tc.s)
+		if tc.wantErr != "" {
+			require.ErrorContains(t, err, tc.wantErr, tc.s)
+			continue
+		}
+		require.NoError(t, err, tc.s)
+		require.Equal(t, tc.want, got, tc.s)
+	}
+}
+
+// The flag's default is the client's default trust level.
+func TestTrustLevelFlagDefault(t *testing.T) {
+	got, err := trustLevel(cmdDeployClientBesu.Flags().Lookup(flagNameTrustLevel).DefValue)
+	require.NoError(t, err)
+	require.Equal(t, besu.DefaultTrustLevel, got)
+}
+
 const (
 	besuHeadHeight    = 112
 	besuHeadTimestamp = 1788200000
 )
 
-// besuHeadTarget is a Besu chain whose head is besuHeadHeight.
+// besuHeadTarget is an IBFT2 Besu chain whose head is besuHeadHeight.
 type besuHeadTarget struct {
 	deploy.Target
 	called bool
 }
 
-func (t *besuHeadTarget) BesuQBFTHead(context.Context) (uint64, besumsgs.IBesuLightClientMsgsConsensusState, error) {
+func (t *besuHeadTarget) BesuHead(context.Context) (*besu.ParsedHeader, error) {
 	t.called = true
-	return besuHeadHeight, besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp}, nil
+	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.IBFT2}, nil
 }
 
 // hostOnlyTarget is a chain that cannot serve Besu consensus states.
@@ -429,7 +729,7 @@ func TestRenderConfigCommandPreservesUnspecifiedSigners(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type: deploy.ClientTypeAttestation,
+			Attestation: &manifest.AttestationParams{},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
@@ -473,8 +773,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Type:   deploy.ClientTypeAttestation,
-			Params: map[string]any{"attestors": []any{attestorAddress}},
+			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddress}},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}

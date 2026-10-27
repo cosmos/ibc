@@ -728,12 +728,12 @@ func TestAttestorsValidate(t *testing.T) {
 			errContains: ".grpc: required for remote attestors",
 		},
 		{
-			name: "remote grpc includes a scheme",
+			name: "remote grpc has a non-http scheme",
 			attestors: Attestors{{
 				Name: "attestor-a", Type: AttestorTypeRemote,
-				GRPC: "https://attestor-a.example.com:443",
+				GRPC: "ftp://attestor-a.example.com:443",
 			}},
-			errContains: ".grpc: must be a bare host:port, not a URL",
+			errContains: ".grpc: must be a bare host:port or an http(s):// URL",
 		},
 		{
 			name: "remote with chainId set",
@@ -1011,10 +1011,12 @@ func TestConfigAccessors(t *testing.T) {
 }
 
 func TestCollectComments(t *testing.T) {
+	const fillIn = "TODO: fill in"
 	cfg := Config{
 		Chains: []ChainConfig{
 			{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: ""}},
 			{ChainID: "2", EVM: &EVMChainConfig{ICS26Router: "0xabc"}},
+			{ChainID: "3", EVM: &EVMChainConfig{ICS26Router: "0xabc"}},
 		},
 		Relayer: RelayerConfig{Connections: []ConnectionConfig{
 			{ClientA: ClientEnd{ChainID: "1"}, ClientB: ClientEnd{ChainID: "2", Signer: "relayer-key"}},
@@ -1027,18 +1029,26 @@ func TestCollectComments(t *testing.T) {
 	}
 
 	require.Equal(t, map[string]string{
-		"$.chains[0].evm.ics26Router":             "TODO: fill in",
+		"$.chains[0].evm.ics26Router":             fillIn,
+		"$.chains[0].evm.ibcMulticall":            fillIn,
+		"$.chains[1].evm.ibcMulticall":            fillIn,
+		"$.chains[2].evm.ibcMulticall":            fillIn,
 		"$.relayer.connections[0].clientA.signer": "TODO: signers[] alias that submits relay txs on chainA",
 		"$.attestors[0].signer":                   "TODO: signers[] alias backing this attestor's key",
 		"$.attestors[0].finalityOffset":           finalityOffsetTODO,
 		"$.attestors[1].finalityOffset":           finalityOffsetTODO,
 	}, CollectComments(cfg))
 
+	require.Equal(t, map[string]string{
+		"$.chains[0].evm.ics26Router":  fillIn,
+		"$.chains[0].evm.ibcMulticall": fillIn,
+	}, CollectComments(Config{Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{}}}}))
+
 	// nothing left blank -> only the always-on finalityOffset reminder remains
 	require.Equal(t, map[string]string{
 		"$.attestors[0].finalityOffset": finalityOffsetTODO,
 	}, CollectComments(Config{
-		Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: "0xabc"}}},
+		Chains: []ChainConfig{{ChainID: "1", EVM: &EVMChainConfig{ICS26Router: "0xabc", IBCMulticall: "0xdef"}}},
 		Relayer: RelayerConfig{Connections: []ConnectionConfig{
 			{ClientA: ClientEnd{ChainID: "1", Signer: "a"}, ClientB: ClientEnd{ChainID: "2", Signer: "b"}},
 		}},
@@ -1053,4 +1063,45 @@ func TestPrintJSON(t *testing.T) {
 		SourceChainId: "chain-1",
 	}))
 	require.JSONEq(t, `{"txHash":"0xabc","sourceChainId":"chain-1"}`, out.String())
+}
+
+func TestMulticallAddressValidation(t *testing.T) {
+	for _, tc := range []struct {
+		address string
+		invalid bool
+	}{
+		{"", true},
+		{"0x0000000000000000000000000000000000000002", false},
+		{"invalid", true},
+		{"0x0000000000000000000000000000000000000000", true},
+	} {
+		t.Run(tc.address, func(t *testing.T) {
+			cfg := loadSampleConfig(t)
+			cfg.Chains[1].EVM.IBCMulticall = tc.address
+			require.NoError(t, cfg.Validate())
+			require.NoError(t, cfg.AttestorSufficiency())
+			err := cfg.RelayerSufficiency()
+			if tc.invalid {
+				require.ErrorContains(t, err, "chains[1].evm.ibcMulticall")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRelayerRequiresMulticallForEveryEVMChain(t *testing.T) {
+	cfg := loadSampleConfig(t)
+	cfg.Chains = append(cfg.Chains, ChainConfig{
+		ChainID: "42",
+		EVM: &EVMChainConfig{
+			RPC: "http://localhost", ICS26Router: "0x0000000000000000000000000000000000000001",
+		},
+	})
+	require.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.AttestorSufficiency())
+	require.ErrorContains(t, cfg.RelayerSufficiency(), "chains[2].evm.ibcMulticall: required")
+
+	cfg.Chains[2].EVM.IBCMulticall = "0x0000000000000000000000000000000000000002"
+	require.NoError(t, cfg.RelayerSufficiency())
 }

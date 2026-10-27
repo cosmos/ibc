@@ -93,8 +93,7 @@ or *narrow*. Narrow findings are the valuable ones and the easy ones to talk
 yourself out of — record them.
 
 A finding that the generator cannot express belongs in the same list, marked as
-such, with the cost of fixing it. `params.url` reaching no row is one of these:
-known, recorded, not worth a day.
+such, with the cost of fixing it.
 
 Nothing about this procedure is a numbered step in
 [AGENTS.md](AGENTS.md). It is not per-pull-request work — it is what you do

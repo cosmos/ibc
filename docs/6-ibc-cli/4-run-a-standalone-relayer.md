@@ -3,11 +3,11 @@ title: "Run a standalone relayer"
 description: "Run a relayer in its own process, querying attestors it does not host."
 ---
 
-This guide shows you how to run a relayer in its own process. It hosts no attestors and queries them over the network instead.
+Run a relayer that queries a standalone attestor for 41002 and builds Besu proofs for 41001.
 
 ## Before you begin
 
-Before proceeding, run the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) and [standalone attestor](3-run-a-standalone-attestor.md) guides first, in order. You'll need to have an IBC deployment and standalone attestors on both chains to complete this guide.
+Complete the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) and [standalone attestor](3-run-a-standalone-attestor.md) guides, in order. Keep the standalone attestor for 41002 running.
 
 The tutorial's keystore already holds a funded key, so this guide reuses it rather than importing another.
 
@@ -19,7 +19,7 @@ The tutorial's keystore already holds a funded key, so this guide reuses it rath
 ./bin/ibc config new --config ibc-relayer2.yml
 ```
 
-2. Write its configuration, reading both router addresses from your deployment:
+2. Write its configuration, reading the router and multicall addresses from your deployment:
 
 ```bash
 cat > ~/.ibc/ibc-relayer2.yml <<EOF
@@ -35,11 +35,13 @@ chains:
     rpc: http://localhost:8545
     ws: ws://localhost:8546
     ics26Router: "$(./bin/ibc deploy show 41001 | jq -r '.core.router')"
+    ibcMulticall: "$(./bin/ibc deploy show 41001 | jq -er '.core.multicall')"
 - chainId: "41002"
   evm:
     rpc: http://localhost:8745
     ws: ws://localhost:8746
     ics26Router: "$(./bin/ibc deploy show 41002 | jq -r '.core.router')"
+    ibcMulticall: "$(./bin/ibc deploy show 41002 | jq -er '.core.multicall')"
 
 relayer:
   connections:
@@ -55,7 +57,7 @@ relayer:
       chainId: "41002"
       clientId: cli-41001-41002
       signer: relayer
-      type: attestation
+      type: besu
       autoRelay:
         enabled: true
 
@@ -63,9 +65,6 @@ attestors:
 - name: attestor-41002
   type: remote
   grpc: 127.0.0.1:3001
-- name: attestor-41001
-  type: remote
-  grpc: 127.0.0.1:3003
 
 signers:
 - alias: relayer
@@ -75,6 +74,7 @@ EOF
 ```
 
 - No chain names a deployer, because this relayer deploys nothing.
+- The client `type` describes how that end verifies the opposite chain. The client on 41001 trusts the remote attestor for 41002. The client on 41002 verifies Besu proofs from 41001.
 - The signer on each client end is the key that submits on that end's own chain, so one connection can use a different key per side.
 - `autoRelay` is set on each client end and governs packets leaving that end's chain. It requires the chain's `ws` endpoint.
 - The listen address and the database are this relayer's own, so neither collides with the tutorial's.
@@ -107,7 +107,7 @@ level=INFO msg="Starting relayer" module=bootstrap
 level=INFO msg=Readiness module=bootstrap readiness="{Event:ready ChainsConnected:[41001 41002] HTTP:[::]:3002}"
 ```
 
-The relayer is running and waiting for packets. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
+The relayer is running and waiting for packets. The readiness log confirms startup; use the [gRPC health check](7-api.md#health-checks) to monitor ongoing API and database availability. It clears pending packets at startup, then every five minutes; `relayer.clearOnStart` and `relayer.clearInterval` change both.
 
 2. Back in your first terminal, send a transfer and keep the hash:
 

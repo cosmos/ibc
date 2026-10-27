@@ -4,7 +4,10 @@ package processors
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -95,11 +98,18 @@ func relayPackets(
 	}
 
 	packets := make([]channeltypesv2.Packet, len(events))
+	var acknowledgements []channeltypesv2.Acknowledgement
+	if relayKind == v2.RelayKindAck {
+		acknowledgements = make([]channeltypesv2.Acknowledgement, len(events))
+	}
 	for i, event := range events {
 		packets[i] = event.Packet
+		if relayKind == v2.RelayKindAck {
+			acknowledgements[i] = channeltypesv2.NewAcknowledgement(event.Acks...)
+		}
 	}
 
-	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets)
+	packetProofs, err := prover.PacketProofs(ctx, proofHeight, proofKindFor(relayKind), packets, acknowledgements)
 	if err != nil {
 		return nil, errors.Wrap(err, "generating packet proofs")
 	}
@@ -115,6 +125,13 @@ func relayPackets(
 		}
 	}
 
+	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
+	defer cancel()
+
+	if err = chainClient.WaitForChain(waitCtx); err != nil {
+		return nil, errors.Wrap(err, "waiting for chain")
+	}
+
 	relayTxs, err := txBuilder.BuildRelayTxs(v2.ClientUpdate{
 		ClientID: clientID,
 		Payloads: clientUpdatePayloads,
@@ -128,12 +145,12 @@ func relayPackets(
 	}
 
 	relayTx := relayTxs[0]
-
-	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
-	defer cancel()
-
-	if err = chainClient.WaitForChain(waitCtx); err != nil {
-		return nil, errors.Wrap(err, "waiting for chain")
+	simulation, err := txSubmitter.SimulateRelayTx(ctx, relayTx)
+	if err != nil {
+		return nil, errors.Wrap(err, "simulating relay tx")
+	}
+	if err = validateRelaySimulation(ctx, logger, simulation); err != nil {
+		return nil, err
 	}
 
 	submission, err := txSubmitter.Submit(ctx, v2.TxIntent{
@@ -149,4 +166,36 @@ func relayPackets(
 	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
 
 	return submission, nil
+}
+
+func validateRelaySimulation(ctx context.Context, logger *slog.Logger, simulation v2.RelaySimulation) error {
+	requiredType := v2.OperationTypeUpdate
+	if slices.ContainsFunc(simulation.Operations, func(result v2.OperationResult) bool {
+		return result.Type == v2.OperationTypePacket
+	}) {
+		requiredType = v2.OperationTypePacket
+	}
+	var failures []string
+	canSucceed := false
+	for i, result := range simulation.Operations {
+		if result.Success {
+			canSucceed = canSucceed || result.Type == requiredType
+			continue
+		}
+		if len(failures) < 5 {
+			reason := result.FailureReason
+			if len(reason) > 256 {
+				reason = reason[:256] + "..."
+			}
+			failures = append(failures, fmt.Sprintf("call[%d]: %s", i, reason))
+		}
+	}
+	details := strings.Join(failures, "; ")
+	if canSucceed {
+		if len(failures) > 0 {
+			logger.DebugContext(ctx, "Relay simulation has failed calls", "failures", details)
+		}
+		return nil
+	}
+	return errors.Errorf("no packet calls can currently succeed: %s", details)
 }

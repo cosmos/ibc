@@ -256,6 +256,7 @@ func acquireIBCInstance(
 			accessManager: EVMAddress(resolved.AccessManager.Hex()),
 			ics20Transfer: EVMAddress(apps.ICS20Transfer.Hex()),
 			ics27GMP:      EVMAddress(apps.ICS27GMP.Hex()),
+			ibcMulticall:  EVMAddress(apps.IBCMulticall.Hex()),
 		}, nil
 	case ExistingIBCInstance:
 		resolved, err := setup.AttachInstance(ctx, common.HexToAddress(string(instance.Locator)))
@@ -350,7 +351,7 @@ func prepareConnections(
 					return dependencies, fmt.Errorf("prepare IBC Client %q: %w", label, err)
 				}
 				dependencies.preparedClients[label] = prepared
-			case NewBesuQBFTClient:
+			case NewBesuClient:
 				instance := dependencies.instances[instanceID]
 				setup, err := solidityIBCSetup(ctx, instance.chain)
 				if err != nil {
@@ -359,7 +360,7 @@ func prepareConnections(
 				authority, _ := runtime.evmAccount(client.Authority)
 				counterparty := dependencies.instances[counterpartyEnd.declaration.clientIBCInstance()]
 				counterpartyRouter := common.HexToAddress(string(counterparty.locator))
-				trusted, err := besuQBFTTrustedState(ctx, counterparty.chain)
+				trusted, err := besuTrustedState(ctx, counterparty.chain)
 				if err != nil {
 					return dependencies, fmt.Errorf(
 						"prepare IBC Client %q counterparty trusted state: %w",
@@ -368,11 +369,12 @@ func prepareConnections(
 					)
 				}
 				router := common.HexToAddress(string(instance.locator))
-				prepared, err := setup.PrepareBesuQBFTClient(
+				prepared, err := setup.PrepareBesuClient(
 					ctx,
 					authority,
 					router,
-					solidityibc.BesuQBFTClientConfig{
+					solidityibc.BesuClientConfig{
+						Consensus:            trusted.Consensus,
 						ID:                   clientIDs[end.label],
 						CounterpartyClientID: clientIDs[counterpartyEnd.label],
 						CounterpartyRouter:   counterpartyRouter,
@@ -382,6 +384,7 @@ func prepareConnections(
 						InitialValidators:    trusted.Validators,
 						TrustingPeriod:       client.TrustingPeriod,
 						MaxClockDrift:        client.MaxClockDrift,
+						TrustLevel:           client.TrustLevel,
 						RoleManager:          router,
 					},
 				)
@@ -469,7 +472,7 @@ func acquireIBCClient(
 		); attestorErr != nil {
 			return nil, attestorErr
 		}
-	case NewClient, NewBesuQBFTClient:
+	case NewClient, NewBesuClient:
 		prepared, ok := dependencies.preparedClients[label]
 		if !ok {
 			return nil, fmt.Errorf("IBC Client %q was not prepared", label)
@@ -546,6 +549,7 @@ func acquireAttestor(
 		SignerRemoteKeyID: binding.SignerRemoteKeyID,
 		RPCURL:            dependencies.observed.chain.rpcURL,
 		ICS26Router:       string(dependencies.observed.locator),
+		Observability:     ibccli.ObservabilityEnabled(ctx),
 	}
 	if binding.SignerGRPC == "" {
 		launch.PrivateKeyHex = binding.PrivateKeyHex
@@ -614,9 +618,9 @@ func evmHeader(ctx context.Context, chain *Chain) (*types.Header, error) {
 	return header, err
 }
 
-// besuQBFTTrustedState is the sealed head of chain, which a Besu QBFT Client
-// tracking it starts trusting.
-func besuQBFTTrustedState(ctx context.Context, chain *Chain) (*besu.ParsedHeader, error) {
+// besuTrustedState is the sealed head of chain, which a Besu Client tracking
+// it starts trusting. Its consensus picks the Client's contract.
+func besuTrustedState(ctx context.Context, chain *Chain) (*besu.ParsedHeader, error) {
 	var header *besu.ParsedHeader
 	ok, err := evm.WithChainClient(chain.impl, func(client *evm.EVMClient) error {
 		var readErr error

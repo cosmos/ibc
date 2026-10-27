@@ -29,6 +29,12 @@ var (
 	_ = abi.ConvertType
 )
 
+// IFTBatchTransferShimRecipient is an auto generated low-level Go binding around an user-defined struct.
+type IFTBatchTransferShimRecipient struct {
+	Account common.Address
+	Amount  *big.Int
+}
+
 // IFTBatchTransferShimTransfer is an auto generated low-level Go binding around an user-defined struct.
 type IFTBatchTransferShimTransfer struct {
 	Receiver         string
@@ -38,8 +44,8 @@ type IFTBatchTransferShimTransfer struct {
 
 // IFTBatchTransferShimMetaData contains all meta data concerning the IFTBatchTransferShim contract.
 var IFTBatchTransferShimMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"batchIftTransfer\",\"inputs\":[{\"name\":\"ift\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"clientId\",\"type\":\"string\",\"internalType\":\"string\"},{\"name\":\"transfers\",\"type\":\"tuple[]\",\"internalType\":\"structIFTBatchTransferShim.Transfer[]\",\"components\":[{\"name\":\"receiver\",\"type\":\"string\",\"internalType\":\"string\"},{\"name\":\"amount\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"timeoutTimestamp\",\"type\":\"uint64\",\"internalType\":\"uint64\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"}]",
-	Bin: "0x60808060405234601557610347908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c634931275714610024575f80fd5b3461028b5760607ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc36011261028b5760043573ffffffffffffffffffffffffffffffffffffffff811680910361028b5760243567ffffffffffffffff811161028b573660238201121561028b57806004013567ffffffffffffffff811161028b576024820191602482369201011161028b576044359067ffffffffffffffff821161028b573660238301121561028b5781600401359367ffffffffffffffff851161028b576024830192602436918760051b01011161028b575f5b85811061010857005b61011381878661028f565b8035907fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe18136030182121561028b57019081359167ffffffffffffffff831161028b57602001823603811361028b57602061016f838a8961028f565b013590604061017f848b8a61028f565b01359067ffffffffffffffff821680920361028b57853b1561028b575f926101e3926102138b9360405198899687967f711708b3000000000000000000000000000000000000000000000000000000008852608060048901528d60848901916102fc565b917ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc8784030160248801526102fc565b9160448401526064830152038183875af1801561028057610239575b60019150016100ff565b67ffffffffffffffff82116102535760019160405261022f565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b6040513d5f823e3d90fd5b5f80fd5b91908110156102cf5760051b810135907fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa18136030182121561028b570190565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b601f82602094937fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe093818652868601375f858286010152011601019056fea164736f6c634300081c000a",
+	ABI: "[{\"type\":\"function\",\"name\":\"batchIftTransfer\",\"inputs\":[{\"name\":\"ift\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"clientId\",\"type\":\"string\",\"internalType\":\"string\"},{\"name\":\"transfers\",\"type\":\"tuple[]\",\"internalType\":\"structIFTBatchTransferShim.Transfer[]\",\"components\":[{\"name\":\"receiver\",\"type\":\"string\",\"internalType\":\"string\"},{\"name\":\"amount\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"timeoutTimestamp\",\"type\":\"uint64\",\"internalType\":\"uint64\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"batchTransfer\",\"inputs\":[{\"name\":\"erc20\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"recipients\",\"type\":\"tuple[]\",\"internalType\":\"structIFTBatchTransferShim.Recipient[]\",\"components\":[{\"name\":\"account\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"}]",
+	Bin: "0x60808060405234601557610584908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c806349312757146102065763a8ad2e061461002f575f80fd5b346101ef5760407ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126101ef5761006661042b565b60243567ffffffffffffffff81116101ef57366023820112156101ef5780600401359067ffffffffffffffff82116101ef576024810190602436918460061b0101116101ef5773ffffffffffffffffffffffffffffffffffffffff8316905f5b8381106100cf57005b6100da818584610567565b3573ffffffffffffffffffffffffffffffffffffffff81168091036101ef576020610106838786610567565b0135604051917fa9059cbb000000000000000000000000000000000000000000000000000000008352600483015260248201526020816044815f885af19081156101fb575f916101bd575b501561015f576001016100c6565b60646040517f08c379a000000000000000000000000000000000000000000000000000000000815260206004820152601560248201527f6572633230207472616e73666572206661696c656400000000000000000000006044820152fd5b90506020813d82116101f3575b816101d7602093836104bb565b810103126101ef575180151581036101ef5785610151565b5f80fd5b3d91506101ca565b6040513d5f823e3d90fd5b346101ef5760607ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3601126101ef5761023d61042b565b6024359067ffffffffffffffff82116101ef57366023830112156101ef57816004013567ffffffffffffffff81116101ef57602483019260248236920101116101ef576044359067ffffffffffffffff82116101ef57366023830112156101ef5781600401359367ffffffffffffffff85116101ef576024830192602436918760051b0101116101ef579273ffffffffffffffffffffffffffffffffffffffff165f5b8581106102e957005b6102f481878661044e565b8035907fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe1813603018212156101ef57019081359167ffffffffffffffff83116101ef5760200182360381136101ef576020610350838a8961044e565b0135906040610360848b8a61044e565b01359067ffffffffffffffff82168092036101ef57853b156101ef575f926103c4926103f48b9360405198899687967f711708b3000000000000000000000000000000000000000000000000000000008852608060048901528d6084890191610529565b917ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc878403016024880152610529565b9160448401526064830152038183875af19182156101fb5760019261041b575b50016102e0565b5f610425916104bb565b87610414565b6004359073ffffffffffffffffffffffffffffffffffffffff821682036101ef57565b919081101561048e5760051b810135907fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa1813603018212156101ef570190565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b90601f7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0910116810190811067ffffffffffffffff8211176104fc57604052565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b601f82602094937fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe093818652868601375f8582860101520116010190565b919081101561048e5760061b019056fea164736f6c634300081c000a",
 }
 
 // IFTBatchTransferShimABI is the input ABI used to generate the binding from.
@@ -228,4 +234,25 @@ func (_IFTBatchTransferShim *IFTBatchTransferShimSession) BatchIftTransfer(ift c
 // Solidity: function batchIftTransfer(address ift, string clientId, (string,uint256,uint64)[] transfers) returns()
 func (_IFTBatchTransferShim *IFTBatchTransferShimTransactorSession) BatchIftTransfer(ift common.Address, clientId string, transfers []IFTBatchTransferShimTransfer) (*types.Transaction, error) {
 	return _IFTBatchTransferShim.Contract.BatchIftTransfer(&_IFTBatchTransferShim.TransactOpts, ift, clientId, transfers)
+}
+
+// BatchTransfer is a paid mutator transaction binding the contract method 0xa8ad2e06.
+//
+// Solidity: function batchTransfer(address erc20, (address,uint256)[] recipients) returns()
+func (_IFTBatchTransferShim *IFTBatchTransferShimTransactor) BatchTransfer(opts *bind.TransactOpts, erc20 common.Address, recipients []IFTBatchTransferShimRecipient) (*types.Transaction, error) {
+	return _IFTBatchTransferShim.contract.Transact(opts, "batchTransfer", erc20, recipients)
+}
+
+// BatchTransfer is a paid mutator transaction binding the contract method 0xa8ad2e06.
+//
+// Solidity: function batchTransfer(address erc20, (address,uint256)[] recipients) returns()
+func (_IFTBatchTransferShim *IFTBatchTransferShimSession) BatchTransfer(erc20 common.Address, recipients []IFTBatchTransferShimRecipient) (*types.Transaction, error) {
+	return _IFTBatchTransferShim.Contract.BatchTransfer(&_IFTBatchTransferShim.TransactOpts, erc20, recipients)
+}
+
+// BatchTransfer is a paid mutator transaction binding the contract method 0xa8ad2e06.
+//
+// Solidity: function batchTransfer(address erc20, (address,uint256)[] recipients) returns()
+func (_IFTBatchTransferShim *IFTBatchTransferShimTransactorSession) BatchTransfer(erc20 common.Address, recipients []IFTBatchTransferShimRecipient) (*types.Transaction, error) {
+	return _IFTBatchTransferShim.Contract.BatchTransfer(&_IFTBatchTransferShim.TransactOpts, erc20, recipients)
 }

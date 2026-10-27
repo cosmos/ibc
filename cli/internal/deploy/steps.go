@@ -95,7 +95,33 @@ func CoreSteps(t Target, dir, chainID string) []Step {
 				m = manifest.New(chainID, "evm")
 			}
 			m.Core.Router = ref.Router
+			m.Core.Multicall = ""
 			m.TargetData = ref.TargetData
+			return m.Save(dir)
+		},
+	}, {
+		Name: fmt.Sprintf("multicall on chain %s", chainID),
+		Done: func(ctx context.Context) (bool, error) {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil || m == nil || m.Core.Multicall == "" {
+				return false, err
+			}
+			return t.HasCode(ctx, m.Core.Multicall)
+		},
+		Run: func(ctx context.Context) error {
+			m, err := manifest.Load(dir, chainID)
+			if err != nil {
+				return err
+			}
+			if m == nil || m.Core.Router == "" || m.TargetData["accessManager"] == "" {
+				return fmt.Errorf("core manifest for chain %s has no router or accessManager recorded", chainID)
+			}
+			ref, err := t.ProvisionMulticall(ctx, m.TargetData["accessManager"])
+			if err != nil {
+				return err
+			}
+			m.Core.Multicall = ref.Address
+			m.TargetData["ibcMulticallImplementation"] = ref.Implementation
 			return m.Save(dir)
 		},
 	}}
@@ -152,13 +178,6 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			return true, nil
 		},
 		Run: func(ctx context.Context) error {
-			if !slices.Contains(t.SupportedClientTypes(), spec.Type()) {
-				return fmt.Errorf(
-					"client type %q not supported by target (supported: %v)",
-					spec.Type(),
-					t.SupportedClientTypes(),
-				)
-			}
 			m, err := manifest.Load(dir, chainID)
 			if err != nil {
 				return err
@@ -247,10 +266,11 @@ func GMPSteps(t Target, dir, chainID string) []Step {
 	}}
 }
 
-// IFTSteps provisions one IFT token on chainID and records it in the manifest.
-// Requires the gmp step to have run.
+// IFTSteps provisions one IFT token on chainID and records it in the manifest,
+// then sets spec.RateLimit on it unless nil. A rerun with a different rate
+// limit updates it. Requires the gmp step to have run.
 func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
-	return []Step{{
+	steps := []Step{{
 		Name: fmt.Sprintf("ift token %s on chain %s", spec.Symbol, chainID),
 		Done: func(ctx context.Context) (bool, error) {
 			m, err := manifest.Load(dir, chainID)
@@ -285,6 +305,51 @@ func IFTSteps(t Target, dir, chainID string, spec IFTSpec) []Step {
 			return m.Save(dir)
 		},
 	}}
+	if spec.RateLimit == nil {
+		return steps
+	}
+	limit := *spec.RateLimit
+	token := func() (string, error) {
+		m, err := manifest.Load(dir, chainID)
+		if err != nil || m == nil {
+			return "", err
+		}
+		tok, _ := m.TokenByIdentity(spec.Symbol, spec.Name, spec.Owner)
+		return tok.Address, nil
+	}
+	return append(steps, Step{
+		Name: fmt.Sprintf("ift rate limit %s on chain %s", spec.Symbol, chainID),
+		Done: func(ctx context.Context) (bool, error) {
+			addr, err := token()
+			if err != nil || addr == "" {
+				return false, err
+			}
+			deployed, err := t.HasCode(ctx, addr)
+			if err != nil || !deployed {
+				return false, err
+			}
+			current, err := t.IFTRateLimit(ctx, addr)
+			if err != nil {
+				return false, err
+			}
+			return current.Equal(limit), nil
+		},
+		Run: func(ctx context.Context) error {
+			addr, err := token()
+			if err != nil {
+				return err
+			}
+			if addr == "" {
+				return fmt.Errorf("no ift token %s recorded for chain %s", spec.Symbol, chainID)
+			}
+			if err := t.SetIFTRateLimit(ctx, addr, limit); err != nil {
+				return err
+			}
+			slog.Info("ift rate limit set", "chain", chainID, "symbol", spec.Symbol,
+				"capacity", limit.Capacity.String(), "window", limit.Window)
+			return nil
+		},
+	})
 }
 
 // IFTBridgeSteps deploys the EVM send-call constructor (unless an override is
@@ -413,61 +478,74 @@ func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
 func specToClient(spec ClientSpec, address string) manifest.Client {
 	client := manifest.Client{
 		ClientID:             spec.ClientID,
-		Type:                 spec.Type(),
 		Address:              address,
 		CounterpartyChainID:  spec.CounterpartyChainID,
 		CounterpartyClientID: spec.CounterpartyClientID,
 	}
 	switch p := spec.Params.(type) {
 	case AttestationParams:
-		client.Params = map[string]any{
-			"attestors":        p.Attestors,
-			"threshold":        p.Threshold,
-			"initialHeight":    p.InitialHeight,
-			"initialTimestamp": p.InitialTimestamp,
-		}
-	case BesuQBFTParams:
+		attestation := manifest.AttestationParams(p)
+		client.Attestation = &attestation
+	case BesuParams:
 		validators := make([]string, len(p.InitialConsensusState.Validators))
 		for i, v := range p.InitialConsensusState.Validators {
 			validators[i] = v.Hex()
 		}
-		client.Params = map[string]any{
-			"ibcRouter":         p.IBCRouter.Hex(),
-			"initialHeight":     p.InitialHeight,
-			"initialTimestamp":  p.InitialConsensusState.Timestamp,
-			"initialStateRoot":  common.Hash(p.InitialConsensusState.StateRoot).Hex(),
-			"initialValidators": validators,
-			"trustingPeriod":    p.TrustingPeriod,
-			"maxClockDrift":     p.MaxClockDrift,
+		client.Besu = &manifest.BesuParams{
+			Consensus:         string(p.Consensus),
+			IBCRouter:         p.IBCRouter.Hex(),
+			InitialHeight:     p.InitialHeight,
+			InitialTimestamp:  p.InitialConsensusState.Timestamp,
+			InitialStateRoot:  common.Hash(p.InitialConsensusState.StateRoot).Hex(),
+			InitialValidators: validators,
+			TrustingPeriod:    p.TrustingPeriod,
+			MaxClockDrift:     p.MaxClockDrift,
+			TrustLevel:        manifest.TrustLevel(p.TrustLevel),
 		}
 	}
 	return client
 }
 
 // clientConflicts reports the identity fields on which spec disagrees with
-// an already-recorded deployment. Values are compared via their JSON
-// encoding so native spec types (uint8, []string) match their file
-// round-tripped forms (float64, []any).
+// an already-recorded deployment.
 func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
+	requested := specToClient(spec, existing.Address)
 	var diffs []string
-	conflict := func(field string, deployed, requested any) {
-		db, errD := json.Marshal(deployed)
-		rb, errR := json.Marshal(requested)
-		if errD != nil || errR != nil || string(db) != string(rb) {
-			diffs = append(diffs, fmt.Sprintf("%s: deployed %s, requested %s", field, db, rb))
-		}
+	diffs = conflict(diffs, "counterpartyChainId", existing.CounterpartyChainID, requested.CounterpartyChainID)
+	diffs = conflict(diffs, "counterpartyClientId", existing.CounterpartyClientID, requested.CounterpartyClientID)
+	if existing.Type() != requested.Type() {
+		return conflict(diffs, "type", existing.Type(), requested.Type())
 	}
-	conflict("type", existing.Type, spec.Type())
-	conflict("counterpartyChainId", existing.CounterpartyChainID, spec.CounterpartyChainID)
-	conflict("counterpartyClientId", existing.CounterpartyClientID, spec.CounterpartyClientID)
-	switch p := spec.Params.(type) {
-	case AttestationParams:
-		conflict("attestors", existing.Params["attestors"], p.Attestors)
-		conflict("threshold", existing.Params["threshold"], p.Threshold)
-	case BesuQBFTParams:
-		conflict("ibcRouter", existing.Params["ibcRouter"], p.IBCRouter.Hex())
-		conflict("trustingPeriod", existing.Params["trustingPeriod"], p.TrustingPeriod)
-		conflict("maxClockDrift", existing.Params["maxClockDrift"], p.MaxClockDrift)
+	switch {
+	case requested.Attestation != nil:
+		d, r := existing.Attestation, requested.Attestation
+		if !slices.Equal(d.Attestors, r.Attestors) {
+			diffs = append(diffs, difference("attestors", d.Attestors, r.Attestors))
+		}
+		diffs = conflict(diffs, "threshold", d.Threshold, r.Threshold)
+	case requested.Besu != nil:
+		d, r := existing.Besu, requested.Besu
+		diffs = conflict(diffs, "consensus", d.Consensus, r.Consensus)
+		diffs = conflict(diffs, "ibcRouter", d.IBCRouter, r.IBCRouter)
+		diffs = conflict(diffs, "trustingPeriod", d.TrustingPeriod, r.TrustingPeriod)
+		diffs = conflict(diffs, "maxClockDrift", d.MaxClockDrift, r.MaxClockDrift)
+		diffs = conflict(diffs, "trustLevel", d.TrustLevel, r.TrustLevel)
 	}
 	return diffs
+}
+
+// conflict appends field's difference to diffs when deployed and requested
+// differ.
+func conflict[T comparable](diffs []string, field string, deployed, requested T) []string {
+	if deployed == requested {
+		return diffs
+	}
+	return append(diffs, difference(field, deployed, requested))
+}
+
+// difference describes field's deployed and requested values as JSON.
+func difference(field string, deployed, requested any) string {
+	d, _ := json.Marshal(deployed)
+	r, _ := json.Marshal(requested)
+	return fmt.Sprintf("%s: deployed %s, requested %s", field, d, r)
 }

@@ -20,7 +20,13 @@ tolerated, so they do not prevent IBC from running.
 ## Available Metrics
 
 Default OpenTelemetry Go runtime metrics and ConnectRPC RPC metrics from
- [otelconnect](https://github.com/connectrpc/otelconnect-go) are also exposed when observability is enabled.
+  [otelconnect](https://github.com/connectrpc/otelconnect-go) are also exposed when observability is enabled.
+
+[OTEL host instrumentation](https://pkg.go.dev/go.opentelemetry.io/contrib/instrumentation/host)
+also exports `process.cpu.time` (user/system CPU seconds for this process) and
+host-wide CPU, memory, and network metrics in both metric modes. Use the rate of
+`process.cpu.time` for per-process CPU usage; host-wide metrics describe the same
+machine across processes and should not be summed across service runtimes.
 
 ### Signer metrics
 
@@ -46,12 +52,18 @@ Shared label: `{otel_scope_name="ibc.prover"}`
 
 | metric                   | type           | labels                                                                                  | notes                                                                                                    |
 | ------------------------ | -------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `prover_operation_*`     | histogram (ms) | `operation`, `chain_id`, `client_id`, `type`, `result`; `proof_kind` on `packet_proofs` | `operation`: `latest_provable_height`, `client_update_payloads`, `packet_proofs`. `type` is the client/prover type. |
+| `prover_operation_*`     | histogram (ms) | `operation`, `chain_id`, `client_id`, `type`, `result`; `proof_kind` on `packet_proofs` | `operation`: `latest_provable_height`, `client_update_payloads`, `packet_proofs`. `type` is the client's on-chain type, including for ends proven by a ProverService. |
 | `latest_provable_height` | gauge          | `chain_id`, `client_id`                                                                 | Recorded only when `latest_provable_height` succeeds.                                                    |
 | `packet_batch_size_*`    | histogram      | `chain_id`, `client_id`, `type`, `proof_kind`                                           | Packet count on PacketProofs. Default histogram buckets.                                                 |
 
 
 `proof_kind`: `packet_commitment`, `acknowledgement`, `receipt_absence`, `unknown`.
+
+Attestation prover metric (`otel_scope_name="ibc.prover.attestation"`):
+
+| Metric | Type | Labels | Notes |
+| --- | --- | --- | --- |
+| `attestation_data_matches_total` | counter | `chain_id`, `client_id`, `attestor`, `result` | Whether returned data matches the expected claim (`true|false`). |
 
 ### Relayer metrics
 

@@ -25,17 +25,18 @@ chains:
       # ws is required by any client end that enables autoRelay
       ws: wss://ethereum-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
       ws: wss://base-rpc.example.com
       ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
 
 relayer:
   # relay specific chain settings
   chainOverrides:
     - chainId: "1"
-      txSubmissionDelay: 5s
       packetBatchSize: 50
 
   # each connection is relayed bidirectionally: clientA's counterparty is
@@ -57,18 +58,22 @@ relayer:
         autoRelay:
           enabled: true
 
-    # a client end of type: remote delegates proof generation to a
-    # ProverService over gRPC instead of building proofs from attestations, so
-    # a light client IBC CLI does not implement can be relayed by serving that
-    # API
-    - alias: "eth-custom"
+    # remoteProver delegates proof generation to a ProverService over gRPC
+    # instead of the built-in prover. With it, type may name a light client the
+    # IBC CLI does not implement.
+    - alias: "eth-base-op"
       clientA:
         chainId: "1"
         signer: "eth-relayer-key"
-        clientId: "custom-0"
-        type: "remote"
-        params:
+        clientId: "op-stack-0"
+        type: "op-stack"
+        remoteProver:
           url: prover.example.com:9090
+#          # TLS needs url: https://prover.example.com; tls only customizes it
+#          tls:
+#            caFile: /etc/ibc/tls/ca.crt
+#            certFile: /etc/ibc/tls/client.crt
+#            keyFile: /etc/ibc/tls/client.key
       clientB:
         chainId: "8453"
         signer: "base-relayer-key"
@@ -81,6 +86,11 @@ attestors:
   - name: "attestor-base"
     type: remote
     grpc: attestor.example.com:3000
+#    # TLS needs grpc: https://attestor.example.com; tls only customizes it
+#    tls:
+#      caFile: /etc/ibc/tls/ca.crt
+#      certFile: /etc/ibc/tls/client.crt
+#      keyFile: /etc/ibc/tls/client.key
   - name: "attestor-ethereum"
     type: remote
     grpc: attestor.example.com:3000
@@ -98,6 +108,11 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "eth-relayer-key-id"
+#    # TLS needs grpc: https://cosmos-kms.example.com; tls only customizes it
+#    tls:
+#      caFile: /etc/ibc/tls/ca.crt
+#      certFile: /etc/ibc/tls/client.crt
+#      keyFile: /etc/ibc/tls/client.key
   - alias: "base-relayer-key"
     type: remote
     grpc: cosmos-kms.example.com:9090

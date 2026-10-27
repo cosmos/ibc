@@ -14,7 +14,9 @@ import (
 
 func TestGMPCall_AutoRelay(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -34,7 +36,7 @@ func TestGMPCall_AutoRelay(t *testing.T) {
 
 func TestGMPCall_Timeout(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t,
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t,
 		e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
@@ -67,7 +69,9 @@ func TestGMPCall_Timeout(t *testing.T) {
 // erc20.transfer executed by the destination ICS27 account.
 func TestGMPCall_ICS27AccountTransfer(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -111,7 +115,9 @@ var invalidGMPPayload = []byte{0xde, 0xad, 0xbe, 0xef}
 
 func TestGMPCall_ErrorAcknowledgement(t *testing.T) {
 	t.Parallel()
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(
+		e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB),
+	)
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

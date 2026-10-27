@@ -132,6 +132,9 @@ type EVMChainConfig struct {
 	WS string `yaml:"ws,omitempty"`
 
 	ICS26Router string `yaml:"ics26Router"`
+
+	// IBCMulticall is the batching contract address, required to run the relayer.
+	IBCMulticall string `yaml:"ibcMulticall"`
 }
 
 // Attestors is the list of attestors, used both by the relayer
@@ -144,7 +147,7 @@ type AttestorConfig struct {
 	// ChainID is the chain this attestor watches.
 	ChainID string `yaml:"chainId,omitempty"`
 
-	// Name is the attestor's own self-reported identity. Not required unique.
+	// Name is the attestor's own self-reported identity. For local attestors, names must be unique.
 	Name string `yaml:"name"`
 
 	Type AttestorType `yaml:"type"`
@@ -157,8 +160,12 @@ type AttestorConfig struct {
 	// tag; n > 0 attests up to "latest" - n instead.
 	FinalityOffset uint `yaml:"finalityOffset"`
 
-	// GRPC required for type: remote only. Bare host:port.
+	// GRPC required for type: remote only. Bare host:port, or an http(s):// URL
+	// without a query or fragment. https:// uses TLS.
 	GRPC string `yaml:"grpc,omitempty"`
+
+	// TLS remote only. Settings for an https:// grpc, see TLSClientConfig.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // Signers is the list of configured signer backends.
@@ -175,11 +182,14 @@ type SignerConfig struct {
 	// File key file path for a local signer
 	File string `yaml:"file,omitempty"`
 
-	// GRPC address for a remote signer
+	// GRPC address for a remote signer. An https:// URL uses TLS.
 	GRPC string `yaml:"grpc,omitempty"`
 
 	// RemoteKeyID KMS key ID for a remote signer
 	RemoteKeyID string `yaml:"remoteKeyId,omitempty"`
+
+	// TLS remote only. Settings for an https:// grpc, see TLSClientConfig.
+	TLS *TLSClientConfig `yaml:"tls,omitempty"`
 }
 
 // ChainSignerPair one (chain, signer alias) pair a client end submits with.
@@ -274,7 +284,18 @@ func (c Config) RelayerSufficiency() error {
 		return errPathf("relayer.connections", "no connections configured")
 	}
 
-	return c.validateRunnable()
+	if err := c.validateRunnable(); err != nil {
+		return err
+	}
+	for i, chain := range c.Chains {
+		if chain.EVM == nil {
+			continue
+		}
+		if _, err := ParseEVMAddress(chain.EVM.IBCMulticall); err != nil {
+			return errPath(fmt.Sprintf("chains[%d].evm.ibcMulticall", i), err)
+		}
+	}
+	return nil
 }
 
 // AttestorSufficiency validates the attestor server is runnable
@@ -469,7 +490,7 @@ func (c ChainConfig) Validate() error {
 	case chainType != ChainTypeEVM:
 		return fmt.Errorf("unsupported chain type %s", chainType)
 	case chainType == ChainTypeEVM:
-		// allow empty / zero ics26 router for general Validate()
+		// Defer contract address validation until runnable checks.
 		return errPath("evm", c.EVM.Validate(false))
 	}
 
@@ -485,17 +506,18 @@ func (c ChainConfig) Type() ChainType {
 	return ""
 }
 
-func (c EVMChainConfig) Validate(validateICS26Router bool) error {
+func (c EVMChainConfig) Validate(validateRouterAddress bool) error {
 	switch {
 	case c.RPC == "":
 		return errPathf("rpc", "required")
 	case c.WS != "" && !strings.HasPrefix(c.WS, "ws://") && !strings.HasPrefix(c.WS, "wss://"):
 		return errPathf("ws", "must be a ws:// or wss:// URL, got %q", c.WS)
-	case validateICS26Router:
-		return errPath("ics26Router", c.validateICS26Router())
-	default:
-		return nil
+	case validateRouterAddress:
+		if _, err := ParseEVMAddress(c.ICS26Router); err != nil {
+			return errPath("ics26Router", err)
+		}
 	}
+	return nil
 }
 
 // Validate validates the attestors list. Allows empty.
@@ -525,13 +547,13 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("signer", "required for local attestors")
 		case c.GRPC != "":
 			return errPathf("grpc", "must not be set for local attestors")
+		case c.TLS != nil:
+			return errPathf("tls", "must not be set for local attestors")
 		}
 	case AttestorTypeRemote:
 		switch {
 		case c.GRPC == "":
 			return errPathf("grpc", "required for remote attestors")
-		case strings.Contains(c.GRPC, "://"):
-			return errPathf("grpc", "must be a bare host:port, not a URL: %q", c.GRPC)
 		case c.ChainID != "":
 			return errPathf("chainId", "must not be set for remote attestors")
 		case c.Signer != "":
@@ -539,9 +561,22 @@ func (c AttestorConfig) Validate() error {
 		case c.FinalityOffset != 0:
 			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
+
+		if err := errPath("grpc", checkEndpointAddr(c.GRPC)); err != nil {
+			return err
+		}
+
+		if err := validateEndpointTLS(c.GRPC, c.TLS); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+// EndpointURL returns GRPC as a URL, see endpointURL.
+func (c AttestorConfig) EndpointURL() string {
+	return endpointURL(c.GRPC)
 }
 
 func (c Signers) Validate() error {
@@ -578,6 +613,16 @@ func (c SignerConfig) Validate() error {
 		return errPathf("grpc", "required for remote signer")
 	case c.Type == SignerRemote && c.RemoteKeyID == "":
 		return errPathf("remoteKeyId", "required for remote signer")
+	case c.Type == SignerLocal && c.TLS != nil:
+		return errPathf("tls", "must not be set for local signer")
+	}
+
+	if err := errPath("grpc", checkHTTPURL(c.GRPC, true)); err != nil {
+		return err
+	}
+
+	if err := validateEndpointTLS(c.GRPC, c.TLS); err != nil {
+		return err
 	}
 
 	if c.Type == SignerLocal {
@@ -611,9 +656,7 @@ func (c Chains) validateIdentities() error {
 
 func (a Attestors) validateIdentities() error {
 	localNames := make(map[string]struct{})
-	// keyed by chainId+signer: the same signer backing one operator's local
-	// attestor on two different chains is fine, but reusing it for two
-	// attestors on the same chain is always a redundant duplicate.
+	// Keyed by chainId+signer to reject redundant local attestors on the same chain.
 	localChainSigners := make(map[[2]string]struct{})
 	for i, attestor := range a {
 		if attestor.Type != AttestorTypeLocal {
@@ -637,11 +680,6 @@ func (a Attestors) validateIdentities() error {
 	}
 
 	return nil
-}
-
-func (c EVMChainConfig) validateICS26Router() error {
-	_, err := ParseEVMAddress(c.ICS26Router)
-	return err
 }
 
 // ParseEVMAddress parses a required, nonzero hex EVM address.
@@ -766,8 +804,7 @@ func (c Config) validateRunnable() error {
 		return errPathf("signers", "no signers configured")
 	}
 
-	// we allow empty / zero ics26 router for general Validate()
-	// but require it for runnable validation
+	// Router addresses are optional in drafts and required to run.
 	for i, chain := range c.Chains {
 		if chain.EVM == nil {
 			continue
@@ -786,12 +823,19 @@ func (c Config) validateRunnable() error {
 // for the operator to fill in by hand, keyed by YAML path for
 // PrintYAMLWithComments/StoreToFileWithComments.
 func CollectComments(cfg Config) map[string]string {
+	const fillIn = "TODO: fill in"
 	comments := map[string]string{}
 
 	for i, chain := range cfg.Chains {
-		if chain.EVM != nil && chain.EVM.ICS26Router == "" {
+		if chain.EVM == nil {
+			continue
+		}
+		if chain.EVM.ICS26Router == "" {
 			path := fmt.Sprintf("$.chains[%d].evm.ics26Router", i)
-			comments[path] = "TODO: fill in"
+			comments[path] = fillIn
+		}
+		if chain.EVM.IBCMulticall == "" {
+			comments[fmt.Sprintf("$.chains[%d].evm.ibcMulticall", i)] = fillIn
 		}
 	}
 

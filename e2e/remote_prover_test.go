@@ -25,7 +25,7 @@ type remoteProverEnv struct {
 func startRemoteProverEnv(t *testing.T, requirements e2etest.EVMRequirements) remoteProverEnv {
 	t.Helper()
 
-	spec, runtime := attestedMesh(e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB))
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t, requirements, e2etest.ChainA, e2etest.ChainB))
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
@@ -36,7 +36,7 @@ func startRemoteProverEnv(t *testing.T, requirements e2etest.EVMRequirements) re
 	driver, deployment := e2etest.DeployWithRelayerConfig(t, env, sender, relayerSigner,
 		func(cfg *ibccli.RelayerConfig) {
 			for i := range cfg.Connections {
-				cfg.Connections[i].ProverURL = "http://" + prover.Address()
+				cfg.Connections[i].RemoteProverURL = "http://" + prover.Address()
 			}
 		}, route)
 

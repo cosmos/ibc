@@ -66,6 +66,8 @@ type AttestorLaunch struct {
 	// ListenAddress defaults to an ephemeral loopback port. Restarts pass the
 	// previously announced address so a running relayer config stays valid.
 	ListenAddress string
+
+	Observability bool
 }
 
 type readinessResult struct {
@@ -88,7 +90,7 @@ type AttestorProcess struct {
 
 // StartAttestor writes a private IBC CLI configuration, stores a local ECDSA key
 // when configured, starts `ibc attestor run`, and returns only after
-// LatestHeight succeeds.
+// health reports SERVING and LatestHeight succeeds.
 func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess, error) {
 	key, signerAddress, err := validateAttestorLaunch(launch)
 	if err != nil {
@@ -127,6 +129,9 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 		"--config", configFilename,
 	)
 	cmd.Dir = paths.dir
+
+	otelEnvApply(cmd, launch.Observability, "attestor", launch.Name)
+
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -199,6 +204,9 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		return err
 	}
 	p.address = address
+	if err := awaitHealth(startupCtx, address, p.handle.doneCh()); err != nil {
+		return fmt.Errorf("attestor readiness: %w; logs: %s", err, p.logTail())
+	}
 	p.client = attestorv2.NewAttestationServiceClient(
 		&http.Client{Timeout: probeRequestTimeout},
 		"http://"+address,
@@ -406,7 +414,8 @@ func prepareAttestorWorkspace(
 	}
 
 	config := fileConfig{
-		Server: serverConfig{ListenAddress: listenAddress},
+		Server:        serverConfig{ListenAddress: listenAddress},
+		Observability: otelFileConfig(spec.Observability),
 		DB: dbConfig{
 			Type: dbTypeSQLite,
 			URL:  filepath.Join(dir, "ibc.db"),
@@ -418,7 +427,7 @@ func prepareAttestorWorkspace(
 				ICS26Router: spec.ICS26Router,
 			},
 		}},
-		Attestors: []attestorFileConfig{{
+		Attestors: []AttestorFileConfig{{
 			Name:           spec.Name,
 			ChainID:        spec.ChainID,
 			Type:           RelayerAttestorLocal,
@@ -548,12 +557,13 @@ const (
 )
 
 type fileConfig struct {
-	Server    serverConfig         `yaml:"server"`
-	DB        dbConfig             `yaml:"db"`
-	Chains    []chainConfig        `yaml:"chains"`
-	Relayer   *relayerFileConfig   `yaml:"relayer,omitempty"`
-	Attestors []attestorFileConfig `yaml:"attestors"`
-	Signers   []signerConfig       `yaml:"signers"`
+	Server        serverConfig         `yaml:"server"`
+	DB            dbConfig             `yaml:"db"`
+	Observability observabilityConfig  `yaml:"observability,omitempty"`
+	Chains        []chainConfig        `yaml:"chains"`
+	Relayer       *relayerFileConfig   `yaml:"relayer,omitempty"`
+	Attestors     []AttestorFileConfig `yaml:"attestors"`
+	Signers       []signerConfig       `yaml:"signers"`
 }
 
 type chainConfig struct {
@@ -563,9 +573,10 @@ type chainConfig struct {
 }
 
 type evmChainConfig struct {
-	RPC         string `yaml:"rpc"`
-	WS          string `yaml:"ws,omitempty"`
-	ICS26Router string `yaml:"ics26Router"`
+	RPC          string `yaml:"rpc"`
+	WS           string `yaml:"ws,omitempty"`
+	ICS26Router  string `yaml:"ics26Router"`
+	IBCMulticall string `yaml:"ibcMulticall,omitempty"`
 }
 
 type serverConfig struct {
@@ -577,7 +588,7 @@ type dbConfig struct {
 	URL  string `yaml:"url"`
 }
 
-type attestorFileConfig struct {
+type AttestorFileConfig struct {
 	Name    string `yaml:"name"`
 	ChainID string `yaml:"chainId"`
 	Type    string `yaml:"type"`

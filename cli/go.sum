@@ -19,6 +19,8 @@ cloud.google.com/go/storage v1.62.1 h1:Os0G3XbUbjZumkpDUf2Y0rLoXJTCF1kU2kWUujKYX
 cloud.google.com/go/storage v1.62.1/go.mod h1:cpYz/kRVZ+UQAF1uHeea10/9ewcRbxGoGNKsS9daSXA=
 connectrpc.com/connect v1.20.0 h1:6TNDAB+WeNd2uolWNlYczB5E0KNNaVMNUEx8JEUsPmQ=
 connectrpc.com/connect v1.20.0/go.mod h1:A2ygJrukXwWy32vkCAAHNVguZrqZ+jeZ9rGRnGR4dN4=
+connectrpc.com/grpchealth v1.5.0 h1:nHEVTwz9WYKxW2JTYUFD337q76oAZMvot9jX0WjVCQo=
+connectrpc.com/grpchealth v1.5.0/go.mod h1:fC9WGwKmDruKCNh8wj2rThiaxxoiXxvsCVIu2Ex2voA=
 connectrpc.com/grpcreflect v1.3.0 h1:Y4V+ACf8/vOb1XOc251Qun7jMB75gCUNw6llvB9csXc=
 connectrpc.com/grpcreflect v1.3.0/go.mod h1:nfloOtCS8VUQOQ1+GTdFzVg2CJo4ZGaat8JIovCtDYs=
 connectrpc.com/otelconnect v0.9.0 h1:NggB3pzRC3pukQWaYbRHJulxuXvmCKCKkQ9hbrHAWoA=
@@ -263,6 +265,8 @@ github.com/cosmos/gogoproto v1.7.2 h1:5G25McIraOC0mRFv9TVO139Uh3OklV2hczr13KKVHC
 github.com/cosmos/gogoproto v1.7.2/go.mod h1:8S7w53P1Y1cHwND64o0BnArT6RmdgIvsBuco6uTllsk=
 github.com/cosmos/iavl v1.2.8 h1:55F96BGUJ7KT7h+Ky/cEqS+pEvhFqsU4O8Th3F0N1js=
 github.com/cosmos/iavl v1.2.8/go.mod h1:FRHN4tO+6crf0p2zsqye+nAbsMgiwdkxpWm18DyP6+Y=
+github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261020123802-f564e6339cfd h1:KRq3tahDCW0S1Y6w8GO/oFdbjFehONaLfOGNRpkUEdQ=
+github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261020123802-f564e6339cfd/go.mod h1:CDEWPhwAMhTrsXyjAMjm0ZM8Bz9XJqJXU78U5MIFNJw=
 github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa h1:Vx10sGBU0k3kGrXFRsAhUbOhf5Nzi7K+w+aWn21hWXM=
 github.com/cosmos/ibc-go/v11 v11.0.0-20260721011357-425ab4b030aa/go.mod h1:rT0+LUYrej0p9OXUOXSK/Svn9PZITTQxujqnKX+bbFA=
 github.com/cosmos/ics23/go v0.11.0 h1:jk5skjT0TqX5e5QJbEnwXIS2yI2vnmLOgpQPeM5RtnU=
@@ -271,8 +275,6 @@ github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e h1:PcYIIjwEN8bvnOvK2GjY
 github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e/go.mod h1:TaVPj19tphn9vL/420FWMKx19MHgL+nxOf0DiCkZAn4=
 github.com/cosmos/ledger-cosmos-go v1.0.0 h1:jNKW89nPf0vR0EkjHG8Zz16h6p3zqwYEOxlHArwgYtw=
 github.com/cosmos/ledger-cosmos-go v1.0.0/go.mod h1:mGaw2wDOf+Z6SfRJsMGxU9DIrBa4du0MAiPlpPhLAOE=
-github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20261006113229-b9ceb3c5518a h1:tUT2PAMa3vV0usYL+ybxynUfes11MhaeJtRBksa+OVY=
-github.com/cosmos/solidity-ibc-eureka/packages/go-abigen v0.0.0-20261006113229-b9ceb3c5518a/go.mod h1:c89meQXdhHjXNEJ+XD60Ey6IWcGjWfJ9B0Mcy8iqj8M=
 github.com/cpuguy83/dockercfg v0.3.2 h1:DlJTyZGBDlXqUZ2Dk2Q3xHs/FtnooJJVaad2S9GKorA=
 github.com/cpuguy83/dockercfg v0.3.2/go.mod h1:sugsbF4//dDlL/i+S+rtpIWp+5h0BHJHfjj5/jFyUJc=
 github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d/go.mod h1:maD7wRr/U5Z6m/iR4s+kqSMx2CaBsrgA7czyZG/E6dU=
@@ -1306,8 +1308,8 @@ golang.org/x/net v0.9.0/go.mod h1:d48xBJpPfHeWQsugry2m+kC02ZBRGRgulfHnEXEuWns=
 golang.org/x/net v0.10.0/go.mod h1:0qNGK6F8kojg2nk9dLZ2mShWaEBan6FAoqfSigmmuDg=
 golang.org/x/net v0.14.0/go.mod h1:PpSgVXXLK0OxS0F31C1/tv6XNguvCrnXIDrFMspZIUI=
 golang.org/x/net v0.20.0/go.mod h1:z8BVo6PvndSri0LbOE3hAn0apkU+1YvI6E70E9jsnvY=
-golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=
-golang.org/x/net v0.59.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg=
+golang.org/x/net v0.60.0 h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=
+golang.org/x/net v0.60.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg=
 golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be/go.mod h1:N/0e6XlmueqKjAGxoOufVs8QHGRruUQn6yWY3a++T0U=
 golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421/go.mod h1:gOpvHmFTYa4IltrdGE7lF6nIHvwfUNPOp7c8zoXwtLw=
 golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d/go.mod h1:gOpvHmFTYa4IltrdGE7lF6nIHvwfUNPOp7c8zoXwtLw=

@@ -10,7 +10,7 @@ managed attestors.
 - Run from the repository root: `make -C e2e test` uses fast mode;
   `make -C e2e test E2E_MODE=complete|production` selects another mode, and
   `E2E_FLAGS='-run TestTransfer_AutoRelay -count=1'` focuses a run. `-e2e.mode` in `E2E_FLAGS`
-  overrides `E2E_MODE`.
+  overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`; `E2E_LOAD=true` also enables load tests.
 - Tests declare portable EVM, controlled-mining, or node-lifecycle requirements. Fast mode may
   skip an unresolved requirement; complete and production modes fail it. Fast and complete prefer
   Anvil, while production prefers Besu where the requirements allow it.
@@ -18,9 +18,9 @@ managed attestors.
   clients, and attestors), hold the temporary IBC CLI driver and relayer explicitly, and assert through
   route-bound application bindings (ICS20 transfers, ICS27 GMP calls, IFT transfers). This e2e-only setup
   lives in `internal/e2etest`; transport-contract tests may call the concrete driver or Relayer directly.
-- E2e may import the IBC CLI's public command transport types, generated RPC clients, and signer-keyfile
-  package for transport and provisioning, but it must not import `cli/internal` or invoke handlers
-  in process.
+- E2e may import the IBC CLI's public packages, such as its command transport types, generated RPC
+  clients, signer-keyfile package, and router access policy, but it must not import `cli/internal`
+  or invoke handlers in process.
 - Each test gets a fresh environment. Managed Anvil uses one-second mixed mining; after mining is
   paused and resumed it is interval-only, so transaction inclusion may take one second.
 - `Environment` cleans up managed resources only. Attached chains remain caller-owned and expose no

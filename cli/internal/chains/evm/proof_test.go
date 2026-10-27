@@ -30,7 +30,7 @@ func hexBytes(nodes [][]byte) []hexutil.Bytes {
 func fixtureProofResult(t *testing.T) (*proofResult, [][]byte, common.Hash) {
 	t.Helper()
 
-	fixture := besutest.MustFixture(t)
+	fixture := besutest.MustFixture(t, besu.QBFT)
 
 	accountNodes, err := fixture.Membership.AccountProofNodes()
 	require.NoError(t, err)
@@ -40,7 +40,9 @@ func fixtureProofResult(t *testing.T) (*proofResult, [][]byte, common.Hash) {
 
 	return &proofResult{
 		AccountProof: hexBytes(accountNodes),
-		StorageProof: []storageProofResult{{Proof: hexBytes(storageNodes)}},
+		StorageProof: []storageProofResult{{
+			Key: besu.CommitmentSlot(fixture.Membership.Path).Hex(), Proof: hexBytes(storageNodes),
+		}},
 	}, accountNodes, besu.CommitmentSlot(fixture.Membership.Path)
 }
 
@@ -124,7 +126,7 @@ func TestGetRouterProof(t *testing.T) {
 	})
 
 	t.Run("empty proof arrays", func(t *testing.T) {
-		empty := &proofResult{StorageProof: []storageProofResult{{Proof: []hexutil.Bytes{}}}}
+		empty := &proofResult{StorageProof: []storageProofResult{{Key: slot.Hex(), Proof: []hexutil.Bytes{}}}}
 		proof, err := clientWithProofAPI(t, &ethProofAPI{result: empty}).GetRouterProof(ctx, 114, []common.Hash{slot})
 		require.NoError(t, err)
 		assert.Empty(t, proof.AccountProof)
@@ -133,25 +135,28 @@ func TestGetRouterProof(t *testing.T) {
 	})
 }
 
-func TestGetRouterProofChecksProofCount(t *testing.T) {
+func TestGetRouterProofRequiresAProofPerSlot(t *testing.T) {
 	result, _, slot := fixtureProofResult(t)
+	r := *result
+	r.StorageProof = nil
 
-	for name, tc := range map[string]struct {
-		storage []storageProofResult
-		want    string
-	}{
-		"missing": {storage: nil, want: "0 storage proofs returned for 1 slots"},
-		"extra":   {storage: append(result.StorageProof, result.StorageProof[0]), want: "2 storage proofs returned for 1 slots"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			r := *result
-			r.StorageProof = tc.storage
-			_, err := clientWithProofAPI(
-				t,
-				&ethProofAPI{result: &r},
-			).GetRouterProof(t.Context(), 114, []common.Hash{slot})
-			require.ErrorContains(t, err, tc.want)
-			require.ErrorContains(t, err, "height 114")
-		})
-	}
+	_, err := clientWithProofAPI(t, &ethProofAPI{result: &r}).GetRouterProof(t.Context(), 114, []common.Hash{slot})
+
+	require.ErrorContains(t, err, "no storage proof returned for key "+slot.Hex())
+	require.ErrorContains(t, err, "height 114")
+}
+
+// Besu answers with the storage proofs sorted by key, each key without its
+// leading zeros.
+func TestGetRouterProofKeepsTheRequestOrder(t *testing.T) {
+	slots := []common.Hash{common.HexToHash("0x09"), common.HexToHash("0x01")}
+	api := &ethProofAPI{result: &proofResult{StorageProof: []storageProofResult{
+		{Key: "0x01", Proof: []hexutil.Bytes{{0x01}}},
+		{Key: "0x09", Proof: []hexutil.Bytes{{0x09}}},
+	}}}
+
+	proof, err := clientWithProofAPI(t, api).GetRouterProof(t.Context(), 114, slots)
+
+	require.NoError(t, err)
+	assert.Equal(t, [][][]byte{{{0x09}}, {{0x01}}}, proof.StorageProofs)
 }

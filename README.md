@@ -2,6 +2,9 @@
 
 # Inter-Blockchain Communication Protocol (IBC)
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/cosmos/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc)
+[![codecov](https://codecov.io/gh/cosmos/ibc/graph/badge.svg)](https://codecov.io/gh/cosmos/ibc)
+
 ![banner](./.github/assets/cosmos-ibc-github.svg)
 
 ## Synopsis

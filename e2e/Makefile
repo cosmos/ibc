@@ -2,6 +2,7 @@
 
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
+E2E_LOAD ?= 0
 FORGE_BUILD_FLAGS ?=
 
 HARNESS_DIR := internal/harness
@@ -36,9 +37,19 @@ test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, fo
 	forge build $(FORGE_BUILD_FLAGS) --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	../scripts/generate-contract-bindings.sh
 
-test: _build-cli ## Run e2e tests (E2E_MODE=... E2E_FLAGS=...)
+test: _build-cli _ensure-observability-stack ## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=...)
 	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
-	E2E_MODE=$(E2E_MODE) go test . -timeout 60m -parallel 4 $(E2E_FLAGS)
+	E2E_MODE=$(E2E_MODE) E2E_LOAD=$(E2E_LOAD) go test . -timeout 60m -parallel 4 $(E2E_FLAGS)
+
+BESU_FIXTURES_DIR := $(abspath ../cli/besu/besutest/testdata)
+BESU_SOLIDITY_FIXTURES := ibc-solidity/test/besu-bft/fixtures
+
+generate-besu-fixtures: _build-cli ## Regenerate the Besu light-client fixtures (IBC_CONTRACTS=<checkout> also copies them there)
+	E2E_MODE=complete BESU_FIXTURES_DIR=$(BESU_FIXTURES_DIR) go test ./besufixtures -count=1 -timeout 30m -v
+	@if [ -n "$(strip $(IBC_CONTRACTS))" ]; then \
+		cp $(BESU_FIXTURES_DIR)/qbft.json $(BESU_FIXTURES_DIR)/ibft2.json "$(IBC_CONTRACTS)/$(BESU_SOLIDITY_FIXTURES)/" && \
+		echo "Copied the fixtures to $(IBC_CONTRACTS)/$(BESU_SOLIDITY_FIXTURES)"; \
+	fi
 
 generate-matrix: ## Regenerate the E2E provider and topology matrix
 	go run ./cmd/e2e-matrix -write test-matrix.md
@@ -82,8 +93,14 @@ run-all-checks: doctor doctor-tools ## Run "all-in-one" code validation step.
 _build-cli:
 	$(MAKE) -C ../cli build build-test-bin
 
+_ensure-observability-stack:
+	@if [ "$(E2E_LOAD)" = true ] || [ "$(E2E_LOAD)" = 1 ] || echo "$(E2E_FLAGS)" | grep -qF e2e.load; then \
+		echo "==== Ensuring observability stack is running ===="; \
+		$(MAKE) -C ../cli/scripts/otel up; \
+	fi
+
 .PHONY: help doctor doctor-tools lint lint-fix
 .PHONY: test-harness test-apps test
-.PHONY: generate-matrix check-matrix
+.PHONY: generate-besu-fixtures generate-matrix check-matrix
 .PHONY:	clean clean-dry-run check-stale run-all-checks
-.PHONY: _build-cli
+.PHONY: _build-cli _ensure-observability-stack

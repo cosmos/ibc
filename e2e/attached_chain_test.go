@@ -58,7 +58,7 @@ func TestAttachedChainRemainsCallerOwned(t *testing.T) {
 				PollInterval:     100 * time.Millisecond,
 			},
 		})
-		spec, runtime := attestedMesh(chains)
+		spec, runtime := e2etest.AttestedMesh(chains)
 		runtime.Endpoints = map[environment.EndpointBindingID]environment.EndpointBinding{
 			externalEndpoint: {RPCURL: externalNode.RPCURL()},
 		}

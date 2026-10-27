@@ -17,8 +17,9 @@ import (
 // RelayerConfig describes one relayer process configuration for the black-box
 // binary. An empty Attestors list runs without attestors.
 type RelayerConfig struct {
-	DBPath      string
-	SignerAlias string
+	DBPath        string
+	SignerAlias   string
+	Observability bool
 	// SignerType defaults to RelayerSignerLocal. A remote transaction signer is
 	// shared by both ends of every route.
 	SignerType string
@@ -51,15 +52,16 @@ type RelayerChain struct {
 	// WS is required by the relayer for chains sourcing auto-relayed routes.
 	WS                 string
 	ICS26Router        string
+	IBCMulticall       string
 	PacketBatchSize    int
 	PacketBatchTimeout time.Duration
+	PendingTxTimeout   time.Duration
 }
 
 // RelayerClientEnd is a registered client and its endpoint relay policy.
 type RelayerClientEnd struct {
-	ChainID  string
-	ClientID string
-	// ClientType is required unless the connection uses a remote prover.
+	ChainID    string
+	ClientID   string
 	ClientType clientkind.Kind
 	AutoRelay  bool
 }
@@ -68,9 +70,9 @@ type RelayerClientEnd struct {
 type RelayerConnection struct {
 	A, B RelayerClientEnd
 
-	// ProverURL points both client ends at a ProverService, overriding the
-	// declared client types.
-	ProverURL string
+	// RemoteProverURL points both client ends at a ProverService instead of
+	// their built-in provers.
+	RemoteProverURL string
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -129,9 +131,10 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		processSigner.File = cfg.SignerKeyFile
 	}
 	file := fileConfig{
-		Server:  serverConfig{ListenAddress: loopbackAnyPort},
-		DB:      dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
-		Signers: []signerConfig{processSigner},
+		Server:        serverConfig{ListenAddress: loopbackAnyPort},
+		DB:            dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
+		Observability: otelFileConfig(cfg.Observability),
+		Signers:       []signerConfig{processSigner},
 		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{
 			DispatchPollInterval: "100ms",
@@ -148,22 +151,21 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		file.Chains = append(file.Chains, chainConfig{
 			ChainID: chain.ChainID,
 			EVM: evmChainConfig{
-				RPC:         chain.RPC,
-				WS:          chain.WS,
-				ICS26Router: chain.ICS26Router,
+				RPC:          chain.RPC,
+				WS:           chain.WS,
+				ICS26Router:  chain.ICS26Router,
+				IBCMulticall: chain.IBCMulticall,
 			},
 		})
-		// The relayer's batching and pacing defaults are mainnet-shaped. A
-		// batch size of one flushes each harness packet on arrival, and the
-		// submission delay paces only consecutive transactions on one chain
-		// (retries and multi-route traffic); it must stay non-zero because
-		// zero is coerced back to the mainnet default.
-		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, chainOverrideFileConfig{
+		override := chainOverrideFileConfig{
 			ChainID:            chain.ChainID,
-			TxSubmissionDelay:  "10ms",
 			PacketBatchSize:    batchSize,
 			PacketBatchTimeout: chain.PacketBatchTimeout,
-		})
+		}
+		if chain.PendingTxTimeout != 0 {
+			override.EVM = &relayerEVMFileConfig{PendingTxTimeout: chain.PendingTxTimeout}
+		}
+		file.Relayer.ChainOverrides = append(file.Relayer.ChainOverrides, override)
 	}
 
 	for _, attestor := range cfg.Attestors {
@@ -173,9 +175,9 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
-		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
-		file.Relayer.Connections = append(file.Relayer.Connections, connectionFileConfig{
+		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.RemoteProverURL)
+		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.RemoteProverURL)
+		file.Relayer.Connections = append(file.Relayer.Connections, ConnectionFileConfig{
 			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
 			ClientA: a,
 			ClientB: b,
@@ -184,8 +186,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	return file, nil
 }
 
-func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clientEndFileConfig {
-	result := clientEndFileConfig{
+func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) ClientEndFileConfig {
+	result := ClientEndFileConfig{
 		ChainID:   end.ChainID,
 		ClientID:  end.ClientID,
 		Signer:    signer,
@@ -193,8 +195,7 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clie
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
 	if proverURL != "" {
-		result.Type = clientkind.Remote
-		result.Params = map[string]any{"url": proverURL}
+		result.RemoteProver = &RemoteProverFileConfig{URL: proverURL}
 	}
 	return result
 }
@@ -204,7 +205,7 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) clie
 func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttestor) error {
 	switch attestor.Type {
 	case RelayerAttestorRemote:
-		file.Attestors = append(file.Attestors, attestorFileConfig{
+		file.Attestors = append(file.Attestors, AttestorFileConfig{
 			Name: attestor.Name, Type: RelayerAttestorRemote, GRPC: attestor.GRPC,
 		})
 		return nil
@@ -220,7 +221,7 @@ func addAttestor(file *fileConfig, finalityOffset uint64, attestor RelayerAttest
 		file.Signers = append(file.Signers, signerConfig{
 			Alias: signerAlias, Type: RelayerSignerLocal, File: attestor.KeyFile,
 		})
-		file.Attestors = append(file.Attestors, attestorFileConfig{
+		file.Attestors = append(file.Attestors, AttestorFileConfig{
 			Name: attestor.Name, ChainID: attestor.ChainID, Type: RelayerAttestorLocal,
 			Signer: signerAlias, FinalityOffset: uint(finalityOffset),
 		})
@@ -242,32 +243,40 @@ type relayerFileConfig struct {
 	ClearOnStart         bool                      `yaml:"clearOnStart,omitempty"`
 	ClearInterval        string                    `yaml:"clearInterval,omitempty"`
 	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
-	Connections          []connectionFileConfig    `yaml:"connections"`
+	Connections          []ConnectionFileConfig    `yaml:"connections"`
 }
 
 type chainOverrideFileConfig struct {
-	ChainID            string        `yaml:"chainId"`
-	TxSubmissionDelay  string        `yaml:"txSubmissionDelay"`
-	PacketBatchSize    int           `yaml:"packetBatchSize"`
-	PacketBatchTimeout time.Duration `yaml:"packetBatchTimeout,omitempty"`
+	ChainID            string                `yaml:"chainId"`
+	PacketBatchSize    int                   `yaml:"packetBatchSize"`
+	PacketBatchTimeout time.Duration         `yaml:"packetBatchTimeout,omitempty"`
+	EVM                *relayerEVMFileConfig `yaml:"evm,omitempty"`
 }
 
-type connectionFileConfig struct {
+type relayerEVMFileConfig struct {
+	PendingTxTimeout time.Duration `yaml:"pendingTxTimeout,omitempty"`
+}
+
+type ConnectionFileConfig struct {
 	Alias   string              `yaml:"alias"`
-	ClientA clientEndFileConfig `yaml:"clientA"`
-	ClientB clientEndFileConfig `yaml:"clientB"`
+	ClientA ClientEndFileConfig `yaml:"clientA"`
+	ClientB ClientEndFileConfig `yaml:"clientB"`
 }
 
-type clientEndFileConfig struct {
-	ChainID   string               `yaml:"chainId"`
-	Signer    string               `yaml:"signer"`
-	ClientID  string               `yaml:"clientId"`
-	Type      clientkind.Kind      `yaml:"type"`
-	Params    map[string]any       `yaml:"params,omitempty"`
-	AutoRelay *autoRelayFileConfig `yaml:"autoRelay,omitempty"`
+type ClientEndFileConfig struct {
+	ChainID      string                  `yaml:"chainId"`
+	Signer       string                  `yaml:"signer"`
+	ClientID     string                  `yaml:"clientId"`
+	Type         clientkind.Kind         `yaml:"type"`
+	RemoteProver *RemoteProverFileConfig `yaml:"remoteProver,omitempty"`
+	AutoRelay    *AutoRelayFileConfig    `yaml:"autoRelay,omitempty"`
 }
 
-type autoRelayFileConfig struct {
+type RemoteProverFileConfig struct {
+	URL string `yaml:"url"`
+}
+
+type AutoRelayFileConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
@@ -278,10 +287,10 @@ func durationYAML(d time.Duration) string {
 	return d.String()
 }
 
-func autoRelay(enabled bool) *autoRelayFileConfig {
+func autoRelay(enabled bool) *AutoRelayFileConfig {
 	if !enabled {
 		return nil
 	}
 
-	return &autoRelayFileConfig{Enabled: true}
+	return &AutoRelayFileConfig{Enabled: true}
 }
