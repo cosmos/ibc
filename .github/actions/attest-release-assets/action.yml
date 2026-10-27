@@ -11,7 +11,7 @@ description: >-
 inputs:
   name:
     description: >-
-      File name stem of the SBOM, e.g. `ibc-v1.2.3-linux-amd64`. The SBOM is written to
+      File name stem of the SBOM, e.g. `ibc-cli-v1.2.3-linux-amd64`. The SBOM is written to
       `<out-dir>/sbom/<name>.spdx.json` and becomes a release asset.
     required: true
   platform:

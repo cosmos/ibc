@@ -6,12 +6,12 @@ description: >-
   verifies every asset against its attestation bundles, signs a `checksums.txt` over the assets,
   SBOMs and combined attestation bundle with cosign, and attaches everything to a draft release for
   the pushed tag. Must run in a job triggered by a tag push. The calling job needs `contents: write`
-  and `id-token: write`.
+  and `id-token: write`, or only `contents: read` with `verify-only: true`.
 
 inputs:
   name:
     description: >-
-      File name stem of the combined attestation bundle, e.g. `ibc-v1.2.3`. It is published as
+      File name stem of the combined attestation bundle, e.g. `ibc-cli-v1.2.3`. It is published as
       `<name>.intoto.jsonl`, the suffix OpenSSF Scorecard's Signed-Releases check looks for.
     required: true
   title:
@@ -25,6 +25,13 @@ inputs:
     description: Verify every asset against the attestation bundles before signing (`true` or `false`).
     required: false
     default: "true"
+  verify-only:
+    description: >-
+      Only collect and verify the assets, without signing anything or touching the release (`true`
+      or `false`). Use it in a job that other publishing steps, such as a container image, wait for,
+      so nothing is published for assets that do not verify.
+    required: false
+    default: "false"
   github-token:
     description: Token used to create the release and verify the attestations.
     required: false
@@ -44,6 +51,7 @@ runs:
         NAME: ${{ inputs.name }}
         PRERELEASE: ${{ inputs.prerelease }}
         VERIFY: ${{ inputs.verify }}
+        VERIFY_ONLY: ${{ inputs.verify-only }}
       run: |
         # The verification checks the tag through GITHUB_REF and the signing workflow through
         # GITHUB_WORKFLOW_REF, so the release must be for the tag this run was triggered by.
@@ -55,12 +63,16 @@ runs:
           echo "::error::name may only contain letters, digits, '.', '_' and '-' (got '${NAME}')"
           exit 1
         fi
-        for value in "$PRERELEASE" "$VERIFY"; do
+        for value in "$PRERELEASE" "$VERIFY" "$VERIFY_ONLY"; do
           if [[ "$value" != "true" && "$value" != "false" ]]; then
-            echo "::error::prerelease and verify must be 'true' or 'false' (got '${value}')"
+            echo "::error::prerelease, verify and verify-only must be 'true' or 'false' (got '${value}')"
             exit 1
           fi
         done
+        if [[ "$VERIFY_ONLY" == "true" && "$VERIFY" != "true" ]]; then
+          echo "::error::verify-only needs verify"
+          exit 1
+        fi
 
     # Downloaded per artifact rather than merged, so two build jobs that produce an asset with the
     # same name fail the release instead of one silently overwriting the other.
@@ -80,7 +92,28 @@ runs:
         mkdir "$dist"
         : > "${RUNNER_TEMP}/release-assets.txt"
         shopt -s nullglob
-        for artifact in "$in"/release-assets-*/; do
+        artifacts=("$in"/release-assets-*/)
+        # download-artifact puts a single matching artifact straight into the path rather than in a
+        # subdirectory named after it, as for a release with one build job.
+        if (( ${#artifacts[@]} == 0 )) && [[ -d "${in}/assets" ]]; then
+          artifacts=("${in}/")
+        fi
+        bundles=()
+        for artifact in "${artifacts[@]}"; do
+          # actions/attest names the SBOM predicate after the SBOM's spdxVersion, so verify against
+          # that rather than a fixed SPDX version.
+          sboms=("${artifact}sbom"/*)
+          if (( ${#sboms[@]} != 1 )); then
+            echo "::error::Expected one SBOM in ${artifact}sbom, found ${#sboms[@]}"
+            exit 1
+          fi
+          spdx_version=$(jq -r '.spdxVersion // empty' "${sboms[0]}")
+          if [[ ! "$spdx_version" =~ ^SPDX-([0-9.]+)$ ]]; then
+            echo "::error::${sboms[0]} has no valid spdxVersion (got '${spdx_version}')"
+            exit 1
+          fi
+          sbom_predicate="https://spdx.dev/Document/v${BASH_REMATCH[1]}"
+          bundles+=("${artifact}attestations"/*.json)
           for kind in assets sbom; do
             for path in "${artifact}${kind}"/*; do
               file="${path##*/}"
@@ -90,12 +123,11 @@ runs:
               fi
               mv "$path" "${dist}/${file}"
               if [[ "$kind" == "assets" ]]; then
-                echo "$file" >> "${RUNNER_TEMP}/release-assets.txt"
+                printf '%s\t%s\n' "$file" "$sbom_predicate" >> "${RUNNER_TEMP}/release-assets.txt"
               fi
             done
           done
         done
-        bundles=("$in"/release-assets-*/attestations/*.json)
         if [[ ! -s "${RUNNER_TEMP}/release-assets.txt" || ${#bundles[@]} -eq 0 ]]; then
           echo "::error::No release assets or attestation bundles were downloaded"
           exit 1
@@ -120,8 +152,8 @@ runs:
         # Check the assets against the bundles before signing, so a release never ships an asset
         # that differs from what its build attested or a bundle that does not verify.
         dist="${RUNNER_TEMP}/release-dist"
-        while IFS= read -r file; do
-          for predicate in https://slsa.dev/provenance/v1 https://spdx.dev/Document/v2.3; do
+        while IFS=$'\t' read -r file sbom_predicate; do
+          for predicate in https://slsa.dev/provenance/v1 "$sbom_predicate"; do
             gh attestation verify "${dist}/${file}" \
               --bundle "${dist}/${NAME}.intoto.jsonl" \
               --predicate-type "$predicate" \
@@ -132,8 +164,10 @@ runs:
         done < "${RUNNER_TEMP}/release-assets.txt"
 
     - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      if: inputs.verify-only != 'true'
 
     - name: Sign checksums
+      if: inputs.verify-only != 'true'
       shell: bash
       run: |
         cd "${RUNNER_TEMP}/release-dist" || exit 1
@@ -141,6 +175,7 @@ runs:
 
     - name: Create or update draft release
       id: release
+      if: inputs.verify-only != 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}

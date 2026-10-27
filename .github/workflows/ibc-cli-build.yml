@@ -48,14 +48,13 @@ jobs:
           tag=$(printf '%s' "$REF_NAME" | tr '[:upper:]/' '[:lower:]-' | tr -c '[:alnum:]_.-' '-')
           echo "image_tag=${tag:0:128}" >> "$GITHUB_OUTPUT"
 
-  # Build binaries, and publish a Docker image for each linux platform
+  # Build binaries. They do not depend on the image tag, so they build even when image-metadata
+  # fails, and only the image job can push to the registry.
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
-    needs: [image-metadata]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-      packages: write
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -108,20 +107,50 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 30
+
+  # Publish a Docker image for each linux platform from the binary the build job uploaded
+  image:
+    name: Image linux-${{ matrix.goarch }}
+    needs: [image-metadata, build]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARTIFACT: ibc-linux-${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.BUILD_SHA }}
+          persist-credentials: false
+          sparse-checkout: cli
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: cli/dist/${{ env.ARTIFACT }}
+      # Artifacts do not keep file permissions.
+      - name: Make binary executable
+        run: chmod +x "cli/dist/${ARTIFACT}/ibc"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-        if: matrix.goos == 'linux'
       - name: Log in to GHCR
-        if: matrix.goos == 'linux'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build & Push image
-        if: matrix.goos == 'linux'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: cli/dist/${{ matrix.artifact }}
+          context: cli/dist/${{ env.ARTIFACT }}
           file: cli/Dockerfile
           target: target-artifact
           platforms: linux/${{ matrix.goarch }}
@@ -134,7 +163,7 @@ jobs:
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [image-metadata, build]
+    needs: [image-metadata, image]
     runs-on: ubuntu-latest
     permissions:
       packages: write

@@ -92,6 +92,8 @@ For a matrix, such as the ibc-contracts proof-api archives, pass the platform in
 
 `publish-draft-release` fails if two build jobs produce a file with the same name, rather than letting one overwrite the other.
 
+If the release also publishes something outside the release, such as a container image, gate it on a job that calls `publish-draft-release` with `verify-only: "true"`. That job only needs `contents: read`, and nothing is published for assets that do not verify. cosmos/ibc's [release workflow](../workflows/release.yml) does this for its image.
+
 ### Images
 
 Pass the digest that the push itself reported, not one looked up from a tag afterwards. For a multi-platform image, attest each platform image in its build job and sign the index in the job that creates it:

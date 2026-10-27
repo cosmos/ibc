@@ -3,8 +3,8 @@
 name: Release
 # Builds the IBC CLI archives for every cli-v* tag, generates an SBOM and build provenance for them,
 # signs a checksums file over them, and attaches everything to a draft release so the signed
-# assets exist before the release is published. It also publishes the signed container image built
-# from the same linux binaries.
+# assets exist before the release is published. Once the assets verify, it also publishes the signed
+# container image built from the same linux archives.
 #
 # The attesting, signing and publishing steps are the shared actions in .github/actions, which
 # cosmos/ibc-go and cosmos/ibc-contracts use too. This repository uses them from the tagged commit.
@@ -47,11 +47,11 @@ jobs:
             echo "::error::Tag must match cli-vX.Y.Z, optionally followed by -<suffix>"
             exit 1
           fi
-          # The assets and the title are named after the version alone, without the cli- prefix.
+          # The assets are named after the tag as pushed, the title after the version alone.
           version="${BASH_REMATCH[1]}"
           suffix="${BASH_REMATCH[2]}"
           {
-            echo "name=ibc-${version}"
+            echo "name=ibc-${TAG}"
             echo "title=IBC CLI ${version}"
             if [[ -n "$suffix" ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
           } >> "$GITHUB_OUTPUT"
@@ -84,13 +84,14 @@ jobs:
           echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch whose ruleset requires an approved pull request"
           exit 1
 
+  # Builds and attests the archives. Only the image job pushes to the registry, so this job, which
+  # also builds darwin, has no packages permission.
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     needs: [validate-tag]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-      packages: write
       id-token: write
       attestations: write
       artifact-metadata: write
@@ -140,10 +141,50 @@ jobs:
           name: ${{ env.NAME }}-${{ env.PLATFORM }}
           platform: ${{ env.PLATFORM }}
           sbom-file: cli/dist/ibc
+
+  # Builds each platform image from the attested linux archive, so the image holds exactly the
+  # released binary.
+  image:
+    name: Image linux-${{ matrix.goarch }}
+    needs: [validate-tag, build]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      NAME: ${{ needs.validate-tag.outputs.name }}
+      PLATFORM: linux-${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions
+            cli
+      - name: Download release assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets-${{ env.PLATFORM }}
+          path: ${{ runner.temp }}/release-assets
+      - name: Extract archive
+        run: |
+          mkdir -p "${RUNNER_TEMP}/image-context"
+          tar -xzf "${RUNNER_TEMP}/release-assets/assets/${NAME}-${PLATFORM}.tar.gz" \
+            -C "${RUNNER_TEMP}/image-context"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-        if: matrix.goos == 'linux'
       - name: Log in to GHCR
-        if: matrix.goos == 'linux'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
@@ -151,10 +192,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build & Push image
         id: image
-        if: matrix.goos == 'linux'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: cli/dist
+          context: ${{ runner.temp }}/image-context
           file: cli/Dockerfile
           target: target-artifact
           platforms: linux/${{ matrix.goarch }}
@@ -165,7 +205,6 @@ jobs:
           provenance: false
       # The platform image gets its provenance and SBOM; the index is signed in publish-manifest.
       - name: Attest image
-        if: matrix.goos == 'linux'
         uses: ./.github/actions/attest-image
         with:
           image: ${{ env.IMAGE_NAME }}
@@ -173,14 +212,12 @@ jobs:
       # publish-manifest builds the index from these digests, so it only references images
       # attested above.
       - name: Save image digest
-        if: matrix.goos == 'linux'
         env:
           DIGEST: ${{ steps.image.outputs.digest }}
         run: |
           mkdir -p "${RUNNER_TEMP}/image-digest"
           echo "$DIGEST" > "${RUNNER_TEMP}/image-digest/${PLATFORM}"
       - name: Upload image digest
-        if: matrix.goos == 'linux'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-digest-${{ env.PLATFORM }}
@@ -188,10 +225,32 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Checks every asset against its attestations before publish-manifest tags and signs the image, so
+  # an image is never published for a release whose assets do not verify. The release job checks
+  # them again before signing.
+  verify:
+    name: Verify release assets
+    needs: [validate-tag, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - name: Verify release assets
+        uses: ./.github/actions/publish-draft-release
+        with:
+          name: ${{ needs.validate-tag.outputs.name }}
+          title: ${{ needs.validate-tag.outputs.title }}
+          verify-only: "true"
+
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [build]
+    needs: [image, verify]
     runs-on: ubuntu-latest
     permissions:
       contents: read
