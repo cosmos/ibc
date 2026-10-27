@@ -58,7 +58,6 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 			return nil, errors.Wrapf(err, "checking ack event in tx %s", *tr.AckTxHash)
 		}
 		if executed {
-			metrics.packetExecution(ctx, tr, "ack", executionSucceeded)
 			return tr, nil
 		}
 	}

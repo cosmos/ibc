@@ -58,7 +58,6 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 			return nil, errors.Wrapf(err, "checking timeout event in tx %s", *tr.TimeoutTxHash)
 		}
 		if executed {
-			metrics.packetExecution(ctx, tr, "timeout", executionSucceeded)
 			return tr, nil
 		}
 	}
