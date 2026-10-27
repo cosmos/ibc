@@ -42,7 +42,7 @@ The attesting, signing and publishing steps are the [shared release actions](./.
 
 Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml` and `.github/actions`.
 
-Pushing a release tag gets the tagged commit signed, so the workflow only accepts a commit that is on `main` or a `release/*` branch that a ruleset requires pull requests for. Add such a ruleset to a release branch before tagging from it. Release tags must also be protected by a tag ruleset that covers `refs/tags/cli-v*` and restricts creations, updates and deletions to the release maintainers.
+The workflow only accepts a commit that is on `main` or a `release/*` branch whose ruleset requires a pull request with at least one approval. Add such a ruleset to a release branch before tagging from it; classic branch protection does not count. The check runs from the tagged commit, so it only guards against tagging an unreviewed commit by mistake. What limits who can get a commit signed is the tag ruleset, which must cover `refs/tags/cli-v*` and restrict creations, updates and deletions. In this repository the "Restrict tag creation" ruleset covers all tags, and only the Maintain and Admin repository roles and organization admins can bypass it, so only they can push a release tag.
 
 ### Verifying release files
 
@@ -74,7 +74,7 @@ Add `--predicate-type https://spdx.dev/Document/v2.3` to check its SBOM attestat
 
 ### Container images
 
-The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. Verify a release image with:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. The release tag is pushed shortly before it is signed, so verify a release image rather than trusting the tag:
 
 ```sh
 cosign verify ghcr.io/cosmos/ibc:<tag> \
@@ -85,4 +85,4 @@ gh attestation verify oci://ghcr.io/cosmos/ibc:<tag> --repo cosmos/ibc \
   --source-ref refs/tags/<tag>
 ```
 
-Image SBOMs are attached to the platform digests, not the multi-platform tag. To check one, pass the platform digest with `--predicate-type https://spdx.dev/Document/v2.3`.
+Image SBOMs are attached to the platform digests, not the multi-platform tag. List the platform digests with `docker buildx imagetools inspect ghcr.io/cosmos/ibc:<tag>`, then pass one as `oci://ghcr.io/cosmos/ibc@<digest>` with `--predicate-type https://spdx.dev/Document/v2.3`.

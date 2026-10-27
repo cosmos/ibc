@@ -65,20 +65,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Anyone who can push a tag would otherwise get release signatures for any commit, so only
-          # sign commits that already landed on main or a release/* branch. Anyone with write access
-          # can create a release/* branch, so the branch must also need a pull request to change.
+          # Only sign commits that were reviewed into main or a release/* branch, i.e. a branch whose
+          # ruleset requires a pull request with at least one approval. Classic branch protection does
+          # not show up in this API. The check runs from the tagged commit, so it guards against
+          # tagging an unreviewed commit by mistake; the tag ruleset is what limits who can get a
+          # commit signed.
           branches=$(git branch --remotes --contains "$GITHUB_SHA" --format='%(refname:lstrip=3)')
           while IFS= read -r branch; do
             if [[ "$branch" != main && "$branch" != release/* ]]; then
               continue
             fi
-            if gh api "repos/${GITHUB_REPOSITORY}/rules/branches/${branch}" --jq '.[].type' \
+            if gh api "repos/${GITHUB_REPOSITORY}/rules/branches/${branch}" \
+              --jq '.[] | select(.type == "pull_request" and .parameters.required_approving_review_count >= 1) | .type' \
               | grep -qx pull_request; then
               exit 0
             fi
           done <<< "$branches"
-          echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch that a ruleset requires pull requests for"
+          echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch whose ruleset requires an approved pull request"
           exit 1
 
   build:
