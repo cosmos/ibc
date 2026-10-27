@@ -3,8 +3,8 @@
 name: Release
 # Builds the IBC CLI archives for every cli-v* tag, generates an SBOM and build provenance for them,
 # signs a checksums file over them, and attaches everything to a draft release so the signed
-# assets exist before the release is published. Once the draft is in place, it publishes the signed
-# container image built from the same linux binaries.
+# assets exist before the release is published. It also publishes the signed container image built
+# from the same linux binaries.
 #
 # The attesting, signing and publishing steps are the shared actions in .github/actions, which
 # cosmos/ibc-go and cosmos/ibc-contracts use too. This repository uses them from the tagged commit.
@@ -188,33 +188,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Runs before publish-manifest, so the image is only published once the assets verify against
-  # their attestations. A re-run after the release is published fails here, at the upload without
-  # --clobber, before it can move the published image tag.
-  release:
-    name: Attach signed assets to draft release
-    needs: [validate-tag, build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          sparse-checkout: .github/actions
-      - name: Publish draft release
-        uses: ./.github/actions/publish-draft-release
-        with:
-          name: ${{ needs.validate-tag.outputs.name }}
-          title: ${{ needs.validate-tag.outputs.title }}
-          prerelease: ${{ needs.validate-tag.outputs.prerelease }}
-
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [build, release]
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -224,6 +201,20 @@ jobs:
       artifact-metadata: write
     timeout-minutes: 10
     steps:
+      - name: Check the release is not published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The platform images are pushed by digest only, so this job is the only one that moves a
+          # tag. A re-run after the release is published must not move the published image tag.
+          # Listed rather than fetched by tag, so a failed request fails the step instead of reading
+          # as "not published".
+          published=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag and (.draft | not)) | .id')
+          if [[ -n "$published" ]]; then
+            echo "::error::Release ${TAG} is already published, so its image is not re-pushed"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
@@ -269,3 +260,24 @@ jobs:
           sign: "true"
           # Also signs the platform manifests referenced by the index.
           recursive: "true"
+
+  # Waits for publish-manifest as well, so a draft release always comes with a signed image.
+  release:
+    name: Attach signed assets to draft release
+    needs: [validate-tag, build, publish-manifest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - name: Publish draft release
+        uses: ./.github/actions/publish-draft-release
+        with:
+          name: ${{ needs.validate-tag.outputs.name }}
+          title: ${{ needs.validate-tag.outputs.title }}
+          prerelease: ${{ needs.validate-tag.outputs.prerelease }}

@@ -25,7 +25,7 @@ See [Signed release assets](#signed-release-assets) for how to verify the artifa
 
 ## Signed release assets
 
-Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. Once the draft is in place, it publishes the signed [container image](#container-images) built from the same linux binaries.
+Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries.
 
 `cli-v*` tags are reserved for IBC CLI releases. A `cli-vX.Y.Z` tag produces `ibc-vX.Y.Z` assets and the "IBC CLI vX.Y.Z" title; the image is tagged with the pushed tag, e.g. `ghcr.io/cosmos/ibc:cli-vX.Y.Z`. Other tags, such as the 2019–2020 spec release candidates `v1.0.0-rc2` to `v1.0.0-rc6`, do not run the release workflow.
 
@@ -35,7 +35,7 @@ The attesting, signing and publishing steps are the [shared release actions](./.
 ### Release procedure
 
 1. Tag the release commit and push the tag (e.g. `git tag -s cli-v0.2.0 -m cli-v0.2.0 origin/main && git push origin cli-v0.2.0`).
-2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached, and then to publish the signed multi-platform image. The draft is only created once every build job has succeeded and every asset verifies against its attestations, and the image is only published after the draft. If a job fails, re-run the failed jobs.
+2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. The draft is only created once every build job has succeeded, the signed multi-platform image is published and every asset verifies against its attestations, so a draft always comes with a signed image. If a job fails, re-run the failed jobs.
 3. Edit the draft and write the release notes.
 4. Check the `Set as a pre-release` checkbox if needed. The workflow already checks it for tags with a pre-release suffix such as `-rc.1`.
 5. Publish the release.
