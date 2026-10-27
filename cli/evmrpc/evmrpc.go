@@ -51,9 +51,10 @@ func dial(ctx context.Context, url string, transport http.RoundTripper) (*ethcli
 	return ethclient.NewClient(client), nil
 }
 
-// retryTransport retries standard reads: eth_ methods other than eth_send*.
-// Writes, vendor methods such as anvil_mine that a retry could apply twice,
-// and batches are sent once.
+// retryTransport retries standard reads, eth_ methods other than eth_send*,
+// that a node answers with an Internal error or with no latest block. Writes,
+// vendor methods such as anvil_mine that a retry could apply twice, and
+// batches are sent once.
 type retryTransport struct {
 	base  http.RoundTripper
 	delay time.Duration
@@ -69,12 +70,15 @@ func (t retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("evm rpc: read request: %w", err)
 	}
 	var call struct {
-		Method string `json:"method"`
+		Method string            `json:"method"`
+		Params []json.RawMessage `json:"params"`
 	}
 	// Batches fail to decode into a single call and are sent once.
 	if json.Unmarshal(body, &call) != nil || !isRead(call.Method) {
 		return t.base.RoundTrip(withBody(req, body))
 	}
+	latestBlock := call.Method == "eth_getBlockByNumber" && len(call.Params) > 0 &&
+		string(call.Params[0]) == `"latest"`
 
 	for attempt := 1; ; attempt++ {
 		resp, err := t.base.RoundTrip(withBody(req, body))
@@ -87,7 +91,7 @@ func (t retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("evm rpc: read %s response: %w", call.Method, err)
 		}
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
-		if !isInternalError(respBody) {
+		if !transientRead(respBody, latestBlock) {
 			return resp, nil
 		}
 		select {
@@ -102,13 +106,27 @@ func isRead(method string) bool {
 	return strings.HasPrefix(method, "eth_") && !strings.HasPrefix(method, "eth_send")
 }
 
-func isInternalError(respBody []byte) bool {
+func transientRead(respBody []byte, latestBlock bool) bool {
 	var reply struct {
 		Error *struct {
 			Code int `json:"code"`
 		} `json:"error"`
 	}
-	return json.Unmarshal(respBody, &reply) == nil && reply.Error != nil && reply.Error.Code == jsonRPCInternalError
+	if json.Unmarshal(respBody, &reply) != nil {
+		return false
+	}
+	if reply.Error != nil {
+		return reply.Error.Code == jsonRPCInternalError
+	}
+	if !latestBlock {
+		return false
+	}
+	// The latest block always exists, so null means the node has not finished
+	// importing it. Only this reply's result is decoded.
+	var block struct {
+		Result json.RawMessage `json:"result"`
+	}
+	return json.Unmarshal(respBody, &block) == nil && string(block.Result) == "null"
 }
 
 func withBody(req *http.Request, body []byte) *http.Request {

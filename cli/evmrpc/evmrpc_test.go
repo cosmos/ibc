@@ -91,6 +91,19 @@ func TestRetryTransportRetriesInternalError(t *testing.T) {
 	require.Equal(t, 3, node.callCount("eth_call"))
 }
 
+func TestRetryTransportRetriesMissingLatestBlock(t *testing.T) {
+	header, err := json.Marshal(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(0)})
+	require.NoError(t, err)
+	client, node := dialScripted(t, map[string][]string{
+		"eth_getBlockByNumber": {nullReply, `{"jsonrpc":"2.0","id":%s,"result":` + string(header) + `}`},
+	})
+
+	got, err := client.HeaderByNumber(t.Context(), nil)
+	require.NoError(t, err)
+	require.Equal(t, big.NewInt(7), got.Number)
+	require.Equal(t, 2, node.callCount("eth_getBlockByNumber"))
+}
+
 func TestRetryTransportReturnsLastErrorAfterAttempts(t *testing.T) {
 	client, node := dialScripted(t, map[string][]string{"eth_call": {internalErrorReply}})
 	to := common.HexToAddress("0x1")
@@ -129,7 +142,7 @@ func TestRetryTransportSendsOnceWhenNotTransientOrNotARead(t *testing.T) {
 
 	_, err := client.CallContract(ctx, ethereum.CallMsg{To: &to}, nil)
 	require.ErrorContains(t, err, "execution reverted")
-	_, err = client.HeaderByNumber(ctx, nil)
+	_, err = client.HeaderByNumber(ctx, big.NewInt(9))
 	require.ErrorIs(t, err, ethereum.NotFound)
 	tx := types.NewTx(&types.LegacyTx{Gas: 21_000, GasPrice: big.NewInt(0), To: &to})
 	require.ErrorContains(t, client.SendTransaction(ctx, tx), "Internal error")
