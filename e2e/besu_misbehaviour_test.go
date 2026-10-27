@@ -26,8 +26,8 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
-// besuHeadersMisbehaviour is MisbehaviourType.Headers in IBesuLightClientMsgs.
-const besuHeadersMisbehaviour uint8 = 1
+// besuConflictingHeadersMisbehaviour is MisbehaviourType.ConflictingHeaders in IBesuLightClientMsgs.
+const besuConflictingHeadersMisbehaviour uint8 = 1
 
 // Two headers at one height with different state roots, both sealed by a
 // quorum of the source validators, prove a double sign and freeze the client.
@@ -181,18 +181,18 @@ func (m besuMisbehaviour) update(header *besu.ParsedHeader) besumsgs.IBesuLightC
 	}
 }
 
-// submit sends both headers as Headers evidence through the router, which
+// submit sends both headers as ConflictingHeaders evidence through the router, which
 // anyone may call.
 func (m besuMisbehaviour) submit(header1, header2 *besu.ParsedHeader) *types.Receipt {
 	m.t.Helper()
 	bindings := besumsgs.NewBindings()
-	evidence, err := bindings.TryPackHeadersMisbehaviour(besumsgs.IBesuLightClientMsgsMsgHeadersMisbehaviour{
+	evidence, err := bindings.TryPackConflictingHeadersMisbehaviour(besumsgs.IBesuLightClientMsgsMsgConflictingHeadersMisbehaviour{
 		Update1: m.update(header1),
 		Update2: m.update(header2),
 	})
 	require.NoError(m.t, err)
 	message, err := bindings.TryPackSubmitMisbehaviour(besumsgs.IBesuLightClientMsgsMsgSubmitMisbehaviour{
-		MisbehaviourType: besuHeadersMisbehaviour,
+		MisbehaviourType: besuConflictingHeadersMisbehaviour,
 		Misbehaviour:     evidence[4:], //nolint:misspell // generated binding field
 	})
 	require.NoError(m.t, err)
