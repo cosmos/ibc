@@ -50,7 +50,6 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 
 	metrics.txRetry(ctx, tr, relayTypeSendToRecv, *tr.RecvTxHash)
 	metrics.packetExecution(ctx, tr, "recv", executionFailed)
-	tr.GetLogger().Warn("Retrying relay tx", "kind", "recv", "txHash", *tr.RecvTxHash)
 
 	// error so the transfer stops processing this run; it is picked up
 	// without the recv tx and redelivered on the next run
@@ -60,6 +59,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 func (p RetryRecvPacket) Cancel(tr *Transfer, err error) {
 	switch {
 	case errors.Is(err, ErrRetryingRecvPacket):
+		tr.GetLogger().Warn("Retrying relay tx", "kind", "recv", "txHash", *tr.RecvTxHash)
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "recv")
 	default:
