@@ -34,7 +34,7 @@ func TestSubmissionAttempts(t *testing.T) {
 				return nil
 			}
 		}},
-		{name: "capacity", result: "deferred", prepare: func(c *TxSubmitter, _ *testRPC) { c.nextNonce = maxInFlight }},
+		{name: "capacity", result: "error", prepare: func(c *TxSubmitter, _ *testRPC) { c.nextNonce = maxInFlight }},
 		{name: "gas estimation", result: "error", prepare: func(_ *TxSubmitter, rpc *testRPC) { rpc.gasErr = assert.AnError }},
 		{name: "broadcast", result: "error", prepare: func(_ *TxSubmitter, rpc *testRPC) {
 			rpc.send = func(*types.Transaction) error { return assert.AnError }

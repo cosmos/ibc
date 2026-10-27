@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
@@ -99,16 +98,13 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 }
 
 const (
-	submissionResultOK       = "ok"
-	submissionResultDeferred = "deferred"
-	submissionResultError    = "error"
+	submissionResultOK    = "ok"
+	submissionResultError = "error"
 )
 
 func (m *instrumentation) attempt(ctx context.Context, chainID, wallet string, err error) {
 	result := submissionResultOK
-	if errors.Is(err, ErrBusy) {
-		result = submissionResultDeferred
-	} else if err != nil {
+	if err != nil {
 		result = submissionResultError
 	}
 	m.Attempts.Add(context.WithoutCancel(ctx), 1, metric.WithAttributes(

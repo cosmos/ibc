@@ -3866,7 +3866,7 @@
         "spec": {
           "id": 32,
           "title": "Transaction Submission Attempts / sec",
-          "description": "Completed Submit calls per second, grouped by chain, wallet and result. Results are ok, deferred (capacity), or error. Internal fee-bump broadcasts do not add attempts. Detailed reasons are in logs.",
+          "description": "Completed Submit calls per second, grouped by chain, wallet and result. Results are ok or error; capacity deferrals count as error. Internal fee-bump broadcasts do not add attempts. Detailed reasons are in logs.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
