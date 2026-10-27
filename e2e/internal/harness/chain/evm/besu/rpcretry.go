@@ -16,8 +16,9 @@ import (
 )
 
 const (
+	// readRetryAttempts are spread over one block period, the window in which
+	// an import can race a read.
 	readRetryAttempts = 8
-	readRetryDelay    = 250 * time.Millisecond
 
 	// Besu answers reads with a bare Internal error, without revert data,
 	// when they race the import of the next block.
@@ -42,9 +43,9 @@ var readMethods = map[string]bool{
 }
 
 // dialClient dials a Besu node's HTTP RPC through readRetryTransport.
-func dialClient(ctx context.Context, url string) (*ethclient.Client, error) {
+func dialClient(ctx context.Context, url string, blockPeriod time.Duration) (*ethclient.Client, error) {
 	client, err := rpc.DialOptions(ctx, url, rpc.WithHTTPClient(&http.Client{
-		Transport: readRetryTransport{base: http.DefaultTransport, delay: readRetryDelay},
+		Transport: readRetryTransport{base: http.DefaultTransport, delay: blockPeriod / readRetryAttempts},
 	}))
 	if err != nil {
 		return nil, err
