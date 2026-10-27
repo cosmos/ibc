@@ -105,7 +105,9 @@ func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {
 		prepared, prepareErr := setup.PrepareBesuClient(ctx, clientAuthority, instance.Router, BesuClientConfig{
 			Consensus: consensus, ID: string(consensus) + "-b", CounterpartyClientID: string(consensus) + "-a",
 			CounterpartyRouter: instance.Router, InitialHeight: 1, InitialTimestamp: head.Time,
-			TrustingPeriod: BesuTrustingPeriod, InitialValidators: []common.Address{attestor.Address()},
+			// the constructor rejects a zero or empty-trie state root
+			InitialStateRoot: common.HexToHash("0x01"),
+			TrustingPeriod:   BesuTrustingPeriod, InitialValidators: []common.Address{attestor.Address()},
 		})
 		require.NoError(t, prepareErr)
 		besuClient, deployErr := prepared.Deploy(ctx)

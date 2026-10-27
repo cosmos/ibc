@@ -184,6 +184,7 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 	for i, header := range headers {
 		updates[i], err = besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 			HeaderRlp:              header.RLP,
+			CommitSeals:            header.CommitSeals,
 			TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trusted.Height},
 			ConsensusStatePreimage: trusted.ConsensusState(),
 		})

@@ -36,7 +36,7 @@ const (
 	// The fixture tests deploy their clients with these, and warp time
 	// relative to them.
 	fixtureTrustingPeriod = 1_209_600
-	fixtureMaxClockDrift  = 15
+	fixtureMaxClockDrift  = 12
 )
 
 // TestGenerateBesuFixtures writes <consensus>.json for every consensus: a
@@ -134,6 +134,7 @@ func update(trusted, header *besu.ParsedHeader) besutest.UpdateFixture {
 	return besutest.UpdateFixture{
 		Height:             header.Height,
 		HeaderRLP:          header.RLP,
+		CommitSeals:        besutest.CommitSeals(header.CommitSeals),
 		TrustedHeight:      trusted.Height,
 		ExpectedTimestamp:  header.Timestamp,
 		ExpectedStateRoot:  header.StateRoot,
@@ -145,6 +146,7 @@ func rejected(trusted, header *besu.ParsedHeader) besutest.RejectedUpdateFixture
 	return besutest.RejectedUpdateFixture{
 		Height:        header.Height,
 		HeaderRLP:     header.RLP,
+		CommitSeals:   besutest.CommitSeals(header.CommitSeals),
 		TrustedHeight: trusted.Height,
 	}
 }

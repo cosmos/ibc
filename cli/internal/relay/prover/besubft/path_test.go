@@ -383,3 +383,32 @@ func TestLatestProvableHeightIsReachable(t *testing.T) {
 		require.Positive(t, stopped)
 	}
 }
+
+// required matches the contract: ceil(n * level), and always more than a
+// third of n, which only a one-third level on a multiple of three exceeds.
+func TestRequiredTrustedSigners(t *testing.T) {
+	for _, tc := range []struct {
+		level      besumsgs.IBesuLightClientMsgsTrustThreshold
+		validators int
+		want       int
+	}{
+		{oneThird, 4, 2},
+		{oneThird, 6, 3},
+		{oneThird, 7, 3},
+		{oneHalf, 6, 3},
+		{twoThirds, 4, 3},
+		{twoThirds, 6, 4},
+		{besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 1}, 4, 4},
+	} {
+		from := &besu.ParsedHeader{Validators: make([]common.Address, tc.validators)}
+		assert.Equal(
+			t,
+			tc.want,
+			required(from, tc.level),
+			"%d/%d of %d",
+			tc.level.Numerator,
+			tc.level.Denominator,
+			tc.validators,
+		)
+	}
+}

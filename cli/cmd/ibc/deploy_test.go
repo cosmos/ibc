@@ -443,6 +443,8 @@ func TestBesuParamsFlags(t *testing.T) {
 	}{
 		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
 		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
+		{name: "long period", period: 31 * 24 * time.Hour, router: router, wantErr: "--trusting-period must be at most 720h0m0s"},
+		{name: "large drift", period: time.Hour, drift: 13 * time.Second, router: router, wantErr: "--max-clock-drift must be at most 12s"},
 		{name: "finite", period: 2 * time.Hour, router: router},
 		{
 			name: "trust level", period: 2 * time.Hour, level: "1/2", router: router,
@@ -457,7 +459,7 @@ func TestBesuParamsFlags(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = tc.period, time.Minute, cmp.Or(
+			flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = tc.period, 12*time.Second, cmp.Or(
 				tc.level,
 				"2/3",
 			)
@@ -479,7 +481,7 @@ func TestBesuParamsFlags(t *testing.T) {
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
 				TrustingPeriod:        uint64(tc.period / time.Second),
-				MaxClockDrift:         60,
+				MaxClockDrift:         12,
 				TrustLevel:            cmp.Or(tc.wantLevel, besu.DefaultTrustLevel),
 			}, params)
 		})

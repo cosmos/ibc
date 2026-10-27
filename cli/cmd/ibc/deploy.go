@@ -396,9 +396,19 @@ func besuParams(
 	if trustingPeriod == 0 {
 		return deploy.BesuParams{}, errors.Errorf("--%s must be positive", flagNameTrustingPeriod)
 	}
+	if flagDeployTrustingPeriod > besu.MaxTrustingPeriod {
+		return deploy.BesuParams{}, errors.Errorf(
+			"--%s must be at most %s, got %s", flagNameTrustingPeriod, besu.MaxTrustingPeriod, flagDeployTrustingPeriod,
+		)
+	}
 	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
+	}
+	if flagDeployMaxClockDrift > besu.MaxClockDrift {
+		return deploy.BesuParams{}, errors.Errorf(
+			"--%s must be at most %s, got %s", flagNameMaxClockDrift, besu.MaxClockDrift, flagDeployMaxClockDrift,
+		)
 	}
 	level, err := trustLevel(flagDeployTrustLevel)
 	if err != nil {

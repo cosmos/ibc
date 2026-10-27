@@ -385,7 +385,6 @@ func prepareConnections(
 						TrustingPeriod:       client.TrustingPeriod,
 						MaxClockDrift:        client.MaxClockDrift,
 						TrustLevel:           client.TrustLevel,
-						RoleManager:          router,
 					},
 				)
 				if err != nil {

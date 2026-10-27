@@ -4,7 +4,6 @@ package evm
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"math/big"
 	"testing"
@@ -20,9 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/cli/besu"
@@ -347,14 +345,11 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 	require.NotEmpty(t, report.Failed())
 }
 
-// A Besu client deploys the contract for its consensus from recorded params
-// alone, registers like any other client, and exposes its state through the
-// reads the prover relies on.
+// A Besu client deploys from recorded params alone, for either consensus,
+// registers like any other client, and exposes its state through the reads
+// the prover relies on.
 func TestProvisionRegisterVerifyBesu(t *testing.T) {
-	for consensus, metadata := range map[besu.Consensus]*bind.MetaData{
-		besu.QBFT:  besuqbft.ContractMetaData,
-		besu.IBFT2: besuibft2.ContractMetaData,
-	} {
+	for _, consensus := range besu.Consensuses {
 		t.Run(string(consensus), func(t *testing.T) {
 			d, sim, _ := newSimDriver(t)
 			ctx := context.Background()
@@ -390,11 +385,15 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			ref, err := d.ProvisionClient(ctx, core.Router, spec)
 			require.NoError(t, err)
 
-			// the deployed runtime code is embedded in the consensus's creation code
-			code, err := sim.Client().CodeAt(ctx, common.HexToAddress(ref.Address), nil)
+			// the client is bound to this chain's router and starts unpaused
+			lightClient, err := besulightclient.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
 			require.NoError(t, err)
-			require.NotEmpty(t, code)
-			require.Contains(t, metadata.Bin, hex.EncodeToString(code))
+			bound, err := lightClient.ICS26ROUTER(&bind.CallOpts{Context: ctx})
+			require.NoError(t, err)
+			require.Equal(t, common.HexToAddress(core.Router), bound)
+			paused, err := lightClient.Paused(&bind.CallOpts{Context: ctx})
+			require.NoError(t, err)
+			require.False(t, paused)
 
 			id, err := d.RegisterClient(ctx, core.Router, spec, ref)
 			require.NoError(t, err)
@@ -421,8 +420,6 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				TrustLevel:     params.TrustLevel,
 			}, state)
 
-			lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
-			require.NoError(t, err)
 			hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
 			require.NoError(t, err)
 

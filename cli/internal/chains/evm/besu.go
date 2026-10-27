@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/besu"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -59,8 +59,7 @@ func (c *Client) BesuConsensusStateHash(ctx context.Context, clientID string, he
 		return common.Hash{}, err
 	}
 
-	// both Besu light clients share this ABI
-	lightClient, err := besuqbft.NewContractCaller(lightClientAddr, c.eth)
+	lightClient, err := besulightclient.NewContractCaller(lightClientAddr, c.eth)
 	if err != nil {
 		return common.Hash{}, err
 	}

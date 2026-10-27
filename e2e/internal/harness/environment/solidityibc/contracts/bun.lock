@@ -5,14 +5,14 @@
     "": {
       "name": "@ibc-cli/solidity-ibc-contract-artifacts",
       "dependencies": {
-        "@cosmos/solidity-ibc-eureka": "github:cosmos/ibc-contracts#72cb83bc20fb134f0171102da2fbbf630b19b673",
+        "@cosmos/solidity-ibc-eureka": "github:cosmos/ibc-contracts#dfba365f27600938ee687e1c4e4b983549a8c378",
         "@openzeppelin/contracts": "5.7.0",
         "@openzeppelin/contracts-upgradeable": "5.7.0",
       },
     },
   },
   "packages": {
-    "@cosmos/solidity-ibc-eureka": ["ibc-contracts@github:cosmos/ibc-contracts#72cb83b", {}, "cosmos-ibc-contracts-72cb83b", "sha512-vsDcKrd9bB+w+VnwMFMCX29dsTYi/n6P5yGLoZgoK7zHmoxQ2PFDv3xxTk7ezvtdJvWp6AyrkgPHY9+46O5O/A=="],
+    "@cosmos/solidity-ibc-eureka": ["ibc-contracts@github:cosmos/ibc-contracts#dfba365", {}, "cosmos-ibc-contracts-dfba365", "sha512-puRfYv1HazN5aw7A0ET8UV97UxFc5IGfxKDC+NrWeSnq+nkSx70PeY2ORyk+z7s6ScGCs56mJQ/I+I+jsGZXPg=="],
 
     "@openzeppelin/contracts": ["@openzeppelin/contracts@5.7.0", "", {}, "sha512-IL2AZpI+7THMzt1u6Cxmc1zLwVnudtUGvrqXQ/HnbLKfQ/8dIWMMQPDwPIjRQzNrlAo4cxZaCGRB/XvwPo9ILA=="],
 

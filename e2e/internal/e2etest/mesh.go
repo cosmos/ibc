@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -147,12 +148,13 @@ func BesuMesh(chains []environment.ChainSpec) (environment.Spec, environment.Run
 	return spec, RuntimeWithProtocolDeployer(environment.Runtime{})
 }
 
-// besuMeshClient trusts states for 14 days and tolerates a minute of clock drift.
+// besuMeshClient trusts states for 14 days and tolerates the most clock
+// drift the client allows.
 func besuMeshClient(chain environment.ChainID) environment.NewBesuClient {
 	return environment.NewBesuClient{
 		IBCInstance:    meshInstanceID(chain),
 		Authority:      ProtocolAuthorityID,
 		TrustingPeriod: environment.BesuTrustingPeriod,
-		MaxClockDrift:  60,
+		MaxClockDrift:  uint64(besu.MaxClockDrift / time.Second),
 	}
 }

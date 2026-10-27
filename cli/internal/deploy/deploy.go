@@ -37,7 +37,8 @@ type AttestationParams manifest.AttestationParams
 func (AttestationParams) clientParams() {}
 
 // BesuParams are the constructor inputs for a Besu client verifying a chain
-// that runs Consensus, which picks the contract. Periods are in seconds.
+// that runs Consensus, which is recorded with the client. Periods are in
+// seconds.
 type BesuParams struct {
 	Consensus             besu.Consensus
 	IBCRouter             common.Address

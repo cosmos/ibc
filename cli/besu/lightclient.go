@@ -5,14 +5,15 @@ package besu
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 )
 
@@ -20,6 +21,13 @@ import (
 // that must seal an update. It matches Besu's own two-thirds commit-seal
 // quorum but is a separate check, against the trusted validator set.
 var DefaultTrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}
+
+// Upper bounds the light client's constructor puts on its trusting period
+// and max clock drift.
+const (
+	MaxTrustingPeriod = 30 * 24 * time.Hour
+	MaxClockDrift     = 12 * time.Second
+)
 
 var (
 	messageBindings     = besumsgs.NewBindings()
@@ -56,40 +64,38 @@ func CommitmentSlot(path []byte) common.Hash {
 	return crypto.Keccak256Hash(crypto.Keccak256(path), ibcStoreStorageSlot.Bytes())
 }
 
-// DeployLightClient deploys the light client contract that verifies a chain
-// running consensus.
+// DeployLightClient deploys a Besu light client bound to ics26Router, the
+// only caller it accepts and the authority that pauses it. One contract
+// verifies both consensus protocols.
 func DeployLightClient(
 	opts *bind.TransactOpts,
 	backend bind.ContractBackend,
-	consensus Consensus,
 	clientState besumsgs.IBesuLightClientMsgsClientState,
 	consensusState besumsgs.IBesuLightClientMsgsConsensusState,
-	roleManager common.Address,
+	ics26Router common.Address,
 ) (common.Address, *types.Transaction, error) {
-	meta, err := consensus.LightClient()
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-	parsed, err := meta.GetAbi()
+	parsed, err := besulightclient.ContractMetaData.GetAbi()
 	if err != nil {
 		return common.Address{}, nil, err
 	}
 
+	// bind.DeployContract packs besumsgs' structs, which the typed
+	// besulightclient.DeployContract would not accept.
 	addr, tx, _, err := bind.DeployContract(
-		opts, *parsed, common.FromHex(meta.Bin), backend, clientState, consensusState, roleManager,
+		opts, *parsed, common.FromHex(besulightclient.ContractMetaData.Bin), backend,
+		clientState, consensusState, ics26Router,
 	)
 
 	return addr, tx, err
 }
 
-// ReadClientState reads the state of the Besu light client at address. The
-// QBFT and IBFT2 clients share their ABI, so either binding reads both.
+// ReadClientState reads the state of the Besu light client at address.
 func ReadClientState(
 	ctx context.Context,
 	caller bind.ContractCaller,
 	address common.Address,
 ) (besumsgs.IBesuLightClientMsgsClientState, error) {
-	lightClient, err := besuqbft.NewContractCaller(address, caller)
+	lightClient, err := besulightclient.NewContractCaller(address, caller)
 	if err != nil {
 		return besumsgs.IBesuLightClientMsgsClientState{}, err
 	}

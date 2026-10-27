@@ -42,8 +42,8 @@ type Client struct {
 }
 
 // AttestationClientConfig contains the immutable constructor inputs for an
-// attestation light client. A zero RoleManager intentionally permits anyone to
-// submit proofs, matching Solidity IBC's constructor semantics.
+// attestation light client. The client is bound to the router it registers
+// with, the only caller it accepts.
 type AttestationClientConfig struct {
 	ID                    string
 	CounterpartyClientID  string
@@ -51,7 +51,6 @@ type AttestationClientConfig struct {
 	MinRequiredSignatures uint8
 	InitialHeight         uint64
 	InitialTimestamp      uint64
-	RoleManager           common.Address
 }
 
 // BesuTrustingPeriod is the trusting period, in seconds, e2e tests give Besu
@@ -60,9 +59,9 @@ const BesuTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
 
 // BesuClientConfig contains the immutable constructor inputs for a Besu light
 // client verifying a chain that runs Consensus. The initial trusted state
-// describes the counterparty chain at InitialHeight; RoleManager restricts
-// proof submission to that address (the host router), a zero value permits
-// anyone. TrustLevel is besu.DefaultTrustLevel when zero.
+// describes the counterparty chain at InitialHeight. The client is bound to
+// the router it registers with, the only caller it accepts. TrustLevel is
+// besu.DefaultTrustLevel when zero.
 type BesuClientConfig struct {
 	Consensus            besu.Consensus
 	ID                   string
@@ -75,7 +74,6 @@ type BesuClientConfig struct {
 	TrustingPeriod       uint64
 	MaxClockDrift        uint64
 	TrustLevel           besumsgs.IBesuLightClientMsgsTrustThreshold
-	RoleManager          common.Address
 }
 
 func (c BesuClientConfig) snapshot() BesuClientConfig {

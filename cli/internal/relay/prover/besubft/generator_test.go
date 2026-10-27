@@ -148,7 +148,7 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 			env := newFixtureEnv(t, consensus)
 			update := env.fixture.NonAdjacentUpdate
 			env.expectInitialAnchor(t)
-			env.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP)
+			env.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP, update.CommitSeals)
 
 			payloads, err := env.gen.ClientUpdatePayloads(ctx, update.Height)
 			require.NoError(t, err)
@@ -157,6 +157,7 @@ func TestClientUpdatePayloadDirectUpdate(t *testing.T) {
 			decoded, err := besumsgs.NewBindings().UnpackUpdateClient(payloads[0])
 			require.NoError(t, err)
 			assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
+			assert.Equal(t, besutest.Seals(update.CommitSeals), decoded.CommitSeals)
 			assert.Equal(
 				t,
 				besumsgs.IICS02ClientMsgsHeight{RevisionHeight: env.fixture.InitialTrustedHeight},
@@ -171,7 +172,7 @@ func TestClientUpdatePayloadTargetIsLatest(t *testing.T) {
 	env := newFixtureEnv(t, besu.QBFT)
 	update := env.fixture.NonAdjacentUpdate
 	env.setAnchor(t, update.Height, update.ExpectedConsensusState())
-	env.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP)
+	env.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP, update.CommitSeals)
 
 	payloads, err := env.gen.ClientUpdatePayloads(t.Context(), update.Height)
 	require.NoError(t, err)
@@ -211,7 +212,7 @@ func (e *fixtureEnv) expectProofAt(
 	nodesFor func(slot common.Hash) [][]byte,
 ) {
 	t.Helper()
-	e.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP)
+	e.counterparty.sealed[update.Height] = besutest.ParseHeader(t, update.HeaderRLP, update.CommitSeals)
 	e.counterparty.proof = func(height uint64, slots []common.Hash) (evm.RouterProof, error) {
 		if height != update.Height {
 			return evm.RouterProof{}, fmt.Errorf("router proof at %d, want %d", height, update.Height)
@@ -335,7 +336,7 @@ func TestLatestProvableHeightReturnsHead(t *testing.T) {
 	env := newFixtureEnv(t, besu.QBFT)
 	update := env.fixture.NonAdjacentUpdate
 	env.expectInitialAnchor(t)
-	head := besutest.ParseHeader(t, update.HeaderRLP)
+	head := besutest.ParseHeader(t, update.HeaderRLP, update.CommitSeals)
 	head.Timestamp = uint64(time.Now().Add(time.Hour).Unix()) //nolint:gosec // test clock is positive
 	env.counterparty.sealed[update.Height] = head
 	env.counterparty.head = update.Height

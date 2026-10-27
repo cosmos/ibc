@@ -493,7 +493,7 @@ func (s *Setup) PrepareAttestationClient(
 				config.MinRequiredSignatures,
 				config.InitialHeight,
 				config.InitialTimestamp,
-				config.RoleManager,
+				router,
 			)
 			return address, transaction, deployErr
 		})
@@ -516,7 +516,6 @@ func (s *Setup) PrepareBesuClient(
 			return besu.DeployLightClient(
 				opts,
 				s.backend,
-				config.Consensus,
 				besumsgs.IBesuLightClientMsgsClientState{
 					IbcRouter:      config.CounterpartyRouter,
 					LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
@@ -529,7 +528,7 @@ func (s *Setup) PrepareBesuClient(
 					StateRoot:  config.InitialStateRoot,
 					Validators: config.InitialValidators,
 				},
-				config.RoleManager,
+				router,
 			)
 		})
 }

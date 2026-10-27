@@ -251,8 +251,8 @@ func (d *Driver) provisionAttestation(
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// provisionBesu deploys a Besu light client with this chain's router as its
-// role manager, so only router calls may update or query it.
+// provisionBesu deploys a Besu light client bound to this chain's router, so
+// only router calls may update or query it.
 func (d *Driver) provisionBesu(
 	ctx context.Context, router string, params deploy.BesuParams,
 ) (deploy.ClientRef, error) {
@@ -263,7 +263,6 @@ func (d *Driver) provisionBesu(
 	addr, tx, err := besu.DeployLightClient(
 		opts,
 		d.backend,
-		params.Consensus,
 		besumsgs.IBesuLightClientMsgsClientState{
 			IbcRouter:      params.IBCRouter,
 			LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},

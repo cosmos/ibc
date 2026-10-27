@@ -9,6 +9,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -52,10 +53,13 @@ type Fixture struct {
 	NonMembership MembershipFixture `json:"nonMembership"`
 }
 
-// UpdateFixture is a live header update the client accepts.
+// UpdateFixture is a live header update the client accepts. HeaderRLP is
+// the header in its commit seal signing form, and CommitSeals are its seals
+// as the light client takes them.
 type UpdateFixture struct {
 	Height             uint64           `json:"height"`
 	HeaderRLP          hexutil.Bytes    `json:"headerRlp"`
+	CommitSeals        []hexutil.Bytes  `json:"commitSeals"`
 	TrustedHeight      uint64           `json:"trustedHeight"`
 	ExpectedTimestamp  uint64           `json:"expectedTimestamp"`
 	ExpectedStateRoot  common.Hash      `json:"expectedStateRoot"`
@@ -66,9 +70,10 @@ type UpdateFixture struct {
 // below quorum, conflicting with a stored height, or sealed by too few
 // trusted validators.
 type RejectedUpdateFixture struct {
-	Height        uint64        `json:"height"`
-	HeaderRLP     hexutil.Bytes `json:"headerRlp"`
-	TrustedHeight uint64        `json:"trustedHeight"`
+	Height        uint64          `json:"height"`
+	HeaderRLP     hexutil.Bytes   `json:"headerRlp"`
+	CommitSeals   []hexutil.Bytes `json:"commitSeals"`
+	TrustedHeight uint64          `json:"trustedHeight"`
 }
 
 // MembershipFixture is one storage proof with the account proof that anchors
@@ -149,19 +154,74 @@ func HashConsensusState(state besumsgs.IBesuLightClientMsgsConsensusState) (comm
 	return crypto.Keccak256Hash(data[4:]), nil
 }
 
-// ParseHeader parses a header RLP the way the relayer parses a node's header.
-func ParseHeader(tb testing.TB, headerRLP []byte) *besu.ParsedHeader {
+// SealedHeader rebuilds the header a node returns from a signing-form header
+// RLP and its commit seals: the seals back in extraData, with Besu's 0/1
+// recovery IDs.
+func SealedHeader(tb testing.TB, headerRLP []byte, commitSeals []hexutil.Bytes) *types.Header {
 	tb.Helper()
 
 	var header types.Header
 	if err := rlp.DecodeBytes(headerRLP, &header); err != nil {
 		tb.Fatalf("decode header: %v", err)
 	}
+	var items []rlp.RawValue
+	if err := rlp.DecodeBytes(header.Extra, &items); err != nil {
+		tb.Fatalf("decode extra data: %v", err)
+	}
 
-	parsed, err := besu.ParseSealedHeader(&header)
+	seals := make([][]byte, len(commitSeals))
+	for i, seal := range commitSeals {
+		seals[i] = slices.Clone(seal)
+		seals[i][crypto.RecoveryIDOffset] -= 27
+	}
+	encoded, err := rlp.EncodeToBytes(seals)
+	if err != nil {
+		tb.Fatalf("encode commit seals: %v", err)
+	}
+	switch len(items) {
+	case 4: // IBFT2 signs extraData without the seal list
+		items = append(items, encoded)
+	case 5: // QBFT signs it with the seal list emptied
+		items[4] = encoded
+	default:
+		tb.Fatalf("%d extra data items", len(items))
+	}
+	if header.Extra, err = rlp.EncodeToBytes(items); err != nil {
+		tb.Fatalf("encode extra data: %v", err)
+	}
+
+	return &header
+}
+
+// ParseHeader parses a signing-form header RLP and its commit seals the way
+// the relayer parses the node's header.
+func ParseHeader(tb testing.TB, headerRLP []byte, commitSeals []hexutil.Bytes) *besu.ParsedHeader {
+	tb.Helper()
+
+	parsed, err := besu.ParseSealedHeader(SealedHeader(tb, headerRLP, commitSeals))
 	if err != nil {
 		tb.Fatalf("parse header: %v", err)
 	}
 
 	return parsed
+}
+
+// CommitSeals converts a parsed header's seals for the fixture.
+func CommitSeals(seals [][]byte) []hexutil.Bytes {
+	out := make([]hexutil.Bytes, len(seals))
+	for i, seal := range seals {
+		out[i] = seal
+	}
+
+	return out
+}
+
+// Seals converts fixture seals for an update message.
+func Seals(seals []hexutil.Bytes) [][]byte {
+	out := make([][]byte, len(seals))
+	for i, seal := range seals {
+		out[i] = seal
+	}
+
+	return out
 }

@@ -399,7 +399,7 @@ func besuClient(chainID, counterparty string) []string {
 		"--chain", chainID,
 		"--counterparty-chain", counterparty,
 		"--trusting-period", "336h",
-		"--max-clock-drift", "1m",
+		"--max-clock-drift", "12s",
 		"--yes",
 	}
 }

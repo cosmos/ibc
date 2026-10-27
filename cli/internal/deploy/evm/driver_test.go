@@ -77,16 +77,15 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 
 func TestBesuHead(t *testing.T) {
 	ctx := context.Background()
-	var sealed types.Header
-	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t, besu.QBFT).AdjacentUpdate.HeaderRLP, &sealed))
+	qbft := besutest.MustFixture(t, besu.QBFT).AdjacentUpdate
+	sealed := *besutest.SealedHeader(t, qbft.HeaderRLP, qbft.CommitSeals)
 
 	for _, consensus := range besu.Consensuses {
 		t.Run("sealed head "+string(consensus), func(t *testing.T) {
 			update := besutest.MustFixture(t, consensus).AdjacentUpdate
-			var head types.Header
-			require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &head))
+			head := besutest.SealedHeader(t, update.HeaderRLP, update.CommitSeals)
 			eth := mocks.NewMockETHClient(t)
-			eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&head, nil).Once()
+			eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(head, nil).Once()
 
 			parsed, err := (&Driver{backend: eth}).BesuHead(ctx)
 			require.NoError(t, err)

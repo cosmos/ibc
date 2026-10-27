@@ -6,7 +6,7 @@ description: "Which roles gate the IBC-solidity contracts, who holds them on a d
 On a deployment of the [IBC-solidity contracts](1-overview.md), who may call the gated functions and who may replace the code depends on the contract.
 
 - **The [router](2-ics26-router.md), IBCMulticall, and [ICS27GMP](3-ics27-gmp-and-accounts.md)** share a single OpenZeppelin access manager, which holds the roles and decides which addresses may call the functions those roles gate. Its admin may also replace the code behind them.
-- **Light clients** sit outside that manager. The attestation light client answers to [a role manager fixed when it was constructed](#permissions-on-a-light-client). No light client has an upgrade path: changing one means deploying a replacement that takes over its client ID.
+- **Light clients** are each bound at construction to one router, the only address that may drive them, and that router's access manager decides who may [pause them](#permissions-on-a-light-client). No light client has an upgrade path: changing one means deploying a replacement that takes over its client ID.
 - **An IFT** answers to its own owner or authority, which may also replace its code.
 
 Everything else about a deployment was fixed when each contract was constructed.
@@ -23,7 +23,8 @@ All other contracts carry their own access control.
 | `IBCMulticall` | The access manager | [IBCMulticall.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCMulticall.sol) |
 | [`ICS27GMP`](3-ics27-gmp-and-accounts.md#roles-pausing-and-upgrades) | The access manager | [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol) |
 | [`ICS27Account`](3-ics27-gmp-and-accounts.md#the-account-contracts-functions) | ICS27GMP, the only outside address that may drive an account. The manager's admin still reaches the account code, through `ICS27GMP.upgradeAccountTo` | [ICS27Account.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Account.sol) |
-| [`AttestationLightClient`](5-attestation-light-client.md#roles-and-permissions) | Its own roles, fixed at construction | [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol) |
+| [`AttestationLightClient`](5-attestation-light-client.md#permissions-and-pausing) | The router it is bound to, fixed at construction. Pausing answers to that router's access manager | [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol) |
+| [`BesuLightClient`](../4-light-clients/3-besu-light-client.md) | The router it is bound to, fixed at construction. Pausing answers to that router's access manager | [BesuLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/besu/BesuLightClient.sol) |
 | [`IFTOwnable`](4-ift-contracts.md#roles-and-permissions) | Its owner | [IFTOwnable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTOwnable.sol) |
 | [`IFTAccessManaged`](4-ift-contracts.md#roles-and-permissions) | An authority its issuer passes at initialization, which may or may not be this manager | [IFTAccessManaged.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTAccessManaged.sol) |
 
@@ -32,9 +33,9 @@ All other contracts carry their own access control.
 | Role | ID | What it gates |
 |------|----|---------------|
 | `ADMIN_ROLE` | 0 | The proxy and beacon upgrade selectors, `migrateClient`, and every role grant by default |
-| `RELAYER_ROLE` | 1 | `recvPacket`, `ackPacket`, `timeoutPacket`, and `updateClient` on the [router](2-ics26-router.md), and `multicall` on IBCMulticall. The ibc-contracts deployment script also grants this role to IBCMulticall, so its batches reach the router |
-| `PAUSER_ROLE` | 2 | `pause` on ICS27GMP |
-| `UNPAUSER_ROLE` | 3 | `unpause` on ICS27GMP |
+| `RELAYER_ROLE` | 1 | `recvPacket`, `ackPacket`, `timeoutPacket`, `updateClient`, `verifyMembership`, and `verifyNonMembership` on the [router](2-ics26-router.md), and `multicall` on IBCMulticall. The ibc-contracts deployment script also grants this role to IBCMulticall, so its batches reach the router |
+| `PAUSER_ROLE` | 2 | `pause` on the router and ICS27GMP. Every light client bound to the router checks this role itself |
+| `UNPAUSER_ROLE` | 3 | `unpause` on the router and ICS27GMP. Every light client bound to the router checks this role itself |
 | `ID_CUSTOMIZER_ROLE` | 6 | The custom-identifier forms of `addIBCApp` and `addClient` |
 | `PUBLIC_ROLE` | `type(uint64).max` | Whatever selectors a deployment assigns to it, and every address holds it |
 
@@ -51,7 +52,9 @@ The IBC CLI deploys the contract set, and `ibc deploy core` makes two assignment
 
 The relayer sends each batch through `IBCMulticall`, so the router sees `IBCMulticall` as the caller, and that is the relayer address it reports to IBC applications. Because the router's relay functions are public, `IBCMulticall` needs no role of its own to call them. The contract's own documentation describes the locked-down alternative: `multicall` mapped to `RELAYER_ROLE`, and `RELAYER_ROLE` granted to `IBCMulticall` so it can call the router.
 
-The manager treats a function it was never told about as gated by `ADMIN_ROLE`. `ibc deploy core` assigns nothing else, so every other `restricted` function answers to the admin alone. That includes `pause` and `unpause` on ICS27GMP, and every form of `addIBCApp` and `addClient`. The ibc-contracts deployment script assigns the forms in which the router picks the identifier to `PUBLIC_ROLE`, so any address may call them. On a chain the IBC CLI brings up, only the admin may register an application or a client.
+The manager treats a function it was never told about as gated by `ADMIN_ROLE`. `ibc deploy core` assigns nothing else, so every other `restricted` function answers to the admin alone. That includes `pause` and `unpause` on the router and ICS27GMP, and every form of `addIBCApp` and `addClient`. The ibc-contracts deployment script assigns the forms in which the router picks the identifier to `PUBLIC_ROLE`, so any address may call them. On a chain the IBC CLI brings up, only the admin may register an application or a client.
+
+`ibc deploy core` grants no one `PAUSER_ROLE` or `UNPAUSER_ROLE`. A light client checks those roles directly rather than through a selector assignment, and the manager does not count its admin as holding them, so no address can pause a light client on a chain the IBC CLI brings up until an admin grants `PAUSER_ROLE`.
 
 The manager's constructor takes its first admin as an argument. `ibc deploy core` passes the deployer key and leaves it there, and the driver's own comment calls role hardening a follow-up. The rest of the manager's surface is in [OpenZeppelin's reference](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager).
 
@@ -59,11 +62,9 @@ Visit the [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) for
 
 ## Permissions on a light client
 
-A light client sits outside the access manager, so the client's own constructor decides who may submit proofs to it. For the attestation light client that is the fifth constructor argument, `roleManager`. A nonzero address there receives both the client's admin role and its proof-submitter role. Whether that address can grant or revoke them afterwards depends on what it is. `ibc deploy client` passes the [router](2-ics26-router.md), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. Deploy with a zero role manager and the submitter role goes to the zero address instead, which leaves proof submission open to every caller.
+A light client sits outside the access manager's selector map, but it defers to the router it was constructed with. That address is immutable and must be nonzero. Only it may call `updateClient`, `verifyMembership`, `verifyNonMembership`, and `misbehaviour`, so proofs reach a client only through the router's own gates. `ibc deploy client` binds each client to this chain's router.
 
-<Warning>
-Deploying an attestation light client by hand with a zero role manager leaves proof submission open for the life of that client. A client with no admin cannot be closed later.
-</Warning>
+Pausing is the one decision a client takes from the access manager. `pause` and `unpause` look the caller up in the bound router's current authority, under `PAUSER_ROLE` and `UNPAUSER_ROLE`, and reject a holder with an execution delay, because the client cannot consume a scheduled call. Granting or revoking either role on the manager takes effect at once on every client bound to that router. A paused client rejects updates and packet proofs, so packets on its connections stop. Whether it can still be frozen depends on the client type: the [Besu light client](../4-light-clients/3-besu-light-client.md#misbehaviour) accepts misbehaviour evidence while paused, but the [attestation light client](5-attestation-light-client.md) freezes only in `updateClient`, which pausing blocks.
 
 ## Configuration fixed at construction
 
@@ -71,7 +72,8 @@ A few inputs are set when a contract is constructed and have no setter afterward
 
 | Contract | Fixed at construction |
 |----------|-----------------------|
-| [`AttestationLightClient`](5-attestation-light-client.md) | The attestor addresses, the signature threshold, and an initial height with its timestamp |
+| [`AttestationLightClient`](5-attestation-light-client.md) | The attestor addresses, the signature threshold, an initial height with its timestamp, and the router it is bound to |
+| [`BesuLightClient`](../4-light-clients/3-besu-light-client.md) | The counterparty router it proves, the trusting period (at most 30 days), the maximum clock drift (at most 12 seconds), the trust level, an initial trusted consensus state, and the router it is bound to |
 | `CosmosIFTSendCallConstructor` | The mint message type URL, the counterparty denom, and the interchain account address |
 
 ## Proxies and upgrade authority
@@ -112,6 +114,6 @@ Only an admin may call `migrateClient`. The role map registers its selector unde
 
 Migration is also how a frozen client is restarted. A frozen client keeps reverting its update and verification calls, so what returns the connection to service is a newly deployed client, migrated in under the same client ID. IBC-solidity's security model asks for that restart, and expects the admin role to sit with a timelocked Security Council.
 
-Each client type decides what freezes it. The [attestation light client](5-attestation-light-client.md) freezes on conflicting attested timestamps, and nothing in it clears that flag.
+Each client type decides what freezes it. The [attestation light client](5-attestation-light-client.md) freezes on conflicting attested timestamps, and the [Besu light client](../4-light-clients/3-besu-light-client.md#misbehaviour) on the misbehaviour its page lists. Nothing in either clears that flag.
 
 The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys the access manager and leaves the deployer as the only address granted a role. [Grant, change, and revoke a role](../6-ibc-cli/9-grant-change-and-revoke-a-role.md) assigns roles on that deployment.
