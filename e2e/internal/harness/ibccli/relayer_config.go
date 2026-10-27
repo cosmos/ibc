@@ -60,9 +60,8 @@ type RelayerChain struct {
 
 // RelayerClientEnd is a registered client and its endpoint relay policy.
 type RelayerClientEnd struct {
-	ChainID  string
-	ClientID string
-	// ClientType is required unless the connection uses a remote prover.
+	ChainID    string
+	ClientID   string
 	ClientType clientkind.Kind
 	AutoRelay  bool
 }
@@ -71,9 +70,9 @@ type RelayerClientEnd struct {
 type RelayerConnection struct {
 	A, B RelayerClientEnd
 
-	// ProverURL points both client ends at a ProverService, overriding the
-	// declared client types.
-	ProverURL string
+	// RemoteProverURL points both client ends at a ProverService instead of
+	// their built-in provers.
+	RemoteProverURL string
 }
 
 // RelayerAttestor describes one candidate attestor: a local entry runs in
@@ -176,8 +175,8 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 	}
 
 	for _, connection := range cfg.Connections {
-		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.ProverURL)
-		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.ProverURL)
+		a := relayerClientEndConfig(connection.A, cfg.SignerAlias, connection.RemoteProverURL)
+		b := relayerClientEndConfig(connection.B, cfg.SignerAlias, connection.RemoteProverURL)
 		file.Relayer.Connections = append(file.Relayer.Connections, ConnectionFileConfig{
 			Alias:   connection.A.ClientID + "-" + connection.B.ClientID,
 			ClientA: a,
@@ -196,8 +195,7 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) Clie
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
 	if proverURL != "" {
-		result.Type = clientkind.Remote
-		result.Params = map[string]any{"url": proverURL}
+		result.RemoteProver = &RemoteProverFileConfig{URL: proverURL}
 	}
 	return result
 }
@@ -266,12 +264,16 @@ type ConnectionFileConfig struct {
 }
 
 type ClientEndFileConfig struct {
-	ChainID   string               `yaml:"chainId"`
-	Signer    string               `yaml:"signer"`
-	ClientID  string               `yaml:"clientId"`
-	Type      clientkind.Kind      `yaml:"type"`
-	Params    map[string]any       `yaml:"params,omitempty"`
-	AutoRelay *AutoRelayFileConfig `yaml:"autoRelay,omitempty"`
+	ChainID      string                  `yaml:"chainId"`
+	Signer       string                  `yaml:"signer"`
+	ClientID     string                  `yaml:"clientId"`
+	Type         clientkind.Kind         `yaml:"type"`
+	RemoteProver *RemoteProverFileConfig `yaml:"remoteProver,omitempty"`
+	AutoRelay    *AutoRelayFileConfig    `yaml:"autoRelay,omitempty"`
+}
+
+type RemoteProverFileConfig struct {
+	URL string `yaml:"url"`
 }
 
 type AutoRelayFileConfig struct {

@@ -133,12 +133,12 @@ func (a *commitmentCorruptingAttestor) requireRejected(t *testing.T) {
 func TestAttestation_RejectsWrongPacketCommitment(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB,
 	))
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	env := e2etest.Start(t, spec, runtime)
-	proxy := newCommitmentCorruptingAttestor(t, env, runtime, meshAttestorFor(route.Destination, route.Source))
+	proxy := newCommitmentCorruptingAttestor(t, env, runtime, e2etest.MeshAttestorFor(route.Destination, route.Source))
 	sender := e2etest.NewSigner(t)
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t, env, sender, e2etest.NewSigner(t), proxy.configureRelayer, route,
@@ -168,12 +168,12 @@ func TestAttestation_RejectsWrongPacketCommitment(t *testing.T) {
 func TestAttestation_RejectsWrongAcknowledgementCommitment(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB,
 	))
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	env := e2etest.Start(t, spec, runtime)
-	proxy := newCommitmentCorruptingAttestor(t, env, runtime, meshAttestorFor(route.Source, route.Destination))
+	proxy := newCommitmentCorruptingAttestor(t, env, runtime, e2etest.MeshAttestorFor(route.Source, route.Destination))
 	sender := e2etest.NewSigner(t)
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t, env, sender, e2etest.NewSigner(t), proxy.configureRelayer, route,
@@ -204,12 +204,12 @@ func TestAttestation_RejectsWrongAcknowledgementCommitment(t *testing.T) {
 func TestAttestation_RejectsWrongTimeoutCommitment(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
-	spec, runtime := attestedMesh(e2etest.EVMChains(
+	spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(
 		t, e2etest.EVMRequirements{ControlledMining: true}, e2etest.ChainA, e2etest.ChainB,
 	))
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	env := e2etest.Start(t, spec, runtime)
-	proxy := newCommitmentCorruptingAttestor(t, env, runtime, meshAttestorFor(route.Source, route.Destination))
+	proxy := newCommitmentCorruptingAttestor(t, env, runtime, e2etest.MeshAttestorFor(route.Source, route.Destination))
 	sender := e2etest.NewSigner(t)
 	driver, deployment := e2etest.DeployWithRelayerConfig(
 		t, env, sender, e2etest.NewSigner(t), proxy.configureRelayer, route,

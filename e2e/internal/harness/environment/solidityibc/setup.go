@@ -6,7 +6,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 	"slices"
 	"time"
@@ -27,6 +26,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27account"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc/cli/besu"
+	"github.com/cosmos/ibc/cli/routeraccess"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
@@ -366,14 +366,7 @@ func (s *Setup) DeployAppStack(
 		return AppStack{}, err
 	}
 
-	routerABI, err := ics26router.ContractMetaData.GetAbi()
-	if err != nil {
-		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: read ICS26Router ABI: %w", err)
-	}
-	if routerABI == nil {
-		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: upstream ICS26Router binding has no ABI")
-	}
-	selectors, err := publicRelayingSelectors(*routerABI)
+	selectors, err := routeraccess.PublicRelayingSelectors()
 	if err != nil {
 		return AppStack{}, fmt.Errorf("solidity IBC open public relaying: %w", err)
 	}
@@ -386,7 +379,7 @@ func (s *Setup) DeployAppStack(
 			opts,
 			instance.Router,
 			selectors,
-			math.MaxUint64, // OZ AccessManager PUBLIC_ROLE
+			routeraccess.PublicRole,
 		)
 		return common.Address{}, transaction, sendErr
 	})
@@ -406,7 +399,7 @@ func (s *Setup) DeployAppStack(
 			opts,
 			multicallProxy,
 			[][4]byte{multicallSelector},
-			math.MaxUint64, // OZ AccessManager PUBLIC_ROLE
+			routeraccess.PublicRole,
 		)
 		return common.Address{}, transaction, sendErr
 	})
@@ -440,25 +433,19 @@ func (s *Setup) DeployAppStack(
 		)
 	}
 
-	recvPacketSelector, err := methodSelector(*routerABI, "recvPacket")
-	if err != nil {
-		return AppStack{}, fmt.Errorf("solidity IBC verify public recvPacket: %w", err)
-	}
 	unrelated := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	permission, err := manager.CanCall(
-		&bind.CallOpts{Context: ctx},
-		unrelated,
-		instance.Router,
-		recvPacketSelector,
-	)
-	if err != nil {
-		return AppStack{}, fmt.Errorf("solidity IBC verify public recvPacket: query CanCall: %w", err)
-	}
-	if !permission.Immediate {
-		return AppStack{}, fmt.Errorf(
-			"solidity IBC verify public recvPacket: unrelated address cannot call immediately (delay %d)",
-			permission.Delay,
-		)
+	for _, selector := range selectors {
+		permission, err := manager.CanCall(&bind.CallOpts{Context: ctx}, unrelated, instance.Router, selector)
+		if err != nil {
+			return AppStack{}, fmt.Errorf("solidity IBC verify public relaying: query CanCall: %w", err)
+		}
+		if !permission.Immediate {
+			return AppStack{}, fmt.Errorf(
+				"solidity IBC verify public relaying: unrelated address cannot call %x immediately (delay %d)",
+				selector,
+				permission.Delay,
+			)
+		}
 	}
 
 	return AppStack{
@@ -933,19 +920,6 @@ func customAddClientSelector(routerABI abi.ABI) ([4]byte, error) {
 		}
 	}
 	return [4]byte{}, fmt.Errorf("upstream ICS26Router ABI has no custom addClient overload")
-}
-
-func publicRelayingSelectors(routerABI abi.ABI) ([][4]byte, error) {
-	names := []string{"recvPacket", "ackPacket", "timeoutPacket", "updateClient"}
-	selectors := make([][4]byte, 0, len(names))
-	for _, name := range names {
-		selector, err := methodSelector(routerABI, name)
-		if err != nil {
-			return nil, err
-		}
-		selectors = append(selectors, selector)
-	}
-	return selectors, nil
 }
 
 func methodSelector(contractABI abi.ABI, rawName string) ([4]byte, error) {

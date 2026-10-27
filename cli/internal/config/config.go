@@ -147,7 +147,7 @@ type AttestorConfig struct {
 	// ChainID is the chain this attestor watches.
 	ChainID string `yaml:"chainId,omitempty"`
 
-	// Name is the attestor's own self-reported identity. Not required unique.
+	// Name is the attestor's own self-reported identity. For local attestors, names must be unique.
 	Name string `yaml:"name"`
 
 	Type AttestorType `yaml:"type"`
@@ -554,8 +554,6 @@ func (c AttestorConfig) Validate() error {
 		switch {
 		case c.GRPC == "":
 			return errPathf("grpc", "required for remote attestors")
-		case strings.Contains(c.GRPC, "://") && !isHTTPURL(c.GRPC):
-			return errPathf("grpc", "must be a bare host:port or an http(s):// URL: %q", c.GRPC)
 		case c.ChainID != "":
 			return errPathf("chainId", "must not be set for remote attestors")
 		case c.Signer != "":
@@ -564,7 +562,7 @@ func (c AttestorConfig) Validate() error {
 			return errPathf("finalityOffset", "must not be set for remote attestors")
 		}
 
-		if err := errPath("grpc", checkHTTPURL(c.EndpointURL(), false)); err != nil {
+		if err := errPath("grpc", checkEndpointAddr(c.GRPC)); err != nil {
 			return err
 		}
 
@@ -658,9 +656,7 @@ func (c Chains) validateIdentities() error {
 
 func (a Attestors) validateIdentities() error {
 	localNames := make(map[string]struct{})
-	// keyed by chainId+signer: the same signer backing one operator's local
-	// attestor on two different chains is fine, but reusing it for two
-	// attestors on the same chain is always a redundant duplicate.
+	// Keyed by chainId+signer to reject redundant local attestors on the same chain.
 	localChainSigners := make(map[[2]string]struct{})
 	for i, attestor := range a {
 		if attestor.Type != AttestorTypeLocal {

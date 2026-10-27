@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
 )
@@ -22,21 +23,15 @@ func NewTransfer(
 	route Route,
 ) *Transfer {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: resolve endpoints for Transfer on route %q", route.ID)
+	r := resolveAppRoute(t, env, deployment, route, sender.account)
 	return &Transfer{
-		routeID:        route.ID,
-		source:         sourceEndpoint,
-		destination:    destinationEndpoint,
-		sender:         sender.account,
-		sourceToken:    sourceApps.Token,
-		sourceICS20:    sourceApps.ICS20Transfer,
-		sourceRouter:   sourceApps.ICS26Router,
-		destRouter:     destinationApps.ICS26Router,
-		destICS20:      destinationApps.ICS20Transfer,
-		sourceClientID: clients.SourceClientID,
-		destClientID:   clients.DestClientID,
+		sourceRoute:  r.sourceRoute,
+		destination:  r.destination,
+		sourceToken:  r.sourceApps.Token,
+		sourceICS20:  r.sourceApps.ICS20Transfer,
+		destRouter:   r.destinationApps.ICS26Router,
+		destICS20:    r.destinationApps.ICS20Transfer,
+		destClientID: r.destClientID,
 	}
 }
 
@@ -50,20 +45,14 @@ func NewIFT(
 	route Route,
 ) *IFT {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: resolve endpoints for IFT on route %q", route.ID)
+	r := resolveAppRoute(t, env, deployment, route, sender.account)
 	return &IFT{
-		routeID:        route.ID,
-		source:         sourceEndpoint,
-		destination:    destinationEndpoint,
-		sender:         sender.account,
-		sourceIFT:      sourceApps.IFT,
-		destIFT:        destinationApps.IFT,
-		sourceRouter:   sourceApps.ICS26Router,
-		destRouter:     destinationApps.ICS26Router,
-		sourceClientID: clients.SourceClientID,
-		batcher:        sourceApps.IFTBatchShim,
+		sourceRoute: r.sourceRoute,
+		destination: r.destination,
+		sourceIFT:   r.sourceApps.IFT,
+		destIFT:     r.destinationApps.IFT,
+		destRouter:  r.destinationApps.ICS26Router,
+		batcher:     r.sourceApps.IFTBatchShim,
 	}
 }
 
@@ -76,45 +65,39 @@ func DeployIFTTokenPair(
 	route Route,
 ) *IFT {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: resolve endpoints for additional IFT on route %q", route.ID)
+	r := resolveAppRoute(t, env, deployment, route, deployer.account)
 
 	sourceIFT, err := deployIFTToken(
-		t.Context(), sourceEndpoint.evm, deployer.account, sourceApps.ICS27GMP,
+		t.Context(), r.source.evm, deployer.account, r.sourceApps.ICS27GMP,
 	)
 	require.NoError(t, err, "e2etest: deploy additional IFT on Chain %q", route.Source)
 	destinationIFT, err := deployIFTToken(
-		t.Context(), destinationEndpoint.evm, deployer.account, destinationApps.ICS27GMP,
+		t.Context(), r.destination.evm, deployer.account, r.destinationApps.ICS27GMP,
 	)
 	require.NoError(t, err, "e2etest: deploy additional IFT on Chain %q", route.Destination)
 	batcher, err := deployIFTBatchShim(
-		t.Context(), sourceEndpoint.evm, deployer.account, sourceIFT, initialTokenSupply,
+		t.Context(), r.source.evm, deployer.account, sourceIFT, initialTokenSupply,
 	)
 	require.NoError(t, err, "e2etest: deploy additional IFT batch transfer shim on Chain %q", route.Source)
 
 	registerIFTBridge(
-		t, sourceEndpoint.evm, deployer, route.Source,
-		sourceIFT, clients.SourceClientID, destinationIFT, sourceApps.IFTSendCallConstructor,
+		t, r.source.evm, deployer, route.Source,
+		sourceIFT, r.sourceClientID, destinationIFT, r.sourceApps.IFTSendCallConstructor,
 	)
 	if !route.SkipDestinationIFTBridge {
 		registerIFTBridge(
-			t, destinationEndpoint.evm, deployer, route.Destination,
-			destinationIFT, clients.DestClientID, sourceIFT, destinationApps.IFTSendCallConstructor,
+			t, r.destination.evm, deployer, route.Destination,
+			destinationIFT, r.destClientID, sourceIFT, r.destinationApps.IFTSendCallConstructor,
 		)
 	}
 
 	return &IFT{
-		routeID:        route.ID,
-		source:         sourceEndpoint,
-		destination:    destinationEndpoint,
-		sender:         deployer.account,
-		sourceIFT:      sourceIFT,
-		destIFT:        destinationIFT,
-		sourceRouter:   sourceApps.ICS26Router,
-		destRouter:     destinationApps.ICS26Router,
-		sourceClientID: clients.SourceClientID,
-		batcher:        batcher,
+		sourceRoute: r.sourceRoute,
+		destination: r.destination,
+		sourceIFT:   sourceIFT,
+		destIFT:     destinationIFT,
+		destRouter:  r.destinationApps.ICS26Router,
+		batcher:     batcher,
 	}
 }
 
@@ -128,47 +111,71 @@ func NewGMP(
 	route Route,
 ) *GMP {
 	t.Helper()
-	source, destination, sourceApps, destinationApps, clients := resolveDeploymentRoute(t, env, deployment, route)
-	sourceEndpoint, destinationEndpoint, err := resolveRouteEndpoints(route.ID, source, destination)
-	require.NoError(t, err, "e2etest: resolve endpoints for GMP on route %q", route.ID)
+	r := resolveAppRoute(t, env, deployment, route, sender.account)
 	bound := mustBinding(counter.NewCounterTransactor(common.Address{}, nil))
 	defaultCall, err := calldata(bound.Increment)
 	require.NoError(t, err, "e2etest: pack Counter.increment()")
 	return &GMP{
-		routeID:        route.ID,
-		source:         sourceEndpoint,
-		destination:    destinationEndpoint,
-		sender:         sender.account,
-		sourceGMP:      sourceApps.ICS27GMP,
-		sourceRouter:   sourceApps.ICS26Router,
-		counter:        destinationApps.Counter,
-		sourceClientID: clients.SourceClientID,
-		destClientID:   clients.DestClientID,
-		destGMP:        destinationApps.ICS27GMP,
-		destToken:      destinationApps.Token,
-		defaultCall:    defaultCall,
+		sourceRoute:  r.sourceRoute,
+		destination:  r.destination,
+		sourceGMP:    r.sourceApps.ICS27GMP,
+		counter:      r.destinationApps.Counter,
+		destClientID: r.destClientID,
+		destGMP:      r.destinationApps.ICS27GMP,
+		destToken:    r.destinationApps.Token,
+		defaultCall:  defaultCall,
 	}
 }
 
-func resolveDeploymentRoute(
+// appRoute is a route resolved against a deployment for the signer an
+// application sends from.
+type appRoute struct {
+	sourceRoute
+	destination     endpoint
+	sourceApps      ChainDeployment
+	destinationApps ChainDeployment
+	destClientID    string
+}
+
+func resolveAppRoute(
 	t testing.TB,
 	env *environment.Environment,
 	deployment *Deployment,
 	route Route,
-) (*environment.Chain, *environment.Chain, ChainDeployment, ChainDeployment, RouteClients) {
+	sender evm.Account,
+) appRoute {
 	t.Helper()
 	require.NotNil(t, env, "e2etest: Environment is required")
 	require.NotNil(t, deployment, "e2etest: deployment is required")
 
-	source, err := env.Chain(route.Source)
-	require.NoError(t, err, "e2etest: resolve source Chain %q", route.Source)
-	destination, err := env.Chain(route.Destination)
-	require.NoError(t, err, "e2etest: resolve destination Chain %q", route.Destination)
-	sourceDeployment, ok := deployment.Chain(route.Source)
+	source := resolveEndpoint(t, env, route.Source)
+	destination := resolveEndpoint(t, env, route.Destination)
+	sourceApps, ok := deployment.Chain(route.Source)
 	require.True(t, ok, "e2etest: deployment has no source Chain %q", route.Source)
-	destinationDeployment, ok := deployment.Chain(route.Destination)
+	destinationApps, ok := deployment.Chain(route.Destination)
 	require.True(t, ok, "e2etest: deployment has no destination Chain %q", route.Destination)
 	clients, ok := deployment.RouteClients(route.ID)
 	require.True(t, ok, "e2etest: deployment has no route %q", route.ID)
-	return source, destination, sourceDeployment, destinationDeployment, clients
+	return appRoute{
+		sourceRoute: sourceRoute{
+			routeID:        route.ID,
+			source:         source,
+			sender:         sender,
+			sourceRouter:   sourceApps.ICS26Router,
+			sourceClientID: clients.SourceClientID,
+		},
+		destination:     destination,
+		sourceApps:      sourceApps,
+		destinationApps: destinationApps,
+		destClientID:    clients.DestClientID,
+	}
+}
+
+func resolveEndpoint(t testing.TB, env *environment.Environment, id environment.ChainID) endpoint {
+	t.Helper()
+	chain, err := env.Chain(id)
+	require.NoError(t, err, "e2etest: resolve Chain %q", id)
+	client, err := chain.EVM()
+	require.NoError(t, err, "e2etest: EVM client for Chain %q", id)
+	return endpoint{chain: chain, evm: client}
 }

@@ -3,11 +3,13 @@
 package e2etest
 
 import (
-	"errors"
 	"fmt"
+	"slices"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -30,84 +32,60 @@ func (p PacketTx) String() string {
 	return fmt.Sprintf("%s-%d", p.RouteID, p.Sequence)
 }
 
+// ID identifies the packet among all packets the source Chain sends.
+func (p PacketTx) ID() PacketID {
+	return PacketID{SourceClientID: p.SourceClientID, Sequence: p.Sequence}
+}
+
+// emittedBy checks that ids, read from txHash's events of the given kind,
+// include this packet.
+func (p PacketTx) emittedBy(ids []PacketID, event, txHash string) error {
+	if !slices.Contains(ids, p.ID()) {
+		return fmt.Errorf("e2etest: transaction %s emitted no %s event for packet %s", txHash, event, p.reference())
+	}
+	return nil
+}
+
 func (p PacketTx) reference() string {
 	return fmt.Sprintf("route %q sequence %d", p.RouteID, p.Sequence)
 }
 
-// sendResult is what every application send produces: the locator of the packet
-// it emitted and the source transaction receipt that emitted it. The
-// application send types embed it so they all expose the same handles.
-type sendResult struct {
-	packetTx PacketTx
-	receipt  *types.Receipt
+// PacketID identifies a packet on its source Chain: a sequence is only unique
+// per source client.
+type PacketID struct {
+	SourceClientID string
+	Sequence       uint64
 }
 
-// newSendResult pairs a source transaction receipt with one packet it emitted.
-func newSendResult(
-	routeID RouteID,
-	source endpoint,
-	sourceClientID string,
-	receipt *types.Receipt,
-	sequence uint64,
-) sendResult {
-	return sendResult{
-		packetTx: PacketTx{
-			RouteID:           routeID,
-			Source:            source.chain.ID(),
-			SourceClientID:    sourceClientID,
-			SourceTxHash:      receipt.TxHash.Hex(),
-			SourceBlockNumber: receipt.BlockNumber.Uint64(),
-			Sequence:          sequence,
-		},
-		receipt: receipt,
-	}
+// sendResult is what every application send produces: the locator of the packet
+// it emitted and the packet itself. The application send types embed it so they
+// all expose the same handles.
+type sendResult struct {
+	packetTx PacketTx
+	packet   ics26router.IICS26RouterMsgsPacket
+}
+
+// sourceRoute is the source side every application sends from: the signer on
+// the source Chain and the router and client its packets leave through.
+type sourceRoute struct {
+	routeID        RouteID
+	source         endpoint
+	sender         evm.Account
+	sourceRouter   common.Address
+	sourceClientID string
 }
 
 // PacketTx locates the packet this send emitted.
 func (s sendResult) PacketTx() PacketTx { return s.packetTx }
 
+// Packet is the packet this send emitted, as the source router's SendPacket
+// event carried it.
+func (s sendResult) Packet() ics26router.IICS26RouterMsgsPacket { return s.packet }
+
 // TxHash is the hex hash of the source transaction that emitted the packet.
 func (s sendResult) TxHash() string { return s.packetTx.SourceTxHash }
-
-// Receipt is the source transaction receipt, for assertions the typed helpers
-// do not cover.
-func (s sendResult) Receipt() *types.Receipt { return s.receipt }
 
 type endpoint struct {
 	chain *environment.Chain
 	evm   *environment.EVM
-}
-
-func resolveRouteEndpoints(
-	routeID RouteID,
-	source, destination *environment.Chain,
-) (endpoint, endpoint, error) {
-	if routeID == "" {
-		return endpoint{}, endpoint{}, errors.New("e2etest: route id is required")
-	}
-	if source == nil {
-		return endpoint{}, endpoint{}, errors.New("e2etest: source Chain is required")
-	}
-	if destination == nil {
-		return endpoint{}, endpoint{}, errors.New("e2etest: destination Chain is required")
-	}
-	if source.ID() == destination.ID() {
-		return endpoint{}, endpoint{}, fmt.Errorf(
-			"e2etest: route %q must connect different Chains",
-			routeID,
-		)
-	}
-	sourceEVM, err := source.EVM()
-	if err != nil {
-		return endpoint{}, endpoint{}, fmt.Errorf("e2etest: source Chain %q: %w", source.ID(), err)
-	}
-	destinationEVM, err := destination.EVM()
-	if err != nil {
-		return endpoint{}, endpoint{}, fmt.Errorf(
-			"e2etest: destination Chain %q: %w",
-			destination.ID(),
-			err,
-		)
-	}
-	return endpoint{chain: source, evm: sourceEVM}, endpoint{chain: destination, evm: destinationEVM}, nil
 }

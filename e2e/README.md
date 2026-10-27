@@ -10,7 +10,7 @@ This repository-level surface hosts one black-box acceptance package. Its tests 
 
 The root package covers ICS20 transfer, ICS27 GMP, IFT (burn/mint on top of GMP) relay behavior, timeout refunds, error acknowledgements, pending-packet status, Relayer and node recovery, attestor quorum loss and recovery, cross-route handling, and relaying through an attached RPC that `Environment` does not own. These are all acceptance criteria and run together by default.
 
-Besu light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestTransferBesuIBFT2_AutoRelay` repeats the transfer on IBFT 2.0 chains. `TestDeployBesuQBFTIBFT2Connection` deploys a besu connection between a QBFT and an IBFT 2.0 chain with `ibc deploy client besu` alone, so each client detects a different consensus, and relays an IFT transfer over it; `TestDeployMixedBesuQBFTAttestationConnection` does the same for the production shape, a besu client on one end and an attestation client on the other, relaying a round trip so each client type proves both a receive and an acknowledgement. `TestTransferBesuQBFT_ValidatorTurnover` and `TestTransferBesuIBFT2_ValidatorTurnover` run the source chain on two nodes and, before any packet is relayed, vote the second node in as a validator and the first out, so the relayer must step the destination's client across both set changes to relay a transfer. Their clients are deployed at a trust level of one half through `NewBesuClient.TrustLevel`, since at the default two thirds the client cannot follow the removal. `ManagedBesu.Nodes` adds the follower nodes and `Chain.Validators` votes through them. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
+Besu light clients are covered through a two-chain Besu mesh, which requires the Besu provider and therefore skips in fast mode. `TestTransferBesuQBFT_AutoRelay` exercises client updates from sealed headers, membership proofs and acknowledgement; `TestTransferBesuQBFT_TimeoutRefund` exercises the non-membership proof of a timeout, letting the packet expire in real time; `TestTransferBesuIBFT2_AutoRelay` repeats the transfer on IBFT 2.0 chains. `TestDeployBesuQBFTIBFT2Connection` deploys a besu connection between a QBFT and an IBFT 2.0 chain with `ibc deploy client besu` alone, so each client detects a different consensus, and relays an IFT transfer over it; `TestDeployMixedBesuQBFTAttestationConnection` does the same for the production shape, a besu client on one end and an attestation client on the other, relaying a round trip so each client type proves both a receive and an acknowledgement. `TestTransferBesuQBFT_ValidatorTurnover` and `TestTransferBesuIBFT2_ValidatorTurnover` run the source chain with three follower nodes and, before any packet is relayed, vote the followers in as validators and three of the four genesis validators out, so the relayer must step the destination's client across the set changes to relay a transfer. Their clients are deployed at a trust level of one half through `NewBesuClient.TrustLevel`, since at the default two thirds the client cannot follow the removals. `ManagedBesu.Followers` adds the follower nodes and `Chain.Validators` votes through them. `TestBesuQBFTClient_DoubleSignFreeze` and `TestBesuQBFTClient_TimeNonMonotonicityFreeze` submit headers sealed by a quorum of the source validators as misbehaviour evidence, one pair for each kind the client detects, and require the frozen client to reject updates and leave the next transfer pending. Client expiry is not exercised end-to-end: it would need the Besu clock moved past the trusting period.
 
 ## Running the acceptance tests
 
@@ -62,7 +62,7 @@ The setup sequence is deliberately explicit:
 ```go
 func TestTransfer_AutoRelay(t *testing.T) {
     t.Parallel()
-    spec, runtime := attestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
+    spec, runtime := e2etest.AttestedMesh(e2etest.EVMChains(t, e2etest.EVMRequirements{}, e2etest.ChainA, e2etest.ChainB))
     env := e2etest.Start(t, spec, runtime)
     sender := e2etest.NewSigner(t)
     relayerSigner := e2etest.NewSigner(t)
@@ -92,7 +92,7 @@ Declare capabilities instead of naming a provider. For example, a controlled-min
 ```go
 chains := e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true},
     e2etest.ChainA, e2etest.ChainB)
-spec, runtime := attestedMesh(chains)
+spec, runtime := e2etest.AttestedMesh(chains)
 env := e2etest.Start(t, spec, runtime)
 
 chainB, err := env.Chain(e2etest.ChainB)
@@ -113,6 +113,12 @@ interval-only, so a transaction may wait up to one second for inclusion.
 `Environment` owns and cleans up only managed resources. An attached EVM remains caller-owned even
 when the harness can connect to it, and connectivity does not grant mining or node-lifecycle control.
 
+Managed Besu runs four validators on a Docker network of its own, so a block needs three of the
+four seals; the first validator serves RPC. `ManagedBesu.Followers` adds nodes that sync from
+genesis and can be voted in. `Chain.Validators` votes, and its `Keys` returns the genesis
+validators' keys, which lets a test seal headers the chain never produced, such as misbehaviour
+evidence.
+
 Bootstrapping a Besu light client reads validators from the sealed block header through
 the `ETH` RPC API; it does not require the `QBFT` or `IBFT` RPC API.
 
@@ -130,9 +136,28 @@ make -C e2e check-matrix
 Regenerate the matrix after changing test requirements or topology. The check compares generated
 output without modifying the committed file.
 
+## Besu light-client fixtures
+
+`cli/besu/besutest/testdata/{qbft,ibft2}.json` are the fixtures the Besu light-client tests read,
+here and in ibc-contracts' `ibc-solidity/test/besu-bft`. The harness generates them, so they come
+from the Besu image it boots (`DefaultDockerImage` in `chain/evm/besu`, or `BESU_DOCKER_IMAGE`):
+
+```sh
+make -C e2e generate-besu-fixtures
+make -C e2e generate-besu-fixtures IBC_CONTRACTS=<ibc-contracts checkout>  # also copies them there
+```
+
+`TestGenerateBesuFixtures`, in `besufixtures/` outside the acceptance package and matrix, boots
+two chains per consensus, sends a transfer and captures from the sending chain the trusted
+header two blocks below the send, an adjacent and a non-adjacent update to the send, and
+membership and non-membership proofs at the send. It reseals headers with the validator keys
+for the updates the client must reject: the send's header sealed short of quorum, the send's
+header with another state root, and the next header with validators mostly new. It skips
+unless `BESU_FIXTURES_DIR` names the directory to write to.
+
 ## Extending the graph
 
-`attestedMesh` (fixtures_test.go) builds a fully connected attested mesh over the given chains; `besuMesh` builds the same graph over Besu chains with Besu Clients and no Attestors; each Client detects its counterparty's consensus, and `besuChains` sets each chain's consensus. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
+`e2etest.AttestedMesh` builds a fully connected attested mesh over the given chains; `e2etest.BesuMesh` builds the same graph over Besu chains with Besu Clients and no Attestors; each Client detects its counterparty's consensus, and `e2etest.BesuChains` sets each chain's consensus. For sparse graphs or custom attestor topologies (see `TestIFTTransfer_MultiAttestorQuorum`), write the `environment.Spec` and matching `environment.Runtime` literals yourself, with every referenced endpoint and authority. Use `e2etest.RuntimeWithProtocolDeployer` only when the spec references `e2etest.ProtocolAuthorityID`, then pass both to `e2etest.Start`. Application deployment and temporary relay policy stay in the test setup that uses them. The test ERC20 and Counter sources live in `internal/harness/environment/solidityibc/contracts`, alongside the pinned solidity-ibc-eureka contracts compiled for the harness bindings.
 
 ## Load Testing
 

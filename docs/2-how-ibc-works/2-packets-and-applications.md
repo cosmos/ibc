@@ -77,7 +77,7 @@ The application is responsible for supplying the source client, the timeout, and
 
 An application is registered with the IBC router on its chain, under a port. Each port identifies one application, and ports are how the router knows which application a packet is for and how to route it.
 
-A port is either the application's own address as a hex string, which anyone may claim, or a readable name like GMP's `gmpport`, which the [access manager](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) gates. Once registered, the port identifier remains with that application permanently.
+A port is either the application's own address as a hex string or a readable name like GMP's `gmpport`. The [access manager](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#the-access-manager-and-its-roles) decides who may register each kind. Once registered, the port identifier remains with that application permanently.
 
 Every payload names two ports:
 - `destPort` says which application the payload is for.

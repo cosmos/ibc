@@ -381,49 +381,52 @@ func TestSignerConfigTLS(t *testing.T) {
 	})
 }
 
-func TestRemoteParamsValidate(t *testing.T) {
+func TestRemoteProverConfigValidate(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := certs.WriteSelfSigned(t, dir, "test")
 
 	for _, tt := range []struct {
 		name        string
-		params      RemoteParams
+		prover      RemoteProverConfig
 		errContains string
 	}{
 		{
 			name:   "https url",
-			params: RemoteParams{URL: "https://prover.example.com:9090"},
+			prover: RemoteProverConfig{URL: "https://prover.example.com:9090"},
 		},
 		{
 			name:   "http url",
-			params: RemoteParams{URL: "http://prover.example.com:9090"},
+			prover: RemoteProverConfig{URL: "http://prover.example.com:9090"},
 		},
 		{
 			name:   "bare host:port",
-			params: RemoteParams{URL: "prover.example.com:9090"},
+			prover: RemoteProverConfig{URL: "prover.example.com:9090"},
 		},
 		{
 			name: "https url with tls",
-			params: RemoteParams{
+			prover: RemoteProverConfig{
 				URL: "https://prover.example.com:9090",
 				TLS: &TLSClientConfig{CertFile: certFile, KeyFile: keyFile},
 			},
 		},
 		{
 			name:   "uppercase https with tls",
-			params: RemoteParams{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
+			prover: RemoteProverConfig{URL: "HTTPS://prover.example.com:9090", TLS: &TLSClientConfig{}},
+		},
+		{
+			name:        "non-http scheme",
+			prover:      RemoteProverConfig{URL: "grpc://prover.example.com:9090"},
+			errContains: "url: must be a bare host:port or an http(s):// URL",
 		},
 		{
 			name:        "empty url",
-			params:      RemoteParams{},
+			prover:      RemoteProverConfig{},
 			errContains: "url: required",
 		},
 		{
-			// tls is a new field, so requiring https rejects nothing that
-			// previously loaded, and catches a block that would otherwise be
-			// read and then silently ignored.
+			// Its settings would be read and then silently ignored.
 			name: "tls block with a plaintext url",
-			params: RemoteParams{
+			prover: RemoteProverConfig{
 				URL: "http://prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
@@ -431,7 +434,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 		},
 		{
 			name: "tls block with a bare host:port",
-			params: RemoteParams{
+			prover: RemoteProverConfig{
 				URL: "prover.example.com:9090",
 				TLS: &TLSClientConfig{},
 			},
@@ -439,45 +442,45 @@ func TestRemoteParamsValidate(t *testing.T) {
 		},
 		{
 			name:        "query on a url",
-			params:      RemoteParams{URL: "https://prover.example.com/grpc?token=abc"},
+			prover:      RemoteProverConfig{URL: "https://prover.example.com/grpc?token=abc"},
 			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:        "fragment on a url",
-			params:      RemoteParams{URL: "http://prover.example.com#section"},
+			prover:      RemoteProverConfig{URL: "http://prover.example.com#section"},
 			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:   "path on a url",
-			params: RemoteParams{URL: "https://prover.example.com/grpc"},
+			prover: RemoteProverConfig{URL: "https://prover.example.com/grpc"},
 		},
 		{
 			name:   "userinfo on a url",
-			params: RemoteParams{URL: "https://user:secret@prover.example.com"},
+			prover: RemoteProverConfig{URL: "https://user:secret@prover.example.com"},
 		},
 		{
 			name:        "url without a host",
-			params:      RemoteParams{URL: "https://"},
+			prover:      RemoteProverConfig{URL: "https://"},
 			errContains: "url: must include a host",
 		},
 		{
 			name:        "bare host:port with a bad port",
-			params:      RemoteParams{URL: "prover.example.com:abc"},
+			prover:      RemoteProverConfig{URL: "prover.example.com:abc"},
 			errContains: "url: invalid URL",
 		},
 		{
 			name:        "bare host:port with a query",
-			params:      RemoteParams{URL: "prover.example.com:9090?token=abc"},
+			prover:      RemoteProverConfig{URL: "prover.example.com:9090?token=abc"},
 			errContains: "url: must not have a query or fragment",
 		},
 		{
 			name:        "url with a bad port",
-			params:      RemoteParams{URL: "https://prover.example.com:abc"},
+			prover:      RemoteProverConfig{URL: "https://prover.example.com:abc"},
 			errContains: "url: invalid URL",
 		},
 		{
 			name: "bad tls block on an https url",
-			params: RemoteParams{
+			prover: RemoteProverConfig{
 				URL: "https://prover.example.com:9090",
 				TLS: &TLSClientConfig{CertFile: certFile},
 			},
@@ -485,7 +488,7 @@ func TestRemoteParamsValidate(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.params.Validate()
+			err := tt.prover.Validate()
 			if tt.errContains == "" {
 				require.NoError(t, err)
 				return
@@ -506,7 +509,7 @@ func TestEndpointURL(t *testing.T) {
 		"https://svc.example.com/grpc": "https://svc.example.com/grpc",
 	} {
 		require.Equal(t, want, AttestorConfig{GRPC: addr}.EndpointURL(), addr)
-		require.Equal(t, want, RemoteParams{URL: addr}.EndpointURL(), addr)
+		require.Equal(t, want, RemoteProverConfig{URL: addr}.EndpointURL(), addr)
 	}
 }
 

@@ -799,13 +799,17 @@ def _():
             home = tempfile.mkdtemp(prefix="refgen-req-")
             try:
                 shutil.copyfile(fixture, os.path.join(home, "ibc.yml"))
-                # A cell reading "required to run" is a claim about the
-                # runnable targets, not about the file being well formed, so
-                # ask the same question the cell answers. Deliberately its own
-                # probing rather than the generator's: two paths to one answer
-                # is the point, and calling refgen here would test nothing.
-                targets = ([[]] if "to run" not in texts.get(key, "")
-                           else [["relayer"], ["attestor"]])
+                # A cell reading "required to run", "to relay" or "to attest"
+                # is a claim about the runnable targets, not about the file
+                # being well formed, so ask the same question the cell
+                # answers. Deliberately its own probing rather than the
+                # generator's: two paths to one answer is the point, and
+                # calling refgen here would test nothing.
+                text = texts.get(key, "")
+                targets = ([["relayer"], ["attestor"]] if "to run" in text
+                           else [["relayer"]] if "to relay" in text
+                           else [["attestor"]] if "to attest" in text
+                           else [[]])
                 complained = False
                 for t in targets:
                     r = subprocess.run(
@@ -1083,7 +1087,7 @@ def _():
 		return c.validateRPC()
 """)
         box.edit("cli/internal/config/config.go",
-                 "func (c EVMChainConfig) Validate(validateICS26Router bool) error {",
+                 "func (c EVMChainConfig) Validate(validateRouterAddress bool) error {",
                  """func (c EVMChainConfig) validateRPC() error {
 	if c.RPC == "" {
 		return errPathf("rpc", "required")
@@ -1091,9 +1095,19 @@ def _():
 	return nil
 }
 
-func (c EVMChainConfig) Validate(validateICS26Router bool) error {""")
+func (c EVMChainConfig) Validate(validateRouterAddress bool) error {""")
         assert _cell(box, "config:chains", "evm.rpc") == "**required**", \
             _cell(box, "config:chains", "evm.rpc")
+
+
+@case("a key required inside an optional block names the block")
+def _():
+    with Sandbox() as box:
+        # A bare `required` told readers every client end needs a remoteProver.
+        # `evm.rpc`, above, stays bare: its block cannot be left out.
+        key = "connections[].clientA.remoteProver.url, connections[].clientB.remoteProver.url"
+        assert _cell(box, "config:relayer:connections", key) == "**required** in `remoteProver`", \
+            _cell(box, "config:relayer:connections", key)
 
 
 @case("a new required key stops the page until a fixture carries it")
