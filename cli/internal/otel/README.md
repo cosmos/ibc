@@ -110,9 +110,9 @@ past the packet timeout, with a 15m source-finality guard) and can move to confi
 
 `relay_packet_execution_total` records receipt observations, including transactions discovered from
 other relayers. A matching WriteAcknowledgement, AckPacket, or TimeoutPacket event counts as `executed`.
-An application-error acknowledgement still counts as an executed recv. A successful receipt missing
+An application-error or undecodable acknowledgement still counts as an executed recv. A successful receipt missing
 the packet's event counts as `missing_event`; a failed receipt counts as `tx_reverted`. Pending
-receipts, RPC/decoding errors, and simulations add no execution result. These are observations of
+receipts, RPC errors, and simulations add no execution result. These are observations of
 mined receipts, not finality guarantees. A result is recorded once the processor has persisted it,
 so a failed storage write followed by reprocessing does not count it twice. Restarts can allow
 recounting; the counters are operational telemetry, not a durable transaction ledger.
