@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
@@ -72,11 +71,10 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 			return nil, fmt.Errorf("deployer key: %w", err)
 		}
 	}
-	conn, err := evmrpc.Dial(ctx, opts.RPCURL, evmrpc.RetryTransport{})
+	client, err := evmrpc.Dial(ctx, opts.RPCURL)
 	if err != nil {
 		return nil, fmt.Errorf("dial %s: %w", opts.RPCURL, err)
 	}
-	client := ethclient.NewClient(conn)
 	chainID, err := client.ChainID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query chain id: %w", err)

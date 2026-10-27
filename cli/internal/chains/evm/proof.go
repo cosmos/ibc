@@ -53,10 +53,6 @@ func (c *Client) GetRouterProof(ctx context.Context, height uint64, slots []comm
 	return RouterProof{AccountProof: accountProof, StorageProofs: storageProofs}, nil
 }
 
-func newRPCClient(client *rpc.Client) *rpcClient {
-	return &rpcClient{Client: ethclient.NewClient(client)}
-}
-
 // GetProof calls eth_getProof directly: go-ethereum only offers it through
 // gethclient, which imports most of go-ethereum's node internals. Storage
 // proofs are matched to keys by the key each carries, since nodes need not

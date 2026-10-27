@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evmrpc dials EVM JSON-RPC nodes, retrying reads that a node fails
-// transiently.
+// Package evmrpc dials EVM JSON-RPC nodes, retrying standard reads that a node
+// fails transiently. Metrics above the client see each call's final outcome
+// and its latency including retries.
 package evmrpc
 
 import (
@@ -11,58 +12,56 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const (
-	// DefaultAttempts is how many times RetryTransport sends a read.
-	DefaultAttempts = 8
-	// DefaultDelay is how long RetryTransport waits between attempts.
-	DefaultDelay = 250 * time.Millisecond
+	attempts = 8
+	delay    = 250 * time.Millisecond
 
-	// Nodes such as Besu and Anvil answer a read with a bare Internal error,
-	// without revert data, when it fails transiently.
+	// Anvil and Besu answer transiently failed reads with an Internal error.
 	jsonRPCInternalError = -32603
-
-	// Callers sign transactions locally, so this is the only write they send.
-	// A resend after the node accepted the transaction would fail as already
-	// known, so it is sent once.
-	sendRawTransaction = "eth_sendRawTransaction"
 )
 
-// Dial dials url with HTTP requests sent through t. Websocket and IPC URLs
-// bypass t.
-func Dial(ctx context.Context, url string, t RetryTransport) (*rpc.Client, error) {
-	return rpc.DialOptions(ctx, url, rpc.WithHTTPClient(&http.Client{Transport: t}))
+// pooledTransport keeps connections to each node open for reuse. go-ethereum's
+// default HTTP client keeps two idle per host, so concurrent calls beyond two
+// each open and close a connection, and under load the closed connections
+// hold every local port in TIME_WAIT.
+var pooledTransport = func() *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 0
+	transport.MaxIdleConnsPerHost = 256
+	return transport
+}()
+
+// Dial dials url. Over HTTP, reads are retried; websocket and IPC URLs are not.
+func Dial(ctx context.Context, url string) (*ethclient.Client, error) {
+	return dial(ctx, url, retryTransport{base: pooledTransport, delay: delay})
 }
 
-// RetryTransport retries reads that a node fails transiently: a JSON-RPC
-// Internal error, or no block for "latest". Writes and batches are sent once.
-// Zero fields take their defaults: http.DefaultTransport, DefaultDelay and
-// DefaultAttempts.
-type RetryTransport struct {
-	Base     http.RoundTripper
-	Delay    time.Duration
-	Attempts int
+func dial(ctx context.Context, url string, transport http.RoundTripper) (*ethclient.Client, error) {
+	client, err := rpc.DialOptions(ctx, url, rpc.WithHTTPClient(&http.Client{Transport: transport}))
+	if err != nil {
+		return nil, err
+	}
+	return ethclient.NewClient(client), nil
 }
 
-// RoundTrip implements http.RoundTripper.
-func (t RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	base, delay, attempts := t.Base, t.Delay, t.Attempts
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	if delay <= 0 {
-		delay = DefaultDelay
-	}
-	if attempts <= 0 {
-		attempts = DefaultAttempts
-	}
+// retryTransport retries standard reads: eth_ methods other than eth_send*.
+// Writes, vendor methods such as anvil_mine that a retry could apply twice,
+// and batches are sent once.
+type retryTransport struct {
+	base  http.RoundTripper
+	delay time.Duration
+}
 
+func (t retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Body == nil {
-		return base.RoundTrip(req)
+		return t.base.RoundTrip(req)
 	}
 	body, err := io.ReadAll(req.Body)
 	_ = req.Body.Close()
@@ -70,16 +69,15 @@ func (t RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("evm rpc: read request: %w", err)
 	}
 	var call struct {
-		Method string            `json:"method"`
-		Params []json.RawMessage `json:"params"`
+		Method string `json:"method"`
 	}
 	// Batches fail to decode into a single call and are sent once.
-	if json.Unmarshal(body, &call) != nil || call.Method == sendRawTransaction {
-		return base.RoundTrip(withBody(req, body))
+	if json.Unmarshal(body, &call) != nil || !isRead(call.Method) {
+		return t.base.RoundTrip(withBody(req, body))
 	}
 
 	for attempt := 1; ; attempt++ {
-		resp, err := base.RoundTrip(withBody(req, body))
+		resp, err := t.base.RoundTrip(withBody(req, body))
 		if err != nil || resp.StatusCode != http.StatusOK || attempt == attempts {
 			return resp, err
 		}
@@ -89,34 +87,28 @@ func (t RetryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("evm rpc: read %s response: %w", call.Method, err)
 		}
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
-		if !transientRead(call.Method, call.Params, respBody) {
+		if !isInternalError(respBody) {
 			return resp, nil
 		}
 		select {
 		case <-req.Context().Done():
 			return nil, fmt.Errorf("evm rpc: %s retry after transient reply: %w", call.Method, req.Context().Err())
-		case <-time.After(delay):
+		case <-time.After(t.delay):
 		}
 	}
 }
 
-func transientRead(method string, params []json.RawMessage, respBody []byte) bool {
+func isRead(method string) bool {
+	return strings.HasPrefix(method, "eth_") && !strings.HasPrefix(method, "eth_send")
+}
+
+func isInternalError(respBody []byte) bool {
 	var reply struct {
-		Result json.RawMessage `json:"result"`
-		Error  *struct {
+		Error *struct {
 			Code int `json:"code"`
 		} `json:"error"`
 	}
-	if json.Unmarshal(respBody, &reply) != nil {
-		return false
-	}
-	if reply.Error != nil {
-		return reply.Error.Code == jsonRPCInternalError
-	}
-	// The latest block always exists, so null means the node has not finished
-	// importing it.
-	return method == "eth_getBlockByNumber" && len(params) > 0 &&
-		string(params[0]) == `"latest"` && string(reply.Result) == "null"
+	return json.Unmarshal(respBody, &reply) == nil && reply.Error != nil && reply.Error.Code == jsonRPCInternalError
 }
 
 func withBody(req *http.Request, body []byte) *http.Request {

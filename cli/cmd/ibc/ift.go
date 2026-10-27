@@ -187,11 +187,10 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	conn, err := evmrpc.Dial(cmd.Context(), chain.EVM.RPC, evmrpc.RetryTransport{})
+	backend, err := evmrpc.Dial(cmd.Context(), chain.EVM.RPC)
 	if err != nil {
 		return errors.Wrapf(err, "dial %s", chain.EVM.RPC)
 	}
-	backend := ethclient.NewClient(conn)
 
 	if !common.IsHexAddress(flagQueryIFTAddress) {
 		return errors.Errorf("invalid IFT address %q", flagQueryIFTAddress)
@@ -256,11 +255,10 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 		return nil, nil, nil, config.Config{}, errors.Wrap(err, "signer key")
 	}
 
-	conn, err := evmrpc.Dial(ctx, chain.EVM.RPC, evmrpc.RetryTransport{})
+	backend, err := evmrpc.Dial(ctx, chain.EVM.RPC)
 	if err != nil {
 		return nil, nil, nil, config.Config{}, errors.Wrapf(err, "dial %s", chain.EVM.RPC)
 	}
-	backend := ethclient.NewClient(conn)
 
 	chainID, err := backend.ChainID(ctx)
 	if err != nil {

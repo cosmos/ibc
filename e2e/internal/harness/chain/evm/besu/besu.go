@@ -81,8 +81,6 @@ type Spec struct {
 	// Followers is how many nodes beyond the validators run the chain. They
 	// sync from genesis and can be voted in.
 	Followers int
-	// RPCRetryDelay spaces retried RPC reads; zero uses evmrpc.DefaultDelay.
-	RPCRetryDelay time.Duration
 }
 
 type Chain struct {
@@ -302,11 +300,10 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 		return nil, fmt.Errorf("resolve besu websocket endpoint: %w", err)
 	}
 
-	conn, err := evmrpc.Dial(ctx, bc.RPCURL(), evmrpc.RetryTransport{Delay: spec.RPCRetryDelay})
+	client, err := evmrpc.Dial(ctx, bc.RPCURL())
 	if err != nil {
 		return nil, fmt.Errorf("dial besu chain %s: %w", spec.ID, err)
 	}
-	client := ethclient.NewClient(conn)
 	if readyErr := waitBesuReady(ctx, client, spec); readyErr != nil {
 		client.Close()
 		return nil, besuStartupError(bc, readyErr)

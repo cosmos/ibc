@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,7 +74,11 @@ func clientWithProofAPI(t *testing.T, api *ethProofAPI) *Client {
 	t.Cleanup(srv.Stop)
 	require.NoError(t, srv.RegisterName("eth", api))
 
-	client, err := NewWithClient(chainIDEth, newRPCClient(rpc.DialInProc(srv)), routerAddress)
+	client, err := NewWithClient(
+		chainIDEth,
+		&rpcClient{Client: ethclient.NewClient(rpc.DialInProc(srv))},
+		routerAddress,
+	)
 	require.NoError(t, err)
 
 	return client
