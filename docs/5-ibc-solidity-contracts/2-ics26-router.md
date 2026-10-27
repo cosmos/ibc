@@ -11,7 +11,7 @@ Source: [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-
 
 The router owns the application registry, the light client registry, and the commitment store. It drives the whole packet lifecycle of send, receive, acknowledge, and timeout. Registered applications call `sendPacket`, and relayers call `recvPacket`, `ackPacket`, `timeoutPacket`, and `updateClient`. Those relayer calls are gated, and one external OpenZeppelin [`AccessManager`](6-permissions-and-upgrades.md#the-access-manager-and-its-roles) decides who passes. The same manager decides who may [pause registration](#pausing-registration), which never stops the packet lifecycle. The router calls back into applications through `IIBCApp`, and it hands every cross-chain claim to a light client through `ILightClient`.
 
-Interacts with: [AttestationLightClient](5-attestation-light-client.md), [ICS27GMP and accounts](3-ics27-gmp-and-accounts.md), [IFT contracts](4-ift-contracts.md), and [Permissions and upgrades](6-permissions-and-upgrades.md).
+Interacts with: [AttestationLightClient](5-attestation-light-client.md), [BesuLightClient](7-besu-light-client.md), [ICS27GMP and accounts](3-ics27-gmp-and-accounts.md), [IFT contracts](4-ift-contracts.md), and [Permissions and upgrades](6-permissions-and-upgrades.md).
 
 ## Contracts on this page
 

@@ -28,6 +28,7 @@ flowchart TB
     MC["IBCMulticall"]
     R["ICS26Router<br/>client registry + commitment store"]
     ALC["AttestationLightClient"]
+    BLC["BesuLightClient"]
 
     IFT -- "sendCall" --> GMP
     GMP -- "executes from" --> ACC
@@ -35,6 +36,7 @@ flowchart TB
     REL -- "multicall" --> MC
     MC -- "updateClient, recvPacket,<br/>ackPacket, timeoutPacket" --> R
     R -- "updateClient, verify" --> ALC
+    R -- "updateClient, verify" --> BLC
 ```
 
 ## IBC-solidity contracts
@@ -57,11 +59,12 @@ Documented in [core](2-ics26-router.md).
 
 ### Light clients
 
-AttestationLightClient is documented in [attestation light client](5-attestation-light-client.md).
+AttestationLightClient is documented in [attestation light client](5-attestation-light-client.md), and BesuLightClient in [Besu light client](7-besu-light-client.md).
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
 | AttestationLightClient | Deployed contract, one per counterparty | Light client that trusts an m-of-n attestor set's signatures over heights and packet commitments | [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol) |
+| BesuLightClient | Deployed contract, one per counterparty | Light client that verifies Besu QBFT and IBFT 2.0 headers signed by their validators, and storage proofs of the counterparty router | [BesuLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/besu/BesuLightClient.sol) |
 | SP1ICS07Tendermint | Deployed contract | Tendermint light client whose updates and proofs are verified as SP1 zero-knowledge proofs | [SP1ICS07Tendermint.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/sp1-ics07/SP1ICS07Tendermint.sol) |
 | ICS02PrecompileWrapper | Deployed contract, one per ibc-go client identifier it wraps | Adapter exposing a Cosmos EVM chain's ICS02 precompile through the light client interface | [ICS02PrecompileWrapper.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/ics02-wrapper/ICS02PrecompileWrapper.sol) |
 
