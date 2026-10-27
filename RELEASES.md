@@ -74,7 +74,7 @@ Add `--predicate-type https://spdx.dev/Document/v2.3` to check its SBOM attestat
 
 ### Container images
 
-The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. The release tag is pushed shortly before it is signed, so verify a release image rather than trusting the tag:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. The workflow pushes the index by digest, signs it, and only then tags it `<tag>`, so the release tag never points at an unsigned image. Verify a release image with:
 
 ```sh
 cosign verify ghcr.io/cosmos/ibc:<tag> \

@@ -309,13 +309,21 @@ jobs:
             digest=$(< "${RUNNER_TEMP}/image-digest/${platform}")
             sources+=("${IMAGE_NAME}@${digest}")
           done
+          # Pushed by digest only, so no tag points at the index until it is signed. --dry-run prints
+          # the index it would push; $(...) strips the trailing newline it adds.
+          index=$(docker buildx imagetools create --dry-run "${sources[@]}")
+          index_digest="sha256:$(printf '%s' "$index" | sha256sum | cut -d' ' -f1)"
           docker buildx imagetools create \
             --metadata-file "$metadata" \
-            --tag "${IMAGE_NAME}:${TAG}" \
+            --tag "${IMAGE_NAME}@${index_digest}" \
             "${sources[@]}"
-          docker buildx imagetools inspect "${IMAGE_NAME}:${TAG}"
-          # The digest of the index this step pushed, rather than whatever the tag points to now.
-          echo "digest=$(jq -r '."containerimage.descriptor".digest' "$metadata")" >> "$GITHUB_OUTPUT"
+          pushed=$(jq -r '."containerimage.descriptor".digest' "$metadata")
+          if [[ "$pushed" != "$index_digest" ]]; then
+            echo "::error::Pushed index ${pushed} does not match its dry run ${index_digest}"
+            exit 1
+          fi
+          docker buildx imagetools inspect "${IMAGE_NAME}@${pushed}"
+          echo "digest=${pushed}" >> "$GITHUB_OUTPUT"
       - name: Attest and sign image
         uses: ./.github/actions/attest-image
         with:
@@ -325,6 +333,20 @@ jobs:
           sign: "true"
           # Also signs the platform manifests referenced by the index.
           recursive: "true"
+      - name: Tag signed image
+        env:
+          DIGEST: ${{ steps.index.outputs.digest }}
+        run: |
+          # A single index source without annotations is pushed as is, so the release tag gets the
+          # signed digest. Checked with a dry run before the tag moves, since a re-encoded index
+          # would be unsigned.
+          index=$(docker buildx imagetools create --dry-run "${IMAGE_NAME}@${DIGEST}")
+          tagged="sha256:$(printf '%s' "$index" | sha256sum | cut -d' ' -f1)"
+          if [[ "$tagged" != "$DIGEST" ]]; then
+            echo "::error::Tagging would push ${tagged}, not the signed index ${DIGEST}"
+            exit 1
+          fi
+          docker buildx imagetools create --tag "${IMAGE_NAME}:${TAG}" "${IMAGE_NAME}@${DIGEST}"
 
   # Waits for publish-manifest as well, so a draft release always comes with a signed image.
   release:
