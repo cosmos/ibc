@@ -1,0 +1,128 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Attest image
+description: >-
+  Attests the build provenance of a pushed container image, optionally generates and attests its
+  SPDX SBOM, and optionally signs it with cosign, all by digest. Use it once per platform image
+  (with `sbom: true`) and once for a multi-platform index (with `sign: true` and
+  `recursive: true`), or once for a single-platform image with both. The job must already be
+  logged in to the registry, and needs `packages: write`, `id-token: write`,
+  `attestations: write` and `artifact-metadata: write`.
+
+inputs:
+  image:
+    description: Image name without tag or digest, e.g. `ghcr.io/cosmos/ibc`.
+    required: true
+  digest:
+    description: >-
+      Digest of the pushed image or index, e.g. `sha256:…`. Take it from the push itself (such as
+      the `digest` output of docker/build-push-action), not from looking up a tag afterwards,
+      which a concurrent push to the same tag can move.
+    required: true
+  sbom:
+    description: Generate and attest an SPDX SBOM of the image (`true` or `false`). Leave it off for an index, whose SBOMs belong to its platform images.
+    required: false
+    default: "true"
+  min-sbom-packages:
+    description: Fail if the image SBOM lists fewer packages than this. Set to 0 to disable.
+    required: false
+    default: "1"
+  sign:
+    description: Sign the image with cosign (`true` or `false`).
+    required: false
+    default: "false"
+  recursive:
+    description: Also sign the platform manifests an index refers to (`true` or `false`).
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Check inputs
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        SBOM: ${{ inputs.sbom }}
+        SIGN: ${{ inputs.sign }}
+        RECURSIVE: ${{ inputs.recursive }}
+        MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
+      run: |
+        # An empty digest usually means the push step's output was misnamed; fail rather than
+        # attesting nothing.
+        if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+          echo "::error::digest must be sha256:<64 hex characters> (got '${DIGEST}')"
+          exit 1
+        fi
+        if [[ ! "$IMAGE" =~ ^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-]+[a-z0-9]+)*)+$ ]]; then
+          echo "::error::image must be a lowercase repository name without tag or digest (got '${IMAGE}')"
+          exit 1
+        fi
+        for value in "$SBOM" "$SIGN" "$RECURSIVE"; do
+          if [[ "$value" != "true" && "$value" != "false" ]]; then
+            echo "::error::sbom, sign and recursive must be 'true' or 'false' (got '${value}')"
+            exit 1
+          fi
+        done
+        if [[ ! "$MIN_PACKAGES" =~ ^[0-9]+$ ]]; then
+          echo "::error::min-sbom-packages must be a non-negative integer (got '${MIN_PACKAGES}')"
+          exit 1
+        fi
+
+    - name: Attest build provenance
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-name: ${{ inputs.image }}
+        subject-digest: ${{ inputs.digest }}
+        push-to-registry: true
+
+    - name: Generate SBOM
+      if: inputs.sbom == 'true'
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      with:
+        image: ${{ inputs.image }}@${{ inputs.digest }}
+        format: spdx-json
+        output-file: ${{ runner.temp }}/image.spdx.json
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: Check SBOM
+      if: inputs.sbom == 'true'
+      shell: bash
+      env:
+        SBOM: ${{ runner.temp }}/image.spdx.json
+        MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
+      run: |
+        count=$(jq '[.packages[]? | select(.SPDXID | startswith("SPDXRef-DocumentRoot") | not)] | length' "$SBOM")
+        echo "Image SBOM lists ${count} packages"
+        if (( count < MIN_PACKAGES )); then
+          echo "::error::Image SBOM lists ${count} packages, fewer than min-sbom-packages (${MIN_PACKAGES})"
+          exit 1
+        fi
+
+    - name: Attest SBOM
+      if: inputs.sbom == 'true'
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-name: ${{ inputs.image }}
+        subject-digest: ${{ inputs.digest }}
+        sbom-path: ${{ runner.temp }}/image.spdx.json
+        push-to-registry: true
+
+    - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      if: inputs.sign == 'true'
+
+    - name: Sign image
+      if: inputs.sign == 'true'
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        RECURSIVE: ${{ inputs.recursive }}
+      run: |
+        args=(--yes)
+        if [[ "$RECURSIVE" == "true" ]]; then
+          args+=(--recursive)
+        fi
+        cosign sign "${args[@]}" "${IMAGE}@${DIGEST}"
