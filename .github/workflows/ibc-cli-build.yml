@@ -52,7 +52,8 @@ jobs:
   # fails, and only the image job can push to the registry.
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
-    runs-on: ${{ matrix.runner }}
+    # CGO is off, so every platform cross-compiles on one runner type.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 20
@@ -63,15 +64,12 @@ jobs:
           - goos: darwin
             goarch: arm64
             artifact: ibc-darwin-arm64
-            runner: ubuntu-latest
           - goos: linux
             goarch: amd64
             artifact: ibc-linux-amd64
-            runner: ubuntu-latest
           - goos: linux
             goarch: arm64
             artifact: ibc-linux-arm64
-            runner: ubuntu-24.04-arm
     defaults:
       run:
         working-directory: cli

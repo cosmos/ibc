@@ -21,10 +21,6 @@ inputs:
     description: Whether to mark a newly created draft as a pre-release (`true` or `false`).
     required: false
     default: "false"
-  verify:
-    description: Verify every asset against the attestation bundles before signing (`true` or `false`).
-    required: false
-    default: "true"
   verify-only:
     description: >-
       Only collect and verify the assets, without signing anything or touching the release (`true`
@@ -50,7 +46,6 @@ runs:
       env:
         NAME: ${{ inputs.name }}
         PRERELEASE: ${{ inputs.prerelease }}
-        VERIFY: ${{ inputs.verify }}
         VERIFY_ONLY: ${{ inputs.verify-only }}
       run: |
         # The verification checks the tag through GITHUB_REF and the signing workflow through
@@ -63,16 +58,12 @@ runs:
           echo "::error::name may only contain letters, digits, '.', '_' and '-' (got '${NAME}')"
           exit 1
         fi
-        for value in "$PRERELEASE" "$VERIFY" "$VERIFY_ONLY"; do
+        for value in "$PRERELEASE" "$VERIFY_ONLY"; do
           if [[ "$value" != "true" && "$value" != "false" ]]; then
-            echo "::error::prerelease, verify and verify-only must be 'true' or 'false' (got '${value}')"
+            echo "::error::prerelease and verify-only must be 'true' or 'false' (got '${value}')"
             exit 1
           fi
         done
-        if [[ "$VERIFY_ONLY" == "true" && "$VERIFY" != "true" ]]; then
-          echo "::error::verify-only needs verify"
-          exit 1
-        fi
 
     # Downloaded per artifact rather than merged, so two build jobs that produce an asset with the
     # same name fail the release instead of one silently overwriting the other.
@@ -143,7 +134,6 @@ runs:
         (cd "$dist" && sha256sum -- * > checksums.txt && cat checksums.txt)
 
     - name: Verify assets against the attestation bundles
-      if: inputs.verify == 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}

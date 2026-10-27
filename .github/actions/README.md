@@ -96,7 +96,7 @@ If the release also publishes something outside the release, such as a container
 
 ### Images
 
-Pass the digest that the push itself reported, not one looked up from a tag afterwards. For a multi-platform image, attest each platform image in its build job and sign the index in the job that creates it:
+Pass the digest that the push itself reported, not one looked up from a tag afterwards. For a multi-platform image, attest each platform image in its build job:
 
 ```yaml
       # Per platform, after docker/build-push-action with provenance: false
@@ -104,29 +104,9 @@ Pass the digest that the push itself reported, not one looked up from a tag afte
         with:
           image: ghcr.io/cosmos/proof-api
           digest: ${{ steps.build.outputs.digest }}
-
-      # For the index: push it by digest, sign it, and only then tag it
-      - name: Create manifest list and push by digest
-        id: index
-        run: |
-          index=$(docker buildx imagetools create --dry-run ...)
-          digest="sha256:$(printf '%s' "$index" | sha256sum | cut -d' ' -f1)"
-          docker buildx imagetools create --tag "ghcr.io/cosmos/proof-api@${digest}" ...
-          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
-      - uses: cosmos/ibc/.github/actions/attest-image@<commit-sha> # main
-        with:
-          image: ghcr.io/cosmos/proof-api
-          digest: ${{ steps.index.outputs.digest }}
-          sbom: "false"
-          sign: "true"
-          recursive: "true"
-      - name: Tag signed image
-        env:
-          DIGEST: ${{ steps.index.outputs.digest }}
-        run: docker buildx imagetools create --tag "ghcr.io/cosmos/proof-api:${TAG}" "ghcr.io/cosmos/proof-api@${DIGEST}"
 ```
 
-No tag points at the index until it is signed. cosmos/ibc's [release workflow](../workflows/release.yml) also checks that the pushed digest and the one the tag gets match the signed digest.
+Then create the index, sign it and tag it as the `Publish manifest`, `Attest and sign image` and `Tag signed image` steps of cosmos/ibc's [release workflow](../workflows/release.yml) do. Copy those steps rather than writing a shorter version: they push the index by digest so no tag points at it until it is signed, and check that the pushed digest and the one the tag gets match the signed digest.
 
 For a single-platform image, call it once with `sign: "true"` and the default `sbom: "true"`.
 

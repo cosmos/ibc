@@ -42,7 +42,7 @@ The attesting, signing and publishing steps are the [shared release actions](./.
 
 Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml` and `.github/actions`.
 
-The workflow only accepts a commit that is on `main` or a `release/*` branch whose ruleset requires a pull request with at least one approval. Add such a ruleset to a release branch before tagging from it; classic branch protection does not count. The check runs from the tagged commit, so it only guards against tagging an unreviewed commit by mistake. What limits who can get a commit signed is the tag ruleset, which must cover `refs/tags/cli-v*` and restrict creations, updates and deletions. In this repository the "Restrict tag creation" ruleset covers all tags, and only the Maintain and Admin repository roles and organization admins can bypass it, so only they can push a release tag.
+The workflow only accepts a commit that is on `main` or a `release/*` branch. The check runs from the tagged commit, so it only guards against tagging a commit outside those branches by mistake. What limits who can get a commit signed is the tag ruleset, which must cover `refs/tags/cli-v*` and restrict creations, updates and deletions. In this repository the "Restrict tag creation" ruleset covers all tags, and only the Maintain and Admin repository roles and organization admins can bypass it, so only they can push a release tag.
 
 ### Verifying release files
 
