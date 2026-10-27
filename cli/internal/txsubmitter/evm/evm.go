@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/pkg/errors"
 
 	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
@@ -70,7 +69,6 @@ type TxSubmitter struct {
 	lowestUnminedNoncePendingSince time.Time
 	lastAttemptedFeeCap            *big.Int
 	lastAttemptedTipCap            *big.Int
-	warnings                       *lru.Cache[transactionWarning, struct{}]
 }
 
 // ErrBusy leaves the packet available for a later dispatch.
@@ -102,13 +100,8 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	if err != nil {
 		return nil, errors.Wrapf(err, "decompressing signer public key for chain %q", chainID)
 	}
-	warnings, err := lru.New[transactionWarning, struct{}](10000)
-	if err != nil {
-		return nil, err
-	}
 	c := &TxSubmitter{
-		warnings: warnings,
-		chainID:  chainID, eth: eth, signer: chainSigner,
+		chainID: chainID, eth: eth, signer: chainSigner,
 		address: crypto.PubkeyToAddress(*pub), ethSigner: types.LatestSignerForChainID(id), opts: opts,
 	}
 	metrics.setWallet(chainID, c.address.Hex(), eth)
@@ -252,8 +245,6 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 	switch {
 	case errors.Is(err, ethereum.NotFound):
 		if time.Since(sentAt) >= c.opts.PendingTxTimeout {
-			c.warnTransaction(ctx, txHash, "receipt_missing", "Transaction still unconfirmed at retry threshold",
-				"submittedAt", sentAt, "pendingDuration", time.Since(sentAt).String())
 			metrics.forgetTx(c.chainID, txHash)
 			return true, nil
 		}
@@ -263,9 +254,6 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 	default:
 		metrics.endTx(c.chainID, receipt)
 		if receipt.Status != types.ReceiptStatusSuccessful {
-			c.warnTransaction(ctx, txHash, "tx_reverted", "Transaction reverted",
-				"blockNumber", receipt.BlockNumber, "gasUsed", receipt.GasUsed,
-				"effectiveGasPriceWei", decimalString(receipt.EffectiveGasPrice), "revertReason", "unavailable")
 			return true, v2.ErrTxReverted
 		}
 		return false, nil

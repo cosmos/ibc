@@ -17,7 +17,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/pkg/errors v0.9.1
 	github.com/rubenv/sql-migrate v1.8.1
@@ -112,6 +111,7 @@ require (
 	github.com/hashicorp/go-metrics v0.6.0 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/holiman/billy v0.0.0-20250707135307-f2f9b9aae7db // indirect

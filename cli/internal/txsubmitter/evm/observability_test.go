@@ -4,12 +4,9 @@ package evm
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"log/slog"
-	"math/big"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -119,42 +116,4 @@ func TestTransactionDiagnosticLogs(t *testing.T) {
 	_, err = c.ShouldRetry(t.Context(), submission.TxHash, time.Now())
 	require.ErrorIs(t, err, v2.ErrTxNotFound)
 	assert.Empty(t, buf.String())
-	for range 2 {
-		retry, retryErr := c.ShouldRetry(t.Context(), submission.TxHash, time.Now().Add(-3*time.Minute))
-		require.NoError(t, retryErr)
-		assert.True(t, retry)
-	}
-	decode()
-	require.Len(t, events, 3)
-	assert.Equal(t, "receipt_missing", events[2]["retryReason"])
-	assert.Contains(t, events[2], "pendingDuration")
-
-	rpc.receipt = &types.Receipt{
-		TxHash: rpc.sent[1].Hash(), Status: types.ReceiptStatusFailed,
-		BlockNumber: big.NewInt(123), GasUsed: 98000, EffectiveGasPrice: big.NewInt(112),
-	}
-	type retryResult struct {
-		retry bool
-		err   error
-	}
-	results := make(chan retryResult, 10)
-	var wg sync.WaitGroup
-	for range 10 {
-		wg.Go(func() {
-			retry, retryErr := c.ShouldRetry(context.Background(), submission.TxHash, submission.SubmittedAt)
-			results <- retryResult{retry: retry, err: retryErr}
-		})
-	}
-	wg.Wait()
-	close(results)
-	for result := range results {
-		require.ErrorIs(t, result.err, v2.ErrTxReverted)
-		assert.True(t, result.retry)
-	}
-	decode()
-	require.Len(t, events, 4, "revert warnings must be deduplicated across packet workers")
-	assert.Equal(t, "Transaction reverted", events[3]["msg"])
-	assert.Equal(t, json.Number("98000"), events[3]["gasUsed"])
-	assert.Equal(t, "112", events[3]["effectiveGasPriceWei"])
-	assert.Equal(t, "unavailable", events[3]["revertReason"])
 }

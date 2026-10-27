@@ -130,13 +130,8 @@ EIP-1559 fee fields are decimal strings in wei; the fee cap is not the eventual 
 Rejected or uncertain broadcasts and fee-ceiling exhaustion log the attempted fees and RPC error.
 Submission errors and capacity deferrals include the chain, sender, and detailed error in logs;
 the attempts metric has no reason label.
-
-Receipt timeouts log `submittedAt`, `pendingDuration`, and `retryReason=receipt_missing` at WARN.
-Mined reverts log the transaction hash, block number, gas used, and effective gas price at WARN.
-Standard receipts contain no revert data, so these logs mark `revertReason=unavailable`; use the
-hash and block to investigate with tracing. RPC errors containing revert data are decoded using
-the known contract ABIs. Warnings are deduplicated per submitter by transaction hash and reason
-within a 10,000-entry cache. No raw transaction payloads are persisted.
+RPC errors containing revert data are decoded using the known contract ABIs.
+No raw transaction payloads are persisted.
 
 ### EVM client metrics
 
