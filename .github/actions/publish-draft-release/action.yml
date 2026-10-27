@@ -151,9 +151,17 @@ runs:
       run: |
         dist="${RUNNER_TEMP}/release-dist"
 
-        if view=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1); then
-          is_draft="$view"
-        elif [[ "$view" == *"release not found"* ]]; then
+        # Listed rather than fetched by tag, because the by-tag endpoint does not return drafts. A
+        # failed request (network, rate limit, auth) fails the step here, so it never falls through
+        # to creating a second release.
+        is_draft=$(gh api --paginate "repos/${GH_REPO}/releases?per_page=100" \
+          | jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag) | .draft')
+        if [[ "$is_draft" == *$'\n'* ]]; then
+          echo "::error::More than one release exists for ${TAG}"
+          exit 1
+        fi
+
+        if [[ -z "$is_draft" ]]; then
           prerelease=()
           if [[ "$PRERELEASE" == "true" ]]; then
             prerelease=(--prerelease)
@@ -165,11 +173,6 @@ runs:
             --title "$TITLE"
           echo "url=$(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_OUTPUT"
           exit 0
-        else
-          # Anything other than a missing release (network, rate limit, auth) must not fall through
-          # to creating a second release.
-          echo "::error::Could not look up release ${TAG}: ${view}"
-          exit 1
         fi
 
         if [[ "$is_draft" == "true" ]]; then

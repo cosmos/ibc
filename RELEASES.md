@@ -42,6 +42,36 @@ The attesting, signing and publishing steps are the [shared release actions](./.
 
 Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml` and `.github/actions`.
 
+Pushing a release tag gets the tagged commit signed, so the workflow only accepts a commit that is on `main` or a `release/*` branch. Release tags must also be protected by a tag ruleset that targets `refs/tags/v*` and `refs/tags/cli-v*` and restricts creations, updates and deletions to the release maintainers.
+
+### Verifying release files
+
+Download the release files, where `<tag>` is the pushed tag:
+
+```sh
+gh release download <tag> --repo cosmos/ibc --dir <tag> && cd <tag>
+```
+
+Check the signature over `checksums.txt`, then check the files against it (on macOS, use `shasum -a 256 -c checksums.txt`):
+
+```sh
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity https://github.com/cosmos/ibc/.github/workflows/release.yml@refs/tags/<tag> \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c checksums.txt
+```
+
+Check the build provenance of an archive:
+
+```sh
+gh attestation verify ibc-vX.Y.Z-linux-amd64.tar.gz --repo cosmos/ibc \
+  --signer-workflow cosmos/ibc/.github/workflows/release.yml \
+  --source-ref refs/tags/<tag>
+```
+
+Add `--predicate-type https://spdx.dev/Document/v2.3` to check its SBOM attestation instead. Add `--bundle ibc-vX.Y.Z.intoto.jsonl` to verify against the attestation bundle attached to the release rather than the GitHub attestations API.
+
 ### Container images
 
 The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. Verify a release image with:

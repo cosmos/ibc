@@ -32,7 +32,7 @@ Within this repository the release workflow uses the actions by local path (`./.
 
 ### Release workflow
 
-A build job puts its release files in `out/assets` and calls `attest-release-assets`. Give each job of a matrix a distinct `platform`. Then a single job, after every build job, calls `publish-draft-release`. It must run for a tag push, because the notes it writes verify against `GITHUB_REF` and `GITHUB_WORKFLOW_REF`.
+A build job puts its release files in `out/assets` and calls `attest-release-assets`. Give each job of a matrix a distinct `platform`. Then a single job, after every build job, calls `publish-draft-release`. It must run for a tag push, because it verifies the assets against `GITHUB_REF` and `GITHUB_WORKFLOW_REF`.
 
 For example, the ibc-go source archive:
 
@@ -124,4 +124,4 @@ For a single-platform image, call it once with `sign: "true"` and the default `s
 
 Keep the inputs backwards compatible where you can, since ibc-go and ibc-contracts pin a SHA and pick up a change only when they bump it. If an input has to change, update both repositories in the same bump.
 
-The safest way to try a change end to end is in a fork: push a pre-release tag such as `v0.0.0-test.1` there, check the draft release and its verification commands, then delete the draft, the tag and any images it pushed.
+The safest way to try a change end to end is in a fork: push a pre-release tag such as `v0.0.0-test.1` there, check the draft release and run your repository's verification commands against it, then delete the draft, the tag and any images it pushed.
