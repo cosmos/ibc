@@ -108,31 +108,6 @@ event counter, not a failure gauge: a packet that remains stuck increments on ev
 so alerts should be built on `rate()`. The threshold is hard-coded for now (60m pending; timeouts 5m
 past the packet timeout, with a 15m source-finality guard) and can move to config in the future.
 
-`relay_packet_execution_total` records relay transaction outcomes per packet, including transactions
-discovered from other relayers. A matching WriteAcknowledgement, AckPacket, or TimeoutPacket event
-counts as `executed`; an application-error or undecodable acknowledgement still counts as an executed
-recv. A transaction that is retried counts as `failed`: it reverted, was mined without the packet's
-event, or had no receipt by the retry threshold. Pending receipts, RPC errors, and simulations add no
-execution result. These are not finality guarantees. A result is recorded once the processor has persisted it,
-so a failed storage write followed by reprocessing does not count it twice. Restarts can allow
-recounting; the counters are operational telemetry, not a durable transaction ledger.
-
-For dispatcher freshness, use `time() - dispatcher_last_success_timestamp_seconds` per instance.
-An empty successful poll advances this timestamp; a blocked pipeline or failure to list packets
-does not. The subscription gauge describes subscription lifecycle state, not proof that an otherwise
-connected endpoint is delivering every event. Missing series must be monitored separately from zero.
-
-### Transaction diagnostic logs
-
-Successful submissions log at INFO with `chainID`, `txHash`, `sender`, `nonce`, `gasLimit`,
-`maxFeePerGasWei`, `maxPriorityFeePerGasWei`, `baseFeePerGasWei`, and `minedNonce`.
-EIP-1559 fee fields are decimal strings in wei; the fee cap is not the eventual effective gas price.
-Rejected or uncertain broadcasts and fee-ceiling exhaustion log the attempted fees and RPC error.
-Submission errors and capacity deferrals include the chain, sender, and detailed error in logs;
-the attempts metric has no reason label.
-RPC errors containing revert data are decoded using the known contract ABIs.
-No raw transaction payloads are persisted.
-
 ### EVM client metrics
 
 Shared label: `{otel_scope_name="ibc.evm_client"}`
