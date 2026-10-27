@@ -369,8 +369,8 @@ func runAttestorHelper() error {
 	); err != nil {
 		return fmt.Errorf("helper write descendant pid: %w", err)
 	}
-	childDone := make(chan error, 1)
-	go func() { childDone <- child.Wait() }()
+	childDone := make(chan struct{})
+	go func() { _ = child.Wait(); close(childDone) }()
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
