@@ -41,11 +41,8 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
 	}
 
-	var executionResult string
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.AckTxHash, *tr.AckTxTime)
-	if errors.Is(err, v2.ErrTxReverted) {
-		executionResult = executionReverted
-	} else if err != nil {
+	if err != nil {
 		return nil, errors.Wrapf(err, "checking if ack tx %s should be retried", *tr.AckTxHash)
 	}
 
@@ -64,7 +61,6 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 			metrics.packetExecution(ctx, tr, "ack", executionSucceeded)
 			return tr, nil
 		}
-		executionResult = executionMissing
 	}
 
 	if err := p.storage.ClearPacketAckTx(ctx, tr.Key()); err != nil {
@@ -72,9 +68,8 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 	}
 
 	metrics.txRetry(ctx, tr, relayTypeRecvToAck, *tr.AckTxHash)
-	if executionResult != "" {
-		metrics.packetExecution(ctx, tr, "ack", executionResult)
-	}
+	metrics.packetExecution(ctx, tr, "ack", executionFailed)
+	tr.GetLogger().Warn("Retrying relay tx", "kind", "ack", "txHash", *tr.AckTxHash)
 
 	return nil, ErrRetryingAckPacket
 }
@@ -82,7 +77,6 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 func (p RetryAckPacket) Cancel(tr *Transfer, err error) {
 	switch {
 	case errors.Is(err, ErrRetryingAckPacket):
-		tr.GetLogger().Warn("Retrying relay tx", "kind", "ack")
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "ack")
 	default:

@@ -3998,7 +3998,7 @@
         "spec": {
           "id": 33,
           "title": "Packet Execution Outcomes / sec",
-          "description": "Observed packet operations in mined receipts per second. Results: executed, missing_event, tx_reverted. Application-error acknowledgements count as executed recv. Pending receipts, RPC/decoding errors and simulations are excluded. Deduplication is bounded and process-local; these are not finalized or durable counts.",
+          "description": "Relay transaction outcomes per packet per second. Results: executed, failed. Application-error and undecodable acknowledgements count as executed recv; reverted, event-less, and receipt-timeout transactions count as failed. Pending receipts, RPC errors and simulations are excluded. These are not finalized or durable counts.",
           "links": [],
           "data": {
             "kind": "QueryGroup",

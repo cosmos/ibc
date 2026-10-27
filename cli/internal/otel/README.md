@@ -92,7 +92,7 @@ Collections inside that threshold re-emit the last observed value. A failed quer
 | processors  | `transactions_submitted_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful broadcast                                    |
 | processors  | `transactions_confirmed_total`  | counter            | `chain_id`, `client_id`                                             | +1 per successful receipt                                      |
 | processors  | `transaction_retries_total`     | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per submitted transaction retried                           |
-| processors | `relay_packet_execution_total` | counter | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `processor`, `result` | Observed packet execution attempts; `result`: `executed`, `missing_event`, `tx_reverted` |
+| processors | `relay_packet_execution_total` | counter | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `processor`, `result` | Observed packet execution attempts; `result`: `executed`, `failed` |
 | txsubmitter | `txsubmitter_attempts_total` | counter | `chain_id`, `wallet`, `result` | +1 per completed Submit call; `result`: `ok`, `deferred` (capacity), `error`. Internal fee replacements do not add attempts. |
 | txsubmitter | `evm_gas_spent`                 | observable counter | `chain_id`, `wallet`                                                | Cumulative mined cost of txs this submitter sent, including failed txs, in native-token units |
 | txsubmitter | `evm_gas_balance`               | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
@@ -108,12 +108,12 @@ event counter, not a failure gauge: a packet that remains stuck increments on ev
 so alerts should be built on `rate()`. The threshold is hard-coded for now (60m pending; timeouts 5m
 past the packet timeout, with a 15m source-finality guard) and can move to config in the future.
 
-`relay_packet_execution_total` records receipt observations, including transactions discovered from
-other relayers. A matching WriteAcknowledgement, AckPacket, or TimeoutPacket event counts as `executed`.
-An application-error or undecodable acknowledgement still counts as an executed recv. A successful receipt missing
-the packet's event counts as `missing_event`; a failed receipt counts as `tx_reverted`. Pending
-receipts, RPC errors, and simulations add no execution result. These are observations of
-mined receipts, not finality guarantees. A result is recorded once the processor has persisted it,
+`relay_packet_execution_total` records relay transaction outcomes per packet, including transactions
+discovered from other relayers. A matching WriteAcknowledgement, AckPacket, or TimeoutPacket event
+counts as `executed`; an application-error or undecodable acknowledgement still counts as an executed
+recv. A transaction that is retried counts as `failed`: it reverted, was mined without the packet's
+event, or had no receipt by the retry threshold. Pending receipts, RPC errors, and simulations add no
+execution result. These are not finality guarantees. A result is recorded once the processor has persisted it,
 so a failed storage write followed by reprocessing does not count it twice. Restarts can allow
 recounting; the counters are operational telemetry, not a durable transaction ledger.
 

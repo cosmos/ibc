@@ -35,8 +35,7 @@ type instrumentation struct {
 
 const (
 	executionSucceeded = "executed"
-	executionMissing   = "missing_event"
-	executionReverted  = "tx_reverted"
+	executionFailed    = "failed"
 )
 
 type completedRelayLeg struct {

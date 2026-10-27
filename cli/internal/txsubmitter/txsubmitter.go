@@ -26,7 +26,6 @@ type TxSubmitter interface {
 	// ShouldRetry reports whether a transaction submitted at sentAt is failed
 	// or has been pending past the implementation's retry expiry and should be
 	// resubmitted.
-	// A reverted receipt returns true with v2.ErrTxReverted; callers must still retry it.
 	ShouldRetry(ctx context.Context, txHash string, sentAt time.Time) (bool, error)
 }
 

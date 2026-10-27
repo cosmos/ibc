@@ -253,9 +253,6 @@ func (c *TxSubmitter) ShouldRetry(ctx context.Context, txHash string, sentAt tim
 		return false, errors.Wrapf(err, "getting receipt for tx %s", txHash)
 	default:
 		metrics.endTx(c.chainID, receipt)
-		if receipt.Status != types.ReceiptStatusSuccessful {
-			return true, v2.ErrTxReverted
-		}
-		return false, nil
+		return receipt.Status != types.ReceiptStatusSuccessful, nil
 	}
 }
