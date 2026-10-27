@@ -68,6 +68,7 @@ runs:
             exit 1
           fi
         done
+        # Same check as in attest-image; change both together.
         if [[ ! "$MIN_PACKAGES" =~ ^[0-9]+$ ]]; then
           echo "::error::min-sbom-packages must be a non-negative integer (got '${MIN_PACKAGES}')"
           exit 1
@@ -117,7 +118,8 @@ runs:
         SBOM: ${{ steps.check.outputs.sbom-path }}
         MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
       run: |
-        # The scanned file or directory itself is listed as an SPDXRef-DocumentRoot package.
+        # The scanned file or directory itself is listed as an SPDXRef-DocumentRoot package. Same
+        # filter as in attest-image; change both together.
         count=$(jq '[.packages[]? | select(.SPDXID | startswith("SPDXRef-DocumentRoot") | not)] | length' "$SBOM")
         echo "SBOM lists ${count} packages"
         if (( count < MIN_PACKAGES )); then

@@ -25,7 +25,7 @@ See [Signed release assets](#signed-release-assets) for how to verify the artifa
 
 ## Signed release assets
 
-Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries.
+Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, packages each binary in a `.tar.gz` archive, generates an SPDX SBOM for each binary, attests the build provenance and SBOM of each archive (not of the binary inside it), signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries.
 
 `cli-v*` tags are reserved for IBC CLI releases. A `cli-vX.Y.Z` tag produces `ibc-cli-vX.Y.Z` assets and the "IBC CLI vX.Y.Z" title; the image is tagged with the pushed tag, e.g. `ghcr.io/cosmos/ibc:cli-vX.Y.Z`. Other tags, such as the 2019–2020 spec release candidates `v1.0.0-rc2` to `v1.0.0-rc6`, do not run the release workflow.
 
@@ -35,9 +35,9 @@ The attesting, signing and publishing steps are the [shared release actions](./.
 ### Release procedure
 
 1. Tag the release commit and push the tag (e.g. `git tag -s cli-v0.2.0 -m cli-v0.2.0 origin/main && git push origin cli-v0.2.0`).
-2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. Every asset is verified against its attestations before any image is pushed, and the draft is only created once the multi-platform image is tagged and signed, so a draft always comes with a signed image. If a job fails, re-run the failed jobs.
+2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. Every asset is verified against its attestations before any image is pushed, and the draft is only created once the multi-platform image is tagged and signed, so a draft always comes with a signed image. If a job fails, re-run the failed jobs within 7 days, while the run's artifacts are kept; after that, re-run all jobs.
 3. Edit the draft and write the release notes.
-4. Check the `Set as a pre-release` checkbox if needed. The workflow already checks it for tags with a pre-release suffix such as `-rc.1`.
+4. Leave `Set as a pre-release` as the workflow set it: checked for tags with a pre-release suffix such as `-rc.1`, unchecked otherwise. Every run of the release job sets it again from the tag, so a manual change does not survive a re-run.
 5. Publish the release.
 
 Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml` and `.github/actions`.
@@ -52,7 +52,7 @@ Download the release files, where `<tag>` is the pushed tag:
 gh release download <tag> --repo cosmos/ibc --dir <tag> && cd <tag>
 ```
 
-Check the signature over `checksums.txt`, then check the files against it (on macOS, use `shasum -a 256 -c checksums.txt`):
+Check the signature over `checksums.txt` with cosign v3 or later, then check the files against it (on macOS, use `shasum -a 256 -c checksums.txt`):
 
 ```sh
 cosign verify-blob checksums.txt \
@@ -70,11 +70,11 @@ gh attestation verify ibc-cli-vX.Y.Z-linux-amd64.tar.gz --repo cosmos/ibc \
   --source-ref refs/tags/<tag>
 ```
 
-Add `--predicate-type https://spdx.dev/Document/v2.3` to check its SBOM attestation instead. Add `--bundle ibc-cli-vX.Y.Z.intoto.jsonl` to verify against the attestation bundle attached to the release rather than the GitHub attestations API.
+To check its SBOM attestation instead, add `--predicate-type https://spdx.dev/Document/v<version>`, where `<version>` is the SPDX version the SBOM declares: `jq -r .spdxVersion ibc-cli-vX.Y.Z-linux-amd64.spdx.json` prints `SPDX-<version>`. Add `--bundle ibc-cli-vX.Y.Z.intoto.jsonl` to verify against the attestation bundle attached to the release rather than the GitHub attestations API.
 
 ### Container images
 
-The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. The workflow pushes the index by digest, signs it, and only then tags it `<tag>`, so the release tag never points at an unsigned image. Verify a release image with:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. The workflow pushes the index by digest, signs it, and only then tags it `<tag>`, so the release tag never points at an unsigned image. Verify a release image with cosign v3 or later:
 
 ```sh
 cosign verify ghcr.io/cosmos/ibc:<tag> \
@@ -85,4 +85,4 @@ gh attestation verify oci://ghcr.io/cosmos/ibc:<tag> --repo cosmos/ibc \
   --source-ref refs/tags/<tag>
 ```
 
-Image SBOMs are attached to the platform digests, not the multi-platform tag. List the platform digests with `docker buildx imagetools inspect ghcr.io/cosmos/ibc:<tag>`, then pass one as `oci://ghcr.io/cosmos/ibc@<digest>` with `--predicate-type https://spdx.dev/Document/v2.3`.
+Image SBOMs are attached to the platform digests, not the multi-platform tag. List the platform digests with `docker buildx imagetools inspect ghcr.io/cosmos/ibc:<tag>`, then pass one as `oci://ghcr.io/cosmos/ibc@<digest>` with `--predicate-type https://spdx.dev/Document/v<version>`, using the same SPDX version as the release SBOMs.

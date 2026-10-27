@@ -64,6 +64,8 @@ runs:
             exit 1
           fi
         done
+        # Cleared so the action can run more than once in a job, e.g. verify-only and then publish.
+        rm -rf "${RUNNER_TEMP}/release-in" "${RUNNER_TEMP}/release-dist"
 
     # Downloaded per artifact rather than merged, so two build jobs that produce an asset with the
     # same name fail the release instead of one silently overwriting the other.
@@ -202,7 +204,17 @@ runs:
 
         if [[ "$is_draft" == "true" ]]; then
           # A draft already exists, either from a previous run or drafted in the UI for this tag.
+          # Any file on it that this run does not upload would ship unsigned and outside
+          # checksums.txt, so fail rather than publish it alongside the signed set.
+          existing=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          extra=$(grep -vxF -f <(cd "$dist" && printf '%s\n' *) <<< "$existing" || true)
+          if [[ -n "$extra" ]]; then
+            echo "::error::Draft release ${TAG} has assets this run does not produce; delete them and re-run: ${extra//$'\n'/, }"
+            exit 1
+          fi
           gh release upload "$TAG" "$dist"/* --clobber
+          # The tag decides, also for a draft created in the UI with the box ticked differently.
+          gh release edit "$TAG" --prerelease="$PRERELEASE"
         else
           # The release was published before this workflow finished. Without --clobber, gh refuses
           # to replace assets that people may already have downloaded, so a re-run after publishing

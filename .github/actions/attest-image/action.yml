@@ -4,7 +4,7 @@ name: Attest image
 description: >-
   Attests the build provenance of a pushed container image, optionally generates and attests its
   SPDX SBOM, and optionally signs it with cosign, all by digest. Use it once per platform image
-  (with `sbom: true`) and once for a multi-platform index (with `sign: true` and
+  (with `sbom: true`) and once for a multi-platform index (with `sbom: false`, `sign: true` and
   `recursive: true`), or once for a single-platform image with both. The job must already be
   logged in to the registry, and needs `packages: write`, `id-token: write`,
   `attestations: write` and `artifact-metadata: write`.
@@ -65,6 +65,7 @@ runs:
             exit 1
           fi
         done
+        # Same check as in attest-release-assets; change both together.
         if [[ ! "$MIN_PACKAGES" =~ ^[0-9]+$ ]]; then
           echo "::error::min-sbom-packages must be a non-negative integer (got '${MIN_PACKAGES}')"
           exit 1
@@ -94,6 +95,8 @@ runs:
         SBOM: ${{ runner.temp }}/image.spdx.json
         MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
       run: |
+        # The scanned image itself is listed as an SPDXRef-DocumentRoot package. Same filter as in
+        # attest-release-assets; change both together.
         count=$(jq '[.packages[]? | select(.SPDXID | startswith("SPDXRef-DocumentRoot") | not)] | length' "$SBOM")
         echo "Image SBOM lists ${count} packages"
         if (( count < MIN_PACKAGES )); then
