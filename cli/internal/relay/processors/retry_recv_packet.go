@@ -35,9 +35,8 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	}
 
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.RecvTxHash, *tr.RecvTxTime)
-	if errors.Is(err, v2.ErrTxReverted) {
-		metrics.packetExecution(ctx, tr, "recv", *tr.RecvTxHash, executionReverted)
-	} else if err != nil {
+	reverted := errors.Is(err, v2.ErrTxReverted)
+	if err != nil && !reverted {
 		return nil, errors.Wrapf(err, "checking if recv tx %s should be retried", *tr.RecvTxHash)
 	}
 
@@ -51,6 +50,9 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	}
 
 	metrics.txRetry(ctx, tr, relayTypeSendToRecv, *tr.RecvTxHash)
+	if reverted {
+		metrics.packetExecution(ctx, tr, "recv", executionReverted)
+	}
 
 	// error so the transfer stops processing this run; it is picked up
 	// without the recv tx and redelivered on the next run

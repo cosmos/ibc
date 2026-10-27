@@ -50,7 +50,6 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	)
 	switch {
 	case errors.Is(err, v2.ErrWriteAckNotFoundForPacket):
-		metrics.packetExecution(ctx, tr, "recv", recvTxHash, executionMissing)
 		// the recv tx exists but does not contain this packet's write ack.
 		// this happens when a packet times out while its batch accumulates:
 		// clear the recv tx and error so the packet is retried and then timed
@@ -59,6 +58,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 			return nil, errors.Wrapf(errClear, "clearing recv tx %s", recvTxHash)
 		}
 		metrics.txRetry(ctx, tr, relayTypeSendToRecv, recvTxHash)
+		metrics.packetExecution(ctx, tr, "recv", executionMissing)
 
 		return nil, errors.Errorf("write ack for transfer not found in recv tx %s", recvTxHash)
 	case errors.Is(err, v2.ErrWriteAckDecoding):
@@ -69,10 +69,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	case err != nil:
 		return nil, errors.Wrapf(err, "finding write ack in recv tx %s", recvTxHash)
 	}
-	if err == nil {
-		metrics.packetExecution(ctx, tr, "recv", recvTxHash, executionSucceeded)
-	}
-
+	writeAckDecoded := err == nil
 	status := writeAckStatusFromV2(ackStatus)
 
 	// the write ack shares the recv tx, so it shares its time
@@ -87,6 +84,9 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	ack := store.WriteAck{TxHash: recvTxHash, TxTime: writeAckTime, Status: status}
 	if err := p.storage.UpdatePacketWriteAck(ctx, tr.Key(), ack); err != nil {
 		return nil, errors.Wrapf(err, "recording write ack from tx %s", recvTxHash)
+	}
+	if writeAckDecoded {
+		metrics.packetExecution(ctx, tr, "recv", executionSucceeded)
 	}
 
 	tr.WriteAckTxHash = &recvTxHash

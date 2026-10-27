@@ -41,9 +41,10 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
 	}
 
+	var executionResult string
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.AckTxHash, *tr.AckTxTime)
 	if errors.Is(err, v2.ErrTxReverted) {
-		metrics.packetExecution(ctx, tr, "ack", *tr.AckTxHash, executionReverted)
+		executionResult = executionReverted
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "checking if ack tx %s should be retried", *tr.AckTxHash)
 	}
@@ -60,10 +61,10 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 			return nil, errors.Wrapf(err, "checking ack event in tx %s", *tr.AckTxHash)
 		}
 		if executed {
-			metrics.packetExecution(ctx, tr, "ack", *tr.AckTxHash, executionSucceeded)
+			metrics.packetExecution(ctx, tr, "ack", executionSucceeded)
 			return tr, nil
 		}
-		metrics.packetExecution(ctx, tr, "ack", *tr.AckTxHash, executionMissing)
+		executionResult = executionMissing
 	}
 
 	if err := p.storage.ClearPacketAckTx(ctx, tr.Key()); err != nil {
@@ -71,6 +72,9 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 	}
 
 	metrics.txRetry(ctx, tr, relayTypeRecvToAck, *tr.AckTxHash)
+	if executionResult != "" {
+		metrics.packetExecution(ctx, tr, "ack", executionResult)
+	}
 
 	return nil, ErrRetryingAckPacket
 }

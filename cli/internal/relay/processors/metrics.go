@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
@@ -32,21 +31,12 @@ type instrumentation struct {
 	PacketExecution       metric.Int64Counter
 
 	submittedTransactions sync.Map
-	executions            *lru.Cache[packetExecutionKey, struct{}]
-}
-
-type packetExecutionKey struct {
-	chainID   string
-	txHash    string
-	packet    store.PacketKey
-	processor string
 }
 
 const (
 	executionSucceeded = "executed"
 	executionMissing   = "missing_event"
 	executionReverted  = "tx_reverted"
-	packetHistorySize  = 100000
 )
 
 type completedRelayLeg struct {
@@ -87,13 +77,8 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	if err != nil {
 		return nil, err
 	}
-	executions, err := lru.New[packetExecutionKey, struct{}](packetHistorySize)
-	if err != nil {
-		return nil, err
-	}
 	return &instrumentation{
 		PacketExecution:       packetExecution,
-		executions:            executions,
 		RelaysCompleted:       relaysCompleted,
 		RelayDuration:         relayDuration,
 		TransactionRetries:    transactionRetries,
@@ -147,15 +132,7 @@ func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayT
 	m.TransactionRetries.Add(ctx, 1, txAttributes(tr, otel.AttrType.String(string(kind))))
 }
 
-func (m *instrumentation) packetExecution(ctx context.Context, tr *Transfer, processor, txHash, result string) {
-	chainID := tr.SourceChainID
-	if processor == "recv" {
-		chainID = tr.DestinationChainID
-	}
-	key := packetExecutionKey{chainID: chainID, txHash: txHash, packet: tr.Key(), processor: processor}
-	if seen, _ := m.executions.ContainsOrAdd(key, struct{}{}); seen {
-		return
-	}
+func (m *instrumentation) packetExecution(ctx context.Context, tr *Transfer, processor, result string) {
 	m.PacketExecution.Add(ctx, 1, txAttributes(tr,
 		otel.AttrProcessor.String(processor), otel.AttrResult.String(result)))
 }

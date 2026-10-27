@@ -113,9 +113,9 @@ other relayers. A matching WriteAcknowledgement, AckPacket, or TimeoutPacket eve
 An application-error acknowledgement still counts as an executed recv. A successful receipt missing
 the packet's event counts as `missing_event`; a failed receipt counts as `tx_reverted`. Pending
 receipts, RPC/decoding errors, and simulations add no execution result. These are observations of
-mined receipts, not finality guarantees. A bounded cache deduplicates the last 100,000
-(chain, transaction, packet, processor) observations. Restarts or eviction can allow recounting;
-the counters are operational telemetry, not a durable transaction ledger.
+mined receipts, not finality guarantees. A result is recorded once the processor has persisted it,
+so a failed storage write followed by reprocessing does not count it twice. Restarts can allow
+recounting; the counters are operational telemetry, not a durable transaction ledger.
 
 For dispatcher freshness, use `time() - dispatcher_last_success_timestamp_seconds` per instance.
 An empty successful poll advances this timestamp; a blocked pipeline or failure to list packets
