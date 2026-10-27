@@ -35,7 +35,7 @@ The attesting, signing and publishing steps are the [shared release actions](./.
 ### Release procedure
 
 1. Tag the release commit and push the tag (e.g. `git tag -s cli-v0.2.0 -m cli-v0.2.0 origin/main && git push origin cli-v0.2.0`).
-2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. Every asset is verified against its attestations before the multi-platform image is tagged and signed, and the draft is only created after that, so a draft always comes with a signed image. If a job fails, re-run the failed jobs.
+2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. Every asset is verified against its attestations before any image is pushed, and the draft is only created once the multi-platform image is tagged and signed, so a draft always comes with a signed image. If a job fails, re-run the failed jobs.
 3. Edit the draft and write the release notes.
 4. Check the `Set as a pre-release` checkbox if needed. The workflow already checks it for tags with a pre-release suffix such as `-rc.1`.
 5. Publish the release.

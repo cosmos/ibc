@@ -75,9 +75,11 @@ jobs:
             if [[ "$branch" != main && "$branch" != release/* ]]; then
               continue
             fi
-            if gh api "repos/${GITHUB_REPOSITORY}/rules/branches/${branch}" \
-              --jq '.[] | select(.type == "pull_request" and .parameters.required_approving_review_count >= 1) | .type' \
-              | grep -qx pull_request; then
+            # Assigned rather than tested in the if, so a failed request fails the step with its own
+            # error instead of reading as an unprotected branch.
+            approved_pr_rules=$(gh api "repos/${GITHUB_REPOSITORY}/rules/branches/${branch}" \
+              --jq '[.[] | select(.type == "pull_request" and .parameters.required_approving_review_count >= 1)] | length')
+            if (( approved_pr_rules > 0 )); then
               exit 0
             fi
           done <<< "$branches"
@@ -146,7 +148,7 @@ jobs:
   # released binary.
   image:
     name: Image linux-${{ matrix.goarch }}
-    needs: [validate-tag, build]
+    needs: [validate-tag, build, verify]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -225,9 +227,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Checks every asset against its attestations before publish-manifest tags and signs the image, so
-  # an image is never published for a release whose assets do not verify. The release job checks
-  # them again before signing.
+  # Checks every asset against its attestations before the image jobs push or attest anything, so
+  # no image is published for a release whose assets do not verify. The release job checks them
+  # again before signing.
   verify:
     name: Verify release assets
     needs: [validate-tag, build]
@@ -260,19 +262,23 @@ jobs:
       artifact-metadata: write
     timeout-minutes: 10
     steps:
-      - name: Check the release is not published
+      - name: Check the release is not published with assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The platform images are pushed by digest only, so this job is the only one that moves a
-          # tag. A re-run after the release is published must not move the published image tag.
-          # Listed rather than fetched by tag, so a failed request fails the step instead of reading
-          # as "not published".
-          published=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            | jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag and (.draft | not)) | .id')
-          if [[ -n "$published" ]]; then
-            echo "::error::Release ${TAG} is already published, so its image is not re-pushed"
+          # tag. A re-run after the release is published with its assets must not move the published
+          # image tag. A release published before its first run finished has no assets yet, so it
+          # continues and the release job attaches them. Listed rather than fetched by tag, so a
+          # failed request fails the step instead of reading as "not published".
+          published_assets=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag and (.draft | not)) | .assets | length')
+          if [[ -n "$published_assets" && "$published_assets" != 0 ]]; then
+            echo "::error::Release ${TAG} is already published with assets, so its image is not re-pushed"
             exit 1
+          fi
+          if [[ -n "$published_assets" ]]; then
+            echo "::warning::Release ${TAG} was published before its signed assets were attached"
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
