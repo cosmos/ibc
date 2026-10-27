@@ -95,7 +95,7 @@ func (t readRetryTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		}
 		select {
 		case <-req.Context().Done():
-			return resp, nil
+			return nil, fmt.Errorf("besu rpc: %s retry after transient reply: %w", call.Method, req.Context().Err())
 		case <-time.After(t.delay):
 		}
 	}
