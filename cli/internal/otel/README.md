@@ -78,8 +78,7 @@ Shared label: `{otel_scope_name="ibc.relayer"}`
 In metrics that label both packet sides, `chain_id` / `client_id` refer to the packet's **source** side and
 `dest_chain_id` / `dest_client_id` to its destination.
 
-Confirmations count only successful receipts for transactions broadcast by this process.
-Confirmations and retries are deduplicated independently in a cache of 10,000 transactions by chain and tx hash.
+Confirmations count only successful receipts for transactions broadcast by this process and are deduplicated in memory by chain and tx hash.
 Completions and durations are recorded only on success (`CompleteWithAck`, `CompleteWithTimeout`).
 EVM wallet balances are queried concurrently at the latest block, at most once every 10 seconds per wallet.
 Collections inside that threshold re-emit the last observed value. A failed query is logged and reported as `-1`.

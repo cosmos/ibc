@@ -31,14 +31,8 @@ type instrumentation struct {
 	TransactionsConfirmed metric.Int64Counter
 	PacketExecution       metric.Int64Counter
 
-	transactions *lru.Cache[string, *transactionObservation]
-	executions   *lru.Cache[packetExecutionKey, struct{}]
-	mu           sync.Mutex
-}
-
-type transactionObservation struct {
-	confirmed bool
-	retried   bool
+	submittedTransactions sync.Map
+	executions            *lru.Cache[packetExecutionKey, struct{}]
 }
 
 type packetExecutionKey struct {
@@ -49,11 +43,10 @@ type packetExecutionKey struct {
 }
 
 const (
-	executionSucceeded     = "executed"
-	executionMissing       = "missing_event"
-	executionReverted      = "tx_reverted"
-	transactionHistorySize = 10000
-	packetHistorySize      = 100000
+	executionSucceeded = "executed"
+	executionMissing   = "missing_event"
+	executionReverted  = "tx_reverted"
+	packetHistorySize  = 100000
 )
 
 type completedRelayLeg struct {
@@ -94,17 +87,12 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	if err != nil {
 		return nil, err
 	}
-	transactions, err := lru.New[string, *transactionObservation](transactionHistorySize)
-	if err != nil {
-		return nil, err
-	}
 	executions, err := lru.New[packetExecutionKey, struct{}](packetHistorySize)
 	if err != nil {
 		return nil, err
 	}
 	return &instrumentation{
 		PacketExecution:       packetExecution,
-		transactions:          transactions,
 		executions:            executions,
 		RelaysCompleted:       relaysCompleted,
 		RelayDuration:         relayDuration,
@@ -131,37 +119,31 @@ func (m *instrumentation) relayCompleted(ctx context.Context, tr *Transfer) {
 
 func (m *instrumentation) txSubmitted(ctx context.Context, chainID, clientID, txHash string) {
 	key := txKey(chainID, txHash)
-	m.transactions.ContainsOrAdd(key, &transactionObservation{})
+	m.submittedTransactions.Store(key, struct{}{})
 	m.TransactionsSubmitted.Add(ctx, 1, txMetricAttributes(chainID, clientID))
 }
 
 func (m *instrumentation) txConfirmed(ctx context.Context, chainID, clientID, txHash string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	key := txKey(chainID, txHash)
-	observation, submitted := m.transactions.Get(key)
-	if !submitted || observation.confirmed {
+	if _, submitted := m.submittedTransactions.LoadAndDelete(key); !submitted {
 		return
 	}
-	observation.confirmed = true
+
 	m.TransactionsConfirmed.Add(ctx, 1, txMetricAttributes(chainID, clientID))
 }
 
 // one txHash might carry multiple transfers
 func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType, txHash string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	chainID := tr.SourceChainID
 	if kind == relayTypeSendToRecv {
 		chainID = tr.DestinationChainID
 	}
 
 	key := txKey(chainID, txHash)
-	observation, submitted := m.transactions.Get(key)
-	if !submitted || observation.retried {
+	if _, submitted := m.submittedTransactions.LoadAndDelete(key); !submitted {
 		return
 	}
-	observation.retried = true
+
 	m.TransactionRetries.Add(ctx, 1, txAttributes(tr, otel.AttrType.String(string(kind))))
 }
 
