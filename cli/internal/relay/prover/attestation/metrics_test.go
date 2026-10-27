@@ -36,10 +36,8 @@ func testMetrics(t *testing.T) *sdkmetric.ManualReader {
 func TestAttestationDataMatches(t *testing.T) {
 	ctx := context.Background()
 	expected := []byte("expected claim")
-	key, err := crypto.GenerateKey()
-	require.NoError(t, err)
 	digest := attestorevm.Digest(attestorevm.TagStateAttestation, expected)
-	signature, err := crypto.Sign(digest[:], key)
+	signature, err := crypto.Sign(digest[:], testKey(t, "attestor-0"))
 	require.NoError(t, err)
 
 	for _, tt := range []struct {
@@ -57,7 +55,8 @@ func TestAttestationDataMatches(t *testing.T) {
 			reader := testMetrics(t)
 			a := attestor.NewMockAttestor(t)
 			a.EXPECT().Name().Return("attestor-0")
-			gen := New("client-chain", "client-0", nil, 1, nil, slog.Default())
+			set := &attestationSet{signers: signerSet(t, "attestor-0"), threshold: 1}
+			gen := newGenerator("client-chain", "client-0", nil, set, nil, slog.Default())
 			response := gen.queryOne(ctx, a, attestorevm.TagStateAttestation, expected,
 				func(context.Context, attestor.Attestor) (attestor.Attestation, error) {
 					return attestor.Attestation{AttestedData: tt.data, Signature: tt.signature}, tt.queryErr

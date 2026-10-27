@@ -315,7 +315,7 @@ Both attestation calls return this shape.
 
 <!-- GEN:api:msg:Attestation END -->
 
-`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [cli/internal/relay/prover/attestation/quorum.go: reduceQuorum] --> <!-- [cli/internal/relay/prover/attestation/resolve.go: MatchAttestors] -->
+`attested_data` is what was signed. A light client accepts the attestation when its threshold of attestors or more sign the same data. <!-- [cli/internal/relay/prover/attestation/quorum.go: reduceQuorum] --> <!-- [cli/internal/relay/prover/attestation/resolve.go: matchAttestors] -->
 
 ### `StateAttestation`
 
@@ -480,7 +480,7 @@ Returns identity information about a configured attestor.
 
 <!-- GEN:api:msg:InfoResponse END -->
 
-`address` is what a light client checks signatures against. So this call is how an operator confirms that the running attestor is the one an on-chain client expects. <!-- [cli/internal/relay/prover/attestation/resolve.go: MatchAttestors] -->
+`address` is what a light client checks signatures against. So this call is how an operator confirms that the running attestor is the one an on-chain client expects. <!-- [cli/internal/relay/prover/attestation/resolve.go: matchAttestors] -->
 
 ```bash
 grpcurl -plaintext -d '{"attestor":"attestor-41002"}' \

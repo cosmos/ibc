@@ -97,7 +97,7 @@ func (g *Generator) queryQuorum(
 
 	wg.Wait()
 
-	signatures, err := reduceQuorum(g.logger, responses, g.threshold)
+	signatures, err := reduceQuorum(g.logger, responses, g.set.threshold)
 	if err != nil {
 		return quorumResult{}, err
 	}
@@ -132,6 +132,18 @@ func (g *Generator) queryOne(
 	if err != nil {
 		g.logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
+	}
+
+	// The light client reverts the whole proof on a signer outside its set.
+	if _, member := g.set.signers[signer]; !member {
+		g.logger.Warn(
+			"Attestor signer is not in the attestation set",
+			"attestor", a.Name(), "signer", signer, "reportedAddress", a.Address(),
+		)
+		return quorumResponse{
+			name: a.Name(),
+			err:  errors.Errorf("attestor %q: signer %s is not in the attestation set", a.Name(), signer),
+		}
 	}
 
 	return quorumResponse{name: a.Name(), signer: signer, sig: sig}

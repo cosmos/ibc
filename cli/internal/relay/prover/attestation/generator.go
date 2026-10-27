@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
@@ -21,20 +22,27 @@ import (
 
 // Generator implements prover.Prover for one configured
 // attestation light client: LatestProvableHeight/ClientUpdatePayloads/PacketProofs all
-// query the same fixed attestor set with the same quorum threshold
+// query the same fixed attestor set, and keep only signatures from signers in
+// the client's on-chain attestation set
 type Generator struct {
 	attestors         []attestor.Attestor
-	threshold         int
+	set               *attestationSet
 	counterpartyChain chains.Client
 	logger            *slog.Logger
 	chainID           string
 	clientID          string
 }
 
-func New(
+// attestationSet is a light client's on-chain attestors and signature threshold.
+type attestationSet struct {
+	signers   map[common.Address]struct{}
+	threshold int
+}
+
+func newGenerator(
 	chainID, clientID string,
 	attestors []attestor.Attestor,
-	threshold int,
+	set *attestationSet,
 	counterpartyChain chains.Client,
 	logger *slog.Logger,
 ) *Generator {
@@ -42,14 +50,14 @@ func New(
 		chainID:           chainID,
 		clientID:          clientID,
 		attestors:         attestors,
-		threshold:         threshold,
+		set:               set,
 		counterpartyChain: counterpartyChain,
 		logger:            logger,
 	}
 }
 
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	return latestProvableHeight(ctx, g.logger, g.attestors, g.threshold, g.counterpartyChain)
+	return latestProvableHeight(ctx, g.logger, g.attestors, g.set.threshold, g.counterpartyChain)
 }
 
 func (g *Generator) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {

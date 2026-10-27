@@ -4,37 +4,77 @@ package attestation
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"log/slog"
 	"math/big"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
+// testKey derives a signing key from name, so a test's attestation set can be
+// built from attestor names.
+func testKey(t *testing.T, name string) *ecdsa.PrivateKey {
+	t.Helper()
+
+	key, err := crypto.ToECDSA(crypto.Keccak256([]byte(name)))
+	require.NoError(t, err)
+
+	return key
+}
+
+// signerSet is an attestation set holding the testKey signer of each name.
+func signerSet(t *testing.T, names ...string) map[common.Address]struct{} {
+	t.Helper()
+
+	set := make(map[common.Address]struct{}, len(names))
+	for _, name := range names {
+		set[crypto.PubkeyToAddress(testKey(t, name).PublicKey)] = struct{}{}
+	}
+
+	return set
+}
+
+// newTestGenerator builds a Generator whose attestation set holds every
+// attestor's testKey signer.
+func newTestGenerator(t *testing.T, attestors []attestor.Attestor, threshold int, chain chains.Client) *Generator {
+	t.Helper()
+
+	names := make([]string, len(attestors))
+	for i, a := range attestors {
+		names[i] = a.Name()
+	}
+
+	set := &attestationSet{signers: signerSet(t, names...), threshold: threshold}
+
+	return newGenerator("client-chain", "client-0", attestors, set, chain, slog.Default())
+}
+
 // signedAttestor builds a attestor.MockAttestor whose StateAttestation call
-// returns attestedData signed by a freshly generated key over the correct
+// returns attestedData signed by name's testKey over the correct
 // domain-tagged digest.
 func signedAttestor(t *testing.T, name string, attestedData []byte) *attestor.MockAttestor {
 	t.Helper()
 
-	key, err := crypto.GenerateKey()
-	require.NoError(t, err)
-
+	key := testKey(t, name)
 	digest := attestorevm.Digest(attestorevm.TagStateAttestation, attestedData)
 	sig, err := crypto.Sign(digest[:], key)
 	require.NoError(t, err)
 
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
+	a.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 	a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
 		attestor.Attestation{Height: 10, AttestedData: attestedData, Signature: sig}, nil,
 	)
@@ -52,14 +92,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", data),
 		}
 
-		result, err := New(
-			"client-chain",
-			"client-0",
-			attestors,
-			2,
-			nil,
-			slog.Default(),
-		).queryStateQuorum(ctx, 10, data)
+		result, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -70,7 +103,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", []byte("wrong claim")),
 			signedAttestor(t, "a2", []byte("wrong claim")),
 		}
-		_, err := New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
+		_, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 		require.ErrorContains(t, err, "attested data does not match expected claim")
 	})
@@ -82,14 +115,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "valid1", data),
 			signedAttestor(t, "valid2", data),
 		}
-		result, err := New(
-			"client-chain",
-			"client-0",
-			attestors,
-			2,
-			nil,
-			slog.Default(),
-		).queryStateQuorum(ctx, 10, data)
+		result, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -100,7 +126,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a1", data),
 		}
 
-		_, err := New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
+		_, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(t, err, "quorum not met")
 	})
 
@@ -110,7 +136,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a2", []byte("a different claim entirely")),
 		}
 
-		_, err := New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
+		_, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(
 			t,
 			err,
@@ -126,14 +152,7 @@ func TestQueryQuorum(t *testing.T) {
 			signedAttestor(t, "a3", data),
 		}
 
-		result, err := New(
-			"client-chain",
-			"client-0",
-			attestors,
-			2,
-			nil,
-			slog.Default(),
-		).queryStateQuorum(ctx, 10, data)
+		result, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Equal(t, data, result.AttestationData)
 		require.Len(t, result.Signatures, 2)
@@ -150,14 +169,7 @@ func TestQueryQuorum(t *testing.T) {
 			erroring,
 		}
 
-		result, err := New(
-			"client-chain",
-			"client-0",
-			attestors,
-			2,
-			nil,
-			slog.Default(),
-		).queryStateQuorum(ctx, 10, data)
+		result, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -176,14 +188,7 @@ func TestQueryQuorum(t *testing.T) {
 		}
 
 		// threshold 2 still met by the two valid attestors despite the bad one
-		result, err := New(
-			"client-chain",
-			"client-0",
-			attestors,
-			2,
-			nil,
-			slog.Default(),
-		).queryStateQuorum(ctx, 10, data)
+		result, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 	})
@@ -191,10 +196,8 @@ func TestQueryQuorum(t *testing.T) {
 	// The light client rejects v of 0/1 and high s, so a proof must carry
 	// neither even when attestors return them.
 	t.Run("proofCarriesNormalizedSignatures", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
-		require.NoError(t, err)
 		digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
-		highS, err := crypto.Sign(digest[:], key)
+		highS, err := crypto.Sign(digest[:], testKey(t, "high-s"))
 		require.NoError(t, err)
 		n := crypto.S256().Params().N
 		new(big.Int).Sub(n, new(big.Int).SetBytes(highS[32:64])).FillBytes(highS[32:64])
@@ -208,14 +211,7 @@ func TestQueryQuorum(t *testing.T) {
 
 		attestors := []attestor.Attestor{signedAttestor(t, "raw-v", data), highSAttestor}
 
-		result, err := New(
-			"client-chain",
-			"client-0",
-			attestors,
-			2,
-			nil,
-			slog.Default(),
-		).queryStateQuorum(ctx, 10, data)
+		result, err := newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.NoError(t, err)
 		require.Len(t, result.Signatures, 2)
 		for _, sig := range result.Signatures {
@@ -226,11 +222,8 @@ func TestQueryQuorum(t *testing.T) {
 	})
 
 	t.Run("duplicateSignerCountsOnce", func(t *testing.T) {
-		key, err := crypto.GenerateKey()
-		require.NoError(t, err)
-
 		digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
-		sig, err := crypto.Sign(digest[:], key)
+		sig, err := crypto.Sign(digest[:], testKey(t, "a1"))
 		require.NoError(t, err)
 
 		makeAttestor := func(name string) *attestor.MockAttestor {
@@ -248,13 +241,51 @@ func TestQueryQuorum(t *testing.T) {
 			makeAttestor("a2-same-key"),
 		}
 
-		_, err = New("client-chain", "client-0", attestors, 2, nil, slog.Default()).queryStateQuorum(ctx, 10, data)
+		_, err = newTestGenerator(t, attestors, 2, nil).queryStateQuorum(ctx, 10, data)
 		require.ErrorContains(
 			t,
 			err,
 			"quorum not met",
 			"the same recovered signer answering twice must not count twice",
 		)
+	})
+
+	// The light client reverts the whole proof on a signer outside its set, so
+	// one is excluded and quorum holds only if members alone meet the threshold.
+	t.Run("signerOutsideSetExcluded", func(t *testing.T) {
+		set := &attestationSet{signers: signerSet(t, "a1", "a2"), threshold: 2}
+		outsider := crypto.PubkeyToAddress(testKey(t, "outsider").PublicKey)
+
+		for _, tt := range []struct {
+			name    string
+			members []string
+			wantErr bool
+		}{
+			{name: "quorumMet", members: []string{"a1", "a2"}},
+			{name: "quorumNotMet", members: []string{"a1"}, wantErr: true},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				attestors := []attestor.Attestor{signedAttestor(t, "outsider", data)}
+				for _, name := range tt.members {
+					attestors = append(attestors, signedAttestor(t, name, data))
+				}
+
+				result, err := newGenerator("client-chain", "client-0", attestors, set, nil, slog.Default()).
+					queryStateQuorum(ctx, 10, data)
+				if !tt.wantErr {
+					require.NoError(t, err)
+					require.Len(t, result.Signatures, 2)
+
+					return
+				}
+				require.ErrorContains(t, err, "quorum not met: got 1 of 2")
+				require.ErrorContains(
+					t,
+					err,
+					`attestor "outsider": signer `+outsider.Hex()+" is not in the attestation set",
+				)
+			})
+		}
 	})
 }
 
