@@ -6,7 +6,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/cosmos/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cosmos/ibc/blob/main/LICENSE)
 [![Discord](https://img.shields.io/discord/669268347736686612?logo=discord&label=Discord)](https://discord.com/invite/interchain)
-[![Version](https://img.shields.io/github/v/tag/cosmos/ibc?filter=v*&label=version)](https://github.com/cosmos/ibc/releases/latest)
+[![Version](https://img.shields.io/github/v/tag/cosmos/ibc?filter=cli-v*&label=version)](https://github.com/cosmos/ibc/releases/latest)
 [![codecov](https://codecov.io/gh/cosmos/ibc/graph/badge.svg)](https://codecov.io/gh/cosmos/ibc)
 
 ![banner](./.github/assets/cosmos-ibc-github.svg)

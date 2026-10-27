@@ -6,7 +6,7 @@
 
 | Tag | Artifact | Description |
 | --- | --- | --- |
-| `vX.Y.Z` or `cli-vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
+| `cli-vX.Y.Z` | `ibc-vX.Y.Z-darwin-arm64.tar.gz` | IBC CLI binary for darwin/arm64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-linux-amd64.tar.gz` | IBC CLI binary for linux/amd64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-linux-arm64.tar.gz` | IBC CLI binary for linux/arm64, with `LICENSE` and `NOTICE` |
 |  | `ibc-vX.Y.Z-darwin-arm64.spdx.json` | SPDX SBOM of the darwin/arm64 binary |
@@ -25,24 +25,24 @@ See [Signed release assets](#signed-release-assets) for how to verify the artifa
 
 ## Signed release assets
 
-Pushing a `v*` or `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. It also publishes the signed [container image](#container-images) built from the same linux binaries.
+Pushing a `cli-v*` tag runs the [release workflow](./.github/workflows/release.yml). It builds the IBC CLI for each platform from the tagged commit, generates an SPDX SBOM for each binary, attests their build provenance, signs a `checksums.txt` over them with cosign, and attaches everything to a draft release for the tag. Once the draft is in place, it publishes the signed [container image](#container-images) built from the same linux binaries.
 
-`v*` and `cli-v*` tags are reserved for IBC CLI releases, and pushing either runs the release workflow. Both forms produce the same `ibc-vX.Y.Z` assets and "IBC CLI vX.Y.Z" title; the image is tagged with the pushed tag. The existing `v1.0.0-rc2` to `v1.0.0-rc6` tags are 2019–2020 spec release candidates; the spec is no longer released under `v*` tags.
+`cli-v*` tags are reserved for IBC CLI releases. A `cli-vX.Y.Z` tag produces `ibc-vX.Y.Z` assets and the "IBC CLI vX.Y.Z" title; the image is tagged with the pushed tag, e.g. `ghcr.io/cosmos/ibc:cli-vX.Y.Z`. Other tags, such as the 2019–2020 spec release candidates `v1.0.0-rc2` to `v1.0.0-rc6`, do not run the release workflow.
 
 
 The attesting, signing and publishing steps are the [shared release actions](./.github/actions/README.md), which [cosmos/ibc-go](https://github.com/cosmos/ibc-go) and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts) use too; each repository only defines its tag patterns and its build. Here the build also pushes the container image, and an extra job publishes its multi-platform tag.
 
 ### Release procedure
 
-1. Tag the release commit and push the tag (e.g. `git tag -s v0.2.0 -m v0.2.0 origin/main && git push origin v0.2.0`).
-2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached. The draft is only created once every build job and the signed multi-platform image have succeeded. If one fails, re-run the failed jobs.
+1. Tag the release commit and push the tag (e.g. `git tag -s cli-v0.2.0 -m cli-v0.2.0 origin/main && git push origin cli-v0.2.0`).
+2. Wait for the [release workflow](https://github.com/cosmos/ibc/actions/workflows/release.yml) to create the draft release in [GitHub](https://github.com/cosmos/ibc/releases) with the signed assets attached, and then to publish the signed multi-platform image. The draft is only created once every build job has succeeded and every asset verifies against its attestations, and the image is only published after the draft. If a job fails, re-run the failed jobs.
 3. Edit the draft and write the release notes.
 4. Check the `Set as a pre-release` checkbox if needed. The workflow already checks it for tags with a pre-release suffix such as `-rc.1`.
 5. Publish the release.
 
 Push the tag with `git` before publishing the release. A release drafted from the GitHub UI only creates its tag when it is published, so its assets would be attached after publishing. The workflow runs from the tagged commit, so a release branch must contain the current `.github/workflows/release.yml` and `.github/actions`.
 
-Pushing a release tag gets the tagged commit signed, so the workflow only accepts a commit that is on `main` or a `release/*` branch. Release tags must also be protected by a tag ruleset that targets `refs/tags/v*` and `refs/tags/cli-v*` and restricts creations, updates and deletions to the release maintainers.
+Pushing a release tag gets the tagged commit signed, so the workflow only accepts a commit that is on `main` or a `release/*` branch that a ruleset requires pull requests for. Add such a ruleset to a release branch before tagging from it. Release tags must also be protected by a tag ruleset that covers `refs/tags/cli-v*` and restricts creations, updates and deletions to the release maintainers.
 
 ### Verifying release files
 

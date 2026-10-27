@@ -151,7 +151,8 @@ runs:
 
     # Only the three subdirectories are uploaded, so other build outputs in out-dir stay out of the
     # release. Their common parent is out-dir, so the artifact keeps the assets/, sbom/ and
-    # attestations/ layout.
+    # attestations/ layout. Without overwrite, two jobs with the same platform fail here instead of
+    # one replacing the other's artifact; a re-run job still replaces its own earlier upload.
     - name: Upload artifact
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
@@ -161,5 +162,4 @@ runs:
           ${{ inputs.out-dir }}/sbom/
           ${{ inputs.out-dir }}/attestations/
         if-no-files-found: error
-        overwrite: true
         retention-days: ${{ inputs.retention-days }}

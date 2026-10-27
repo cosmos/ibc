@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: Release
-# Builds the IBC CLI archives for every version tag, generates an SBOM and build provenance for them,
+# Builds the IBC CLI archives for every cli-v* tag, generates an SBOM and build provenance for them,
 # signs a checksums file over them, and attaches everything to a draft release so the signed
-# assets exist before the release is published. It also publishes the signed container image built
-# from the same linux binaries.
+# assets exist before the release is published. Once the draft is in place, it publishes the signed
+# container image built from the same linux binaries.
 #
 # The attesting, signing and publishing steps are the shared actions in .github/actions, which
 # cosmos/ibc-go and cosmos/ibc-contracts use too. This repository uses them from the tagged commit.
 
 on:
   push:
-    tags: ["v*", "cli-v*"]
+    tags: ["cli-v*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -43,13 +43,13 @@ jobs:
       - name: Check tag format
         id: tag
         run: |
-          if [[ ! "$TAG" =~ ^(cli-)?(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
-            echo "::error::Tag must match vX.Y.Z or cli-vX.Y.Z, optionally followed by -<suffix>"
+          if [[ ! "$TAG" =~ ^cli-(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::Tag must match cli-vX.Y.Z, optionally followed by -<suffix>"
             exit 1
           fi
-          # Both tag forms name the assets and the title after the version alone.
-          version="${BASH_REMATCH[2]}"
-          suffix="${BASH_REMATCH[3]}"
+          # The assets and the title are named after the version alone, without the cli- prefix.
+          version="${BASH_REMATCH[1]}"
+          suffix="${BASH_REMATCH[2]}"
           {
             echo "name=ibc-${version}"
             echo "title=IBC CLI ${version}"
@@ -61,15 +61,25 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           filter: tree:0
-      - name: Check tagged commit is on main or a release branch
+      - name: Check tagged commit is on a protected main or release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Anyone who can push a tag would otherwise get release signatures for any commit, so only
-          # sign commits that already landed on main or a release/* branch.
-          branches=$(git branch --remotes --contains "$GITHUB_SHA" --format='%(refname)')
-          if ! grep -qxE 'refs/remotes/origin/(main|release/.+)' <<< "$branches"; then
-            echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch"
-            exit 1
-          fi
+          # sign commits that already landed on main or a release/* branch. Anyone with write access
+          # can create a release/* branch, so the branch must also need a pull request to change.
+          branches=$(git branch --remotes --contains "$GITHUB_SHA" --format='%(refname:lstrip=3)')
+          while IFS= read -r branch; do
+            if [[ "$branch" != main && "$branch" != release/* ]]; then
+              continue
+            fi
+            if gh api "repos/${GITHUB_REPOSITORY}/rules/branches/${branch}" --jq '.[].type' \
+              | grep -qx pull_request; then
+              exit 0
+            fi
+          done <<< "$branches"
+          echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch that a ruleset requires pull requests for"
+          exit 1
 
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
@@ -145,11 +155,11 @@ jobs:
           file: cli/Dockerfile
           target: target-artifact
           platforms: linux/${{ matrix.goarch }}
-          push: true
+          # Pushed by digest only. A platform tag could be moved before publish-manifest reads it.
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           # Disable BuildKit's unsigned attestation, so the pushed digest is the platform image
           # itself rather than an index wrapping it.
           provenance: false
-          tags: ${{ env.IMAGE_NAME }}:${{ env.TAG }}-${{ env.PLATFORM }}
       # The platform image gets its provenance and SBOM; the index is signed in publish-manifest.
       - name: Attest image
         if: matrix.goos == 'linux'
@@ -157,11 +167,51 @@ jobs:
         with:
           image: ${{ env.IMAGE_NAME }}
           digest: ${{ steps.image.outputs.digest }}
+      # publish-manifest builds the index from these digests, so it only references images
+      # attested above.
+      - name: Save image digest
+        if: matrix.goos == 'linux'
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/image-digest"
+          echo "$DIGEST" > "${RUNNER_TEMP}/image-digest/${PLATFORM}"
+      - name: Upload image digest
+        if: matrix.goos == 'linux'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-digest-${{ env.PLATFORM }}
+          path: ${{ runner.temp }}/image-digest/${{ env.PLATFORM }}
+          if-no-files-found: error
+          retention-days: 1
+
+  # Runs before publish-manifest, so the image is only published once the assets verify against
+  # their attestations. A re-run after the release is published fails here, at the upload without
+  # --clobber, before it can move the published image tag.
+  release:
+    name: Attach signed assets to draft release
+    needs: [validate-tag, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - name: Publish draft release
+        uses: ./.github/actions/publish-draft-release
+        with:
+          name: ${{ needs.validate-tag.outputs.name }}
+          title: ${{ needs.validate-tag.outputs.title }}
+          prerelease: ${{ needs.validate-tag.outputs.prerelease }}
 
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [build]
+    needs: [build, release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -185,15 +235,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download image digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: image-digest-*
+          path: ${{ runner.temp }}/image-digest
+          merge-multiple: true
       - name: Publish manifest
         id: index
         run: |
           metadata="${RUNNER_TEMP}/index-metadata.json"
+          sources=()
+          for platform in linux-amd64 linux-arm64; do
+            digest=$(< "${RUNNER_TEMP}/image-digest/${platform}")
+            sources+=("${IMAGE_NAME}@${digest}")
+          done
           docker buildx imagetools create \
             --metadata-file "$metadata" \
             --tag "${IMAGE_NAME}:${TAG}" \
-            "${IMAGE_NAME}:${TAG}-linux-amd64" \
-            "${IMAGE_NAME}:${TAG}-linux-arm64"
+            "${sources[@]}"
           docker buildx imagetools inspect "${IMAGE_NAME}:${TAG}"
           # The digest of the index this step pushed, rather than whatever the tag points to now.
           echo "digest=$(jq -r '."containerimage.descriptor".digest' "$metadata")" >> "$GITHUB_OUTPUT"
@@ -206,24 +266,3 @@ jobs:
           sign: "true"
           # Also signs the platform manifests referenced by the index.
           recursive: "true"
-
-  # Waits for publish-manifest as well, so a draft release always comes with a signed image.
-  release:
-    name: Attach signed assets to draft release
-    needs: [validate-tag, build, publish-manifest]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-          sparse-checkout: .github/actions
-      - name: Publish draft release
-        uses: ./.github/actions/publish-draft-release
-        with:
-          name: ${{ needs.validate-tag.outputs.name }}
-          title: ${{ needs.validate-tag.outputs.title }}
-          prerelease: ${{ needs.validate-tag.outputs.prerelease }}

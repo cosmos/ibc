@@ -24,7 +24,7 @@ Reference the actions by full commit SHA, like every other action in these repos
 uses: cosmos/ibc/.github/actions/publish-draft-release@<commit-sha> # main
 ```
 
-Do not tag the actions with `v*` or `cli-v*` tags in this repository: pushing either runs the IBC CLI release here. A change to an action reaches ibc-go and ibc-contracts only when they bump the SHA, so bump it in both in the same way you would bump any pinned action.
+Do not tag the actions with `cli-v*` tags in this repository: pushing one runs the IBC CLI release here. A change to an action reaches ibc-go and ibc-contracts only when they bump the SHA, so bump it in both in the same way you would bump any pinned action.
 
 The `cosmos` organization's Actions policy must allow `cosmos/ibc` actions in those repositories.
 
@@ -124,4 +124,4 @@ For a single-platform image, call it once with `sign: "true"` and the default `s
 
 Keep the inputs backwards compatible where you can, since ibc-go and ibc-contracts pin a SHA and pick up a change only when they bump it. If an input has to change, update both repositories in the same bump.
 
-The safest way to try a change end to end is in a fork: push a pre-release tag such as `v0.0.0-test.1` there, check the draft release and run your repository's verification commands against it, then delete the draft, the tag and any images it pushed.
+The safest way to try a change end to end is in a fork: push a pre-release tag such as `cli-v0.0.0-test.1` there, check the draft release and run your repository's verification commands against it, then delete the draft, the tag and any images it pushed.
