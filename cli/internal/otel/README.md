@@ -99,7 +99,7 @@ Collections inside that threshold re-emit the last observed value. A failed quer
 | txsubmitter | `evm_gas_balance`               | observable gauge   | `chain_id`, `wallet`                                                | Latest EVM wallet balance in native-token units; `-1` on error |
 | watcher     | `watcher_events_total`          | counter            | `chain_id`, `type` (`send_packet`)                                  | Observed send-packet events                                    |
 | watcher | `watcher_subscription_up` | gauge | `chain_id` | 1 while subscribed; 0 before the initial subscription, during reconnection, and after shutdown. Only configured auto-relay watchers emit it. |
-| dispatch | `dispatcher_last_success_timestamp_seconds` | gauge | none | Unix timestamp of the last completed successful poll, including empty polls. Initially 0; errors and blocked polls leave it unchanged. |
+| dispatch | `dispatcher_last_success_timestamp_seconds` | gauge | none | Unix timestamp of the last completed successful poll, including empty polls. Initially 0; listing errors and blocked polls leave it unchanged. |
 | dispatch    | `packets_pending`               | gauge              | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`          | Pending packets per route                                      |
 | dispatch    | `excessive_relay_latency_total` | counter            | `chain_id`, `dest_chain_id`, `client_id`, `dest_client_id`, `type`  | +1 per poll while a packet is pending past its leg threshold   |
 
@@ -119,7 +119,7 @@ mined receipts, not finality guarantees. A bounded cache deduplicates the last 1
 the counters are operational telemetry, not a durable transaction ledger.
 
 For dispatcher freshness, use `time() - dispatcher_last_success_timestamp_seconds` per instance.
-An empty successful poll advances this timestamp; a blocked pipeline or failed database operation
+An empty successful poll advances this timestamp; a blocked pipeline or failure to list packets
 does not. The subscription gauge describes subscription lifecycle state, not proof that an otherwise
 connected endpoint is delivering every event. Missing series must be monitored separately from zero.
 

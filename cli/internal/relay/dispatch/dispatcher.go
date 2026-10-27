@@ -4,7 +4,6 @@ package dispatch
 
 import (
 	"context"
-	stderrors "errors"
 	"log/slog"
 	"time"
 
@@ -120,11 +119,7 @@ func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) 
 	metrics.packetsPending(ctx, d.routes, packets)
 	metrics.excessiveRelayLatency(ctx, packets)
 
-	var persistenceErrors []error
 	for _, packet := range packets {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
 		tr := processors.NewTransfer(packet, d.logger)
 
 		err := d.SubmitTransfer(ctx, tr)
@@ -136,14 +131,10 @@ func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) 
 
 			if errUpdate := d.storage.UpdatePacketStatus(ctx, tr.Key(), store.RelayStatusFailed); errUpdate != nil {
 				tr.GetLogger().Error("Marking packet failed", "err", errUpdate)
-				persistenceErrors = append(persistenceErrors, errors.Wrap(errUpdate, "marking packet failed"))
 			}
 		}
 	}
 
-	if err := stderrors.Join(append(persistenceErrors, ctx.Err())...); err != nil {
-		return err
-	}
 	metrics.LastSuccess.Record(ctx, float64(time.Now().UnixNano())/float64(time.Second))
 	return nil
 }
