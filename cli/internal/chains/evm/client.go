@@ -29,6 +29,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	"github.com/cosmos/ibc/cli/evmrpc"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
@@ -101,11 +102,7 @@ func dialRPC(chainID, rpcURL string) (*rpcClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, err := rpc.DialOptions(
-		ctx,
-		rpcURL,
-		rpc.WithHTTPClient(&http.Client{Transport: nodeTransport}),
-	)
+	conn, err := evmrpc.Dial(ctx, rpcURL, evmrpc.RetryTransport{Base: nodeTransport})
 	if err != nil {
 		return nil, errors.Wrapf(err, "dialing rpc for chain %s", chainID)
 	}

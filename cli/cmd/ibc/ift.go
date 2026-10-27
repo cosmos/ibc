@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
+	"github.com/cosmos/ibc/cli/evmrpc"
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
@@ -186,10 +187,11 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	backend, err := ethclient.DialContext(cmd.Context(), chain.EVM.RPC)
+	conn, err := evmrpc.Dial(cmd.Context(), chain.EVM.RPC, evmrpc.RetryTransport{})
 	if err != nil {
 		return errors.Wrapf(err, "dial %s", chain.EVM.RPC)
 	}
+	backend := ethclient.NewClient(conn)
 
 	if !common.IsHexAddress(flagQueryIFTAddress) {
 		return errors.Errorf("invalid IFT address %q", flagQueryIFTAddress)
@@ -254,10 +256,11 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 		return nil, nil, nil, config.Config{}, errors.Wrap(err, "signer key")
 	}
 
-	backend, err := ethclient.DialContext(ctx, chain.EVM.RPC)
+	conn, err := evmrpc.Dial(ctx, chain.EVM.RPC, evmrpc.RetryTransport{})
 	if err != nil {
 		return nil, nil, nil, config.Config{}, errors.Wrapf(err, "dial %s", chain.EVM.RPC)
 	}
+	backend := ethclient.NewClient(conn)
 
 	chainID, err := backend.ChainID(ctx)
 	if err != nil {

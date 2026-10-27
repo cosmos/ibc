@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package besu
+package evmrpc_test
 
 import (
 	"context"
@@ -19,6 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cosmos/ibc/cli/evmrpc"
 )
 
 const (
@@ -26,6 +28,8 @@ const (
 	nullReply          = `{"jsonrpc":"2.0","id":%s,"result":null}`
 	revertReply        = `{"jsonrpc":"2.0","id":%s,"error":{"code":3,"message":"execution reverted","data":"0x"}}`
 )
+
+var fast = evmrpc.RetryTransport{Delay: time.Millisecond}
 
 // scriptedNode answers each call to a method with that method's next scripted
 // reply, repeating the last one, and counts the calls.
@@ -60,26 +64,24 @@ func (n *scriptedNode) callCount(method string) int {
 	return n.calls[method]
 }
 
-// fastBlockPeriod puts retries 1ms apart.
-const fastBlockPeriod = readRetryAttempts * time.Millisecond
-
 func dialScripted(
 	t *testing.T,
-	blockPeriod time.Duration,
+	transport evmrpc.RetryTransport,
 	replies map[string][]string,
 ) (*ethclient.Client, *scriptedNode) {
 	t.Helper()
 	node := &scriptedNode{replies: replies, calls: map[string]int{}}
 	server := httptest.NewServer(node)
 	t.Cleanup(server.Close)
-	client, err := dialClient(t.Context(), server.URL, blockPeriod)
+	conn, err := evmrpc.Dial(t.Context(), server.URL, transport)
 	require.NoError(t, err)
+	client := ethclient.NewClient(conn)
 	t.Cleanup(client.Close)
 	return client, node
 }
 
-func TestReadRetryTransportRetriesInternalError(t *testing.T) {
-	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{
+func TestRetryTransportRetriesInternalError(t *testing.T) {
+	client, node := dialScripted(t, fast, map[string][]string{
 		"eth_call": {internalErrorReply, internalErrorReply, `{"jsonrpc":"2.0","id":%s,"result":"0x2a"}`},
 	})
 	to := common.HexToAddress("0x1")
@@ -90,10 +92,10 @@ func TestReadRetryTransportRetriesInternalError(t *testing.T) {
 	require.Equal(t, 3, node.callCount("eth_call"))
 }
 
-func TestReadRetryTransportRetriesMissingLatestBlock(t *testing.T) {
+func TestRetryTransportRetriesMissingLatestBlock(t *testing.T) {
 	header, err := json.Marshal(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(0)})
 	require.NoError(t, err)
-	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{
+	client, node := dialScripted(t, fast, map[string][]string{
 		"eth_getBlockByNumber": {nullReply, `{"jsonrpc":"2.0","id":%s,"result":` + string(header) + `}`},
 	})
 
@@ -103,17 +105,23 @@ func TestReadRetryTransportRetriesMissingLatestBlock(t *testing.T) {
 	require.Equal(t, 2, node.callCount("eth_getBlockByNumber"))
 }
 
-func TestReadRetryTransportReturnsLastErrorAfterAttempts(t *testing.T) {
-	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{"eth_call": {internalErrorReply}})
-	to := common.HexToAddress("0x1")
+func TestRetryTransportReturnsLastErrorAfterAttempts(t *testing.T) {
+	for attempts, want := range map[int]int{0: evmrpc.DefaultAttempts, 3: 3} {
+		transport := fast
+		transport.Attempts = attempts
+		client, node := dialScripted(t, transport, map[string][]string{"eth_call": {internalErrorReply}})
+		to := common.HexToAddress("0x1")
 
-	_, err := client.CallContract(t.Context(), ethereum.CallMsg{To: &to}, nil)
-	require.ErrorContains(t, err, "Internal error")
-	require.Equal(t, readRetryAttempts, node.callCount("eth_call"))
+		_, err := client.CallContract(t.Context(), ethereum.CallMsg{To: &to}, nil)
+		require.ErrorContains(t, err, "Internal error")
+		require.Equal(t, want, node.callCount("eth_call"), "attempts %d", attempts)
+	}
 }
 
-func TestReadRetryTransportReturnsContextErrorWhenCanceledDuringDelay(t *testing.T) {
-	client, node := dialScripted(t, time.Hour, map[string][]string{"eth_call": {internalErrorReply}})
+func TestRetryTransportReturnsContextErrorWhenCanceledDuringDelay(t *testing.T) {
+	client, node := dialScripted(t, evmrpc.RetryTransport{Delay: time.Hour}, map[string][]string{
+		"eth_call": {internalErrorReply},
+	})
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	to := common.HexToAddress("0x1")
@@ -123,8 +131,8 @@ func TestReadRetryTransportReturnsContextErrorWhenCanceledDuringDelay(t *testing
 	require.Equal(t, 1, node.callCount("eth_call"))
 }
 
-func TestReadRetryTransportSendsOnceWhenNotTransient(t *testing.T) {
-	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{
+func TestRetryTransportSendsOnceWhenNotTransient(t *testing.T) {
+	client, node := dialScripted(t, fast, map[string][]string{
 		"eth_call":               {revertReply},
 		"eth_getBlockByNumber":   {nullReply},
 		"eth_sendRawTransaction": {internalErrorReply},

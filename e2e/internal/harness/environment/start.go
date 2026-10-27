@@ -360,11 +360,13 @@ func acquireChain(
 }
 
 func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAcquisition, error) {
+	timing := blockTiming(time.Second)
 	adapter, err := anvil.Start(ctx, anvil.Spec{
-		ID:      string(spec.ID),
-		ChainID: spec.EVMChainID,
-		LogPath: filepath.Join(ws.diagnosticsDir, "anvil-"+resourcePathToken(string(spec.ID))+".log"),
-		RunID:   ws.runID,
+		ID:            string(spec.ID),
+		ChainID:       spec.EVMChainID,
+		LogPath:       filepath.Join(ws.diagnosticsDir, "anvil-"+resourcePathToken(string(spec.ID))+".log"),
+		RunID:         ws.runID,
+		RPCRetryDelay: timing.PollInterval,
 	})
 	if err != nil {
 		return chainAcquisition{}, err
@@ -375,7 +377,7 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
 		wsURL:      adapter.WSURL(),
-		timing:     blockTiming(time.Second),
+		timing:     timing,
 		impl:       adapter,
 		mining:     &Mining{controller: adapter},
 		node:       &NodeLifecycle{controller: adapter},
@@ -389,14 +391,16 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 }
 
 func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcquisition, error) {
+	timing := blockTiming(besuBlockPeriod)
 	adapter, err := besu.Start(ctx, besu.Spec{
-		ID:          string(spec.ID),
-		ChainID:     spec.EVMChainID,
-		Consensus:   spec.Consensus,
-		WorkDir:     filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
-		RunID:       ws.runID,
-		BlockPeriod: besuBlockPeriod,
-		Followers:   spec.Followers,
+		ID:            string(spec.ID),
+		ChainID:       spec.EVMChainID,
+		Consensus:     spec.Consensus,
+		WorkDir:       filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
+		RunID:         ws.runID,
+		BlockPeriod:   besuBlockPeriod,
+		Followers:     spec.Followers,
+		RPCRetryDelay: timing.PollInterval,
 	})
 	if err != nil {
 		return chainAcquisition{}, err
@@ -407,7 +411,7 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 			evmChainID: spec.EVMChainID,
 			rpcURL:     adapter.RPCURL(),
 			wsURL:      adapter.WSURL(),
-			timing:     blockTiming(besuBlockPeriod),
+			timing:     timing,
 			impl:       adapter,
 			funding:    &Funding{controller: adapter},
 			validators: &Validators{controller: adapter},
@@ -420,9 +424,10 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 func attachEVM(ctx context.Context, spec AttachedEVM, runtime Runtime) (chainAcquisition, error) {
 	endpoint, _ := runtime.endpoint(spec.Endpoint)
 	adapter, err := evm.ConnectAttached(ctx, evm.AttachedSpec{
-		ID:      string(spec.ID),
-		ChainID: spec.EVMChainID,
-		RPCURL:  endpoint.RPCURL,
+		ID:            string(spec.ID),
+		ChainID:       spec.EVMChainID,
+		RPCURL:        endpoint.RPCURL,
+		RPCRetryDelay: spec.Timing.PollInterval,
 	})
 	if err != nil {
 		return chainAcquisition{}, err

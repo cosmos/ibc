@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/cosmos/ibc/cli/evmrpc"
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 )
 
@@ -16,6 +18,8 @@ type AttachedSpec struct {
 	ID      string
 	ChainID uint64
 	RPCURL  string
+	// RPCRetryDelay spaces retried RPC reads; zero uses evmrpc.DefaultDelay.
+	RPCRetryDelay time.Duration
 }
 
 type AttachedChain struct {
@@ -37,10 +41,11 @@ func ConnectAttached(ctx context.Context, spec AttachedSpec) (*AttachedChain, er
 		return nil, fmt.Errorf("attached chain %s: rpc url is empty", spec.ID)
 	}
 
-	client, err := ethclient.DialContext(ctx, spec.RPCURL)
+	conn, err := evmrpc.Dial(ctx, spec.RPCURL, evmrpc.RetryTransport{Delay: spec.RPCRetryDelay})
 	if err != nil {
 		return nil, fmt.Errorf("dial attached chain %s at %s: %w", spec.ID, spec.RPCURL, err)
 	}
+	client := ethclient.NewClient(conn)
 	ec, err := NewVerifiedClient(ctx, client, spec.ChainID, fmt.Sprintf("attached chain %s", spec.ID))
 	if err != nil {
 		return nil, err

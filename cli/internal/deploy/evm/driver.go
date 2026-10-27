@@ -29,6 +29,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/besu"
+	"github.com/cosmos/ibc/cli/evmrpc"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/routeraccess"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
@@ -71,10 +72,11 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 			return nil, fmt.Errorf("deployer key: %w", err)
 		}
 	}
-	client, err := ethclient.DialContext(ctx, opts.RPCURL)
+	conn, err := evmrpc.Dial(ctx, opts.RPCURL, evmrpc.RetryTransport{})
 	if err != nil {
 		return nil, fmt.Errorf("dial %s: %w", opts.RPCURL, err)
 	}
+	client := ethclient.NewClient(conn)
 	chainID, err := client.ChainID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("query chain id: %w", err)

@@ -21,6 +21,7 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 
+	"github.com/cosmos/ibc/cli/evmrpc"
 	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
@@ -48,6 +49,8 @@ type Spec struct {
 	LogPath string
 	RunID   string
 	Image   string
+	// RPCRetryDelay spaces retried RPC reads; zero uses evmrpc.DefaultDelay.
+	RPCRetryDelay time.Duration
 }
 
 type Chain struct {
@@ -159,10 +162,11 @@ func launchAnvil(
 
 func connectAnvil(ctx context.Context, spec Spec, rpcURL string) (*evm.EVMClient, error) {
 	// HTTP dialing is lazy and succeeds on an unbound port; readiness is probed separately below.
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	conn, err := evmrpc.Dial(ctx, rpcURL, evmrpc.RetryTransport{Delay: spec.RPCRetryDelay})
 	if err != nil {
 		return nil, fmt.Errorf("dial anvil (chain %s): %w", spec.ID, err)
 	}
+	client := ethclient.NewClient(conn)
 
 	probe := func(ctx context.Context) error {
 		_, blockErr := client.BlockNumber(ctx)
