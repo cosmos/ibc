@@ -57,7 +57,6 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		if errClear := p.storage.ClearPacketRecvTx(ctx, tr.Key()); errClear != nil {
 			return nil, errors.Wrapf(errClear, "clearing recv tx %s", recvTxHash)
 		}
-		metrics.txRetry(ctx, tr, relayTypeSendToRecv, recvTxHash)
 		metrics.packetExecution(ctx, tr, "recv", executionFailed)
 
 		return nil, errors.Errorf("write ack for transfer not found in recv tx %s", recvTxHash)
