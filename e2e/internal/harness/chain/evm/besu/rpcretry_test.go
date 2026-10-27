@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,25 +60,26 @@ func (n *scriptedNode) callCount(method string) int {
 	return n.calls[method]
 }
 
+// fastBlockPeriod puts retries 1ms apart.
+const fastBlockPeriod = readRetryAttempts * time.Millisecond
+
 func dialScripted(
 	t *testing.T,
-	delay time.Duration,
+	blockPeriod time.Duration,
 	replies map[string][]string,
 ) (*ethclient.Client, *scriptedNode) {
 	t.Helper()
 	node := &scriptedNode{replies: replies, calls: map[string]int{}}
 	server := httptest.NewServer(node)
 	t.Cleanup(server.Close)
-	client, err := rpc.DialOptions(t.Context(), server.URL, rpc.WithHTTPClient(&http.Client{
-		Transport: readRetryTransport{base: http.DefaultTransport, delay: delay},
-	}))
+	client, err := dialClient(t.Context(), server.URL, blockPeriod)
 	require.NoError(t, err)
 	t.Cleanup(client.Close)
-	return ethclient.NewClient(client), node
+	return client, node
 }
 
 func TestReadRetryTransportRetriesInternalError(t *testing.T) {
-	client, node := dialScripted(t, time.Millisecond, map[string][]string{
+	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{
 		"eth_call": {internalErrorReply, internalErrorReply, `{"jsonrpc":"2.0","id":%s,"result":"0x2a"}`},
 	})
 	to := common.HexToAddress("0x1")
@@ -93,7 +93,7 @@ func TestReadRetryTransportRetriesInternalError(t *testing.T) {
 func TestReadRetryTransportRetriesMissingLatestBlock(t *testing.T) {
 	header, err := json.Marshal(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(0)})
 	require.NoError(t, err)
-	client, node := dialScripted(t, time.Millisecond, map[string][]string{
+	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{
 		"eth_getBlockByNumber": {nullReply, `{"jsonrpc":"2.0","id":%s,"result":` + string(header) + `}`},
 	})
 
@@ -104,7 +104,7 @@ func TestReadRetryTransportRetriesMissingLatestBlock(t *testing.T) {
 }
 
 func TestReadRetryTransportReturnsLastErrorAfterAttempts(t *testing.T) {
-	client, node := dialScripted(t, time.Millisecond, map[string][]string{"eth_call": {internalErrorReply}})
+	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{"eth_call": {internalErrorReply}})
 	to := common.HexToAddress("0x1")
 
 	_, err := client.CallContract(t.Context(), ethereum.CallMsg{To: &to}, nil)
@@ -113,7 +113,7 @@ func TestReadRetryTransportReturnsLastErrorAfterAttempts(t *testing.T) {
 }
 
 func TestReadRetryTransportReturnsContextErrorWhenCanceledDuringDelay(t *testing.T) {
-	client, node := dialScripted(t, time.Minute, map[string][]string{"eth_call": {internalErrorReply}})
+	client, node := dialScripted(t, time.Hour, map[string][]string{"eth_call": {internalErrorReply}})
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	to := common.HexToAddress("0x1")
@@ -124,11 +124,10 @@ func TestReadRetryTransportReturnsContextErrorWhenCanceledDuringDelay(t *testing
 }
 
 func TestReadRetryTransportSendsOnceWhenNotTransient(t *testing.T) {
-	client, node := dialScripted(t, time.Millisecond, map[string][]string{
-		"eth_call":                  {revertReply},
-		"eth_getBlockByNumber":      {nullReply},
-		"eth_getTransactionReceipt": {nullReply},
-		"eth_sendRawTransaction":    {internalErrorReply},
+	client, node := dialScripted(t, fastBlockPeriod, map[string][]string{
+		"eth_call":               {revertReply},
+		"eth_getBlockByNumber":   {nullReply},
+		"eth_sendRawTransaction": {internalErrorReply},
 	})
 	ctx := t.Context()
 	to := common.HexToAddress("0x1")
@@ -137,14 +136,10 @@ func TestReadRetryTransportSendsOnceWhenNotTransient(t *testing.T) {
 	require.ErrorContains(t, err, "execution reverted")
 	_, err = client.HeaderByNumber(ctx, big.NewInt(9))
 	require.ErrorIs(t, err, ethereum.NotFound)
-	_, err = client.TransactionReceipt(ctx, common.Hash{})
-	require.ErrorIs(t, err, ethereum.NotFound)
 	tx := types.NewTx(&types.LegacyTx{Gas: 21_000, GasPrice: big.NewInt(0), To: &to})
 	require.ErrorContains(t, client.SendTransaction(ctx, tx), "Internal error")
 
-	for _, method := range []string{
-		"eth_call", "eth_getBlockByNumber", "eth_getTransactionReceipt", "eth_sendRawTransaction",
-	} {
+	for _, method := range []string{"eth_call", "eth_getBlockByNumber", "eth_sendRawTransaction"} {
 		require.Equal(t, 1, node.callCount(method), method)
 	}
 }

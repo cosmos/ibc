@@ -16,31 +16,20 @@ import (
 )
 
 const (
-	// readRetryAttempts are spread over one block period, the window in which
-	// an import can race a read.
+	// Attempts are a block period / readRetryAttempts apart, so together they
+	// cover just under one block period, the window in which an import can
+	// race a read.
 	readRetryAttempts = 8
 
 	// Besu answers reads with a bare Internal error, without revert data,
 	// when they race the import of the next block.
 	jsonRPCInternalError = -32603
-)
 
-// readMethods are the JSON-RPC methods the harness reads chain state with.
-// Only these are retried; anything that writes is sent once.
-var readMethods = map[string]bool{
-	"eth_blockNumber":         true,
-	"eth_call":                true,
-	"eth_chainId":             true,
-	"eth_estimateGas":         true,
-	"eth_getBalance":          true,
-	"eth_getBlockByHash":      true,
-	"eth_getBlockByNumber":    true,
-	"eth_getCode":             true,
-	"eth_getLogs":             true,
-	"eth_getProof":            true,
-	"eth_getStorageAt":        true,
-	"eth_getTransactionCount": true,
-}
+	// The harness signs transactions locally, so this is the only write the
+	// chain client sends. A resend after Besu accepted the transaction would
+	// fail as already known, so it is sent once.
+	sendRawTransaction = "eth_sendRawTransaction"
+)
 
 // dialClient dials a Besu node's HTTP RPC through readRetryTransport.
 func dialClient(ctx context.Context, url string, blockPeriod time.Duration) (*ethclient.Client, error) {
@@ -76,7 +65,7 @@ func (t readRetryTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		Params []json.RawMessage `json:"params"`
 	}
 	// Batches fail to decode into a single call and are sent once.
-	if json.Unmarshal(body, &call) != nil || !readMethods[call.Method] {
+	if json.Unmarshal(body, &call) != nil || call.Method == sendRawTransaction {
 		return t.base.RoundTrip(withBody(req, body))
 	}
 
