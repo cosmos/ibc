@@ -56,7 +56,7 @@ For a matrix, such as the ibc-contracts proof-api archives, pass the platform in
 ```yaml
       - uses: cosmos/ibc/.github/actions/attest-release-assets@<commit-sha> # main
         with:
-          name: ${{ env.NAME }}${{ matrix.asset-suffix }}
+          name: ${{ env.NAME }}-${{ matrix.platform }}
           platform: ${{ matrix.platform }}
           sbom-dir: src
 ```
