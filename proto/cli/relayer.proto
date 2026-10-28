@@ -18,8 +18,7 @@ service RelayerApiService {
 message RelayRequest {
   string tx_hash = 1;
   string source_chain_id = 2;
-  // Selection is required and controls only this relayer instance; IBC
-  // relaying remains permissionless.
+  // Selection is required and controls only this relayer instance.
   oneof selection {
     AllPackets all_packets = 3;
     SelectedPackets selected_packets = 4;
@@ -118,9 +117,9 @@ message TransactionInfo {
 
 message PacketStatus {
   PacketState state = 1;
-  // Together with source_client_id, identifies the packet.
+  // Together with source_client_id and send_tx.chain_id, identifies the packet.
   uint64 sequence_number = 2;
-  // Together with sequence_number, identifies the packet.
+  // Together with sequence_number and send_tx.chain_id, identifies the packet.
   string source_client_id = 3;
   // The source-chain SendPacket transaction. Always present.
   TransactionInfo send_tx = 4;
