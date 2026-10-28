@@ -7,10 +7,14 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "relayer-key-id"
-  - alias: "attestor-dan-key"
+  - alias: "attestor-dan-base-key"
     type: remote
     grpc: cosmos-kms.example.com:9090
-    remoteKeyId: "attestor-dan-key-id"
+    remoteKeyId: "attestor-dan-base-key-id"
+  - alias: "attestor-dan-ethereum-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-ethereum-key-id"
 db:
   type: sqlite
   url: ibc.db
@@ -63,9 +67,9 @@ attestors:
   - name: "attestor-dan-base"
     chainId: "8453"
     type: local
-    signer: "attestor-dan-key"
+    signer: "attestor-dan-base-key"
     finalityOffset: 1
   - name: "attestor-dan-ethereum"
     chainId: "1"
     type: local
-    signer: "attestor-dan-key"
+    signer: "attestor-dan-ethereum-key"

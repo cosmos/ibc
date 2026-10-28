@@ -42,6 +42,7 @@ var (
 	flagDeployDeployer        string
 	flagDeployDryRun          bool
 	flagDeployYes             bool
+	flagDeployCorePopulate    bool
 	flagDeployChain           string
 	flagDeployCounterparty    string
 	flagDeployClientID        string
@@ -284,7 +285,30 @@ func deployCore(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	return planThenRun(cmd.Context(), deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain))
+	if runErr := planThenRun(
+		cmd.Context(),
+		deploy.CoreSteps(target, flagDeployManifestDir, flagDeployChain),
+	); runErr != nil {
+		return runErr
+	}
+	if !flagDeployCorePopulate || flagDeployDryRun {
+		return nil
+	}
+
+	m, err := manifest.Load(flagDeployManifestDir, flagDeployChain)
+	if err != nil {
+		return err
+	}
+	if m == nil || m.Core.Router == "" || m.Core.Multicall == "" {
+		return errors.Errorf("core manifest for chain %s has no router or multicall recorded", flagDeployChain)
+	}
+	merged, _, err := cfg.ReconcileDeployment(config.DeploymentConfig{
+		Chains: []config.ChainConfig{renderedChain(cfg, m)},
+	})
+	if err != nil {
+		return err
+	}
+	return populateRenderedConfig(merged)
 }
 
 // clientSpec resolves the client ids for --chain tracking
@@ -938,10 +962,13 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 	if flagDeployBridgeChainA == flagDeployBridgeChainB {
 		return errors.New("--chain-a and --chain-b must differ")
 	}
-	for _, addr := range []string{flagDeployBridgeIFTA, flagDeployBridgeIFTB} {
-		if !common.IsHexAddress(addr) {
-			return errors.Errorf("invalid IFT address %q", addr)
-		}
+	iftA, err := normalizeIFTAddress(cfg, flagDeployBridgeChainA, flagDeployBridgeIFTA)
+	if err != nil {
+		return err
+	}
+	iftB, err := normalizeIFTAddress(cfg, flagDeployBridgeChainB, flagDeployBridgeIFTB)
+	if err != nil {
+		return err
 	}
 	clientID := flagDeployBridgeClientID
 	if clientID == "" {
@@ -959,10 +986,25 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 		return errors.Wrapf(err, "chain %s", flagDeployBridgeChainB)
 	}
 	stepsA := deploy.IFTBridgeSteps(
-		targetA, flagDeployManifestDir, flagDeployBridgeChainA, flagDeployBridgeIFTA, flagDeployBridgeCtorA,
-		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTB})
+		targetA, flagDeployManifestDir, flagDeployBridgeChainA, iftA, flagDeployBridgeCtorA,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: iftB})
 	stepsB := deploy.IFTBridgeSteps(
-		targetB, flagDeployManifestDir, flagDeployBridgeChainB, flagDeployBridgeIFTB, flagDeployBridgeCtorB,
-		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: flagDeployBridgeIFTA})
+		targetB, flagDeployManifestDir, flagDeployBridgeChainB, iftB, flagDeployBridgeCtorB,
+		deploy.BridgeSpec{ClientID: clientID, CounterpartyIFT: iftA})
 	return planThenRun(cmd.Context(), append(stepsA, stepsB...))
+}
+
+func normalizeIFTAddress(cfg config.Config, chainID, address string) (string, error) {
+	chain, ok := cfg.Chain(chainID)
+	if !ok {
+		return "", errors.Errorf("chain %q not declared in config", chainID)
+	}
+	if chain.Type() != config.ChainTypeEVM {
+		return address, nil
+	}
+	if !common.IsHexAddress(address) {
+		return "", errors.Errorf("invalid IFT address %q", address)
+	}
+	// GMP identifies EVM senders by their checksummed address string.
+	return common.HexToAddress(address).Hex(), nil
 }

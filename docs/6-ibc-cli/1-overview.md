@@ -40,6 +40,8 @@ Signer keys, contract addresses, client IDs, and finality settings all have to s
 
 Follow the [tutorial](2-tutorial-deploy-ibc-and-send-a-token.md) to learn the full process of deploying IBC between two chains and sending a token.
 
+Each side can use a different client type. The tutorial pairs an attestation light client with a Besu consensus light client.
+
 Deployment is done from a single key. It becomes the access manager's admin, which governs the router, multicall, and the GMP app, and the default owner of any token you deploy. See [Permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md) for more details.
 
 ## The relayer
@@ -147,6 +149,9 @@ Most configurations can be generated. `ibc config new` writes a starting file, `
 The IBC CLI also validates the file with the `ibc config validate` command. 
 
 The [configuration reference](5-configuration.md) carries every key and its default. [CLI commands](6-cli-commands.md) and the [API reference](7-api.md) cover the rest of the surface.
+
+See [Observability and metrics](8-observability-and-metrics.md) for metric export modes
+and the metrics reference.
 
 ## Next steps
 

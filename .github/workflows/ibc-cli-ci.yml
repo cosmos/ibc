@@ -67,7 +67,7 @@ jobs:
             gen/go/solidity-abi/go.sum
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
-          version: v2.13.2
+          version: v2.15.0
           working-directory: cli
 
   build:
@@ -98,6 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write # Codecov OIDC upload
     timeout-minutes: 30
     env:
       # creates postgres docker container for testing
@@ -111,7 +112,12 @@ jobs:
             cli/go.sum
             gen/go/solidity-abi/go.sum
       - name: Test
-        run: make test
+        run: go test ./... -v -coverprofile=coverage.out
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: cli/coverage.out
+          flags: cli
+          use_oidc: true
 
   verify-codegen:
     name: Codegen Verify

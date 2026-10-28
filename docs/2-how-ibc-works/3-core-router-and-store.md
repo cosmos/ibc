@@ -45,7 +45,7 @@ flowchart LR
 
 The application registry maps a port to its application, and the client registry maps a client identifier to the light client that verifies a counterparty chain, along with the [counterparty information](4-clients-and-counterparties.md) recorded for it. Between them the router can find which application an arriving payload belongs to, and which client can verify the proof that came with it.
 
-In IBC-solidity anyone can register an application under its address-derived port or a client under a generated identifier. Custom identifiers and client migration are role-gated. For how an application claims a port, see [ports and registration](2-packets-and-applications.md#ports-and-registration). For the client side, see [connecting two chains](4-clients-and-counterparties.md#connecting-two-chains).
+In IBC-solidity, registering an application or a client and migrating a client are all role-gated. Each deployment decides who holds those roles, as [permissions and upgrades](../5-ibc-solidity-contracts/6-permissions-and-upgrades.md#what-a-deployment-assigns) describes. For how an application claims a port, see [ports and registration](2-packets-and-applications.md#ports-and-registration). For the client side, see [connecting two chains](4-clients-and-counterparties.md#connecting-two-chains).
 
 ## The store
 

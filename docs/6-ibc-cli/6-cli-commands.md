@@ -98,7 +98,7 @@ Validate config structure and cross-references.
 
 <!-- GEN:cli:cmd:config-validate END -->
 
-`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> Unknown fields and unresolved cross-references always fail at load. <!-- [cli/internal/config/file.go: LoadFromFile] -->
+`--live` adds checks that need live chain RPC endpoints. Pass `relayer` or `attestor` to also verify the file is sufficient to run that process. <!-- [cli/cmd/ibc/config.go: configValidate] --> This command rejects unknown fields and unresolved cross-references. <!-- [cli/internal/config/file.go: LoadFromFile] -->
 
 ```bash
 ibc config validate
@@ -132,6 +132,10 @@ Import a private key into `<ibc-home>/keys/<name>`.
 
 <!-- GEN:cli:cmd:keys-import END -->
 
+```bash
+ibc keys import ecdsa deployer --private-key "$DEPLOYER_KEY" --populate-config
+```
+
 ### `ibc keys list`
 
 <!-- GEN:cli:cmd:keys-list START -->
@@ -156,6 +160,10 @@ Saves key into `<ibc-home>/keys/<name>` or prints to stdout if name is not provi
 
 <!-- GEN:cli:cmd:keys-new END -->
 
+```bash
+ibc keys new ecdsa relayer --populate-config
+```
+
 ### `ibc keys show`
 
 <!-- GEN:cli:cmd:keys-show START -->
@@ -170,6 +178,10 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 
 <!-- GEN:cli:cmd:keys-show END -->
 
+```bash
+ibc keys show relayer
+```
+
 > **Warning:** Do not run `keys show --private` on a shared or recorded terminal. The private key it prints controls every asset its address holds.
 
 ## `deploy`
@@ -178,7 +190,7 @@ Deploying a working connection between two chains takes `deploy core` on both, t
 
 `--chain` is declared once for the whole `deploy` group, and the commands that provision something reject an empty value themselves: `deploy core`, `deploy client attestation`, `deploy client besu`, `deploy gmp`, and `deploy ift`. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
-`--dry-run` prints the steps a command would take and submits nothing. <!-- [cli/internal/deploy/steps.go: RunSteps] -->
+`--dry-run` prints the steps a provisioning command would take and submits nothing. It has no effect on `deploy show`, `deploy status`, or `deploy render-config`; `render-config --populate-config` still writes the configuration. <!-- [cli/internal/deploy/steps.go: RunSteps] --> <!-- [cli/cmd/ibc/deploy.go: deployShow] --> <!-- [cli/cmd/ibc/deploy.go: deployStatus] --> <!-- [cli/cmd/ibc/deploy.go: deployRenderConfig] -->
 
 Manifests are machine-generated. A command that provisions something reads the manifest, decides from it what is already done, and writes it back. <!-- [cli/internal/deploy/steps.go: CoreSteps] -->
 
@@ -205,7 +217,7 @@ Deploy and register an attestation light client.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L164](cli/cmd/ibc/main.go#L164) -->
+<!-- [main.go:L166](cli/cmd/ibc/main.go#L166) -->
 
 <!-- GEN:cli:cmd:deploy-client-attestation END -->
 
@@ -237,12 +249,14 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L180](cli/cmd/ibc/main.go#L180) -->
+<!-- [main.go:L182](cli/cmd/ibc/main.go#L182) -->
 
 <!-- GEN:cli:cmd:deploy-client-besu END -->
 
+`--chain` is required.
+
 ```bash
-ibc deploy client besu --chain 41001 --counterparty-chain 41002 --trusting-period 336h --yes
+ibc deploy client besu --chain 41002 --counterparty-chain 41001 --trusting-period 336h --yes
 ```
 
 The client starts trusting the counterparty's current head, and the head's commit seals decide which light client it deploys: the QBFT one or the IBFT 2.0 one, whose seals sign a different digest. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or clock drift, or after the counterparty's consensus changed, fails and lists the differences. See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
@@ -255,19 +269,22 @@ Deploy the core IBC routing stack on one chain.
 
 | Flag | Default | Description |
 |---|---|---|
+| `-p, --populate-config` |  | Write the deployed router and multicall addresses to the config. |
 | `--chain <string>` | required | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L153](cli/cmd/ibc/main.go#L153) -->
 
 <!-- GEN:cli:cmd:deploy-core END -->
 
 Deploys the access manager, router, and multicall. The manifest records the
 proxies as `core.router` and `core.multicall`. Rerunning resumes unfinished
 deployment steps and skips contracts already deployed. <!-- [cli/internal/deploy/steps.go: CoreSteps] -->
+
+Pass `--populate-config` to write the router and multicall addresses into the chain's config entry. With `--dry-run`, the config stays unchanged. <!-- [cli/cmd/ibc/deploy.go: deployCore] -->
 
 ### `ibc deploy gmp`
 
@@ -306,12 +323,12 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L197](cli/cmd/ibc/main.go#L197) -->
+<!-- [main.go:L199](cli/cmd/ibc/main.go#L199) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
 ```bash
-ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --yes
+ibc deploy ift --chain 41001 --name "Demo Token" --symbol DEMO --rate-limit-capacity 1000000000000000000000 --yes
 ```
 
 ### `ibc deploy ift-bridge`
@@ -335,7 +352,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L207](cli/cmd/ibc/main.go#L207) -->
+<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -360,9 +377,13 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L189](cli/cmd/ibc/main.go#L189) -->
+<!-- [main.go:L191](cli/cmd/ibc/main.go#L191) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
+
+```bash
+ibc deploy render-config 41001 41002
+```
 
 ### `ibc deploy show`
 
@@ -381,6 +402,10 @@ Print the recorded deployment manifest for a chain.
 <!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-show END -->
+
+```bash
+ibc deploy show 41001
+```
 
 ### `ibc deploy status`
 
@@ -471,7 +496,9 @@ List the packets the relayer is aware of, most recent first.
 ibc relayer packets --chain-id 41001 --tx-hash 0xSendTxHash
 ```
 
-Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. <!-- [cli/cmd/ibc/relayer.go: relayerPacketsAll] --> [API](7-api.md) lists the states `--state` accepts.
+Every filter flag is optional, and they combine. Results are paged: `--all` follows the pages and prints the combined result, and `--cursor` resumes from a previous one. <!-- [cli/cmd/ibc/relayer.go: relayerPacketsAll] -->
+
+Use the short names in the flag table for `--state`. For example, `--state succeeded` selects `PACKET_STATE_SUCCEEDED` results. <!-- [cli/cmd/ibc/relayer.go: packetStates] --> See [API](7-api.md#packetstate) for the returned states.
 
 ## `attestor`
 
@@ -530,6 +557,8 @@ Query a local attestor for a state attestation at `--height`.
 
 <!-- GEN:cli:cmd:attestor-state-attestation END -->
 
+Pass a positive `--height`. Zero and omission are rejected. <!-- [cli/internal/service/attestor/local.go: validateHeight] --> <!-- [cli/cmd/ibc/main.go: init] --> <!-- [cli/cmd/ibc/attestor.go: attestorStateAttestation] --> Use `ibc attestor latest-height <name>` to get the highest attestable height. <!-- [cli/internal/service/attestor/local.go: LocalAttestor.LatestHeight] -->
+
 ## `tx`
 
 These commands submit transactions to a chain.
@@ -548,7 +577,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L233](cli/cmd/ibc/main.go#L233) -->
+<!-- [main.go:L235](cli/cmd/ibc/main.go#L235) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -568,7 +597,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L238](cli/cmd/ibc/main.go#L238) -->
+<!-- [main.go:L240](cli/cmd/ibc/main.go#L240) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
