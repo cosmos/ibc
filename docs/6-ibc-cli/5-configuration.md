@@ -266,6 +266,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.clientId, connections[].clientB.clientId` | `string` | **required** | The light client's id on this chain. |
 | `connections[].clientA.type, connections[].clientB.type` | `string` | **required** | The on-chain light client type: `attestation` or `besu`, or with a remoteProver any type, including ones the IBC CLI does not implement. |
 | `connections[].clientA.remoteProver.url, connections[].clientB.remoteProver.url` | `string` | **required** in `remoteProver` | The ProverService endpoint: an http(s):// URL, or a bare host:port dialed as http://. Without a query or fragment. |
+| `connections[].clientA.remoteProver.requestTimeout, connections[].clientB.remoteProver.requestTimeout` | `duration` | `1m` | Limits each remote prover RPC. Must be positive when set. |
 | `connections[].clientA.remoteProver.tls.caFile, connections[].clientB.remoteProver.tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
 | `connections[].clientA.remoteProver.tls.certFile, connections[].clientB.remoteProver.tls.certFile` | `string` | optional | The client certificate presented for mTLS. Required with keyFile. Omit both for one-way TLS. Read at startup, so a rotated certificate needs a restart. |
 | `connections[].clientA.remoteProver.tls.keyFile, connections[].clientB.remoteProver.tls.keyFile` | `string` | optional | The private key for certFile. Required with certFile. |
@@ -273,7 +274,7 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.remoteProver.tls.insecureSkipVerify, connections[].clientB.remoteProver.tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
 
-<!-- [relayer.go:L61](cli/internal/config/relayer.go#L61) -->
+<!-- [relayer.go:L64](cli/internal/config/relayer.go#L64) --> <!-- [relayer.go:L21](cli/internal/config/relayer.go#L21) -->
 
 <!-- GEN:config:relayer:connections END -->
 
@@ -297,7 +298,7 @@ The relayer uses these defaults unless you override them.
 | `clearOnStart` | `bool` | `true` | Runs a clearing pass at startup. Unset runs it. |
 | `clearInterval` | `duration` | `5m` | How often a clearing pass runs; a chainOverrides entry wins. |
 
-<!-- [relayer.go:L27](cli/internal/config/relayer.go#L27) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L18](cli/internal/config/relayer.go#L18) --> <!-- [relayer.go:L24](cli/internal/config/relayer.go#L24) -->
+<!-- [relayer.go:L30](cli/internal/config/relayer.go#L30) --> <!-- [dispatcher.go:L17](cli/internal/relay/dispatch/dispatcher.go#L17) --> <!-- [relayer.go:L18](cli/internal/config/relayer.go#L18) --> <!-- [relayer.go:L27](cli/internal/config/relayer.go#L27) -->
 
 <!-- GEN:config:relayer END -->
 
@@ -312,7 +313,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
 | `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
 
-<!-- [relayer.go:L38](cli/internal/config/relayer.go#L38) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
+<!-- [relayer.go:L41](cli/internal/config/relayer.go#L41) --> <!-- [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) --> <!-- [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) --> <!-- [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) --> <!-- [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) -->
 
 <!-- GEN:config:relayer:chainOverrides END -->
 

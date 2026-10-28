@@ -17,8 +17,12 @@ import (
 )
 
 func TestProverRequestTimeout(t *testing.T) {
-	client := timeoutProverClient{t: t}
-	prover := &Prover{client: client, chainID: "chain-a", clientID: "client-0", logger: slog.Default()}
+	const timeout = 5 * time.Minute
+	client := timeoutProverClient{t: t, timeout: timeout}
+	prover := &Prover{
+		client: client, chainID: "chain-a", clientID: "client-0",
+		logger: slog.Default(), requestTimeout: timeout,
+	}
 	ctx := context.Background()
 
 	_, _, err := prover.LatestProvableHeight(ctx)
@@ -32,7 +36,8 @@ func TestProverRequestTimeout(t *testing.T) {
 }
 
 type timeoutProverClient struct {
-	t *testing.T
+	t       *testing.T
+	timeout time.Duration
 }
 
 func (c timeoutProverClient) LatestProvableHeight(
@@ -64,7 +69,7 @@ func (c timeoutProverClient) requireDeadline(ctx context.Context) {
 
 	deadline, ok := ctx.Deadline()
 	require.True(c.t, ok)
-	require.WithinDuration(c.t, time.Now().Add(requestTimeout), deadline, time.Second)
+	require.WithinDuration(c.t, time.Now().Add(c.timeout), deadline, time.Second)
 }
 
 func TestPacketProofsRejectsAcknowledgementCountMismatch(t *testing.T) {
