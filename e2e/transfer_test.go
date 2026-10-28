@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -205,8 +204,9 @@ func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
 // Header voting brings three followers in as validators on chain B and votes
 // three of its four genesis validators out before any packet is relayed, so
 // only one validator chain A's client trusts seals B's head, short of the two
-// its one-half trust level needs. The relayer steps the client across the
-// changes in the transaction relaying the transfer.
+// its default trust level needs. The relayer steps the client across the
+// changes in the transaction relaying the transfer: capped at floor(2n/3),
+// two thirds follows every single validator change.
 func TestTransferBesuQBFT_ValidatorTurnover(t *testing.T) {
 	t.Parallel()
 	requireBesuValidatorTurnover(t, besu.QBFT)
@@ -227,16 +227,6 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	chainB.Followers = 3
 	chains[1] = chainB
 	spec, runtime := e2etest.BesuMesh(chains)
-	// At the default two thirds, a client cannot follow a removal sealed by a
-	// bare quorum of the remaining validators; one half follows every single
-	// validator change.
-	connection := &spec.Connections[0]
-	for _, end := range []*environment.ClientSpec{&connection.A, &connection.B} {
-		client, ok := (*end).(environment.NewBesuClient)
-		require.True(t, ok)
-		client.TrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}
-		*end = client
-	}
 	env := e2etest.Start(t, spec, runtime)
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)

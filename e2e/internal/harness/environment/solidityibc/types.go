@@ -52,6 +52,10 @@ type AttestationClientConfig struct {
 	InitialTimestamp      uint64
 }
 
+// evmMerklePrefix is the empty prefix attestation clients verify EVM
+// counterparties under.
+var evmMerklePrefix = [][]byte{{}}
+
 // BesuTrustingPeriod is the trusting period, in seconds, e2e tests give Besu
 // clients. Clients trust the current head, so it outlasts any run.
 const BesuTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)

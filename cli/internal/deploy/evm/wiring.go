@@ -3,10 +3,12 @@
 package evm
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -16,11 +18,13 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
+	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
-// evmMerklePrefix is the empty prefix EVM counterparties use.
+// evmMerklePrefix is the empty prefix attestation clients verify EVM
+// counterparties under.
 var evmMerklePrefix = [][]byte{{}}
 
 // Custom-error selectors for the getters that revert when absent, so their
@@ -46,9 +50,13 @@ func (d *Driver) RegisterClient(
 	if err != nil {
 		return "", err
 	}
+	prefix := evmMerklePrefix
+	if p, ok := spec.Params.(deploy.BesuParams); ok {
+		prefix = besu.MerklePrefix(p.IBCRouter)
+	}
 	tx, err := contract.AddClient(opts, spec.ClientID, ics26router.IICS02ClientMsgsCounterpartyInfo{
 		ClientId:     spec.CounterpartyClientID,
-		MerklePrefix: evmMerklePrefix,
+		MerklePrefix: prefix,
 	}, common.HexToAddress(ref.Address))
 	if err != nil {
 		return "", fmt.Errorf("addClient %q: %w", spec.ClientID, err)
@@ -210,6 +218,15 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			"client "+c.ClientID+" counterparty matches",
 			cp.ClientId == c.CounterpartyClientID,
 			fmt.Sprintf("router has %q, manifest has %q", cp.ClientId, c.CounterpartyClientID),
+		)
+		want := evmMerklePrefix
+		if c.Besu != nil {
+			want = besu.MerklePrefix(common.HexToAddress(c.Besu.IBCRouter))
+		}
+		check(
+			"client "+c.ClientID+" merkle prefix matches",
+			slices.EqualFunc(cp.MerklePrefix, want, bytes.Equal),
+			fmt.Sprintf("router has %x, want %x", cp.MerklePrefix, want),
 		)
 	}
 

@@ -61,6 +61,13 @@ func CommitmentSlot(path []byte) common.Hash {
 	return crypto.Keccak256Hash(crypto.Keccak256(path), ibcStoreStorageSlot.Bytes())
 }
 
+// MerklePrefix is the counterparty Merkle prefix a Besu light client tracking
+// counterpartyRouter must be registered with: the router, the IBCStore slot,
+// and an empty element the ICS26 router appends the commitment path to.
+func MerklePrefix(counterpartyRouter common.Address) [][]byte {
+	return [][]byte{counterpartyRouter.Bytes(), ibcStoreStorageSlot.Bytes(), {}}
+}
+
 // DeployLightClient deploys a Besu light client bound to ics26Router, the
 // only caller of its update, verify and misbehavior functions. Holders of
 // PAUSER_ROLE in the router's access manager may pause it. One contract

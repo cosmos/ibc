@@ -240,7 +240,7 @@ Deploy and register a Besu light client that trusts a recent counterparty header
 | `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
-| `--trust-level <string>` | `2/3` | Fraction n/d of the trusted validators that must seal an update, from 1/3 to 1. |
+| `--trust-level <string>` | `2/3` | Fraction n/d of the trusted validators that must seal an update, from 1/3 to 2/3. |
 | `--trusting-period <duration>` | required | Positive trusted state lifetime, at most 720h. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
@@ -424,7 +424,7 @@ Verify recorded deployments against live chain state.
 
 <!-- GEN:cli:cmd:deploy-status END -->
 
-Among its checks, each recorded client must be registered at its recorded address and bound to this chain's router. A client deployed from ibc-contracts before `dfba365f` has no router binding and fails that check. <!-- [cli/internal/deploy/evm/wiring.go: Verify] -->
+Among its checks, each recorded client must be registered at its recorded address, bound to this chain's router, and registered with the Merkle prefix its type proves under: the empty prefix for an attestation client, and for a Besu client the one naming the counterparty router it records. A client deployed from ibc-contracts before `dfba365f` has no router binding and fails that check. <!-- [cli/internal/deploy/evm/wiring.go: Verify] -->
 
 ## `relayer`
 

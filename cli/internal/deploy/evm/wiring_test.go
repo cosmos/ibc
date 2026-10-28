@@ -405,12 +405,22 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			m.Core.Router = core.Router
 			m.Core.Multicall = multicall.Address
 			m.TargetData = core.TargetData
-			m.UpsertClient(manifest.Client{
+			client := manifest.Client{
 				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
-			})
+				Besu: &manifest.BesuParams{IBCRouter: fixture.RouterAddress.Hex()},
+			}
+			m.UpsertClient(client)
 			report, err := d.Verify(ctx, m)
 			require.NoError(t, err)
 			require.Empty(t, report.Failed())
+
+			// the client is registered with the prefix naming its counterparty router
+			client.Besu = &manifest.BesuParams{IBCRouter: common.HexToAddress("0x01").Hex()}
+			m.UpsertClient(client)
+			report, err = d.Verify(ctx, m)
+			require.NoError(t, err)
+			require.Len(t, report.Failed(), 1)
+			require.Equal(t, "client besu-2 merkle prefix matches", report.Failed()[0].Name)
 
 			state, err := besu.ReadClientState(ctx, sim.Client(), common.HexToAddress(ref.Address))
 			require.NoError(t, err)

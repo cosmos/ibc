@@ -424,7 +424,8 @@ func besuParams(
 // defaultTrustLevel is the --trust-level default, besu.DefaultTrustLevel as n/d.
 var defaultTrustLevel = fmt.Sprintf("%d/%d", besu.DefaultTrustLevel.Numerator, besu.DefaultTrustLevel.Denominator)
 
-// trustLevel parses n/d, which the contract accepts from one third to one.
+// trustLevel parses n/d, which the contract accepts from one third to two
+// thirds.
 func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
 	numerator, denominator, _ := strings.Cut(s, "/")
 	n, errN := strconv.ParseUint(numerator, 10, 8)
@@ -434,8 +435,8 @@ func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
 		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("want n/d, each at most 255, got %q", s)
 	case d == 0:
 		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("denominator must not be zero, got %q", s)
-	case n > d || 3*n < d:
-		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 1, got %q", s)
+	case 3*n < d || 3*n > 2*d:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 2/3, got %q", s)
 	}
 	return besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: uint8(n), Denominator: uint8(d)}, nil
 }

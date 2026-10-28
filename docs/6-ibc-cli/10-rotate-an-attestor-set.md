@@ -46,7 +46,7 @@ git clone https://github.com/cosmos/ibc-contracts.git ../../ibc-contracts-attest
 ```
 
 ```bash
-git -C ../../ibc-contracts-attestor-rotation checkout dfba365f27600938ee687e1c4e4b983549a8c378
+git -C ../../ibc-contracts-attestor-rotation checkout 770b6e02ee46b14f697806dba4d2ee862b5dd695
 ```
 
 ```bash

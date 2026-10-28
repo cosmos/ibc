@@ -197,7 +197,6 @@ Only ICS27GMP can drive an account from outside, and it has one function for the
 | `functionCall(target, data)` | ICS27GMP | Low-level call carrying the received payload |
 | `execute(target, data, value)` | The account itself | Call with native value |
 | `executeBatch(Call[])` | The account itself | Several calls in sequence |
-| `delegateExecute(target, data)` | The account itself | Delegatecall |
 | `sendValue(recipient, amount)` | The account itself | Native value transfer |
 | `initialize(ics27)` | Runs once, during the proxy's construction | Binds the account to ICS27GMP |
 | `ics27()` | Anyone | The ICS27GMP address |

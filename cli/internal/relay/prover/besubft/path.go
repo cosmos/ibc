@@ -82,12 +82,13 @@ func verifies(from, header *besu.ParsedHeader, level besumsgs.IBesuLightClientMs
 }
 
 // required is how many of from's validators must seal an update trusting
-// from, as the contract computes it: ceil(n * level), and always more than
-// a third of n.
+// from, as the contract computes it: ceil(n * level), capped at floor(2n/3)
+// so a single validator vote cannot stall updates, and always more than a
+// third of n, which takes precedence over the cap.
 func required(from *besu.ParsedHeader, level besumsgs.IBesuLightClientMsgsTrustThreshold) int {
 	n := len(from.Validators)
 	scaled, d := n*int(level.Numerator), int(level.Denominator)
-	return max((scaled+d-1)/d, n/3+1)
+	return max(min((scaled+d-1)/d, 2*n/3), n/3+1)
 }
 
 // trustedSigners is how many of from's validators sealed header.
