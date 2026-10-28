@@ -45,8 +45,15 @@ jobs:
             exit 1
           fi
           # The only triggers are pushes to main and workflow_dispatch, so the ref is a branch here.
+          # Images of other branches get a branch- prefix, as in ibc-go, so no branch name can produce
+          # a tag that release.yml publishes, such as cli-v1.2.3 for a branch named cli-v1.2.3.
           tag=$(printf '%s' "$REF_NAME" | tr '[:upper:]/' '[:lower:]-' | tr -c '[:alnum:]_.-' '-')
-          echo "image_tag=${tag:0:128}" >> "$GITHUB_OUTPUT"
+          if [[ "$REF_NAME" != main ]]; then
+            tag="branch-${tag}"
+          fi
+          # Image tags are at most 128 characters; this leaves room for the -linux-<arch> suffix of
+          # the platform tags.
+          echo "image_tag=${tag:0:116}" >> "$GITHUB_OUTPUT"
 
   # Build binaries. They do not depend on the image tag, so they build even when image-metadata
   # fails, and only the image job can push to the registry.

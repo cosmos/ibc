@@ -19,7 +19,7 @@
 
 The files are attached to the tag's [GitHub release](https://github.com/cosmos/ibc/releases) and the image is published to [GHCR](https://github.com/cosmos/ibc/pkgs/container/ibc).
 
-The image is also published, unsigned, as `ghcr.io/cosmos/ibc:main` on pushes to `main` that change the CLI.
+The image is also published, unsigned, as `ghcr.io/cosmos/ibc:main` on pushes to `main` that change the CLI, and as `ghcr.io/cosmos/ibc:branch-<branch>` for manual runs of the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on other branches.
 
 See [Signed release assets](#signed-release-assets) for how to verify the artifacts.
 
@@ -74,7 +74,7 @@ To check its SBOM attestation instead, add `--predicate-type https://spdx.dev/Do
 
 ### Container images
 
-The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `ghcr.io/cosmos/ibc:main` image, published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) on pushes to `main`, is not signed. The workflow pushes the index by digest, signs it, and only then tags it `<tag>`, so the release tag never points at an unsigned image. Verify a release image with cosign v3 or later:
+The [release workflow](./.github/workflows/release.yml) publishes `ghcr.io/cosmos/ibc:<tag>` from the release binaries, attests its build provenance and per-platform SBOMs, and signs it with cosign. The `main` and `branch-<branch>` images published by the [IBC CLI build workflow](./.github/workflows/ibc-cli-build.yml) are not signed. The workflow pushes the index by digest, signs it, and only then tags it `<tag>`, so the release tag never points at an unsigned image. Verify a release image with cosign v3 or later:
 
 ```sh
 cosign verify ghcr.io/cosmos/ibc:<tag> \
