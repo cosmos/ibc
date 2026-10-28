@@ -81,7 +81,7 @@ For a [Besu light client](../4-light-clients/3-besu-light-client.md), the prover
 
 Either way it returns the client updates for a height, and a proof for each packet in the batch.
 
-The relayer then turns each batch of packets heading to the same destination into one transaction. Every configured EVM chain must have router and `IBCMulticall` addresses to run a relayer; an attestor requires only the router address. CLI deployments include both in the generated config. Each batch carries a list of operations: first the client update needed for the height just proved, if any, then one delivery for each packet in the batch. When the client needs several updates, as a Besu client crossing validator set changes can, the relayer first sends all but the last in transactions of their own, each mined before the next, and the last goes with the deliveries.
+The relayer then turns each batch of packets heading to the same destination into one transaction. Every configured EVM chain must have router and `IBCMulticall` addresses to run a relayer; an attestor requires only the router address. CLI deployments include both in the generated config. Each batch carries a list of operations: first the client update needed for the height just proved, if any, then one delivery for each packet in the batch. When the client needs several updates, as a Besu client crossing validator set changes can, the relayer first sends all but the last in transactions of their own, and the last goes with the deliveries; see [Relayer](../2-how-ibc-works/5-relayer.md).
 
 ### Signing and gas
 

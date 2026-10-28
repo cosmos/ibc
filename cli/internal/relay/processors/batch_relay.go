@@ -142,9 +142,11 @@ func relayPackets(
 	}
 
 	// More than one update steps the client across validator set changes.
-	// All but the last go in transactions of their own, each mined before the
-	// next is built, so however long the chain, no transaction outgrows the
-	// size and gas limits a node accepts.
+	// All but the last go in transactions of their own, so however long the
+	// chain, no transaction outgrows the size and gas limits a node accepts.
+	// Each is mined before the next is submitted: gas is estimated against the
+	// latest block, and each update verifies from the state the one before
+	// leaves.
 	last := max(len(clientUpdatePayloads)-1, 0)
 	for i, payload := range clientUpdatePayloads[:last] {
 		if err = relay.sendUpdate(ctx, payload, i+1, len(clientUpdatePayloads)); err != nil {
