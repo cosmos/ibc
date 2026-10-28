@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
 )
 
 // Instance is one initialized ICS26 router installation. The router address is
@@ -58,12 +57,11 @@ type AttestationClientConfig struct {
 const BesuTrustingPeriod = uint64(14 * 24 * time.Hour / time.Second)
 
 // BesuClientConfig contains the immutable constructor inputs for a Besu light
-// client verifying a chain that runs Consensus. The initial trusted state
-// describes the counterparty chain at InitialHeight. The client is bound to
-// the router it registers with, the only caller it accepts. TrustLevel is
+// client. The initial trusted state describes the counterparty chain at
+// InitialHeight. The client is bound to the router it registers with, the
+// only caller it accepts, and allows besu.MaxClockDrift. TrustLevel is
 // besu.DefaultTrustLevel when zero.
 type BesuClientConfig struct {
-	Consensus            besu.Consensus
 	ID                   string
 	CounterpartyClientID string
 	CounterpartyRouter   common.Address
@@ -72,7 +70,6 @@ type BesuClientConfig struct {
 	InitialStateRoot     common.Hash
 	InitialValidators    []common.Address
 	TrustingPeriod       uint64
-	MaxClockDrift        uint64
 	TrustLevel           besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
@@ -82,9 +79,6 @@ func (c BesuClientConfig) snapshot() BesuClientConfig {
 }
 
 func (c BesuClientConfig) validate() error {
-	if err := c.Consensus.Validate(); err != nil {
-		return err
-	}
 	if !validCustomClientID(c.ID) {
 		return fmt.Errorf("client id %q is not a valid Solidity IBC custom client identifier", c.ID)
 	}

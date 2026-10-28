@@ -17,6 +17,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/besu/besutest"
+	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
 // Each fixture chain's headers parse to the consensus it runs: under the other
@@ -120,8 +121,7 @@ func testParseSealedHeaderNormalizesCommitSeals(t *testing.T, fixture besutest.F
 }
 
 // Dropping every seal, as seals from outside the validator set would, must
-// fail clearly. A header without seals, like the genesis block, still parses,
-// with no consensus.
+// fail clearly, as must a header without seals, like the genesis block.
 func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	header := *fixtureHeader(t, besu.QBFT)
 	items, seals := splitExtra(t, header.Extra)
@@ -143,10 +143,8 @@ func TestParseSealedHeaderRequiresAValidatorSeal(t *testing.T) {
 	_, err = besu.ParseSealedHeader(withSeals([][]byte{outsider, seals[0][:64]}))
 	require.ErrorContains(t, err, "no commit seal recovers to a header validator")
 
-	parsed, err := besu.ParseSealedHeader(withSeals([][]byte{}))
-	require.NoError(t, err)
-	assert.Empty(t, parsed.Consensus)
-	assert.Empty(t, parsed.CommitSeals)
+	_, err = besu.ParseSealedHeader(withSeals([][]byte{}))
+	require.ErrorContains(t, err, "no commit seals")
 }
 
 // A header resealed by a quorum of new validators parses to their consensus
@@ -241,19 +239,17 @@ func fixtureHeader(t *testing.T, consensus besu.Consensus) *types.Header {
 }
 
 // recoverSeals recovers header's commit seals over the hash of its RLP, as
-// the light client does.
-func recoverSeals(t *testing.T, header *besu.ParsedHeader) []common.Address {
+// the light client does, requiring each already in the form it accepts.
+func recoverSeals(t testing.TB, header *besu.ParsedHeader) []common.Address {
 	t.Helper()
 
 	digest := crypto.Keccak256(header.RLP)
 	signers := make([]common.Address, len(header.CommitSeals))
 	for i, seal := range header.CommitSeals {
-		require.Contains(t, []byte{27, 28}, seal[crypto.RecoveryIDOffset], "seal %d recovery ID", i)
-		sig := slices.Clone(seal)
-		sig[crypto.RecoveryIDOffset] -= 27
-		pubkey, err := crypto.SigToPub(digest, sig)
+		signer, canonical, err := ecrecover.Recover(digest, seal)
 		require.NoError(t, err)
-		signers[i] = crypto.PubkeyToAddress(*pubkey)
+		require.Equal(t, seal, canonical, "seal %d not in the light client's form", i)
+		signers[i] = signer
 	}
 
 	return signers

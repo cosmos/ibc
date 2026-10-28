@@ -408,14 +408,14 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 	a.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200, MaxClockDrift: 60},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200, MaxClockDrift: 60},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
@@ -427,24 +427,20 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 }
 
 func TestBesuParamsFlags(t *testing.T) {
-	previousPeriod, previousDrift, previousLevel := flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel
+	previousPeriod, previousLevel := flagDeployTrustingPeriod, flagDeployTrustLevel
 	t.Cleanup(func() {
-		flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = previousPeriod, previousDrift, previousLevel
+		flagDeployTrustingPeriod, flagDeployTrustLevel = previousPeriod, previousLevel
 	})
 	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
 		name      string
 		period    time.Duration
-		drift     time.Duration
 		level     string
 		router    string
 		wantLevel besumsgs.IBesuLightClientMsgsTrustThreshold
 		wantErr   string
 	}{
-		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
-		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
-		{name: "long period", period: 31 * 24 * time.Hour, router: router, wantErr: "--trusting-period must be at most 720h0m0s"},
-		{name: "large drift", period: time.Hour, drift: 13 * time.Second, router: router, wantErr: "--max-clock-drift must be at most 12s"},
+		{name: "negative period", period: -time.Second, router: router, wantErr: "--trusting-period: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
 		{
 			name: "trust level", period: 2 * time.Hour, level: "1/2", router: router,
@@ -459,35 +455,27 @@ func TestBesuParamsFlags(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = tc.period, 12*time.Second, cmp.Or(
-				tc.level,
-				"2/3",
-			)
-			if tc.drift != 0 {
-				flagDeployMaxClockDrift = tc.drift
-			}
+			flagDeployTrustingPeriod, flagDeployTrustLevel = tc.period, cmp.Or(tc.level, "2/3")
 			source := &besuHeadTarget{}
-			params, err := besuParams(t.Context(), tc.router, source)
+			params, err := besuParams(t.Context(), tc.router, hostTarget{}, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
-				require.False(t, source.called)
+				require.Zero(t, source.notAfter)
 				return
 			}
 			require.NoError(t, err)
-			require.True(t, source.called)
+			require.Equal(t, uint64(hostTime)+besu.MaxClockDrift, source.notAfter)
 			require.Equal(t, deploy.BesuParams{
-				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
 				TrustingPeriod:        uint64(tc.period / time.Second),
-				MaxClockDrift:         12,
 				TrustLevel:            cmp.Or(tc.wantLevel, besu.DefaultTrustLevel),
 			}, params)
 		})
 	}
 
-	_, err := besuParams(t.Context(), router, &hostOnlyTarget{})
+	_, err := besuParams(t.Context(), router, hostTarget{}, &hostOnlyTarget{})
 	require.ErrorContains(t, err, "cannot serve a besu consensus state")
 }
 
@@ -640,17 +628,29 @@ func TestTrustLevelFlagDefault(t *testing.T) {
 const (
 	besuHeadHeight    = 112
 	besuHeadTimestamp = 1788200000
+	// hostTime is later than the test's clock, so besuParams uses it.
+	hostTime = 4_000_000_000
 )
 
-// besuHeadTarget is an IBFT2 Besu chain whose head is besuHeadHeight.
-type besuHeadTarget struct {
+// hostTarget is a chain whose head time is hostTime.
+type hostTarget struct {
 	deploy.Target
-	called bool
 }
 
-func (t *besuHeadTarget) BesuHead(context.Context) (*besu.ParsedHeader, error) {
-	t.called = true
-	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.IBFT2}, nil
+func (hostTarget) Head(context.Context) (uint64, uint64, error) {
+	return 1, hostTime, nil
+}
+
+// besuHeadTarget is a Besu chain whose header is at besuHeadHeight, and
+// records the notAfter it was asked for.
+type besuHeadTarget struct {
+	deploy.Target
+	notAfter uint64
+}
+
+func (t *besuHeadTarget) BesuHead(_ context.Context, notAfter uint64) (*besu.ParsedHeader, error) {
+	t.notAfter = notAfter
+	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp}, nil
 }
 
 // hostOnlyTarget is a chain that cannot serve Besu consensus states.

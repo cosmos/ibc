@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"testing"
 	"time"
 
@@ -35,7 +36,13 @@ type fakeChain struct {
 	clientStateErr error
 	stored         map[uint64]common.Hash
 	proof          func(height uint64, slots []common.Hash) (evm.RouterProof, error)
+	blockTime      uint64
+	boundRouter    common.Address
+	boundRouterErr error
 }
+
+// farFuture is a host block time no header is ahead of.
+const farFuture = math.MaxUint32
 
 func (f *fakeChain) ChainID() string { return f.id }
 
@@ -58,6 +65,14 @@ func (f *fakeChain) GetRouterProof(_ context.Context, height uint64, slots []com
 		return evm.RouterProof{}, fmt.Errorf("no router proof at %d", height)
 	}
 	return f.proof(height, slots)
+}
+
+func (f *fakeChain) GetBlockHeader(_ context.Context, height uint64) (v2.BlockHeader, error) {
+	return v2.BlockHeader{Height: height, Timestamp: time.Unix(int64(f.blockTime), 0)}, nil //nolint:gosec // test clock
+}
+
+func (f *fakeChain) BesuClientRouter(context.Context, string) (common.Address, error) {
+	return f.boundRouter, f.boundRouterErr
 }
 
 func (f *fakeChain) BesuClientState(context.Context, string) (besumsgs.IBesuLightClientMsgsClientState, error) {
@@ -84,7 +99,7 @@ func newFixtureEnv(t *testing.T, consensus besu.Consensus) *fixtureEnv {
 
 	env := &fixtureEnv{
 		fixture:      besutest.MustFixture(t, consensus),
-		host:         &fakeChain{id: "host", sealed: map[uint64]*besu.ParsedHeader{}},
+		host:         &fakeChain{id: "host", sealed: map[uint64]*besu.ParsedHeader{}, blockTime: farFuture},
 		counterparty: &fakeChain{id: "besu-b", sealed: map[uint64]*besu.ParsedHeader{}},
 	}
 	env.counterparty.router = env.fixture.RouterAddress
@@ -330,21 +345,37 @@ func testPacketProofs(t *testing.T, consensus besu.Consensus) {
 	})
 }
 
-// The head is returned even when it is ahead of the host clock: the contract
-// rejects a header beyond maxClockDrift at simulation.
-func TestLatestProvableHeightReturnsHead(t *testing.T) {
-	env := newFixtureEnv(t, besu.QBFT)
-	update := env.fixture.NonAdjacentUpdate
-	env.expectInitialAnchor(t)
-	head := besutest.ParseHeader(t, update.HeaderRLP, update.CommitSeals)
-	head.Timestamp = uint64(time.Now().Add(time.Hour).Unix()) //nolint:gosec // test clock is positive
-	env.counterparty.sealed[update.Height] = head
-	env.counterparty.head = update.Height
+// A head more than the max clock drift ahead of the host's block time, or
+// now if later, reverts at simulation, so the prover targets an earlier
+// header.
+func TestLatestProvableHeightWithinDrift(t *testing.T) {
+	gen, counterparty, _ := syntheticEnv(
+		t,
+		twoThirds,
+		10,
+		30,
+		era{from: 10, validators: []int64{1, 2, 3}, signers: []int64{1, 2, 3}},
+	)
+	// Date the headers after the test's clock, a second apart.
+	const base = 4_000_000_000
+	for height, header := range counterparty.sealed {
+		header.Timestamp = base + height
+	}
+	host := gen.host.(*fakeChain)
+	host.clientState.MaxClockDrift = 2
+	// The head is 5s beyond the drift of the host's block time.
+	host.blockTime = base + 23
 
-	height, ts, err := env.gen.LatestProvableHeight(t.Context())
+	height, ts, err := gen.LatestProvableHeight(t.Context())
 	require.NoError(t, err)
-	assert.Equal(t, update.Height, height)
-	assert.Equal(t, time.Unix(int64(head.Timestamp), 0).UTC(), ts) //nolint:gosec // test clock is positive
+	assert.Equal(t, uint64(25), height)
+	assert.Equal(t, time.Unix(base+25, 0).UTC(), ts)
+
+	// Against now, no header above the trusted one fits.
+	host.blockTime = 0
+	height, _, err = gen.LatestProvableHeight(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, uint64(10), height)
 }
 
 func TestNewGeneratorChecksRouter(t *testing.T) {
@@ -356,6 +387,20 @@ func TestNewGeneratorChecksRouter(t *testing.T) {
 		env.counterparty.router = common.HexToAddress("0x1234")
 		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty, slog.New(slog.DiscardHandler))
 		require.ErrorContains(t, err, "configured with router")
+	})
+
+	t.Run("client predates the router binding", func(t *testing.T) {
+		env := newFixtureEnv(t, besu.QBFT)
+		env.host.boundRouterErr = errors.New("execution reverted")
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty, slog.New(slog.DiscardHandler))
+		require.ErrorContains(t, err, "replace it with migrateClient")
+	})
+
+	t.Run("client bound to another router", func(t *testing.T) {
+		env := newFixtureEnv(t, besu.QBFT)
+		env.host.boundRouter = common.HexToAddress("0x99")
+		_, err := NewGenerator(ctx, clientID, env.host, env.counterparty, slog.New(slog.DiscardHandler))
+		require.ErrorContains(t, err, "is bound to router")
 	})
 
 	t.Run("client state error", func(t *testing.T) {

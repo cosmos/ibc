@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
@@ -195,6 +196,12 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			strings.EqualFold(registered, c.Address),
 			fmt.Sprintf("router has %s, manifest has %s", registered, c.Address),
 		)
+		bound, detail := d.clientRouter(ctx, registered)
+		check(
+			"client "+c.ClientID+" bound to router",
+			strings.EqualFold(bound, m.Core.Router),
+			detail,
+		)
 		cp, clientErr := contract.GetCounterparty(&bind.CallOpts{Context: ctx}, c.ClientID)
 		if clientErr != nil {
 			return report, clientErr
@@ -270,6 +277,21 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 	check("multicall authority matches", strings.EqualFold(authority.Hex(), m.TargetData["accessManager"]),
 		fmt.Sprintf("multicall has %s, manifest has %s", authority, m.TargetData["accessManager"]))
 	return report, nil
+}
+
+// clientRouter returns the router the light client at address is bound to,
+// or why it has none. Every ibc-contracts light client has ICS26_ROUTER, so
+// one binding reads it for all of them.
+func (d *Driver) clientRouter(ctx context.Context, address string) (string, string) {
+	lightClient, err := besulightclient.NewContractCaller(common.HexToAddress(address), d.backend)
+	if err != nil {
+		return "", err.Error()
+	}
+	router, err := lightClient.ICS26ROUTER(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return "", "no ICS26_ROUTER, so deployed before ibc-contracts dfba365f: " + err.Error()
+	}
+	return router.Hex(), "bound to " + router.Hex()
 }
 
 // customErrorSelector returns the 0x-prefixed 4-byte selector of the named

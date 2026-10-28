@@ -36,25 +36,24 @@ type AttestationParams manifest.AttestationParams
 
 func (AttestationParams) clientParams() {}
 
-// BesuParams are the constructor inputs for a Besu client verifying a chain
-// that runs Consensus, which is recorded with the client. Periods are in
-// seconds.
+// BesuParams are the constructor inputs for a Besu client. The trusting
+// period is in seconds; the max clock drift is always besu.MaxClockDrift.
 type BesuParams struct {
-	Consensus             besu.Consensus
 	IBCRouter             common.Address
 	InitialHeight         uint64
 	InitialConsensusState besumsgs.IBesuLightClientMsgsConsensusState
 	TrustingPeriod        uint64
-	MaxClockDrift         uint64
 	TrustLevel            besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
 func (BesuParams) clientParams() {}
 
 // BesuSource is implemented by targets whose chain runs Besu and can serve
-// their sealed head, which a new client tracking them starts trusting.
+// a sealed header, which a new client tracking them starts trusting.
 type BesuSource interface {
-	BesuHead(ctx context.Context) (*besu.ParsedHeader, error)
+	// BesuHead returns a recent sealed header with a timestamp at most
+	// notAfter.
+	BesuHead(ctx context.Context, notAfter uint64) (*besu.ParsedHeader, error)
 }
 
 // ClientSpec describes one light client to provision and register.

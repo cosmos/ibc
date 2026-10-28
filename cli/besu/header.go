@@ -37,7 +37,7 @@ var emptyRLPList = rlp.RawValue{0xc0}
 type ParsedHeader struct {
 	// RLP is the header in its commit seal signing form, whose hash the seals
 	// sign: extraData without the seal list for IBFT2, or with it emptied for
-	// QBFT. A header without seals keeps the node's encoding.
+	// QBFT.
 	RLP []byte
 	// CommitSeals are the Signers' seals in the same order, canonical, with
 	// 27/28 recovery IDs.
@@ -49,8 +49,7 @@ type ParsedHeader struct {
 	// Signers are the validators whose commit seals the header keeps, in
 	// ascending order: the signers the contract recovers.
 	Signers []common.Address
-	// Consensus is the protocol whose digest the commit seals sign, empty for
-	// a header without seals.
+	// Consensus is the protocol whose digest the commit seals sign.
 	Consensus Consensus
 }
 
@@ -95,16 +94,22 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	}
 	header.Consensus, header.CommitSeals, header.Signers = consensus, seals, signers
 
-	if consensus == "" {
-		header.RLP, err = rlp.EncodeToBytes(h)
-	} else {
-		header.RLP, err = signingHeader(h, extraItems, consensus)
-	}
-	if err != nil {
+	if header.RLP, err = signingHeader(h, extraItems, consensus); err != nil {
 		return nil, fmt.Errorf("encode header %d: %w", header.Height, err)
 	}
 
 	return header, nil
+}
+
+// HeightNotAfter is a height at most head's whose header has a timestamp at
+// most notAfter, or 0 when there is none. The light client requires blocks at
+// least a second apart, so it steps back one block per second head is later
+// than notAfter; with slower blocks it may land below the newest such header.
+func HeightNotAfter(head *ParsedHeader, notAfter uint64) uint64 {
+	if head.Timestamp <= notAfter {
+		return head.Height
+	}
+	return head.Height - min(head.Height, head.Timestamp-notAfter)
 }
 
 // SealHeader sets h's validators and replaces its commit seals with seals
@@ -196,7 +201,7 @@ func normalizeCommitSeals(
 	}
 
 	if len(seals) == 0 {
-		return "", nil, nil, nil
+		return "", nil, nil, errors.New("no commit seals")
 	}
 
 	var (
@@ -228,8 +233,6 @@ func normalizeCommitSeals(
 	keptSeals := make([][]byte, len(kept))
 	signers := make([]common.Address, len(kept))
 	for i, s := range kept {
-		// The contract recovers with OpenZeppelin's ECDSA, which takes 27/28.
-		s.seal[crypto.RecoveryIDOffset] += 27
 		keptSeals[i], signers[i] = s.seal, s.signer
 	}
 

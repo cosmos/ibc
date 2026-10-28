@@ -520,7 +520,7 @@ func (s *Setup) PrepareBesuClient(
 					IbcRouter:      config.CounterpartyRouter,
 					LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
 					TrustingPeriod: config.TrustingPeriod,
-					MaxClockDrift:  config.MaxClockDrift,
+					MaxClockDrift:  besu.MaxClockDrift,
 					TrustLevel:     cmp.Or(config.TrustLevel, besu.DefaultTrustLevel),
 				},
 				besumsgs.IBesuLightClientMsgsConsensusState{

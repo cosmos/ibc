@@ -368,12 +368,10 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			consensusState.Timestamp = head.Time
 
 			params := deploy.BesuParams{
-				Consensus:             consensus,
 				IBCRouter:             fixture.RouterAddress,
 				InitialHeight:         fixture.InitialTrustedHeight,
 				InitialConsensusState: consensusState,
 				TrustingPeriod:        fixture.TrustingPeriod,
-				MaxClockDrift:         fixture.MaxClockDrift,
 				TrustLevel:            besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
 			}
 			spec := deploy.ClientSpec{
@@ -382,15 +380,19 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				CounterpartyClientID: "besu-1",
 				Params:               params,
 			}
+
+			// a rejected deploy names the constructor's error
+			tooLong := params
+			tooLong.TrustingPeriod = 31 * 24 * 60 * 60
+			_, err = d.ProvisionClient(ctx, core.Router, deploy.ClientSpec{Params: tooLong})
+			require.ErrorContains(t, err, "InvalidTrustingPeriod(2678400)")
+
 			ref, err := d.ProvisionClient(ctx, core.Router, spec)
 			require.NoError(t, err)
 
-			// the client is bound to this chain's router and starts unpaused
+			// the client starts unpaused; Verify checks its router
 			lightClient, err := besulightclient.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
 			require.NoError(t, err)
-			bound, err := lightClient.ICS26ROUTER(&bind.CallOpts{Context: ctx})
-			require.NoError(t, err)
-			require.Equal(t, common.HexToAddress(core.Router), bound)
 			paused, err := lightClient.Paused(&bind.CallOpts{Context: ctx})
 			require.NoError(t, err)
 			require.False(t, paused)
@@ -416,7 +418,7 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				IbcRouter:      fixture.RouterAddress,
 				LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
 				TrustingPeriod: fixture.TrustingPeriod,
-				MaxClockDrift:  fixture.MaxClockDrift,
+				MaxClockDrift:  besu.MaxClockDrift,
 				TrustLevel:     params.TrustLevel,
 			}, state)
 

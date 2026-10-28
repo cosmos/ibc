@@ -69,7 +69,7 @@ func syntheticEnv(
 		}
 	}
 
-	host := &fakeChain{id: "host", clientState: besumsgs.IBesuLightClientMsgsClientState{
+	host := &fakeChain{id: "host", blockTime: farFuture, clientState: besumsgs.IBesuLightClientMsgsClientState{
 		LatestHeight: besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trusted},
 		TrustLevel:   level,
 	}}

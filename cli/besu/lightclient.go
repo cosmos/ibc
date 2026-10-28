@@ -5,7 +5,6 @@ package besu
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,12 +21,10 @@ import (
 // quorum but is a separate check, against the trusted validator set.
 var DefaultTrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}
 
-// Upper bounds the light client's constructor puts on its trusting period
-// and max clock drift.
-const (
-	MaxTrustingPeriod = 30 * 24 * time.Hour
-	MaxClockDrift     = 12 * time.Second
-)
+// MaxClockDrift is the max clock drift, in seconds, Besu light clients are
+// deployed with: the most the contract accepts. A lower drift only makes a
+// counterparty header too new to submit sooner.
+const MaxClockDrift uint64 = 12
 
 var (
 	messageBindings     = besumsgs.NewBindings()
@@ -65,7 +62,8 @@ func CommitmentSlot(path []byte) common.Hash {
 }
 
 // DeployLightClient deploys a Besu light client bound to ics26Router, the
-// only caller it accepts and the authority that pauses it. One contract
+// only caller of its update, verify and misbehavior functions. Holders of
+// PAUSER_ROLE in the router's access manager may pause it. One contract
 // verifies both consensus protocols.
 func DeployLightClient(
 	opts *bind.TransactOpts,

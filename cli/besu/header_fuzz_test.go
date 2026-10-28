@@ -3,7 +3,6 @@
 package besu_test
 
 import (
-	"math/big"
 	"slices"
 	"testing"
 
@@ -71,11 +70,6 @@ func FuzzParseSealedHeader(f *testing.F) {
 			slices.SortFunc(signed, common.Address.Cmp)
 			return slices.Compact(signed)
 		}
-		if parsed.Consensus == "" {
-			require.Empty(t, inputSeals, "seals but no consensus")
-			require.Empty(t, parsed.CommitSeals)
-			return
-		}
 		for _, other := range besu.Consensuses {
 			if other != parsed.Consensus {
 				require.Empty(t, signers(other), "validators signed under %s, detected %s", other, parsed.Consensus)
@@ -85,19 +79,7 @@ func FuzzParseSealedHeader(f *testing.F) {
 		digest, err := besu.CommitSealDigest(&header, inputItems, parsed.Consensus)
 		require.NoError(t, err)
 		require.Equal(t, digest, crypto.Keccak256(parsed.RLP), "RLP is not the signing form")
-
-		var got []common.Address
-		for i, seal := range parsed.CommitSeals {
-			require.Contains(t, []byte{27, 28}, seal[crypto.RecoveryIDOffset], "seal %d recovery ID", i)
-			sig := slices.Clone(seal)
-			sig[crypto.RecoveryIDOffset] -= 27
-			r, s := new(big.Int).SetBytes(sig[:32]), new(big.Int).SetBytes(sig[32:64])
-			require.True(t, crypto.ValidateSignatureValues(sig[64], r, s, true), "seal %d not canonical", i)
-			pubkey, sigErr := crypto.SigToPub(digest, sig)
-			require.NoError(t, sigErr)
-			got = append(got, crypto.PubkeyToAddress(*pubkey))
-		}
-		require.Equal(t, want, got, "not one seal per validator that signed, in signer order")
+		require.Equal(t, want, recoverSeals(t, parsed), "not one seal per validator that signed, in signer order")
 		require.Equal(t, want, parsed.Signers)
 
 		reparsed, err := besu.ParseSealedHeader(
