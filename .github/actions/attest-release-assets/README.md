@@ -26,6 +26,6 @@ jobs:
 - `platform` names the job's upload, so give each build job a different one.
 - `sbom-file` points at a binary. For a source tree with lockfiles, set `sbom-dir` instead.
 
-The action fails if the SBOM lists no packages besides the scanned file or directory. That usually means the SBOM came from the wrong path. For a component without dependencies, set `min-sbom-packages: "0"`.
+The action fails if the SBOM lists no packages besides the scanned file or directory. That usually means the SBOM came from the wrong path.
 
 [`action.yml`](./action.yml) lists every input.

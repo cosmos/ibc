@@ -26,6 +26,8 @@ jobs:
 
 The action fails rather than ship a wrong or unsigned file. That happens when two build jobs produce a file with the same name, or when an existing draft holds a file this run does not produce.
 
+On a release that is already published, the action uploads only the files that are missing. It fails if an attached file differs, so no file people may have downloaded is replaced.
+
 ## Gate an image on verified files
 
 A release that also publishes an image should push it only after the files verify. Call the action first with `verify-only`, in a job the image jobs need. It verifies the files without signing or publishing anything, so the job only needs `contents: read`.

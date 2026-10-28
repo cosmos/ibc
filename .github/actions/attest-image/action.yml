@@ -23,10 +23,6 @@ inputs:
     description: Generate and attest an SPDX SBOM of the image (`true` or `false`). Leave it off for an index, whose SBOMs belong to its platform images.
     required: false
     default: "true"
-  min-sbom-packages:
-    description: Fail if the image SBOM lists fewer packages than this. Set to 0 to disable.
-    required: false
-    default: "1"
   sign:
     description: Sign the image with cosign (`true` or `false`).
     required: false
@@ -47,7 +43,6 @@ runs:
         SBOM: ${{ inputs.sbom }}
         SIGN: ${{ inputs.sign }}
         RECURSIVE: ${{ inputs.recursive }}
-        MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
       run: |
         # An empty digest usually means the push step's output was misnamed; fail rather than
         # attesting nothing.
@@ -65,18 +60,6 @@ runs:
             exit 1
           fi
         done
-        # Same check as in attest-release-assets; change both together.
-        if [[ ! "$MIN_PACKAGES" =~ ^[0-9]+$ ]]; then
-          echo "::error::min-sbom-packages must be a non-negative integer (got '${MIN_PACKAGES}')"
-          exit 1
-        fi
-
-    - name: Attest build provenance
-      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-      with:
-        subject-name: ${{ inputs.image }}
-        subject-digest: ${{ inputs.digest }}
-        push-to-registry: true
 
     - name: Generate SBOM
       if: inputs.sbom == 'true'
@@ -93,16 +76,23 @@ runs:
       shell: bash
       env:
         SBOM: ${{ runner.temp }}/image.spdx.json
-        MIN_PACKAGES: ${{ inputs.min-sbom-packages }}
       run: |
         # The scanned image itself is listed as an SPDXRef-DocumentRoot package. Same filter as in
         # attest-release-assets; change both together.
         count=$(jq '[.packages[]? | select(.SPDXID | startswith("SPDXRef-DocumentRoot") | not)] | length' "$SBOM")
         echo "Image SBOM lists ${count} packages"
-        if (( count < MIN_PACKAGES )); then
-          echo "::error::Image SBOM lists ${count} packages, fewer than min-sbom-packages (${MIN_PACKAGES})"
+        if (( count == 0 )); then
+          echo "::error::Image SBOM lists no packages besides the image itself"
           exit 1
         fi
+
+    # Attested only after the SBOM check, so an image whose SBOM fails gets no attestation.
+    - name: Attest build provenance
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-name: ${{ inputs.image }}
+        subject-digest: ${{ inputs.digest }}
+        push-to-registry: true
 
     - name: Attest SBOM
       if: inputs.sbom == 'true'

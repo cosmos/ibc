@@ -18,7 +18,9 @@ inputs:
     description: Title of the release, used when the draft is created.
     required: true
   prerelease:
-    description: Whether to mark a newly created draft as a pre-release (`true` or `false`).
+    description: >-
+      Whether the release is a pre-release (`true` or `false`). Set when the draft is created and
+      again each time an existing draft is updated.
     required: false
     default: "false"
   verify-only:
@@ -28,15 +30,6 @@ inputs:
       so nothing is published for assets that do not verify.
     required: false
     default: "false"
-  github-token:
-    description: Token used to create the release and verify the attestations.
-    required: false
-    default: ${{ github.token }}
-
-outputs:
-  url:
-    description: URL of the draft (or already published) release.
-    value: ${{ steps.release.outputs.url }}
 
 runs:
   using: composite
@@ -138,7 +131,7 @@ runs:
     - name: Verify assets against the attestation bundles
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ github.token }}
         NAME: ${{ inputs.name }}
       run: |
         # Check the assets against the bundles before signing, so a release never ships an asset
@@ -166,11 +159,10 @@ runs:
         cosign sign-blob --yes --bundle checksums.txt.sigstore.json checksums.txt
 
     - name: Create or update draft release
-      id: release
       if: inputs.verify-only != 'true'
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ github.token }}
         GH_REPO: ${{ github.repository }}
         TAG: ${{ github.ref_name }}
         TITLE: ${{ inputs.title }}
@@ -198,7 +190,6 @@ runs:
             "${prerelease[@]}" \
             --verify-tag \
             --title "$TITLE"
-          echo "url=$(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -216,10 +207,36 @@ runs:
           # The tag decides, also for a draft created in the UI with the box ticked differently.
           gh release edit "$TAG" --prerelease="$PRERELEASE"
         else
-          # The release was published before this workflow finished. Without --clobber, gh refuses
-          # to replace assets that people may already have downloaded, so a re-run after publishing
-          # fails here instead of swapping assets under a published release.
+          # The release was published before this workflow finished, as when the tag is created in
+          # the UI on publish. Files already attached are kept if they match, so re-running this job
+          # finishes a partial upload. A file that differs fails the step instead of being swapped
+          # under a published release that people may already have downloaded from.
           echo "::warning::Release ${TAG} was published before its signed assets were attached"
-          gh release upload "$TAG" "$dist"/*
+          attached=$(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)\t\(.state)\t\(.digest)"')
+          upload=()
+          for path in "$dist"/*; do
+            file="${path##*/}"
+            entry=$(awk -F'\t' -v file="$file" '$1 == file { print $2 "\t" $3 }' <<< "$attached")
+            state="${entry%%$'\t'*}"
+            digest="${entry#*$'\t'}"
+            if [[ -z "$entry" ]]; then
+              upload+=("$path")
+            elif [[ "$state" != uploaded ]]; then
+              # An upload that stopped partway can leave the file unfinished. Nobody can download
+              # it, so it is replaced.
+              gh release delete-asset "$TAG" "$file" --yes
+              upload+=("$path")
+            elif [[ "$file" == checksums.txt.sigstore.json ]]; then
+              # Signing again gives new bytes for the same checksums.txt. validate-tag stops a full
+              # re-run once assets are attached, so a re-run reuses the build artifacts and the
+              # attached signature still covers this checksums.txt.
+              continue
+            elif [[ "$digest" != "sha256:$(sha256sum "$path" | cut -d' ' -f1)" ]]; then
+              echo "::error::Release ${TAG} already has a different ${file}; delete it and re-run"
+              exit 1
+            fi
+          done
+          if (( ${#upload[@]} > 0 )); then
+            gh release upload "$TAG" "${upload[@]}"
+          fi
         fi
-        echo "url=$(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_OUTPUT"
