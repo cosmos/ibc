@@ -147,7 +147,7 @@ func relayPackets(
 	// size and gas limits a node accepts.
 	last := max(len(clientUpdatePayloads)-1, 0)
 	for i, payload := range clientUpdatePayloads[:last] {
-		if err = relay.sendUpdate(ctx, payload); err != nil {
+		if err = relay.sendUpdate(ctx, payload, i+1, len(clientUpdatePayloads)); err != nil {
 			return nil, errors.Wrapf(err, "client update %d of %d", i+1, len(clientUpdatePayloads))
 		}
 	}
@@ -207,15 +207,15 @@ func (r clientRelay) send(ctx context.Context, payloads [][]byte, items []v2.Pac
 	return submission, nil
 }
 
-// sendUpdate submits payload in a transaction of its own and waits for it to
-// be mined. An update the client already holds is sent all the same: while
+// sendUpdate submits payload, update n of total, in a transaction of its own
+// and waits for it to be mined. An update the client already holds is sent all the same: while
 // it is still pending, resending it is what replaces a stalled transaction.
-func (r clientRelay) sendUpdate(ctx context.Context, payload []byte) error {
+func (r clientRelay) sendUpdate(ctx context.Context, payload []byte, n, total int) error {
 	submission, err := r.send(ctx, [][]byte{payload}, nil)
 	if err != nil {
 		return err
 	}
-	r.logger.Info("Submitted client update tx", "txHash", submission.TxHash)
+	r.logger.Info("Submitted client update tx", "update", n, "of", total, "txHash", submission.TxHash)
 
 	return r.waitForInclusion(ctx, submission)
 }

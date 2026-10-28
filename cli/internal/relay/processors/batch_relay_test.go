@@ -3,10 +3,12 @@
 package processors
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,7 +110,9 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 		updates   int
 		submitter *recordingTxSubmitter
 		wantLog   []string
-		wantErr   string
+		// wantInfo are fragments of the info lines logged, in order.
+		wantInfo []string
+		wantErr  string
 	}{
 		{
 			name:      "no update",
@@ -130,6 +134,7 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 				"submit 0x2 updates=[2] packets=0", "mined 0x2",
 				"submit 0x3 updates=[3] packets=1",
 			},
+			wantInfo: []string{"update=1 of=3 txHash=0x1", "update=2 of=3 txHash=0x2"},
 		},
 		{
 			name:      "a reverted update stops the relay",
@@ -168,13 +173,21 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 			mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything,
 				[]channeltypesv2.Acknowledgement(nil)).Return([][]byte{{0xff}}, nil).Once()
 
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&logs, nil))
 			submission, err := relayPackets(
-				t.Context(), slog.Default(), chainClient, mockProver, byteTxBuilder{}, tc.submitter,
+				t.Context(), logger, chainClient, mockProver, byteTxBuilder{}, tc.submitter,
 				"client-0", v2.RelayKindRecv, 100,
 				[]v2.PacketEvent{{Height: 90, Packet: channeltypesv2.Packet{Sequence: 1}}},
 			)
 
 			require.Equal(t, tc.wantLog, tc.submitter.log)
+			rest := logs.String()
+			for _, fragment := range tc.wantInfo {
+				_, after, found := strings.Cut(rest, fragment)
+				require.True(t, found, "log %q not found in order in:\n%s", fragment, logs.String())
+				rest = after
+			}
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				require.Nil(t, submission)
