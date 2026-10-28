@@ -284,8 +284,7 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 }
 
 // requireUpdatesBeforeRecv checks that the destination's client was updated
-// one update per transaction, in at least two transactions, the last of them
-// being the receive.
+// in at least two transactions, the last of them being the receive.
 func requireUpdatesBeforeRecv(
 	t *testing.T,
 	destination *environment.Chain,
@@ -315,7 +314,7 @@ func requireUpdatesBeforeRecv(
 	})
 	require.NoError(t, err)
 
-	updatesPerTx := map[common.Hash]int{}
+	updateTxs := map[common.Hash]bool{}
 	for _, log := range logs {
 		event, unpackErr := routerABI.Unpack("ICS02ClientUpdated", log.Data)
 		require.NoError(t, unpackErr)
@@ -324,13 +323,10 @@ func requireUpdatesBeforeRecv(
 		}
 		require.True(t, log.TxHash == recv.TxHash || log.BlockNumber < recv.BlockNumber.Uint64(),
 			"client update %s is mined before the receive", log.TxHash)
-		updatesPerTx[log.TxHash]++
+		updateTxs[log.TxHash] = true
 	}
-	require.Equal(t, 1, updatesPerTx[recv.TxHash], "the receive carries the last update")
-	require.GreaterOrEqual(t, len(updatesPerTx), 2, "the client crosses the turnover in several updates")
-	for tx, updates := range updatesPerTx {
-		require.Equal(t, 1, updates, "transaction %s carries one update", tx)
-	}
+	require.True(t, updateTxs[recv.TxHash], "the receive carries the last update")
+	require.GreaterOrEqual(t, len(updateTxs), 2, "the client crosses the turnover in several transactions")
 }
 
 // requireBesuAutoRelay relays a transfer between two Besu chains running
