@@ -54,7 +54,7 @@ func assertSubscriptionUp(t *testing.T, reader *sdkmetric.ManualReader, want int
 	require.NoError(t, reader.Collect(context.Background(), &data))
 	for _, scope := range data.ScopeMetrics {
 		for _, m := range scope.Metrics {
-			if m.Name == "watcher_subscription_up" {
+			if m.Name == "packet_event_stream_up" {
 				gauge, ok := m.Data.(metricdata.Gauge[int64])
 				require.True(t, ok)
 				require.Len(t, gauge.DataPoints, 1)

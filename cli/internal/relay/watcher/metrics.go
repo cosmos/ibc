@@ -23,7 +23,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	subscriptionUp, err := m.Int64Gauge("watcher_subscription_up")
+	subscriptionUp, err := m.Int64Gauge("packet_event_stream_up")
 	if err != nil {
 		return nil, err
 	}
