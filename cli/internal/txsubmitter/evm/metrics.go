@@ -72,7 +72,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	attempts, err := m.Int64Counter("txsubmitter_attempts_total")
+	attempts, err := m.Int64Counter("transaction_submission_attempts_total")
 	if err != nil {
 		return nil, err
 	}
@@ -97,18 +97,9 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	return instruments, nil
 }
 
-const (
-	submissionResultOK    = "ok"
-	submissionResultError = "error"
-)
-
 func (m *instrumentation) attempt(ctx context.Context, chainID, wallet string, err error) {
-	result := submissionResultOK
-	if err != nil {
-		result = submissionResultError
-	}
 	m.Attempts.Add(context.WithoutCancel(ctx), 1, metric.WithAttributes(
-		otel.AttrChainID.String(chainID), otel.AttrWallet.String(wallet), otel.AttrResult.String(result),
+		otel.AttrChainID.String(chainID), otel.AttrWallet.String(wallet), otel.AttrResultError(err),
 	))
 }
 

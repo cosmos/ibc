@@ -201,7 +201,7 @@ func (c *TxSubmitter) transactionAttributes(tx *types.Transaction, baseFee *big.
 		"chainID", c.chainID, "txHash", tx.Hash().Hex(), "sender", c.address.Hex(),
 		"nonce", tx.Nonce(), "gasLimit", tx.Gas(),
 		"maxFeePerGasWei", tx.GasFeeCap().String(), "maxPriorityFeePerGasWei", tx.GasTipCap().String(),
-		"baseFeePerGasWei", baseFee.String(), "minedNonce", c.lowestUnminedNonce,
+		"baseFeePerGasWei", baseFee.String(), "nextUnminedNonce", c.lowestUnminedNonce,
 	}
 }
 

@@ -57,7 +57,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
-	lastSuccess, err := m.Float64Gauge("dispatcher_last_success_timestamp_seconds")
+	lastSuccess, err := m.Float64Gauge("packet_poll_last_success_timestamp_seconds")
 	if err != nil {
 		return nil, err
 	}
