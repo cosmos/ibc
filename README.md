@@ -43,9 +43,7 @@ For a high-level explanation of IBC, you can also read [this blog post](https://
 
 ## Releases
 
-See [`RELEASES.md`](RELEASES.md) for how to cut a release.
-
-See [Release artifacts](RELEASES.md#release-artifacts) for the files and images each release tag publishes.
+See [`RELEASES.md`](RELEASES.md) for how to cut a release and how to verify its signed files and image.
 
 ## Interchain Standards
 
