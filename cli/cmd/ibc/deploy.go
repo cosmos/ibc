@@ -97,7 +97,7 @@ var (
 
 	cmdDeployClientBesu = &cobra.Command{
 		Use:   "besu",
-		Short: "Deploy and register a Besu light client for the counterparty's consensus, trusting its head",
+		Short: "Deploy and register a Besu light client that trusts a recent counterparty header",
 		Args:  cobra.NoArgs,
 		RunE:  deployBesuClient,
 	}
@@ -381,8 +381,8 @@ func attestationParams(
 }
 
 // besuParams reads the Besu client flags and trusts the counterparty head, or
-// an earlier header when the head is too far ahead of the later of host's
-// latest block time and now for the client to accept.
+// an earlier header when the head is too far ahead of host's latest block for
+// the client to accept.
 func besuParams(
 	ctx context.Context,
 	counterpartyRouter string,
@@ -408,8 +408,7 @@ func besuParams(
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrap(err, "read host head")
 	}
-	now := uint64(time.Now().Unix()) //nolint:gosec // the clock is past 1970
-	trusted, err := source.BesuHead(ctx, max(hostTime, now)+besu.MaxClockDrift)
+	trusted, err := source.BesuHead(ctx, hostTime+besu.MaxClockDrift)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrap(err, "read counterparty head")
 	}

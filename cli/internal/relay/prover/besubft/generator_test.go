@@ -345,33 +345,27 @@ func testPacketProofs(t *testing.T, consensus besu.Consensus) {
 	})
 }
 
-// A head more than the max clock drift ahead of the host's block time, or
-// now if later, reverts at simulation, so the prover targets an earlier
-// header.
+// A head more than the max clock drift ahead of the host's latest block fails
+// gas estimation, so the prover targets an earlier header.
 func TestLatestProvableHeightWithinDrift(t *testing.T) {
-	gen, counterparty, _ := syntheticEnv(
+	gen, _, _ := syntheticEnv(
 		t,
 		twoThirds,
 		10,
 		30,
 		era{from: 10, validators: []int64{1, 2, 3}, signers: []int64{1, 2, 3}},
 	)
-	// Date the headers after the test's clock, a second apart.
-	const base = 4_000_000_000
-	for height, header := range counterparty.sealed {
-		header.Timestamp = base + height
-	}
 	host := gen.host.(*fakeChain)
 	host.clientState.MaxClockDrift = 2
-	// The head is 5s beyond the drift of the host's block time.
-	host.blockTime = base + 23
+	// The head, at 1030, is 5s beyond the drift.
+	host.blockTime = 1023
 
 	height, ts, err := gen.LatestProvableHeight(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, uint64(25), height)
-	assert.Equal(t, time.Unix(base+25, 0).UTC(), ts)
+	assert.Equal(t, time.Unix(1025, 0).UTC(), ts)
 
-	// Against now, no header above the trusted one fits.
+	// No header above the trusted one fits.
 	host.blockTime = 0
 	height, _, err = gen.LatestProvableHeight(t.Context())
 	require.NoError(t, err)

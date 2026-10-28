@@ -628,8 +628,7 @@ func TestTrustLevelFlagDefault(t *testing.T) {
 const (
 	besuHeadHeight    = 112
 	besuHeadTimestamp = 1788200000
-	// hostTime is later than the test's clock, so besuParams uses it.
-	hostTime = 4_000_000_000
+	hostTime          = 1788200005
 )
 
 // hostTarget is a chain whose head time is hostTime.

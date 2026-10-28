@@ -233,7 +233,7 @@ Rerunning with the same `--client-id` continues that client. Rerunning with diff
 
 <!-- GEN:cli:cmd:deploy-client-besu START -->
 
-Deploy and register a Besu light client for the counterparty's consensus, trusting its head.
+Deploy and register a Besu light client that trusts a recent counterparty header.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -258,7 +258,7 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 ibc deploy client besu --chain 41002 --counterparty-chain 41001 --trusting-period 336h --yes
 ```
 
-The client starts trusting the counterparty's current head, or an earlier header when the head is more than the 12-second maximum clock drift ahead of this chain's latest block time, or of the current time if later. <!-- [cli/cmd/ibc/deploy.go: besuParams] --> One light client contract verifies QBFT and IBFT 2.0; the relayer submits each header in the form its seals sign. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or trust level fails and lists the differences. <!-- [cli/internal/deploy/steps.go: clientConflicts] --> See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
+The client starts trusting the counterparty's current head, or an earlier header when the head is more than the 12-second maximum clock drift ahead of this chain's latest block. <!-- [cli/cmd/ibc/deploy.go: besuParams] --> One light client contract verifies QBFT and IBFT 2.0; the relayer submits each header in the form its seals sign. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or trust level fails and lists the differences. <!-- [cli/internal/deploy/steps.go: clientConflicts] --> See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
 
 ### `ibc deploy core`
 

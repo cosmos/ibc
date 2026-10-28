@@ -102,14 +102,15 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 }
 
 // HeightNotAfter is a height at most head's whose header has a timestamp at
-// most notAfter, or 0 when there is none. The light client requires blocks at
-// least a second apart, so it steps back one block per second head is later
-// than notAfter; with slower blocks it may land below the newest such header.
+// most notAfter, or 1 when there is none, since genesis has no seals. The
+// light client requires blocks at least a second apart, so it steps back one
+// block per second head is later than notAfter; with slower blocks it may
+// land below the newest such header.
 func HeightNotAfter(head *ParsedHeader, notAfter uint64) uint64 {
-	if head.Timestamp <= notAfter {
+	if head.Timestamp <= notAfter || head.Height <= 1 {
 		return head.Height
 	}
-	return head.Height - min(head.Height, head.Timestamp-notAfter)
+	return head.Height - min(head.Height-1, head.Timestamp-notAfter)
 }
 
 // SealHeader sets h's validators and replaces its commit seals with seals

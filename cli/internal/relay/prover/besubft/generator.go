@@ -99,8 +99,8 @@ func NewGenerator(
 }
 
 // LatestProvableHeight returns the counterparty head, or an earlier header
-// when the head is more than the client's max clock drift ahead of the later
-// of the host's latest block time and now, or the furthest header the prover finds the client can
+// when the head is more than the client's max clock drift ahead of the host's
+// latest block, or the furthest header the prover finds the client can
 // reach when a validator set change it cannot follow comes first. The light
 // client rejects an update it cannot verify when the relay is simulated.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
@@ -117,9 +117,8 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	if err != nil {
 		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
 	}
-	// Simulation runs on the pending block, which geth-like nodes date now.
-	hostTime := max(hostHead.Timestamp.Unix(), time.Now().Unix())
-	notAfter := uint64(hostTime) + state.MaxClockDrift //nolint:gosec // block times are positive
+	// Gas is estimated on the latest block, so its time bounds the header.
+	notAfter := uint64(hostHead.Timestamp.Unix()) + state.MaxClockDrift //nolint:gosec // block times are positive
 	if head.Timestamp > notAfter {
 		height := max(besu.HeightNotAfter(head, notAfter), state.LatestHeight.RevisionHeight)
 		if head, err = g.sealedHeader(ctx, height); err != nil {

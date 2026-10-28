@@ -459,11 +459,18 @@ func TestDeployBesuQBFTIBFT2Connection(t *testing.T) {
 
 	d.deployCore(t)
 	d.configureRouters(t)
+
+	// the contract bounds the trusting period, and the CLI names its revert
+	tooLong := besuClient(d.chainAID, d.chainBID)
+	tooLong[slices.Index(tooLong, "--trusting-period")+1] = "721h"
+	_, err := d.driver.Deploy(ctx, tooLong...)
+	require.ErrorContains(t, err, "InvalidTrustingPeriod")
+
 	iftA, iftB := d.deployIFTConnection(t,
 		besuClient(d.chainAID, d.chainBID), besuClient(d.chainBID, d.chainAID))
 	d.requireRerunSkipped(t)
 
-	_, err := d.driver.Deploy(ctx, "status")
+	_, err = d.driver.Deploy(ctx, "status")
 	require.NoError(t, err)
 
 	cfg := d.populateRelayConfig(t)

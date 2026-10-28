@@ -254,3 +254,17 @@ func recoverSeals(t testing.TB, header *besu.ParsedHeader) []common.Address {
 
 	return signers
 }
+
+func TestHeightNotAfter(t *testing.T) {
+	head := &besu.ParsedHeader{Height: 30, Timestamp: 1030}
+	for notAfter, want := range map[uint64]uint64{
+		1030: 30, // the head fits
+		1040: 30,
+		1025: 25, // one block back per second
+		1001: 1,
+		0:    1, // never genesis
+	} {
+		assert.Equal(t, want, besu.HeightNotAfter(head, notAfter), "notAfter %d", notAfter)
+	}
+	assert.Equal(t, uint64(1), besu.HeightNotAfter(&besu.ParsedHeader{Height: 1, Timestamp: 1030}, 0))
+}
