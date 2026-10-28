@@ -208,8 +208,9 @@ func (r clientRelay) send(ctx context.Context, payloads [][]byte, items []v2.Pac
 }
 
 // sendUpdate submits payload, update n of total, in a transaction of its own
-// and waits for it to be mined. An update the client already holds is sent all the same: while
-// it is still pending, resending it is what replaces a stalled transaction.
+// and waits for it to be mined. An update the client already holds is sent
+// all the same: while it is still pending, resending it is what replaces a
+// stalled transaction.
 func (r clientRelay) sendUpdate(ctx context.Context, payload []byte, n, total int) error {
 	submission, err := r.send(ctx, [][]byte{payload}, nil)
 	if err != nil {
