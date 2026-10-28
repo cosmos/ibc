@@ -107,7 +107,7 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 // block per second head is later than notAfter; with slower blocks it may
 // land below the newest such header.
 func HeightNotAfter(head *ParsedHeader, notAfter uint64) uint64 {
-	if head.Timestamp <= notAfter || head.Height <= 1 {
+	if head.Timestamp <= notAfter {
 		return head.Height
 	}
 	return head.Height - min(head.Height-1, head.Timestamp-notAfter)

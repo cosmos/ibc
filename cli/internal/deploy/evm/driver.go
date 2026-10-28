@@ -287,8 +287,11 @@ func (d *Driver) provisionBesu(
 // picks when the head is later than notAfter.
 func (d *Driver) BesuHead(ctx context.Context, notAfter uint64) (*besu.ParsedHeader, error) {
 	header, err := besu.ReadSealedHeader(ctx, d.backend, nil)
-	if err != nil || header.Timestamp <= notAfter {
-		return header, err
+	if err != nil {
+		return nil, err
+	}
+	if header.Timestamp <= notAfter {
+		return header, nil
 	}
 	return besu.ReadSealedHeader(ctx, d.backend, new(big.Int).SetUint64(besu.HeightNotAfter(header, notAfter)))
 }
