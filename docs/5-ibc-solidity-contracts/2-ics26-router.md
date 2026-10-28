@@ -228,7 +228,7 @@ The IBC-defined reverts a router call can produce come from one of three places:
 | `IBCInvalidCounterparty` | A packet whose claimed counterparty client is not the one registered |
 | `IBCAsyncAcknowledgementNotSupported` | An application returning empty acknowledgement bytes |
 | `IBCErrorUniversalAcknowledgement` | An application returning the universal error acknowledgement |
-| `IBCFailedCallback` | A receive callback that leaves empty revert data, which happens when the callback frame itself dies |
+| `IBCFailedCallback` | A receive callback that leaves empty revert data, which happens when the callback frame itself dies or a GMP account's destination call most likely ran out of gas |
 | `IBCPacketCommitmentAlreadyExists` | Committing a packet where a commitment already exists |
 | `IBCPacketAcknowledgementAlreadyExists` | A second acknowledgement write for the same packet |
 | `IBCPacketCommitmentMismatch` | A supplied packet that does not hash to the stored commitment being deleted |

@@ -201,7 +201,7 @@ Only ICS27GMP can drive an account from outside, and it has one function for the
 | `initialize(ics27)` | Runs once, during the proxy's construction | Binds the account to ICS27GMP |
 | `ics27()` | Anyone | The ICS27GMP address |
 
-An inbound payload runs through `functionCall`, a thin wrapper around OpenZeppelin's `Address.functionCall`.
+An inbound payload runs through `functionCall`, which calls the target like OpenZeppelin's `Address.functionCall` but fails the relay when the call most likely ran out of gas (see [Gas and value](#gas-and-value)).
 
 The four value and batching primitives carry an `onlySelf` check, so `msg.sender` has to be the account. A sender reaches them by addressing a GMP call to its own account, with the primitive as the payload. A batch is an array of `Call { target, data, value }`.
 
@@ -234,9 +234,9 @@ Both callbacks fire synchronously inside the relayer's `ackPacket` or `timeoutPa
 
 The destination call runs on whatever gas the relayer's transaction leaves, and a GMP call carries no native value.
 
-The account forwards the destination call with `Address.functionCall`, which sends all remaining gas. Gas budgeting is delegated to the relayer.
+The account forwards the destination call with a low-level call that sends all remaining gas, as OpenZeppelin's `Address.functionCall` does. Gas budgeting is delegated to the relayer.
 
-The same helper turns an empty revert into a `FailedCall` error. A target that runs out of gas reverts with a four-byte `FailedCall`, so the router writes the error acknowledgement and the packet is consumed. Empty revert data reaches the router only when the callback frame itself dies, and that is the case the router rejects outright, leaving the packet in flight. A relayer can then retry that packet with more gas.
+The account bubbles up a failed call's revert data and turns an empty revert into a `FailedCall` error, so the router writes the error acknowledgement and the packet is consumed. The exception is an empty revert that leaves the account less than an eighth of the gas it had before the call: the target most likely ran out of gas, up to about eight frames below it, so the account reverts without data too. The router rejects empty revert data outright with `IBCFailedCallback`, as it does when the callback frame itself dies, so the relay fails and the packet stays in flight. A relayer can then retry that packet with more gas. Packets carry no gas limit, so a relayer can still starve a target that turns running out of gas into an error of its own, swallows it, or checks `gasleft()` itself.
 
 A GMP call carries call data alone, so any native value a target receives has to be in the account already.
 
