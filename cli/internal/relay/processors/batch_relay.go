@@ -164,9 +164,15 @@ func relayPackets(
 	return submission, nil
 }
 
-// updateTxPollInterval is how often an update-only transaction is checked
-// for inclusion before the next one is built.
-const updateTxPollInterval = time.Second
+const (
+	// updateTxPollInterval is how often an update-only transaction is checked
+	// for inclusion before the next one is built.
+	updateTxPollInterval = time.Second
+	// updateTxTimeout bounds the wait for an update-only transaction whose
+	// receipt lookups keep failing. An unmined one is reported by the tx
+	// submitter once its pending timeout, shorter unless raised, expires.
+	updateTxTimeout = 10 * time.Minute
+)
 
 // clientRelay builds, simulates and submits relay transactions for one client.
 type clientRelay struct {
@@ -225,19 +231,27 @@ func (r clientRelay) sendUpdate(ctx context.Context, payload []byte, n, total in
 
 // waitForInclusion polls until submission is mined successfully, failing if
 // it reverted, stayed pending past the tx submitter's retry expiry, or could
-// not be looked up. The next attempt then resends the update.
+// not be looked up for updateTxTimeout. The next attempt then resends the
+// update.
 func (r clientRelay) waitForInclusion(ctx context.Context, submission *v2.Submission) error {
+	waitCtx, cancel := context.WithTimeout(ctx, updateTxTimeout)
+	defer cancel()
 	ticker := time.NewTicker(updateTxPollInterval)
 	defer ticker.Stop()
 
+	var lookupErr error
 	for {
-		retry, err := r.txSubmitter.ShouldRetry(ctx, submission.TxHash, submission.SubmittedAt)
+		retry, err := r.txSubmitter.ShouldRetry(waitCtx, submission.TxHash, submission.SubmittedAt)
 		switch {
 		case errors.Is(err, v2.ErrTxNotFound):
 			// still pending, poll again
+			lookupErr = nil
 		case err != nil:
-			metrics.txDropped(r.chainID, submission.TxHash)
-			return errors.Wrapf(err, "checking client update tx %s", submission.TxHash)
+			if lookupErr == nil && waitCtx.Err() == nil {
+				r.logger.Warn("Checking client update tx failed, polling again",
+					"txHash", submission.TxHash, "error", err)
+			}
+			lookupErr = err
 		case retry:
 			metrics.txDropped(r.chainID, submission.TxHash)
 			return errors.Errorf("client update tx %s reverted or was not mined in time", submission.TxHash)
@@ -247,8 +261,12 @@ func (r clientRelay) waitForInclusion(ctx context.Context, submission *v2.Submis
 		}
 
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-waitCtx.Done():
+			metrics.txDropped(r.chainID, submission.TxHash)
+			if lookupErr != nil && ctx.Err() == nil {
+				return errors.Wrapf(lookupErr, "checking client update tx %s", submission.TxHash)
+			}
+			return errors.Wrapf(waitCtx.Err(), "waiting for client update tx %s", submission.TxHash)
 		case <-ticker.C:
 		}
 	}

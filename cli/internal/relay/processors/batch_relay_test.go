@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/mock"
@@ -68,7 +69,9 @@ type recordingTxSubmitter struct {
 	misbehavior map[byte]bool
 	reverted    map[string]bool
 	// pollErrs are returned by the first inclusion checks, in order.
-	pollErrs  []error
+	pollErrs []error
+	// lookupErr, if set, is returned by every later inclusion check.
+	lookupErr error
 	submitted int
 	log       []string
 }
@@ -100,6 +103,9 @@ func (s *recordingTxSubmitter) ShouldRetry(_ context.Context, txHash string, _ t
 		s.pollErrs = s.pollErrs[1:]
 		return false, err
 	}
+	if s.lookupErr != nil {
+		return false, s.lookupErr
+	}
 	s.log = append(s.log, "mined "+txHash)
 	return s.reverted[txHash], nil
 }
@@ -110,9 +116,9 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 		updates   int
 		submitter *recordingTxSubmitter
 		wantLog   []string
-		// wantInfo are fragments of the info lines logged, in order.
-		wantInfo []string
-		wantErr  string
+		// wantLines are fragments of the lines logged, in order.
+		wantLines []string
+		wantErr   string
 	}{
 		{
 			name:      "no update",
@@ -134,7 +140,7 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 				"submit 0x2 updates=[2] packets=0", "mined 0x2",
 				"submit 0x3 updates=[3] packets=1",
 			},
-			wantInfo: []string{"update=1 of=3 txHash=0x1", "update=2 of=3 txHash=0x2"},
+			wantLines: []string{"update=1 of=3 txHash=0x1", "update=2 of=3 txHash=0x2"},
 		},
 		{
 			name:      "a reverted update stops the relay",
@@ -144,9 +150,22 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 			wantErr:   "client update 1 of 3: client update tx 0x1 reverted or was not mined in time",
 		},
 		{
-			name:      "a failed receipt lookup stops the relay",
+			name:      "a failed receipt lookup is polled again",
 			updates:   3,
 			submitter: &recordingTxSubmitter{pollErrs: []error{errors.New("connection refused")}},
+			wantLog: []string{
+				"submit 0x1 updates=[1] packets=0", "mined 0x1",
+				"submit 0x2 updates=[2] packets=0", "mined 0x2",
+				"submit 0x3 updates=[3] packets=1",
+			},
+			wantLines: []string{
+				`msg="Checking client update tx failed, polling again"`, `txHash=0x1 error="connection refused"`,
+			},
+		},
+		{
+			name:      "receipt lookups failing until the timeout stop the relay",
+			updates:   3,
+			submitter: &recordingTxSubmitter{lookupErr: errors.New("connection refused")},
 			wantLog:   []string{"submit 0x1 updates=[1] packets=0"},
 			wantErr:   "client update 1 of 3: checking client update tx 0x1: connection refused",
 		},
@@ -159,42 +178,47 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			payloads := make([][]byte, tc.updates)
-			for i := range payloads {
-				payloads[i] = []byte{byte(i + 1)}
-			}
+			synctest.Test(t, func(t *testing.T) {
+				payloads := make([][]byte, tc.updates)
+				for i := range payloads {
+					payloads[i] = []byte{byte(i + 1)}
+				}
 
-			chainClient := mocks.NewMockClient(t)
-			chainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-			chainClient.EXPECT().ChainID().Return("8453").Once()
+				chainClient := mocks.NewMockClient(t)
+				chainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
+				chainClient.EXPECT().ChainID().Return("8453").Once()
 
-			mockProver := mocks.NewMockProver(t)
-			mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, uint64(100)).Return(payloads, nil).Once()
-			mockProver.EXPECT().PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything,
-				[]channeltypesv2.Acknowledgement(nil)).Return([][]byte{{0xff}}, nil).Once()
+				mockProver := mocks.NewMockProver(t)
+				mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, uint64(100)).Return(payloads, nil).Once()
+				mockProver.EXPECT().
+					PacketProofs(mock.Anything, uint64(100), v2.ProofKindPacketCommitment, mock.Anything,
+						[]channeltypesv2.Acknowledgement(nil)).
+					Return([][]byte{{0xff}}, nil).
+					Once()
 
-			var logs bytes.Buffer
-			logger := slog.New(slog.NewTextHandler(&logs, nil))
-			submission, err := relayPackets(
-				t.Context(), logger, chainClient, mockProver, byteTxBuilder{}, tc.submitter,
-				"client-0", v2.RelayKindRecv, 100,
-				[]v2.PacketEvent{{Height: 90, Packet: channeltypesv2.Packet{Sequence: 1}}},
-			)
+				var logs bytes.Buffer
+				logger := slog.New(slog.NewTextHandler(&logs, nil))
+				submission, err := relayPackets(
+					t.Context(), logger, chainClient, mockProver, byteTxBuilder{}, tc.submitter,
+					"client-0", v2.RelayKindRecv, 100,
+					[]v2.PacketEvent{{Height: 90, Packet: channeltypesv2.Packet{Sequence: 1}}},
+				)
 
-			require.Equal(t, tc.wantLog, tc.submitter.log)
-			rest := logs.String()
-			for _, fragment := range tc.wantInfo {
-				_, after, found := strings.Cut(rest, fragment)
-				require.True(t, found, "log %q not found in order in:\n%s", fragment, logs.String())
-				rest = after
-			}
-			if tc.wantErr != "" {
-				require.ErrorContains(t, err, tc.wantErr)
-				require.Nil(t, submission)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, fmt.Sprintf("0x%d", tc.submitter.submitted), submission.TxHash)
+				require.Equal(t, tc.wantLog, tc.submitter.log)
+				rest := logs.String()
+				for _, fragment := range tc.wantLines {
+					_, after, found := strings.Cut(rest, fragment)
+					require.True(t, found, "log %q not found in order in:\n%s", fragment, logs.String())
+					rest = after
+				}
+				if tc.wantErr != "" {
+					require.ErrorContains(t, err, tc.wantErr)
+					require.Nil(t, submission)
+					return
+				}
+				require.NoError(t, err)
+				require.Equal(t, fmt.Sprintf("0x%d", tc.submitter.submitted), submission.TxHash)
+			})
 		})
 	}
 }
