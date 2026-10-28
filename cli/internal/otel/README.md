@@ -4,9 +4,6 @@
 
 # Observability
 
-See [Observability and metrics](../../../docs/6-ibc-cli/8-observability-and-metrics.md)
-for metric modes, names, labels, and semantics.
-
 ## Guide on creating new metrics
 
 1. Ensure unique attribute keys are present in `otel/metrics.go` (eg `AttrChainID`, `AttrAttestor`). Add new if needed.
