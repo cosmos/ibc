@@ -21,12 +21,15 @@ type PipelineSet struct {
 	deps   pipeline.Deps
 
 	mu        sync.Mutex
-	pipelines map[processors.Route]pipeline.TransferPipeline
+	pipelines map[processors.Route]*Deduper
 }
 
 // Pipelines identifies the pipeline a transfer is relayed through.
 type Pipelines interface {
 	Pipeline(ctx context.Context, tr *processors.Transfer) (pipeline.TransferPipeline, error)
+	// Release lets the transfers that have left their pipelines be pushed
+	// again.
+	Release()
 	Routes() []processors.Route
 	Close()
 }
@@ -38,7 +41,7 @@ func NewPipelineSet(logger *slog.Logger, cfg config.Config, deps pipeline.Deps) 
 		logger:    logger,
 		cfg:       cfg,
 		deps:      deps,
-		pipelines: make(map[processors.Route]pipeline.TransferPipeline),
+		pipelines: make(map[processors.Route]*Deduper),
 	}
 }
 
@@ -83,6 +86,15 @@ func (s *PipelineSet) Pipeline(ctx context.Context, tr *processors.Transfer) (pi
 	s.pipelines[route] = pl
 
 	return pl, nil
+}
+
+func (s *PipelineSet) Release() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, pl := range s.pipelines {
+		pl.Release()
+	}
 }
 
 func (s *PipelineSet) isRouted(route processors.Route) bool {

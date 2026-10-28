@@ -106,6 +106,10 @@ func (d *RelayDispatcher) Stop() error {
 // being in flight are marked failed: submission only fails on configuration
 // errors that will not resolve by retrying.
 func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) error {
+	// before the read: a transfer that leaves its pipeline after it must not
+	// be pushed again from a packet read before its last writes
+	d.pipelines.Release()
+
 	packets, err := d.storage.ListDispatchablePackets(ctx)
 	if err != nil {
 		return errors.Wrap(err, "listing dispatchable packets")
