@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -143,6 +144,17 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 			wantLines: []string{"update=1 of=3 txHash=0x1", "update=2 of=3 txHash=0x2"},
 		},
 		{
+			name:    "a pending update is waited on past the lookup timeout",
+			updates: 2,
+			submitter: &recordingTxSubmitter{
+				pollErrs: slices.Repeat([]error{v2.ErrTxNotFound}, int(2*updateTxLookupTimeout/updateTxPollInterval)),
+			},
+			wantLog: []string{
+				"submit 0x1 updates=[1] packets=0", "mined 0x1",
+				"submit 0x2 updates=[2] packets=1",
+			},
+		},
+		{
 			name:      "a reverted update stops the relay",
 			updates:   3,
 			submitter: &recordingTxSubmitter{reverted: map[string]bool{"0x1": true}},
@@ -186,7 +198,7 @@ func TestRelayPacketsClientUpdates(t *testing.T) {
 
 				chainClient := mocks.NewMockClient(t)
 				chainClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
-				chainClient.EXPECT().ChainID().Return("8453").Once()
+				chainClient.EXPECT().ChainID().Return("8453").Maybe()
 
 				mockProver := mocks.NewMockProver(t)
 				mockProver.EXPECT().ClientUpdatePayloads(mock.Anything, uint64(100)).Return(payloads, nil).Once()
