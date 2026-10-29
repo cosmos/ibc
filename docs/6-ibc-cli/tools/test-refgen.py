@@ -507,7 +507,7 @@ def _():
     b = refgen.gen_config()
     assert "`0.0.0.0:3000`" in b["config:server"]
     assert "`1s`" in b["config:relayer"]            # dispatch.DefaultPollInterval
-    assert "`50`" in b["config:relayer:chainOverrides"]   # pipeline.DefaultBatchSize
+    assert "`25`" in b["config:relayer:chainOverrides"]   # pipeline.DefaultBatchSize
 
 
 @case("config: a key with no description anywhere is an error, not a blank cell")
