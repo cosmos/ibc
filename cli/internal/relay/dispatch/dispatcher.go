@@ -59,6 +59,7 @@ func NewRelayDispatcher(
 // Polls for dispatchable packets until Stop is called.
 func (d *RelayDispatcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
+	metrics.LastSuccess.Record(ctx, 0)
 	d.cancel = cancel
 	d.stopped = make(chan struct{})
 
@@ -134,6 +135,7 @@ func (d *RelayDispatcher) SubmitWaitingDispatchablePackets(ctx context.Context) 
 		}
 	}
 
+	metrics.LastSuccess.Record(ctx, float64(time.Now().UnixNano())/float64(time.Second))
 	return nil
 }
 

@@ -124,6 +124,7 @@ func New(
 
 func (w *Watcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
+	metrics.subscription(ctx, w.chainID, false)
 
 	eventsChan := make(chan v2.PacketEvent, eventBuffer)
 
@@ -238,12 +239,14 @@ func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (st
 		return stream{}, errors.Wrap(err, "subscribing to send packets")
 	}
 
+	metrics.subscription(ctx, w.chainID, true)
 	return stream{sub, events, cancel}, nil
 }
 
 // connects to live events and recovers broken subscriptions.
 func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 	defer func() {
+		metrics.subscription(ctx, w.chainID, false)
 		eventStream.close(true)
 	}()
 
@@ -270,6 +273,7 @@ func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 		case <-ctx.Done():
 			return
 		case err := <-eventStream.errs():
+			metrics.subscription(ctx, w.chainID, false)
 			eventStream.close(false)
 			eventStream = stream{}
 			triggerReconnect("Send packet subscription ended, reconnecting", err)
