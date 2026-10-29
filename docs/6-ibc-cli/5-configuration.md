@@ -309,7 +309,7 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
-| `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
+| `chainOverrides[].packetBatchSize` | `int` | `25` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
