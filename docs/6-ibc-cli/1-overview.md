@@ -32,7 +32,7 @@ You can deploy the IBC Solidity contracts to an EVM chain with an RPC endpoint a
 It deploys the following contracts:
 
 - The core routing stack: an access manager, the [ICS26Router](../5-ibc-solidity-contracts/2-ics26-router.md), and `IBCMulticall`, with both contracts behind proxies.
-- A light client on each chain tracking the other, registered on the router: an [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md), or a [Besu light client](../4-light-clients/3-besu-light-client.md) when the tracked chain runs Besu QBFT or IBFT 2.0.
+- A light client on each chain tracking the other, registered on the router: an [attestation light client](../5-ibc-solidity-contracts/5-attestation-light-client.md), or a [Besu light client](../5-ibc-solidity-contracts/7-besu-light-client.md) when the tracked chain runs Besu QBFT or IBFT 2.0.
 - The [ICS27GMP](../5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md) app and its account logic.
 - [IFT](../5-ibc-solidity-contracts/4-ift-contracts.md) token contracts, and the bridges between them.
 
@@ -83,7 +83,7 @@ For a [Besu light client](../4-light-clients/3-besu-light-client.md), the prover
 
 Either way it returns the client updates for a height, and a proof for each packet in the batch.
 
-The relayer then turns each batch of packets heading to the same destination into one transaction. Every configured EVM chain must have router and `IBCMulticall` addresses to run a relayer; an attestor requires only the router address. CLI deployments include both in the generated config. Each batch carries a list of operations: first any client updates needed for the height just proved, then one delivery for each packet in the batch.
+The relayer then turns each batch of packets heading to the same destination into one transaction. Every configured EVM chain must have router and `IBCMulticall` addresses to run a relayer; an attestor requires only the router address. CLI deployments include both in the generated config. Each batch carries a list of operations: first the client update needed for the height just proved, if any, then one delivery for each packet in the batch. When the client needs several updates, as a Besu client crossing validator set changes can, the relayer first sends all but the last in transactions of their own, and the last goes with the deliveries; see [Relayer](../2-how-ibc-works/5-relayer.md).
 
 ### Signing and gas
 

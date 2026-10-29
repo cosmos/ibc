@@ -29,7 +29,7 @@ How a chain decides what to believe.
 
 - [The attestation light client](4-light-clients/1-attestation-light-client.md): Accepts what a quorum of attestors signs.
 - [Attestors](4-light-clients/2-attestors.md): The services that sign, and the keys trusted.
-- [The Besu QBFT and IBFT 2.0 light clients](4-light-clients/3-besu-light-client.md): Verify sealed Besu headers and storage proofs.
+- [The Besu QBFT and IBFT 2.0 light client](4-light-clients/3-besu-light-client.md): Verify sealed Besu headers and storage proofs.
 
 ## IBC-solidity contracts
 
@@ -40,6 +40,7 @@ Solidity contract references.
 - [ICS27GMP and accounts](5-ibc-solidity-contracts/3-ics27-gmp-and-accounts.md): GMP and its per-sender accounts.
 - [IFT contracts](5-ibc-solidity-contracts/4-ift-contracts.md): The base contract and its variants.
 - [AttestationLightClient](5-ibc-solidity-contracts/5-attestation-light-client.md): What it verifies, and how.
+- [BesuLightClient](5-ibc-solidity-contracts/7-besu-light-client.md): What it verifies, and how.
 - [Permissions and upgrades](5-ibc-solidity-contracts/6-permissions-and-upgrades.md): Roles, proxies, and what is fixed.
 
 ## IBC CLI

@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc/cli/besu"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -51,6 +51,28 @@ func (c *Client) BesuClientState(
 	return state, nil
 }
 
+// BesuClientRouter returns the router clientID's light client is bound to.
+// It fails for a client deployed before ibc-contracts dfba365f, which has
+// none.
+func (c *Client) BesuClientRouter(ctx context.Context, clientID string) (common.Address, error) {
+	lightClientAddr, err := c.lightClientAddress(ctx, clientID)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	lightClient, err := besulightclient.NewContractCaller(lightClientAddr, c.eth)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	router, err := lightClient.ICS26ROUTER(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return common.Address{}, errors.Wrapf(err, "reading ICS26_ROUTER of client %q on chain %s", clientID, c.chainID)
+	}
+
+	return router, nil
+}
+
 // BesuConsensusStateHash returns the hash of the consensus state clientID
 // stores at height. The contract reverts when it stores none.
 func (c *Client) BesuConsensusStateHash(ctx context.Context, clientID string, height uint64) (common.Hash, error) {
@@ -59,8 +81,7 @@ func (c *Client) BesuConsensusStateHash(ctx context.Context, clientID string, he
 		return common.Hash{}, err
 	}
 
-	// both Besu light clients share this ABI
-	lightClient, err := besuqbft.NewContractCaller(lightClientAddr, c.eth)
+	lightClient, err := besulightclient.NewContractCaller(lightClientAddr, c.eth)
 	if err != nil {
 		return common.Hash{}, err
 	}
