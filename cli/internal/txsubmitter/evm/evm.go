@@ -108,7 +108,18 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	return c, nil
 }
 
-func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submission, error) {
+func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (_ *v2.Submission, err error) {
+	defer func() {
+		metrics.attempt(ctx, c.chainID, c.address.Hex(), err)
+		if err != nil {
+			level := slog.LevelWarn
+			if errors.Is(err, ErrBusy) {
+				level = slog.LevelInfo
+			}
+			slog.Log(ctx, level, "Transaction submission unsuccessful",
+				"chainID", c.chainID, "sender", c.address.Hex(), "err", err.Error())
+		}
+	}()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -145,13 +156,15 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 				c.lowestUnminedNoncePendingSince = time.Now()
 			}
 			metrics.startTx(c.chainID, c.address.Hex(), tx.Hash().Hex())
-			slog.Debug("Transaction broadcast", "chainID", c.chainID, "nonce", nonce, "txHash", tx.Hash())
+			slog.InfoContext(ctx, "Transaction submitted", c.transactionAttributes(tx, head.BaseFee)...)
 			return &v2.Submission{
 				TxHash:         tx.Hash().Hex(),
 				SubmittedAt:    submittedAt,
 				RelayerAddress: c.address.Hex(),
 			}, nil
 		}
+		slog.WarnContext(ctx, "Transaction broadcast rejected or unconfirmed",
+			append(c.transactionAttributes(tx, head.BaseFee), "err", chainsevm.ExplainRevert(err).Error())...)
 		if !isReplacementUnderpriced(err) {
 			return nil, errors.Wrapf(err, "broadcasting transaction %s at nonce %d", tx.Hash(), nonce)
 		}
@@ -160,6 +173,16 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		}
 		nextFee, nextTip := capFees(bump(fee), bump(tip), feeCeiling)
 		if nextFee.Cmp(fee) == 0 && nextTip.Cmp(tip) == 0 {
+			slog.WarnContext(
+				ctx,
+				"Transaction replacement fee ceiling reached",
+				append(
+					c.transactionAttributes(tx, head.BaseFee),
+					"feeCeilingWei",
+					feeCeiling.String(),
+					"err",
+					err.Error(),
+				)...)
 			return nil, errors.Wrapf(err,
 				"fee ceiling %s wei (%dx fresh estimate) reached for nonce %d",
 				feeCeiling, feeCeilingMultiplier, nonce)
@@ -171,6 +194,15 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (*v2.Submi
 		maxBroadcastAttempts,
 		nonce,
 	)
+}
+
+func (c *TxSubmitter) transactionAttributes(tx *types.Transaction, baseFee *big.Int) []any {
+	return []any{
+		"chainID", c.chainID, "txHash", tx.Hash().Hex(), "sender", c.address.Hex(),
+		"nonce", tx.Nonce(), "gasLimit", tx.Gas(),
+		"maxFeePerGasWei", tx.GasFeeCap().String(), "maxPriorityFeePerGasWei", tx.GasTipCap().String(),
+		"baseFeePerGasWei", baseFee.String(), "nextUnminedNonce", c.lowestUnminedNonce,
+	}
 }
 
 func (c *TxSubmitter) selectNonce(ctx context.Context, now time.Time) (uint64, *types.Header, error) {

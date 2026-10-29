@@ -157,9 +157,10 @@ func relayPackets(
 	if err != nil {
 		return nil, err
 	}
-	metrics.txSubmitted(ctx, chainClient.ChainID(), clientID, submission.TxHash)
+	chainID := chainClient.ChainID()
+	logger.Info("Relay transaction submitted", "chainID", chainID, "txHash", submission.TxHash)
 
-	logger.Info("Relayed packets", "txHash", submission.TxHash)
+	metrics.txSubmitted(ctx, chainID, clientID, submission.TxHash)
 
 	return submission, nil
 }
