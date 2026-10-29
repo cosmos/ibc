@@ -15,8 +15,9 @@ inputs:
       `<name>.intoto.jsonl`, the suffix OpenSSF Scorecard's Signed-Releases check looks for.
     required: true
   title:
-    description: Title of the release, used when the draft is created.
-    required: true
+    description: Title of the release, used when the draft is created. Required unless `verify-only` is `true`.
+    required: false
+    default: ""
   prerelease:
     description: >-
       Whether the release is a pre-release (`true` or `false`). Set when the draft is created and
@@ -38,6 +39,7 @@ runs:
       shell: bash
       env:
         NAME: ${{ inputs.name }}
+        TITLE: ${{ inputs.title }}
         PRERELEASE: ${{ inputs.prerelease }}
         VERIFY_ONLY: ${{ inputs.verify-only }}
       run: |
@@ -57,6 +59,10 @@ runs:
             exit 1
           fi
         done
+        if [[ "$VERIFY_ONLY" == "false" && -z "$TITLE" ]]; then
+          echo "::error::title is required unless verify-only is 'true'"
+          exit 1
+        fi
         # Cleared so the action can run more than once in a job, e.g. verify-only and then publish.
         rm -rf "${RUNNER_TEMP}/release-in" "${RUNNER_TEMP}/release-dist"
 
@@ -193,16 +199,17 @@ runs:
           exit 0
         fi
 
+        # The release already exists, as a draft from a previous run or the UI, or published from
+        # the UI. Any file on it that this run does not produce would ship unsigned and outside
+        # checksums.txt, so fail rather than publish it alongside the signed set.
+        attached=$(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)\t\(.state)\t\(.digest)"')
+        extra=$(cut -f1 <<< "$attached" | grep -vxF -f <(cd "$dist" && printf '%s\n' *) || true)
+        if [[ -n "$extra" ]]; then
+          echo "::error::Release ${TAG} has assets this run does not produce; delete them and re-run: ${extra//$'\n'/, }"
+          exit 1
+        fi
+
         if [[ "$is_draft" == "true" ]]; then
-          # A draft already exists, either from a previous run or drafted in the UI for this tag.
-          # Any file on it that this run does not upload would ship unsigned and outside
-          # checksums.txt, so fail rather than publish it alongside the signed set.
-          existing=$(gh release view "$TAG" --json assets --jq '.assets[].name')
-          extra=$(grep -vxF -f <(cd "$dist" && printf '%s\n' *) <<< "$existing" || true)
-          if [[ -n "$extra" ]]; then
-            echo "::error::Draft release ${TAG} has assets this run does not produce; delete them and re-run: ${extra//$'\n'/, }"
-            exit 1
-          fi
           gh release upload "$TAG" "$dist"/* --clobber
           # The tag decides, also for a draft created in the UI with the box ticked differently.
           gh release edit "$TAG" --prerelease="$PRERELEASE"
@@ -212,7 +219,6 @@ runs:
           # finishes a partial upload. A file that differs fails the step instead of being swapped
           # under a published release that people may already have downloaded from.
           echo "::warning::Release ${TAG} was published before its signed assets were attached"
-          attached=$(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)\t\(.state)\t\(.digest)"')
           upload=()
           for path in "$dist"/*; do
             file="${path##*/}"

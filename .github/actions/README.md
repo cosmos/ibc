@@ -21,5 +21,5 @@ Each action's README has a minimal example. The [release workflow](../workflows/
 - Pin the actions by full commit SHA, because a tag or branch can move. The `cosmos` organization's Actions policy must allow `cosmos/ibc` actions in the calling repository.
 - Signatures name the calling repository's own `release.yml`, because these are composite actions rather than a reusable workflow.
 - ibc-go and ibc-contracts pick up a change only when they bump the SHA, so keep inputs backwards compatible.
-- Do not tag the actions with `cli-v*` tags. Pushing one runs the IBC CLI release.
-- To test a change, push a tag such as `cli-v0.0.0-test.1` in a fork and verify the draft release. Then delete the draft, the tag, and any images it pushed.
+- Do not tag the actions with `cli/v*` tags. Pushing one runs the IBC CLI release.
+- To test a change, push a tag such as `cli/v0.0.0-test.1` in a fork and verify the draft release. Then delete the draft, the tag, and any images it pushed.

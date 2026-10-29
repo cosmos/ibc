@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: Release
-# Builds the IBC CLI archives for every cli-v* tag, generates an SBOM and build provenance for them,
+# Builds the IBC CLI archives for every cli/v* tag, generates an SBOM and build provenance for them,
 # signs a checksums file over them, and attaches everything to a draft release so the signed
 # assets exist before the release is published. Once the assets verify, it also publishes the signed
 # container image built from the same linux archives.
@@ -11,7 +11,7 @@ name: Release
 
 on:
   push:
-    tags: ["cli-v*"]
+    tags: ["cli/v*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -39,19 +39,22 @@ jobs:
       name: ${{ steps.tag.outputs.name }}
       title: ${{ steps.tag.outputs.title }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
+      image-tag: ${{ steps.tag.outputs.image-tag }}
     steps:
       - name: Check tag format
         id: tag
         run: |
-          if [[ ! "$TAG" =~ ^cli-(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
-            echo "::error::Tag must match cli-vX.Y.Z, optionally followed by -<suffix>"
+          # The cli/ prefix lets Go resolve the github.com/cosmos/ibc/cli module at this version.
+          if [[ ! "$TAG" =~ ^cli/(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::Tag must match cli/vX.Y.Z, optionally followed by -<suffix>"
             exit 1
           fi
-          # The assets are named after the tag as pushed, the title after the version alone.
+          # Release file names and image tags cannot contain '/', so both use cli-<version>.
           version="${BASH_REMATCH[1]}"
           suffix="${BASH_REMATCH[2]}"
           {
-            echo "name=ibc-${TAG}"
+            echo "name=ibc-cli-${version}"
+            echo "image-tag=cli-${version}"
             echo "title=IBC CLI ${version}"
             if [[ -n "$suffix" ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
           } >> "$GITHUB_OUTPUT"
@@ -160,7 +163,7 @@ jobs:
   # released binary.
   image:
     name: Image linux-${{ matrix.goarch }}
-    needs: [validate-tag, build, verify]
+    needs: [validate-tag, verify]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -259,13 +262,12 @@ jobs:
         uses: ./.github/actions/publish-draft-release
         with:
           name: ${{ needs.validate-tag.outputs.name }}
-          title: ${{ needs.validate-tag.outputs.title }}
           verify-only: "true"
 
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [image, verify]
+    needs: [validate-tag, image]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -275,8 +277,7 @@ jobs:
       artifact-metadata: write
     timeout-minutes: 10
     env:
-      # The image is tagged with the pushed tag.
-      IMAGE_TAG: ${{ github.ref_name }}
+      IMAGE_TAG: ${{ needs.validate-tag.outputs.image-tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -366,10 +367,10 @@ jobs:
           fi
           docker buildx imagetools create --tag "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}@${DIGEST}"
 
-  # Waits for publish-manifest as well, so a draft release always comes with a signed image.
+  # Waits for publish-manifest, so a draft release always comes with a signed image.
   release:
     name: Attach signed assets to draft release
-    needs: [validate-tag, build, publish-manifest]
+    needs: [validate-tag, publish-manifest]
     runs-on: ubuntu-latest
     permissions:
       contents: write

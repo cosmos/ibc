@@ -24,7 +24,7 @@ jobs:
 - `title` is the release title, used when the draft is created.
 - `prerelease` sets **Set as a pre-release** on the draft.
 
-The action fails rather than ship a wrong or unsigned file. That happens when two build jobs produce a file with the same name, or when an existing draft holds a file this run does not produce.
+The action fails rather than ship a wrong or unsigned file. That happens when two build jobs produce a file with the same name, or when an existing release, draft or published, holds a file this run does not produce.
 
 On a release that is already published, the action uploads only the files that are missing. It fails if an attached file differs, so no file people may have downloaded is replaced.
 
@@ -36,7 +36,6 @@ A release that also publishes an image should push it only after the files verif
       - uses: cosmos/ibc/.github/actions/publish-draft-release@<commit-sha> # main
         with:
           name: ibc-cli-v1.2.3
-          title: IBC CLI v1.2.3
           verify-only: "true"
 ```
 
