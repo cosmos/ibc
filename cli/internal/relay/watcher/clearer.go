@@ -16,11 +16,19 @@ import (
 
 const chunkSizeSendEvents = 200
 
+// max limit on Clear() since last sequence processed
+const clearingSequenceLimit = 1000
+
 // ClearStore the persistence a clearing pass reads and writes.
 type ClearStore interface {
 	PacketStore
 
-	ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)
+	ListPacketSequences(
+		ctx context.Context,
+		chainID, clientID string,
+		fromSequence, toSequence uint64,
+	) ([]uint64, error)
+
 	GetClearingState(ctx context.Context, chainID string, clientID string) (store.ClearingState, error)
 
 	// Transact carries the pass's rows and its watermark, so a watermark is never
@@ -146,15 +154,23 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 		return Result{}, errors.Wrapf(err, "reading the latest sequence")
 	}
 
+	// limit one Clear() run to fixed packets size
+	if seqLatest > state.LastProbed {
+		seqLatest = state.LastProbed + min(seqLatest-state.LastProbed, clearingSequenceLimit)
+	}
+
 	// fetch seqs that were recorded by wss subscription between clear() ticks
-	// todo pagination FOU-1679
-	seqsExisting, err := c.storage.ListPacketSequencesFrom(ctx, c.chainID, c.clientID, seqFrom)
-	if err != nil {
-		return Result{}, errors.Wrapf(err, "listing recorded sequences")
+	var seqsExisting []uint64
+	if seqFrom <= seqLatest {
+		seqsExisting, err = c.storage.ListPacketSequences(ctx, c.chainID, c.clientID, seqFrom, seqLatest)
+		if err != nil {
+			return Result{}, errors.Wrapf(err, "listing recorded sequences")
+		}
 	}
 
 	// query unresolved packages one more time. This might succeed ONLY
 	// if an operator changes RPC to an archival one
+	// todo(swift1337): implement a cursor + cap for unresolved sequences
 	seqsPreviouslyUnresolved := state.Unresolved
 	if c.abandon {
 		seqsPreviouslyUnresolved = nil

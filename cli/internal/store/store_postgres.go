@@ -272,22 +272,25 @@ func (db *PostgresDB) ListDispatchablePackets(ctx context.Context) ([]Packet, er
 	return packets, nil
 }
 
-func (db *PostgresDB) ListPacketSequencesFrom(
+func (db *PostgresDB) ListPacketSequences(
 	ctx context.Context,
-	chainID string,
-	clientID string,
-	fromSequence uint64,
+	chainID, clientID string,
+	fromSequence, toSequence uint64,
 ) ([]uint64, error) {
-	db.logger.Debug("ListPacketSequencesFrom", "chainID", chainID, "clientID", clientID, "from", fromSequence)
+	db.logger.Debug("ListPacketSequences", "chainID", chainID, "clientID", clientID, "from", fromSequence)
 
 	if chainID == "" || clientID == "" {
 		return nil, errors.New("chainID and clientID are required")
 	}
+	if fromSequence > toSequence {
+		return nil, errors.New("fromSequence must not exceed toSequence")
+	}
 
-	rows, err := db.repo.ListPacketSequencesFrom(ctx, postgres.ListPacketSequencesFromParams{
+	rows, err := db.repo.ListPacketSequences(ctx, postgres.ListPacketSequencesParams{
 		ChainID:      chainID,
 		ClientID:     clientID,
 		FromSequence: int64(fromSequence), //nolint:gosec // sequences fit in int64
+		ToSequence:   int64(toSequence),   //nolint:gosec // sequences fit in int64
 	})
 	if err != nil {
 		return nil, errNormalize(err)

@@ -475,7 +475,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 			}
 		}
 
-		sequences, err := s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 1)
+		sequences, err := s.ListPacketSequences(ctx, chainIDEth, clientID, 1, 1000)
 		require.NoError(t, err)
 		assert.Empty(t, sequences)
 
@@ -504,18 +504,25 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Equal(t, []uint64{5}, unfinishedSequences)
 
 		// Ordered, scoped to the chain and client, and terminal rows included
-		sequences, err = s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 1)
+		sequences, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 1, 1000)
 		require.NoError(t, err)
 		assert.Equal(t, []uint64{5, 9, 11, 12}, sequences)
 
-		// The floor is inclusive
-		sequences, err = s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 9)
+		// Both bounds are inclusive.
+		sequences, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 9, 11)
 		require.NoError(t, err)
-		assert.Equal(t, []uint64{9, 11, 12}, sequences)
+		assert.Equal(t, []uint64{9, 11}, sequences)
 
-		sequences, err = s.ListPacketSequencesFrom(ctx, chainIDEth, clientID, 13)
+		sequences, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 11, 11)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{11}, sequences)
+
+		sequences, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 13, 1000)
 		require.NoError(t, err)
 		assert.Empty(t, sequences)
+
+		_, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 12, 11)
+		require.ErrorContains(t, err, "fromSequence must not exceed toSequence")
 	})
 
 	t.Run("clearingState", func(t *testing.T) {

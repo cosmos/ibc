@@ -44,10 +44,14 @@ type Repository interface {
 	// ListDispatchablePackets returns selected packets that have not reached a terminal status.
 	ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 
-	// ListPacketSequencesFrom returns the sequences we hold a row for at or above fromSequence, ascending.
+	// ListPacketSequences returns recorded sequences in [fromSequence, toSequence], ascending.
 	// It filters on no status: clearing must skip a sequence we know about in any state, terminal and
 	// NOT_SELECTED ones included.
-	ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)
+	ListPacketSequences(
+		ctx context.Context,
+		chainID, clientID string,
+		fromSequence, toSequence uint64,
+	) ([]uint64, error)
 
 	// GetClearingState returns how far clearing has probed a client. A client we hold no state for
 	// returns the zero value and no error, which means "probe from the first sequence".
