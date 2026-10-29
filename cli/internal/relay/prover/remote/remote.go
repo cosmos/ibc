@@ -20,30 +20,40 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-const requestTimeout = time.Minute
-
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.
 type Prover struct {
-	client   proverv2.ProverServiceClient
-	chainID  string
-	clientID string
-	logger   *slog.Logger
+	requestTimeout time.Duration
+	client         proverv2.ProverServiceClient
+	chainID        string
+	clientID       string
+	logger         *slog.Logger
 }
 
-func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *slog.Logger) *Prover {
+func New(
+	httpClient connect.HTTPClient,
+	url, chainID, clientID string,
+	requestTimeout time.Duration,
+	logger *slog.Logger,
+) *Prover {
 	return &Prover{
-		client:   proverv2.NewProverServiceClient(httpClient, url, connect.WithGRPC()),
-		chainID:  chainID,
-		clientID: clientID,
-		logger:   logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
+		requestTimeout: requestTimeout,
+		client:         proverv2.NewProverServiceClient(httpClient, url, connect.WithGRPC()),
+		chainID:        chainID,
+		clientID:       clientID,
+		logger:         logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
 	}
 }
 
 // NewFromEndpoint dials endpoint with a client that can negotiate h2c, which
 // gRPC requires over plaintext.
-func NewFromEndpoint(endpoint network.Endpoint, chainID, clientID string, logger *slog.Logger) *Prover {
-	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, logger)
+func NewFromEndpoint(
+	endpoint network.Endpoint,
+	chainID, clientID string,
+	requestTimeout time.Duration,
+	logger *slog.Logger,
+) *Prover {
+	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, requestTimeout, logger)
 }
 
 func newHTTPClient(tlsConfig *tls.Config) *http.Client {
@@ -59,7 +69,7 @@ func (p *Prover) target() *proverv2.Client {
 }
 
 func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, p.requestTimeout)
 	defer cancel()
 
 	res, err := p.client.LatestProvableHeight(ctx, connect.NewRequest(&proverv2.LatestProvableHeightRequest{
@@ -78,7 +88,7 @@ func (p *Prover) LatestProvableHeight(ctx context.Context) (uint64, time.Time, e
 }
 
 func (p *Prover) ClientUpdatePayloads(ctx context.Context, height uint64) ([][]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, p.requestTimeout)
 	defer cancel()
 
 	res, err := p.client.ClientUpdatePayloads(ctx, connect.NewRequest(&proverv2.ClientUpdatePayloadsRequest{
@@ -109,7 +119,7 @@ func (p *Prover) PacketProofs(
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, p.requestTimeout)
 	defer cancel()
 
 	res, err := p.client.PacketProofs(ctx, connect.NewRequest(&proverv2.PacketProofsRequest{
