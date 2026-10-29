@@ -33,7 +33,6 @@ import (
 
 const (
 	flagNameTrustingPeriod = "trusting-period"
-	flagNameMaxClockDrift  = "max-clock-drift"
 	flagNameTrustLevel     = "trust-level"
 )
 
@@ -52,7 +51,6 @@ var (
 	flagDeployHeight          uint64
 	flagDeployTimestamp       uint64
 	flagDeployTrustingPeriod  time.Duration
-	flagDeployMaxClockDrift   time.Duration
 	flagDeployTrustLevel      string
 
 	flagDeployRenderSignerA  string
@@ -99,7 +97,7 @@ var (
 
 	cmdDeployClientBesu = &cobra.Command{
 		Use:   "besu",
-		Short: "Deploy and register a Besu light client for the counterparty's consensus, trusting its head",
+		Short: "Deploy and register a Besu light client that trusts a recent counterparty header",
 		Args:  cobra.NoArgs,
 		RunE:  deployBesuClient,
 	}
@@ -341,7 +339,7 @@ func attestationParams(
 	ctx context.Context,
 	cfg config.Config,
 	counterpartyChainID string,
-	counterpartyTarget deploy.Target,
+	_, counterpartyTarget deploy.Target,
 ) (deploy.ClientParams, error) {
 	var attestors []string
 	if len(flagDeployAttestors) > 0 {
@@ -382,23 +380,17 @@ func attestationParams(
 	}, nil
 }
 
-// besuParams reads the Besu client flags and trusts the counterparty head,
-// whose commit seals decide the consensus the client verifies.
+// besuParams reads the Besu client flags and trusts the counterparty head, or
+// an earlier header when the head is too far ahead of host's latest block for
+// the client to accept.
 func besuParams(
 	ctx context.Context,
 	counterpartyRouter string,
-	counterpartyTarget deploy.Target,
+	host, counterpartyTarget deploy.Target,
 ) (deploy.BesuParams, error) {
 	trustingPeriod, err := wholeSeconds(flagDeployTrustingPeriod)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameTrustingPeriod)
-	}
-	if trustingPeriod == 0 {
-		return deploy.BesuParams{}, errors.Errorf("--%s must be positive", flagNameTrustingPeriod)
-	}
-	maxClockDrift, err := wholeSeconds(flagDeployMaxClockDrift)
-	if err != nil {
-		return deploy.BesuParams{}, errors.Wrapf(err, "--%s", flagNameMaxClockDrift)
 	}
 	level, err := trustLevel(flagDeployTrustLevel)
 	if err != nil {
@@ -412,17 +404,19 @@ func besuParams(
 	if !ok {
 		return deploy.BesuParams{}, errors.New("counterparty cannot serve a besu consensus state")
 	}
-	head, err := source.BesuHead(ctx)
+	_, hostTime, err := host.Head(ctx)
+	if err != nil {
+		return deploy.BesuParams{}, errors.Wrap(err, "read host head")
+	}
+	trusted, err := source.BesuHead(ctx, hostTime+besu.MaxClockDrift)
 	if err != nil {
 		return deploy.BesuParams{}, errors.Wrap(err, "read counterparty head")
 	}
 	return deploy.BesuParams{
-		Consensus:             head.Consensus,
 		IBCRouter:             router,
-		InitialHeight:         head.Height,
-		InitialConsensusState: head.ConsensusState(),
+		InitialHeight:         trusted.Height,
+		InitialConsensusState: trusted.ConsensusState(),
 		TrustingPeriod:        trustingPeriod,
-		MaxClockDrift:         maxClockDrift,
 		TrustLevel:            level,
 	}, nil
 }
@@ -430,7 +424,8 @@ func besuParams(
 // defaultTrustLevel is the --trust-level default, besu.DefaultTrustLevel as n/d.
 var defaultTrustLevel = fmt.Sprintf("%d/%d", besu.DefaultTrustLevel.Numerator, besu.DefaultTrustLevel.Denominator)
 
-// trustLevel parses n/d, which the contract accepts from one third to one.
+// trustLevel parses n/d, which the contract accepts from one third to two
+// thirds.
 func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
 	numerator, denominator, _ := strings.Cut(s, "/")
 	n, errN := strconv.ParseUint(numerator, 10, 8)
@@ -440,8 +435,8 @@ func trustLevel(s string) (besumsgs.IBesuLightClientMsgsTrustThreshold, error) {
 		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("want n/d, each at most 255, got %q", s)
 	case d == 0:
 		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("denominator must not be zero, got %q", s)
-	case n > d || 3*n < d:
-		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 1, got %q", s)
+	case 3*n < d || 3*n > 2*d:
+		return besumsgs.IBesuLightClientMsgsTrustThreshold{}, errors.Errorf("must be from 1/3 to 2/3, got %q", s)
 	}
 	return besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: uint8(n), Denominator: uint8(d)}, nil
 }
@@ -469,20 +464,20 @@ func deployAttestationClient(cmd *cobra.Command, _ []string) error {
 
 func deployBesuClient(cmd *cobra.Command, _ []string) error {
 	return deployClient(cmd, func(
-		ctx context.Context, cfg config.Config, counterpartyChainID string, counterpartyTarget deploy.Target,
+		ctx context.Context, cfg config.Config, counterpartyChainID string, host, counterpartyTarget deploy.Target,
 	) (deploy.ClientParams, error) {
 		// newTarget already checked that the counterparty is a configured EVM chain
 		counterparty, _ := cfg.Chain(counterpartyChainID)
-		params, err := besuParams(ctx, counterparty.EVM.ICS26Router, counterpartyTarget)
+		params, err := besuParams(ctx, counterparty.EVM.ICS26Router, host, counterpartyTarget)
 		return params, errors.Wrapf(err, "besu client tracking chain %s", counterpartyChainID)
 	})
 }
 
-// deployClient deploys a client on --chain whose params read the
-// counterparty.
+// deployClient deploys a client on --chain whose params read the host and
+// the counterparty.
 func deployClient(
 	cmd *cobra.Command,
-	params func(context.Context, config.Config, string, deploy.Target) (deploy.ClientParams, error),
+	params func(context.Context, config.Config, string, deploy.Target, deploy.Target) (deploy.ClientParams, error),
 ) error {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
@@ -503,7 +498,7 @@ func deployClient(
 	if err != nil {
 		return err
 	}
-	spec.Params, err = params(cmd.Context(), cfg, flagDeployCounterparty, counterpartyTarget)
+	spec.Params, err = params(cmd.Context(), cfg, flagDeployCounterparty, target, counterpartyTarget)
 	if err != nil {
 		return err
 	}

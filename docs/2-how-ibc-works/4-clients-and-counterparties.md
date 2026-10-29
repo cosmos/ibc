@@ -118,7 +118,7 @@ What a client checks claims against is fixed when it is deployed. The attestatio
 
 After deploying IBC to two chains, an IBC client connection between them involves the following:
 
-1. Deploy the light client for the counterparty chain, configured with whatever it will check that chain's claims against. The attestation light client also takes a [role manager](../5-ibc-solidity-contracts/5-attestation-light-client.md#roles-and-permissions), the address that may submit proofs to it and that administers its roles afterwards. `ibc deploy client` names the router there, which grants the router that permission at deployment. The zero address opens submission to anyone.
+1. Deploy the light client for the counterparty chain, configured with whatever it will check that chain's claims against. Every light client also takes the [router it is bound to](../5-ibc-solidity-contracts/5-attestation-light-client.md#permissions-and-pausing), the only address that may submit updates and proofs to it, and whose access manager decides who may pause it. `ibc deploy client` names this chain's router there.
 2. Register it with `addClient`, naming the counterparty's client identifier and merkle prefix.
 3. Register each application on a port, so the router can deliver payloads to it. See [ports and registration](2-packets-and-applications.md#ports-and-registration).
 

@@ -32,8 +32,9 @@ func (e *stuckError) Error() string {
 // path returns the headers that take the client from trusted to target, each
 // verifiable from the one before, each the furthest the bisection finds. Header
 // voting changes at most one validator a block, which leaves every header
-// verifiable from its parent at a trust level of at most one half, so the
-// search reaches target. Otherwise it may stop short, at a header that is not.
+// verifiable from its parent at any trust level, so the search reaches target.
+// A larger change, such as a validator override in Besu's genesis transitions,
+// may stop it short, at a header that is not.
 func (g *Generator) path(
 	ctx context.Context,
 	trusted, target *besu.ParsedHeader,
@@ -82,11 +83,13 @@ func verifies(from, header *besu.ParsedHeader, level besumsgs.IBesuLightClientMs
 }
 
 // required is how many of from's validators must seal an update trusting
-// from, ceil(n * level) as the contract computes it.
+// from, as the contract computes it: ceil(n * level), capped at floor(2n/3)
+// so a single validator vote cannot stall updates, and always more than a
+// third of n, which takes precedence over the cap.
 func required(from *besu.ParsedHeader, level besumsgs.IBesuLightClientMsgsTrustThreshold) int {
-	n := len(from.Validators) * int(level.Numerator)
-	d := int(level.Denominator)
-	return (n + d - 1) / d
+	n := len(from.Validators)
+	scaled, d := n*int(level.Numerator), int(level.Denominator)
+	return max(min((scaled+d-1)/d, 2*n/3), n/3+1)
 }
 
 // trustedSigners is how many of from's validators sealed header.

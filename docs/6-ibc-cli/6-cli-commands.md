@@ -233,16 +233,15 @@ Rerunning with the same `--client-id` continues that client. Rerunning with diff
 
 <!-- GEN:cli:cmd:deploy-client-besu START -->
 
-Deploy and register a Besu light client for the counterparty's consensus, trusting its head.
+Deploy and register a Besu light client that trusts a recent counterparty header.
 
 | Flag | Default | Description |
 |---|---|---|
 | `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |
-| `--max-clock-drift <duration>` | `1m0s` | How far ahead of this chain's block time a counterparty header may be. |
-| `--trust-level <string>` | `2/3` | Fraction n/d of the trusted validators that must seal an update, from 1/3 to 1. |
-| `--trusting-period <duration>` | required | Positive trusted state lifetime. |
+| `--trust-level <string>` | `2/3` | Fraction n/d of the trusted validators that must seal an update, from 1/3 to 2/3. |
+| `--trusting-period <duration>` | required | Positive trusted state lifetime, at most 720h. |
 | `--chain <string>` |  | Chain ID for the chain being deployed to. |
 | `--deployer <string>` |  | Signer alias override for deployment transactions. |
 | `--dry-run` |  | Print the step plan without submitting transactions. |
@@ -259,7 +258,7 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 ibc deploy client besu --chain 41002 --counterparty-chain 41001 --trusting-period 336h --yes
 ```
 
-The client starts trusting the counterparty's current head, and the head's commit seals decide which light client it deploys: the QBFT one or the IBFT 2.0 one, whose seals sign a different digest. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or clock drift, or after the counterparty's consensus changed, fails and lists the differences. See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
+The client starts trusting the counterparty's current head, or an earlier header when the head is more than the 12-second maximum clock drift ahead of this chain's latest block. <!-- [cli/cmd/ibc/deploy.go: besuParams] --> One light client contract verifies QBFT and IBFT 2.0; the relayer submits each header in the form its seals sign. <!-- [cli/besu/header.go: normalizeCommitSeals] --> Configure the counterparty chain's `evm.ics26Router` with its deployed router address first; no local counterparty manifest is required. Rerunning under the same id with a different router, trusting period or trust level fails and lists the differences. <!-- [cli/internal/deploy/steps.go: clientConflicts] --> See [Besu light clients](../4-light-clients/3-besu-light-client.md#deploying) for choosing the trusting period.
 
 ### `ibc deploy core`
 
@@ -323,7 +322,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L199](cli/cmd/ibc/main.go#L199) -->
+<!-- [main.go:L197](cli/cmd/ibc/main.go#L197) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -352,7 +351,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
+<!-- [main.go:L207](cli/cmd/ibc/main.go#L207) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -377,7 +376,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L191](cli/cmd/ibc/main.go#L191) -->
+<!-- [main.go:L189](cli/cmd/ibc/main.go#L189) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -424,6 +423,8 @@ Verify recorded deployments against live chain state.
 <!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
 
 <!-- GEN:cli:cmd:deploy-status END -->
+
+Among its checks, each recorded client must be registered at its recorded address, bound to this chain's router, and registered with the Merkle prefix its type proves under: the empty prefix for an attestation client, and for a Besu client the one naming the counterparty router it records. A client deployed from ibc-contracts before `dfba365f` has no router binding and fails that check. <!-- [cli/internal/deploy/evm/wiring.go: Verify] -->
 
 ## `relayer`
 
@@ -577,7 +578,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L235](cli/cmd/ibc/main.go#L235) -->
+<!-- [main.go:L233](cli/cmd/ibc/main.go#L233) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -597,7 +598,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L240](cli/cmd/ibc/main.go#L240) -->
+<!-- [main.go:L238](cli/cmd/ibc/main.go#L238) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 

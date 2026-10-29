@@ -6,8 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
@@ -44,23 +42,7 @@ func SignABI(ctx context.Context, signer Signer, tag byte, data []byte) ([]byte,
 		return nil, err
 	}
 
-	_, signature, err = RecoverSigner(digest, signature)
+	_, signature, err = ecrecover.Recover(digest[:], signature)
 
 	return signature, err
-}
-
-// RecoverSigner recovers the address that produced sig over digest, and
-// returns sig in the only form AttestationLightClient.sol accepts. sig may use
-// v of 0/1 or 27/28 and either s.
-func RecoverSigner(digest [32]byte, sig []byte) (common.Address, []byte, error) {
-	signer, canonical, err := ecrecover.Recover(digest[:], sig)
-	if err != nil {
-		return common.Address{}, nil, err
-	}
-
-	// AttestationLightClient.sol passes the signature to ECDSA.recover unchanged,
-	// which takes only v of 27/28.
-	canonical[64] += 27
-
-	return signer, canonical, nil
 }

@@ -135,7 +135,7 @@ bytes internal constant UNIVERSAL_ERROR_ACK =
 
 The acknowledgement reports that the call failed. The destination chain's router emits the revert reason as an `IBCAppRecvPacketCallbackError` event, so finding out why means reading that chain's logs.
 
-The account forwards the destination call through `Address.functionCall`, which turns an empty revert into a `FailedCall` error. A target that runs out of gas reverts with a four-byte `FailedCall`, so the router writes the error acknowledgement and the packet is consumed. Empty revert data reaches the router only when the callback frame itself dies, and that is the case the router rejects outright, leaving the packet in flight. A relayer can then retry that packet with more gas.
+The account forwards the destination call with all remaining gas and turns an empty revert into a `FailedCall` error, so the router writes the error acknowledgement and the packet is consumed. A target that most likely ran out of gas, one whose empty revert leaves the account less than an eighth of the gas it had before the call, is the exception: the account reverts without data, the router rejects the receive outright, and the packet stays in flight, so a relayer can retry it with more gas. Packets carry no gas limit, so a relayer can still starve a target that catches running out of gas itself into an error acknowledgement.
 
 A packet that is never received ends in a timeout. Once the deadline passes, a relayer proves non-receipt on the source chain, and GMP fires the timeout callback if the sender implements it. A packet cannot be both executed and timed out, because the destination refuses a packet whose deadline has passed.
 

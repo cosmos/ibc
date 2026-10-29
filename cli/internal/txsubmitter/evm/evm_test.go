@@ -16,7 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -587,7 +587,7 @@ func (e revertError) ErrorData() any { return string(e) }
 
 func TestSubmitRejectsEstimationRevert(t *testing.T) {
 	submitter, eth := newSubmitter(t)
-	contractABI, err := besuqbft.ContractMetaData.GetAbi()
+	contractABI, err := besulightclient.ContractMetaData.GetAbi()
 	require.NoError(t, err)
 	customErr := contractABI.Errors["ConsensusStateExpired"]
 	args, err := customErr.Inputs.Pack(uint64(100), big.NewInt(121), uint64(20))

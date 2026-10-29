@@ -36,14 +36,12 @@ func TestRoundTrip(t *testing.T) {
 		CounterpartyChainID:  "3",
 		CounterpartyClientID: "cli-1",
 		Besu: &BesuParams{
-			Consensus:         "qbft",
 			IBCRouter:         "0xrouter",
 			InitialHeight:     112,
 			InitialTimestamp:  1788192445,
 			InitialStateRoot:  "0xroot",
 			InitialValidators: []string{"0xv1", "0xv2"},
 			TrustingPeriod:    1209600,
-			MaxClockDrift:     15,
 			TrustLevel:        TrustLevel{Numerator: 2, Denominator: 3},
 		},
 	}

@@ -46,7 +46,7 @@ git clone https://github.com/cosmos/ibc-contracts.git ../../ibc-contracts-attest
 ```
 
 ```bash
-git -C ../../ibc-contracts-attestor-rotation checkout f564e6339cfd49498b043cc9fab770ed6f20ebaa
+git -C ../../ibc-contracts-attestor-rotation checkout daaed552e739ad81e758855fd6b2734bf46ebb8c
 ```
 
 ```bash
@@ -71,7 +71,7 @@ Deploy a client that accepts only the replacement attestor:
 REPLACEMENT_CLIENT=$(forge create --root ../../ibc-contracts-attestor-rotation/ibc-solidity contracts/light-clients/attestation/AttestationLightClient.sol:AttestationLightClient --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY" --broadcast --json --constructor-args "[$NEW_ATTESTOR]" 1 "$HEIGHT" "$TIMESTAMP" "$ROUTER_A" | jq -er '.deployedTo')
 ```
 
-The constructor authorizes `ROUTER_A` to submit proofs.
+The constructor binds the client to `ROUTER_A`, the only caller it accepts.
 
 ## 3. Migrate to the replacement client
 

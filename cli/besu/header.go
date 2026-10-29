@@ -20,8 +20,8 @@ import (
 	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 )
 
-// Besu BFT extraData layout, matching _parseHeader in
-// ibc-contracts/ibc-solidity/contracts/light-clients/besu/BesuLightClientBase.sol.
+// Besu BFT extraData layout, matching Header.decodeRlp in
+// ibc-contracts/ibc-solidity/contracts/light-clients/besu/utils/Header.sol.
 const (
 	extraDataItemCount  = 5
 	extraIdxValidators  = 1
@@ -31,21 +31,25 @@ const (
 // emptyRLPList replaces the commit seals in the QBFT signing form of extraData.
 var emptyRLPList = rlp.RawValue{0xc0}
 
-// ParsedHeader is a Besu header's RLP in the form the light client accepts,
-// with its commit seals normalized, plus the few fields decoded from it
-// that light-client payloads need; consensus validity is checked by the
-// contract.
+// ParsedHeader is a Besu header and its commit seals in the form the light
+// client accepts, plus the few fields decoded from it that light-client
+// payloads need; consensus validity is checked by the contract.
 type ParsedHeader struct {
-	RLP        []byte
-	Height     uint64
-	Timestamp  uint64
-	StateRoot  common.Hash
-	Validators []common.Address
+	// RLP is the header in its commit seal signing form, whose hash the seals
+	// sign: extraData without the seal list for IBFT2, or with it emptied for
+	// QBFT.
+	RLP []byte
+	// CommitSeals are the Signers' seals in the same order, canonical, with
+	// 27/28 recovery IDs.
+	CommitSeals [][]byte
+	Height      uint64
+	Timestamp   uint64
+	StateRoot   common.Hash
+	Validators  []common.Address
 	// Signers are the validators whose commit seals the header keeps, in
 	// ascending order: the signers the contract recovers.
 	Signers []common.Address
-	// Consensus is the protocol whose digest the commit seals sign, empty for
-	// a header without seals.
+	// Consensus is the protocol whose digest the commit seals sign.
 	Consensus Consensus
 }
 
@@ -59,12 +63,12 @@ func (h *ParsedHeader) ConsensusState() besumsgs.IBesuLightClientMsgsConsensusSt
 	}
 }
 
-// ParseSealedHeader encodes a node-supplied header the way Besu sealed it,
-// with its commit seals in the form the light client requires, and reads the
-// fields needed for payloads. go-ethereum keeps every optional post-merge
-// field the node returned, so apart from the commit seals the encoding
-// reproduces the sealed bytes. Validators come from extraData, not a
-// consensus RPC. The consensus is the one whose digest the commit seals sign.
+// ParseSealedHeader encodes a node-supplied header in the signing form its
+// commit seals sign, takes the seals in the form the light client requires,
+// and reads the fields needed for payloads. go-ethereum keeps every optional
+// post-merge field the node returned, so the encoding reproduces the signed
+// bytes. Validators come from extraData, not a consensus RPC. The consensus
+// is the one whose digest the commit seals sign.
 func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 	if h == nil {
 		return nil, errors.New("nil header")
@@ -84,18 +88,29 @@ func ParseSealedHeader(h *types.Header) (*ParsedHeader, error) {
 		return nil, fmt.Errorf("validators: %w", err)
 	}
 
-	sorted, consensus, signers, err := normalizeCommitSeals(h, extraItems, header.Validators)
+	consensus, seals, signers, err := normalizeCommitSeals(h, extraItems, header.Validators)
 	if err != nil {
 		return nil, fmt.Errorf("header %d: %w", header.Height, err)
 	}
-	header.Consensus, header.Signers = consensus, signers
+	header.Consensus, header.CommitSeals, header.Signers = consensus, seals, signers
 
-	header.RLP, err = rlp.EncodeToBytes(sorted)
-	if err != nil {
+	if header.RLP, err = signingHeader(h, extraItems, consensus); err != nil {
 		return nil, fmt.Errorf("encode header %d: %w", header.Height, err)
 	}
 
 	return header, nil
+}
+
+// HeightNotAfter is a height at most head's whose header has a timestamp at
+// most notAfter, or 1 when there is none, since genesis has no seals. The
+// light client requires blocks at least a second apart, so it steps back one
+// block per second head is later than notAfter; with slower blocks it may
+// land below the newest such header.
+func HeightNotAfter(head *ParsedHeader, notAfter uint64) uint64 {
+	if head.Timestamp <= notAfter {
+		return head.Height
+	}
+	return head.Height - min(head.Height-1, head.Timestamp-notAfter)
 }
 
 // SealHeader sets h's validators and replaces its commit seals with seals
@@ -170,25 +185,24 @@ func decodeExtra(h *types.Header) ([]rlp.RawValue, error) {
 	return extraItems, nil
 }
 
-// normalizeCommitSeals returns h with only the commit seals the contract
-// accepts: canonical, from one of validators, one per signer, in strictly
-// ascending order of signer. The contract rejects the whole header for any
-// other seal. Changing the seals is safe because the seal digest excludes
-// them. It also returns the consensus whose digest the seals sign, which
-// must be the only one under which any of them recovers to a validator, and
-// the signers of the kept seals.
+// normalizeCommitSeals returns the consensus whose digest h's commit seals
+// sign, which must be the only one under which any of them recovers to a
+// validator, and only the seals the contract accepts: canonical with 27/28
+// recovery IDs, from one of validators, one per signer, in strictly
+// ascending order of signer, with those signers. The contract rejects the
+// whole update for any other seal.
 func normalizeCommitSeals(
 	h *types.Header,
 	extraItems []rlp.RawValue,
 	validators []common.Address,
-) (*types.Header, Consensus, []common.Address, error) {
+) (Consensus, [][]byte, []common.Address, error) {
 	var seals [][]byte
 	if err := rlp.DecodeBytes(extraItems[extraIdxCommitSeals], &seals); err != nil {
-		return nil, "", nil, fmt.Errorf("commit seals: %w", err)
+		return "", nil, nil, fmt.Errorf("commit seals: %w", err)
 	}
 
 	if len(seals) == 0 {
-		return h, "", nil, nil
+		return "", nil, nil, errors.New("no commit seals")
 	}
 
 	var (
@@ -198,14 +212,14 @@ func normalizeCommitSeals(
 	for _, consensus := range Consensuses {
 		digest, err := commitSealDigest(h, extraItems, consensus)
 		if err != nil {
-			return nil, "", nil, err
+			return "", nil, nil, err
 		}
 		signed := validatorSeals(digest, seals, validators)
 		if len(signed) == 0 {
 			continue
 		}
 		if detected != "" {
-			return nil, "", nil, fmt.Errorf(
+			return "", nil, nil, fmt.Errorf(
 				"commit seals recover to header validators under both %s and %s",
 				detected,
 				consensus,
@@ -214,7 +228,7 @@ func normalizeCommitSeals(
 		detected, kept = consensus, signed
 	}
 	if detected == "" {
-		return nil, "", nil, errors.New("no commit seal recovers to a header validator")
+		return "", nil, nil, errors.New("no commit seal recovers to a header validator")
 	}
 
 	keptSeals := make([][]byte, len(kept))
@@ -222,14 +236,8 @@ func normalizeCommitSeals(
 	for i, s := range kept {
 		keptSeals[i], signers[i] = s.seal, s.signer
 	}
-	items := slices.Clone(extraItems)
-	var err error
-	if items[extraIdxCommitSeals], err = rlp.EncodeToBytes(keptSeals); err != nil {
-		return nil, "", nil, fmt.Errorf("encode commit seals: %w", err)
-	}
-	out, err := withExtraData(h, items)
 
-	return out, detected, signers, err
+	return detected, keptSeals, signers, nil
 }
 
 type signedSeal struct {
@@ -252,11 +260,21 @@ func validatorSeals(digest []byte, seals [][]byte, validators []common.Address) 
 	return slices.CompactFunc(signed, func(a, b signedSeal) bool { return a.signer == b.signer })
 }
 
-// commitSealDigest is the digest commit seals sign under consensus, matching
-// _commitSealDigest in BesuQBFTLightClient.sol and BesuIBFT2LightClient.sol:
-// the header hash with the commit seals emptied from extraData for QBFT, or
-// dropped from it for IBFT2.
+// commitSealDigest is the digest commit seals sign under consensus, the hash
+// of h's signing form.
 func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Consensus) ([]byte, error) {
+	signing, err := signingHeader(h, extraItems, consensus)
+	if err != nil {
+		return nil, err
+	}
+
+	return crypto.Keccak256(signing), nil
+}
+
+// signingHeader is the RLP of h in the form commit seals sign under
+// consensus: the commit seals emptied from extraData for QBFT, or dropped
+// from it for IBFT2.
+func signingHeader(h *types.Header, extraItems []rlp.RawValue, consensus Consensus) ([]byte, error) {
 	var signingItems []rlp.RawValue
 	switch consensus {
 	case QBFT:
@@ -278,7 +296,7 @@ func commitSealDigest(h *types.Header, extraItems []rlp.RawValue, consensus Cons
 		return nil, fmt.Errorf("encode signing header: %w", err)
 	}
 
-	return crypto.Keccak256(encoded), nil
+	return encoded, nil
 }
 
 // withExtraData returns a copy of h whose extraData is the RLP list of items.
