@@ -108,7 +108,7 @@ The specification may have any or all of the following sub-components, as approp
 
 An ICS should include a history section, listing any inspiring documents and a plaintext log of significant changes.
 
-See an example history section [below](#history-1).
+The History section at the end of this document is an example.
 
 ### Copyright
 

@@ -1,0 +1,15 @@
+{
+  "name": "ibc-docs-versioning",
+  "version": "1.0.0",
+  "description": "Version management scripts for the IBC docs site (docs/)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "freeze": "node version-manager.js",
+    "check-canonicals": "node check-canonicals.js",
+    "test": "node check-github-refs.test.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,286 @@
+/* Code block font — Fira Code has full box-drawing character support */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+
+:root {
+  --background-light: 255 255 255;
+}
+
+/* Accent color overrides */
+/* The accent is set per page by custom.js, which picks one of the six Cosmos
+   brand hues from a hash of the path. The fallbacks here are the brand blue,
+   so the nav still looks right if the script does not run. */
+.bg-primary\/10,
+.dark .bg-primary\/10,
+.dark\:bg-primary-light\/10:is(.dark *) {
+  background-color: var(--nav-accent, #40b3ff);
+}
+
+.bg-primary\/10.text-primary,
+.bg-primary\/10 .text-primary,
+.dark\:bg-primary-light\/10:is(.dark *),
+.dark\:bg-primary-light\/10:is(.dark *) .text-primary,
+.dark\:bg-primary-light\/10:is(.dark *).dark\:text-primary-light {
+  color: var(--nav-accent-ink, #0e0e0e);
+}
+
+/* The Future Font Family */
+@font-face {
+  font-family: 'The Future';
+  src: url('/mintlify/assets/fonts/the-future-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'The Future';
+  src: url('/mintlify/assets/fonts/the-future-medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'The Future';
+  src: url('/mintlify/assets/fonts/the-future-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'The Future';
+  src: url('/mintlify/assets/fonts/the-future-light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Hide top navigation bar ONLY on landing page (index.mdx) */
+/* Use :has() selector to check if custom-index-content exists on page */
+body:has(#custom-index-content) header,
+body:has(#custom-index-content) #navbar,
+body:has(#custom-index-content) #header,
+body:has(#custom-index-content) nav[aria-label],
+body:has(#custom-index-content) button#search-bar-entry,
+body:has(#custom-index-content) button#search-bar-entry-mobile,
+body:has(#custom-index-content) #search-bar-entry,
+body:has(#custom-index-content) #search-bar-entry-mobile,
+body:has(#custom-index-content) .chat-assistant-floating-input,
+body:has(#custom-index-content) *:has(> .chat-assistant-floating-input) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -99999px !important;
+  pointer-events: none !important;
+}
+
+/* Apply The Future font to custom index content */
+body:has(#custom-index-content) #custom-index-content {
+  font-family: 'The Future', sans-serif;
+}
+
+
+body:has(#custom-index-content) #custom-index-content h1,
+body:has(#custom-index-content) #custom-index-content h2,
+body:has(#custom-index-content) #custom-index-content h3,
+body:has(#custom-index-content) #custom-index-content p,
+body:has(#custom-index-content) #custom-index-content a {
+  font-family: 'The Future', sans-serif;
+}
+
+/* Hide "More actions" ellipsis button on mobile (it doesn't do anything) */
+@media (max-width: 768px) {
+  button[aria-label="More actions"] {
+    display: none !important;
+  }
+
+  #custom-index-content {
+    margin-top: -120px; /* Matches h-24 header height */
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1023px) {
+  #custom-index-content {
+    margin-top: -120px; /* Matches md:h-28 header height */
+  }
+}
+
+
+/* Override text links underline colors for inline content links */
+.prose p a,
+.prose li a,
+.prose ul a,
+.prose span a,
+.prose div[data-callout-type] a,
+.prose .callout a,
+.prose .info a,
+.prose .note a,
+.prose .warning a,
+.prose .tip a,
+.prose .steps a,
+.prose .step a,
+.prose [role="listitem"] a {
+  border-bottom-color: #0E0E0E !important;
+  text-decoration-color: #0E0E0E !important;
+}
+
+.dark .prose p a,
+.dark .prose li a,
+.dark .prose ul a,
+.dark .prose span a,
+.dark .prose div[data-callout-type] a,
+.dark .prose .callout a,
+.dark .prose .info a,
+.dark .prose .note a,
+.dark .prose .warning a,
+.dark .prose .tip a,
+.dark .prose .steps a,
+.dark .prose .step a,
+.dark .prose [role="listitem"] a {
+  border-bottom-color: #cccccc !important;
+  text-decoration-color: #cccccc !important;
+}
+
+/* Highlighted card background */
+.highlighted-card-bg {
+  background-color: #FFB84D;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.highlighted-card-bg:hover {
+  box-shadow: 
+    0 0 30px rgba(255, 184, 77, 0.5),
+    0 0 60px rgba(255, 184, 77, 0.3),
+    0 10px 40px rgba(255, 184, 77, 0.2);
+}
+
+.highlighted-card-bg::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  transition: transform 0.6s ease-in-out;
+}
+
+.highlighted-card-bg:hover::before {
+  transform: translateX(100%) translateY(100%) rotate(45deg);
+}
+
+/* Show Mintlify footer on custom index page.
+   Mintlify hides it with a layered Tailwind utility (`peer-[.is-custom]:hidden!`).
+   For !important declarations the cascade-layer order inverts, so an unlayered
+   override loses no matter how specific it is. Ours has to be layered too. */
+@layer utilities {
+  body:has(#custom-index-content) #footer {
+    display: flex !important;
+  }
+}
+
+pre, pre code, code {
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace !important;
+}
+
+/* ── "Get started" CTA ─────────────────────────────────────────────────────
+   Mintlify builds this button as a link whose fill is a child
+   <span class="absolute inset-0 bg-primary-dark">, not a background on the
+   link itself. colors.primary is #000000 here, so that span paints #0E0E0E
+   over a #0E0E0E navbar and the button reads as bare text. Colour the span,
+   not the anchor — setting it on the anchor only leaks round the corners,
+   because the span's radius is larger.
+
+   It takes the same --nav-accent as the sidebar highlight, so the button and
+   the nav shift together section by section and there is one value to change.
+   Fallback is the brand blue, for when custom.js has not run.
+
+   Matched on that span rather than on the button's href. An earlier version
+   keyed on `href$="…/02-tutorial-deploy-ibc-and-send-a-token"`, and when the
+   tutorial moved under `02-tutorial/` the selector stopped matching and the
+   button silently went black-on-black. `span.absolute.bg-primary-dark` is
+   unique to this CTA in the navbar and survives re-pointing it. */
+header a > span.absolute.bg-primary-dark,
+#navbar a > span.absolute.bg-primary-dark {
+  background-color: var(--nav-accent, #40b3ff);
+  transition: background-color 120ms ease;
+}
+
+header a:hover > span.absolute.bg-primary-dark,
+#navbar a:hover > span.absolute.bg-primary-dark {
+  background-color: color-mix(in srgb, var(--nav-accent, #40b3ff) 82%, white);
+  opacity: 1;
+}
+
+header a:has(> span.absolute.bg-primary-dark),
+header a:has(> span.absolute.bg-primary-dark) *,
+#navbar a:has(> span.absolute.bg-primary-dark),
+#navbar a:has(> span.absolute.bg-primary-dark) * {
+  color: var(--nav-accent-ink, #0e0e0e);
+  font-weight: 600;
+}
+
+/* ── Section tabs: colour on hover ─────────────────────────────────────────
+   Each tab carries its section's brand hue and shows it only on hover, so the
+   bar stays quiet until you reach for it. Matched on href prefix rather than
+   the exact landing page, so re-pointing a tab at a different first page does
+   not silently drop its colour.
+
+   The fill is a ::before rather than a background on the link, because the
+   link is full navbar height (48px) and a 48px block reads as a bar instead
+   of a control. The pseudo-element insets it to a chip. .nav-tabs-item is
+   already position:relative, so it anchors correctly. */
+.nav-tabs-item {
+  --tab-accent: #40b3ff;
+  --tab-ink: #0e0e0e;
+  transition: color 120ms ease;
+}
+
+.nav-tabs-item::before {
+  content: "";
+  position: absolute;
+  inset: 9px -10px;
+  border-radius: 0.5rem;
+  background-color: transparent;
+  transition: background-color 120ms ease;
+  z-index: -1;
+}
+
+.nav-tabs-item:hover::before {
+  background-color: var(--tab-accent);
+}
+
+/* !important is needed here, not laziness: Mintlify puts its own
+   `dark:hover:text-gray-*` utility on these links, which compiles to
+   `.dark\:hover\:text-gray-200:is(.dark *):hover` — two classes plus a
+   pseudo-class, so it outranks `.nav-tabs-item:hover` and the ink never
+   applies. Scoped to the hover colour only. */
+.nav-tabs-item:hover,
+.nav-tabs-item:hover * {
+  color: var(--tab-ink) !important;
+}
+
+.nav-tabs-item[href^="/ibc/05-ibc-cli/"]              { --tab-accent: #22e2a8; --tab-ink: #0e0e0e; }
+.nav-tabs-item[href^="/ibc/06-ibc-solidity-contracts/"] { --tab-accent: #7522b5; --tab-ink: #ffffff; }
+.nav-tabs-item[href^="/ibc-go/"]                   { --tab-accent: #4b47ca; --tab-ink: #ffffff; }
+.nav-tabs-item[href^="/ibc/spec/"]                 { --tab-accent: #ef5628; --tab-ink: #0e0e0e; }
+
+/* Mintlify sizes the navbar logo with its own `h-7` utility (28px), which is
+   too small for this lockup: the tagline sits on three lines, so at 28px each
+   line is about 2.8px tall. `img.nav-logo` is one class plus an element, so it
+   outranks `.h-7` without needing !important. */
+img.nav-logo {
+  height: 3rem;
+}

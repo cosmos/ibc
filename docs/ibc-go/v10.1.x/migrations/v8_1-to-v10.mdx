@@ -1,0 +1,287 @@
+---
+noindex: true
+canonical: '/ibc-go/latest/migrations/v8_1-to-v10'
+title: IBC-Go v8.1 to v10
+description: This guide provides instructions for migrating to a new version of ibc-go.
+---
+
+This guide provides instructions for migrating to a new version of ibc-go.
+
+**Note:** ibc-go supports golang semantic versioning and therefore all imports must be updated on major version releases. In addition, for this release, the 08-wasm module has been released as v10, and the callbacks middleware has been moved into the ibc-go module itself.
+
+Diff examples are shown after the list of overall changes:
+
+* To add support for IBC v2, Chains will need to wire up a new IBC v2 Transfer stack
+* Chains will need to wire up the new light client modules
+* Chains will need to update Keeper construction calls to comply with the new signatures
+* Chains will need to remove the route for the legacy proposal handler for 02-client from their `app/app.go`
+* Chains will need to remove the capability keeper and all related setup, including the scoped keepers from their `app/app.go`
+* Chains will need to remove ibc fee middleware (29-fee)
+* Chains will need, if using this module, to update their imports and usage of `github.com/cosmos/ibc-go/modules/light-clients/08-wasm/` to `github.com/cosmos/ibc-go/modules/light-clients/08-wasm/v10`
+* Chains will need, if using this module, to update their imports and usage of `github.com/cosmos/ibc-go/modules/apps/callbacks` to `github.com/cosmos/ibc-go/v10/modules/apps/callbacks`
+
+To add IBC v2 support, wire up a new transfer stack. Example below showing wired up with IBC Callbacks module:
+
+```diff
++ var ibcv2TransferStack ibcapi.IBCModule
++ ibcv2TransferStack = transferv2.NewIBCModule(app.TransferKeeper)
++ ibcv2TransferStack = ibccallbacksv2.NewIBCMiddleware(
++   transferv2.NewIBCModule(app.TransferKeeper),
++   app.IBCKeeper.ChannelKeeperV2,
++   wasmStackIBCHandler,
++   app.IBCKeeper.ChannelKeeperV2,
++   maxCallbackGas,
++ )
+```
+
+Wire up each light client as a separate module and add them to the client keeper router. Example below for 07-tendermint and 08-wasm:
+
+```diff
++ / Light client modules
++ clientKeeper := app.IBCKeeper.ClientKeeper
++ storeProvider := app.IBCKeeper.ClientKeeper.GetStoreProvider()
++
++ tmLightClientModule := ibctm.NewLightClientModule(appCodec, storeProvider)
++ clientKeeper.AddRoute(ibctm.ModuleName, &tmLightClientModule)
++
++ wasmLightClientModule := ibcwasm.NewLightClientModule(app.WasmClientKeeper, storeProvider)
++ clientKeeper.AddRoute(ibcwasmtypes.ModuleName, &wasmLightClientModule)
+```
+
+Remove ibc fee module name (if used) from module account permissions:
+
+```diff
+  // app.go
+  ...
+  // module account permissions
+  var maccPerms = map[string][]string{
+    ...
+-   ibcfeetypes.ModuleName:      nil,
+    ...
+  }
+```
+
+Remove `CapabilityKeeper`, `IBCFeeKeeper` and all `capabilitykeeper.ScopedKeeper` Scoped keepers from the App struct:
+
+```diff expandable
+  // ChainApp extended ABCI application
+  type ChainApp struct {
+    ...
+-	CapabilityKeeper      *capabilitykeeper.Keeper
+    ...
+-   IBCFeeKeeper        ibcfeekeeper.Keeper
+    ...
+-   ScopedIBCKeeper           capabilitykeeper.ScopedKeeper
+-	ScopedICAHostKeeper       capabilitykeeper.ScopedKeeper
+-	ScopedICAControllerKeeper capabilitykeeper.ScopedKeeper
+-	ScopedTransferKeeper      capabilitykeeper.ScopedKeeper
+-	ScopedIBCFeeKeeper        capabilitykeeper.ScopedKeeper
+    ...
+  }
+  ...
+- app.ScopedIBCKeeper = scopedIBCKeeper
+- app.ScopedTransferKeeper = scopedTransferKeeper
+- app.ScopedWasmKeeper = scopedWasmKeeper
+- app.ScopedICAHostKeeper = scopedICAHostKeeper
+- app.ScopedICAControllerKeeper = scopedICAControllerKeeper
+```
+
+Remove capability and ibc fee middleware store keys from the `NewKVStoreKeys` call:
+
+```diff
+...
+  keys := storetypes.NewKVStoreKeys(
+    ...
+-   capabilitytypes.StoreKey,
+-   ibcfeetypes.StoreKey,
+    ...
+  }
+```
+
+Remove the in-memory store keys previously used by the capability module:
+
+```diff
+- memKeys := storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
+...
+- app.MountMemoryStores(memKeys)
+```
+
+Remove creation of the capability keeper:
+
+```diff expandable
+- / add capability keeper and ScopeToModule for ibc module
+- 	app.CapabilityKeeper = capabilitykeeper.NewKeeper(
+- 		appCodec,
+- 		keys[capabilitytypes.StoreKey],
+- 		memKeys[capabilitytypes.MemStoreKey],
+- 	)
+
+- 	scopedIBCKeeper := app.CapabilityKeeper.ScopeToModule(ibcexported.ModuleName)
+- 	scopedICAHostKeeper := app.CapabilityKeeper.ScopeToModule(icahosttypes.SubModuleName)
+- 	scopedICAControllerKeeper := app.CapabilityKeeper.ScopeToModule(icacontrollertypes.SubModuleName)
+- 	scopedTransferKeeper := app.CapabilityKeeper.ScopeToModule(ibctransfertypes.ModuleName)
+- 	scopedWasmKeeper := app.CapabilityKeeper.ScopeToModule(wasmtypes.ModuleName)
+- 	app.CapabilityKeeper.Seal()
+```
+
+Remove the legacy route for the client keeper:
+
+```diff
+...
+  govRouter.AddRoute(govtypes.RouterKey, govv1beta1.ProposalHandler).
+- AddRoute(paramproposal.RouterKey, params.NewParamChangeProposalHandler(app.ParamsKeeper)).
+- AddRoute(ibcclienttypes.RouterKey, ibcclient.NewClientProposalHandler(app.IBCKeeper.ClientKeeper))
++ AddRoute(paramproposal.RouterKey, params.NewParamChangeProposalHandler(app.ParamsKeeper))
+```
+
+Update Core IBC Keeper constructor:
+
+```diff
+  app.IBCKeeper = ibckeeper.NewKeeper(
+	appCodec,
+-	keys[ibcexported.StoreKey],
++	runtime.NewKVStoreService(keys[ibcexported.StoreKey]),
+	app.GetSubspace(ibcexported.ModuleName),
+-	app.StakingKeeper,
+	app.UpgradeKeeper,
+-	scopedIBCKeeper,
+	authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+  )
+```
+
+Update IBC Transfer keeper constructor:
+
+```diff expandable
+  app.TransferKeeper = ibctransferkeeper.NewKeeper(
+	appCodec,
+-	keys[ibctransfertypes.StoreKey],
++	runtime.NewKVStoreService(keys[ibctransfertypes.StoreKey]),
+	app.GetSubspace(ibctransfertypes.ModuleName),
+	app.IBCKeeper.ChannelKeeper,
+	app.IBCKeeper.ChannelKeeper,
+-	app.IBCKeeper.PortKeeper,
++	app.MsgServiceRouter(),
+	app.AccountKeeper,
+	app.BankKeeper,
+-	scopedTransferKeeper,
+	authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+  )
+```
+
+Update ICA Host keeper constructor, notice the removal of the `WithQueryRouter` call in particular:
+
+```diff expandable
+  app.ICAHostKeeper = icahostkeeper.NewKeeper(
+	appCodec,
+-	keys[icahosttypes.StoreKey],
++	runtime.NewKVStoreService(keys[icahosttypes.StoreKey]),
+	app.GetSubspace(icahosttypes.SubModuleName),
+-	app.IBCFeeKeeper, / use ics29 fee as ics4Wrapper in middleware stack
+	app.IBCKeeper.ChannelKeeper,
+-	app.IBCKeeper.PortKeeper,
++	app.IBCKeeper.ChannelKeeper,
+	app.AccountKeeper,
+-	scopedICAHostKeeper,
+	app.MsgServiceRouter(),
++	app.GRPCQueryRouter(),
+	authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+  )
+- app.ICAHostKeeper.WithQueryRouter(app.GRPCQueryRouter())
+```
+
+Remove IBC Fee Module keeper:
+
+```diff
+- app.IBCFeeKeeper = ibcfeekeeper.NewKeeper(
+-	appCodec, keys[ibcfeetypes.StoreKey],
+-	app.IBCKeeper.ChannelKeeper, / may be replaced with IBC middleware
+-	app.IBCKeeper.ChannelKeeper,
+-	app.IBCKeeper.PortKeeper, app.AccountKeeper, app.BankKeeper,
+- )
+```
+
+Update Transfer stack to remove the fee middleware. The example below shows the correct way to wire up a middleware stack with the IBC callbacks middleware:
+
+```diff expandable
+  // Create Transfer Stack
+  var transferStack porttypes.IBCModule
+  transferStack = transfer.NewIBCModule(app.TransferKeeper)
+- transferStack = ibccallbacks.NewIBCMiddleware(transferStack, app.IBCFeeKeeper, wasmStackIBCHandler, maxCallbackGas)
+- transferStack = ibcfee.NewIBCMiddleware(transferStack, app.IBCFeeKeeper)
++ / callbacks wraps the transfer stack as its base app, and uses PacketForwardKeeper as the ICS4Wrapper
++ / i.e. packet-forward-middleware is higher on the stack and sits between callbacks and the ibc channel keeper
++ / Since this is the lowest level middleware of the transfer stack, it should be the first entrypoint for transfer keeper's
++ / WriteAcknowledgement.
++ cbStack := ibccallbacks.NewIBCMiddleware(transferStack, app.PacketForwardKeeper, wasmStackIBCHandler, maxCallbackGas)
+transferStack = packetforward.NewIBCMiddleware(
+-	transferStack,
++	cbStack,
+	app.PacketForwardKeeper,
+	0,
+	packetforwardkeeper.DefaultForwardTransferPacketTimeoutTimestamp,
+  )
++ app.TransferKeeper.WithICS4Wrapper(cbStack)
+```
+
+Remove ibc fee middleware and any empty IBCModule (often dubbed `noAuthzModule`) from the ICA Controller stack creation:
+
+```diff
+- var noAuthzModule porttypes.IBCModule
+- icaControllerStack = icacontroller.NewIBCMiddleware(noAuthzModule, app.ICAControllerKeeper)
+- icaControllerStack = ibcfee.NewIBCMiddleware(icaControllerStack, app.IBCFeeKeeper)
++ icaControllerStack = icacontroller.NewIBCMiddleware(app.ICAControllerKeeper)
+```
+
+Remove ibc fee middleware from ICA Host stack creation:
+
+```diff
+  icaHostStack = icahost.NewIBCModule(app.ICAHostKeeper)
+- icaHostStack = ibcfee.NewIBCMiddleware(icaHostStack, app.IBCFeeKeeper)
+```
+
+Update the module manager creation by removing the capability module, fee module and updating the tendermint app module constructor:
+
+```diff
+  app.ModuleManager = module.NewManager(
+    ...
+-   capability.NewAppModule(appCodec, *app.CapabilityKeeper, false),
+    ...
+-   ibcfee.NewAppModule(app.IBCFeeKeeper),
+    ...
+-   ibctm.NewAppModule(),
++   ibctm.NewAppModule(tmLightClientModule),
+    ...
+  )
+```
+
+Remove the capability module and ibc fee middleware from `SetOrderBeginBlockers`, `SetOrderEndBlockers`, `SetOrderInitGenesis` and `SetOrderExportGenesis`:
+
+```diff
+-   capabilitytypes.ModuleName,
+-   ibcfeetypes.ModuleName,
+```
+
+If you use 08-wasm, you will need to update the go module that is used for `QueryPlugins` and `AcceptListStargateQuerier`.
+
+```diff
+- wasmLightClientQuerier := ibcwasmtypes.QueryPlugins{
++ wasmLightClientQuerier := ibcwasmkeeper.QueryPlugins{
+-	Stargate: ibcwasmtypes.AcceptListStargateQuerier([]string{
++	Stargate: ibcwasmkeeper.AcceptListStargateQuerier([]string{
+		"/ibc.core.client.v1.Query/ClientState",
+		"/ibc.core.client.v1.Query/ConsensusState",
+		"/ibc.core.connection.v1.Query/Connection",
+-	}),
++	}, app.GRPCQueryRouter()),
+  }
+```
+
+If you use 08-wasm, you will need to use the wasm client keeper rather than the go module to initialize pinned codes:
+
+```diff
+- if err := ibcwasmkeeper.InitializePinnedCodes(ctx); err != nil {
+-	panic(fmt.Sprintf("ibcwasmkeeper failed initialize pinned codes %s", err))
++ if err := app.WasmClientKeeper.InitializePinnedCodes(ctx); err != nil {
++	panic(fmt.Sprintf("WasmClientKeeper failed initialize pinned codes %s", err))
++ }
+```

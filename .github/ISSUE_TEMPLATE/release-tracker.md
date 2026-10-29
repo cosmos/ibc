@@ -46,7 +46,7 @@ versions to guarantee that no regression is introduced -->
 ## Post-release checklist
 
 - [ ] Update [`CHANGELOG.md`](https://github.com/cosmos/ibc/blob/main/CHANGELOG.md)
-- [ ] Update the docs (`docs/`) with any version-specific changes, and permalinks with links of the released tag.
+- [ ] Update the docs (`docs/`) with any version-specific changes, and permalinks with links of the released tag. See `docs/AGENTS.md`.
 
 ---
 
