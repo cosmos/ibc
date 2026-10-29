@@ -32,8 +32,9 @@ func (e *stuckError) Error() string {
 // path returns the headers that take the client from trusted to target, each
 // verifiable from the one before, each the furthest the bisection finds. Header
 // voting changes at most one validator a block, which leaves every header
-// verifiable from its parent at a trust level of at most one half, so the
-// search reaches target. Otherwise it may stop short, at a header that is not.
+// verifiable from its parent at any trust level, so the search reaches target.
+// A larger change, such as a validator override in Besu's genesis transitions,
+// may stop it short, at a header that is not.
 func (g *Generator) path(
 	ctx context.Context,
 	trusted, target *besu.ParsedHeader,
