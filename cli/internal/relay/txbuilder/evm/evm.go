@@ -68,9 +68,8 @@ func New(router, multicall common.Address) *TxBuilder {
 }
 
 // BuildRelayTxs packs the clientUpdate payloads and every packetRelayItems
-// entry into a single multicall transaction. EVM router calldata
-// has no meaningful size limit for the batch sizes the relayer forms, so this
-// always returns exactly one tx. Provers rely on that: a batch's proofs are
+// entry into a single multicall transaction, so it always returns exactly one
+// tx, however large. Provers rely on that: a batch's proofs are
 // built to be verified together in one transaction, in order (the Besu
 // prover carries the router account proof only in the first one, and the
 // light client caches the proven storage root for the rest of the transaction).
