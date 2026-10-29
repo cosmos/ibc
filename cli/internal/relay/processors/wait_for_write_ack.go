@@ -57,6 +57,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		if errClear := p.storage.ClearPacketRecvTx(ctx, tr.Key()); errClear != nil {
 			return nil, errors.Wrapf(errClear, "clearing recv tx %s", recvTxHash)
 		}
+		metrics.packetExecution(ctx, tr, "recv", executionFailed)
 
 		return nil, errors.Errorf("write ack for transfer not found in recv tx %s", recvTxHash)
 	case errors.Is(err, v2.ErrWriteAckDecoding):
@@ -67,7 +68,6 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	case err != nil:
 		return nil, errors.Wrapf(err, "finding write ack in recv tx %s", recvTxHash)
 	}
-
 	status := writeAckStatusFromV2(ackStatus)
 
 	// the write ack shares the recv tx, so it shares its time
@@ -83,6 +83,7 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	if err := p.storage.UpdatePacketWriteAck(ctx, tr.Key(), ack); err != nil {
 		return nil, errors.Wrapf(err, "recording write ack from tx %s", recvTxHash)
 	}
+	metrics.packetExecution(ctx, tr, "recv", executionSucceeded)
 
 	tr.WriteAckTxHash = &recvTxHash
 	tr.WriteAckTxTime = &ack.TxTime

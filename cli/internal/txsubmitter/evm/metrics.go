@@ -52,6 +52,7 @@ type instrumentation struct {
 	// This helps to convert cumulativeGasCostWei's bigInt to float64 only when requested by telemetry.
 	EVMGasSpent metric.Float64ObservableCounter
 	GasBalance  metric.Float64ObservableGauge
+	Attempts    metric.Int64Counter
 
 	txOwners map[transactionKey]chainWallet
 	wallets  map[chainWallet]*walletMetrics
@@ -71,7 +72,12 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
+	attempts, err := m.Int64Counter("transaction_submission_attempts_total")
+	if err != nil {
+		return nil, err
+	}
 	instruments := &instrumentation{
+		Attempts:    attempts,
 		EVMGasSpent: evmGasSpent,
 		GasBalance:  gasBalance,
 		txOwners:    make(map[transactionKey]chainWallet),
@@ -89,6 +95,12 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	}
 
 	return instruments, nil
+}
+
+func (m *instrumentation) attempt(ctx context.Context, chainID, wallet string, err error) {
+	m.Attempts.Add(context.WithoutCancel(ctx), 1, metric.WithAttributes(
+		otel.AttrChainID.String(chainID), otel.AttrWallet.String(wallet), otel.AttrResultError(err),
+	))
 }
 
 func (m *instrumentation) setWallet(chainID, wallet string, client balanceClient) {

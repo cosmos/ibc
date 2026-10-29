@@ -67,6 +67,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 	}
 
 	metrics.txRetry(ctx, tr, relayTypeRecvToAck, *tr.AckTxHash)
+	metrics.packetExecution(ctx, tr, "ack", executionFailed)
 
 	return nil, ErrRetryingAckPacket
 }
@@ -74,7 +75,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 func (p RetryAckPacket) Cancel(tr *Transfer, err error) {
 	switch {
 	case errors.Is(err, ErrRetryingAckPacket):
-		tr.GetLogger().Warn("Retrying relay tx", "kind", "ack")
+		tr.GetLogger().Warn("Retrying relay tx", "kind", "ack", "txHash", *tr.AckTxHash)
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "ack")
 	default:

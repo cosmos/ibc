@@ -29,12 +29,17 @@ Run the following commands to create and validate the file:
 
 ```sh
 ibc config new
+```
+
+Populate the chains, signers, connections, and attestors you need before running the process-specific checks:
+
+```sh
 ibc config validate              # structural checks and cross-references
 ibc config validate relayer      # also check the file can run a relayer
 ibc config validate attestor     # also check the file can run a local attestor
 ```
 
-Every command loads the config file and runs the same structural checks: unknown fields are rejected, and cross-references (including a local attestor's `chainId` and `signer`) must resolve. `ibc config validate` reports those without starting a process. Pass `relayer` or `attestor` to add the sufficiency checks needed to run that process.
+`ibc config validate` rejects unknown fields and unresolved cross-references, including a local attestor's `chainId` and `signer`, without starting a process. Key-management commands and commands that write a draft configuration do not necessarily run these checks. Pass `relayer` or `attestor` to add the sufficiency checks needed to run that process.
 
 Values can contain `${VAR}`. The CLI replaces each variable from the environment before it parses the file. <!-- [cli/internal/config/file.go: LoadFromFile] -->
 
@@ -52,10 +57,14 @@ signers:
     type: remote
     grpc: cosmos-kms.example.com:9090
     remoteKeyId: "relayer-key-id"
-  - alias: "attestor-dan-key"
+  - alias: "attestor-dan-base-key"
     type: remote
     grpc: cosmos-kms.example.com:9090
-    remoteKeyId: "attestor-dan-key-id"
+    remoteKeyId: "attestor-dan-base-key-id"
+  - alias: "attestor-dan-ethereum-key"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-ethereum-key-id"
 db:
   type: sqlite
   url: ibc.db
@@ -108,12 +117,12 @@ attestors:
   - name: "attestor-dan-base"
     chainId: "8453"
     type: local
-    signer: "attestor-dan-key"
+    signer: "attestor-dan-base-key"
     finalityOffset: 1
   - name: "attestor-dan-ethereum"
     chainId: "1"
     type: local
-    signer: "attestor-dan-key"
+    signer: "attestor-dan-ethereum-key"
 ```
 
 <!-- [sample.yml:L1](cli/internal/config/testdata/sample.yml#L1) -->
@@ -139,7 +148,7 @@ Some fields name something declared elsewhere in the file. The loader checks eac
 
 <!-- GEN:config:crossrefs END -->
 
-For example, `signer: attestor-dan-key` selects the signer whose alias is `attestor-dan-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. Any unresolved reference fails at load — including on `ibc config validate` — before a relayer or attestor process starts.
+For example, `signer: attestor-dan-base-key` selects the signer whose alias is `attestor-dan-base-key`. A local attestor's `chainId` must name a chain declared under `chains`; running the attestor also requires that chain's `evm.rpc` endpoint. `ibc config validate`, `ibc relayer run`, and `ibc attestor run` reject unresolved references.
 
 ## `server`
 
@@ -155,7 +164,7 @@ For example, `signer: attestor-dan-key` selects the signer whose alias is `attes
 
 <!-- GEN:config:server END -->
 
-Server reflection is always enabled. <!-- [cli/internal/bootstrap/bootstrap.go: rpcEnableReflection] --> <!-- [cli/internal/server/server.go: Server.start] -->
+Server reflection is always enabled. <!-- [cli/internal/bootstrap/bootstrap.go: rpcEnableReflection] --> <!-- [cli/internal/server/server.go: Server.Start] -->
 
 ## `logging`
 
@@ -218,6 +227,9 @@ is disabled.
 from `otelFile` or from `OTEL_CONFIG_FILE`.
 <!-- [cli/internal/config/config.go: Observability.ConfigFile] -->
 
+See [Observability and metrics](8-observability-and-metrics.md) for metric names,
+labels, and semantics.
+
 ## `chains`
 
 `chains` lists every chain used elsewhere in the file.
@@ -239,7 +251,7 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 
 `ibc deploy core` deploys the router and multicall. <!-- [cli/internal/deploy/steps.go: CoreSteps] --> Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. <!-- [cli/cmd/ibc/deploy.go: renderedChain] -->
 
-The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: resolveDeployerAlias] -->
+The deployer must be a local signer, because deployment requires direct access to the key. <!-- [cli/cmd/ibc/deploy.go: deployerKeyHex] -->
 
 ## `relayer`
 
@@ -268,11 +280,11 @@ The deployer must be a local signer, because deployment requires direct access t
 
 <!-- GEN:config:relayer:connections END -->
 
-Client identifiers are scoped to a chain, so both ends can use the same `clientId`, as in the example above. The `ibc deploy client` subcommands do this by default. <!-- [cli/cmd/ibc/deploy.go: defaultClientID] -->
+Client identifiers are scoped to a chain, so both ends can use the same `clientId`. The `ibc deploy client` subcommands do this by default. <!-- [cli/cmd/ibc/deploy.go: defaultClientID] -->
 
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. <!-- [cli/internal/config/relayer.go: RelayerConfig.validateConnectionIdentities] -->
 
-With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [cli/internal/relay/watcher/set.go: NewSetFromConfig] --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [cli/internal/config/config.go: Config.validateAutoRelay] --> Unset and `false` are the same input. <!-- [cli/internal/config/relayer.go: RelayerConfig.Validate] -->
+With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. <!-- [cli/internal/relay/watcher/set.go: NewSetFromConfig] --> That end's chain needs `evm.ws`, and validation fails without it. <!-- [cli/internal/config/config.go: Config.validateAutoRelay] --> Unset and `false` are the same input. <!-- [cli/internal/config/relayer.go: RelayerConfig.AutoRelayConnections] -->
 
 `remoteProver` is optional. Without it, the relayer proves an end with the built-in prover for its `type`; with it, the ProverService at `remoteProver.url` proves that end instead, and `type` may name a light client the IBC CLI does not implement. <!-- [cli/internal/relay/prover/prover.go: newProver] --> `ibc deploy render-config` never writes a `remoteProver` block, and keeps one you added. <!-- [cli/internal/config/patch.go: mergeConnections] -->
 
@@ -297,7 +309,7 @@ The relayer uses these defaults unless you override them.
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainOverrides[].chainId` | `string` | **required** | The chain these settings apply to. |
-| `chainOverrides[].packetBatchSize` | `int` | `50` | How many packets the relayer puts in one transaction. |
+| `chainOverrides[].packetBatchSize` | `int` | `25` | How many packets the relayer puts in one transaction. |
 | `chainOverrides[].packetBatchTimeout` | `duration` | `3s` (receive and acknowledge), `1m` (timeout) | How long the relayer waits to fill a batch before submitting it. |
 | `chainOverrides[].clearInterval` | `duration` | optional | Overrides relayer.clearInterval for packets sourced from this chain. |
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
@@ -322,7 +334,7 @@ relayer:
         pendingTxTimeout: 3m
 ```
 
-Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: Options] -->
+Receive batches use the destination chain's settings. Acknowledgement and timeout batches use the source chain's settings. <!-- [cli/internal/relay/pipeline/opts.go: OptionsFromConfig] -->
 
 ## `attestors`
 
@@ -335,7 +347,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | Key | Type | Default or required | Description |
 |---|---|---|---|
 | `chainId` | `string` | **required** | The chain this attestor watches. |
-| `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
+| `name` | `string` | **required** | The attestor's own self-reported identity. For local attestors, names must be unique. |
 | `type` | `local` | **required** | Whether this process runs the attestor or queries it. |
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
@@ -359,7 +371,7 @@ attestors:
 
 | Key | Type | Default or required | Description |
 |---|---|---|---|
-| `name` | `string` | **required** | The attestor's own self-reported identity. Not required unique. |
+| `name` | `string` | **required** | The attestor's own self-reported identity. For local attestors, names must be unique. |
 | `type` | `remote` | **required** | Whether this process runs the attestor or queries it. |
 | `grpc` | `string` | **required** | Bare host:port, or an http(s):// URL without a query or fragment. https:// uses TLS. |
 | `tls.caFile` | `string` | optional | A PEM bundle verifying the server. Empty uses system roots. Read at startup, so a changed bundle needs a restart. |
@@ -377,6 +389,8 @@ A remote entry does not set `chainId` or `signer`. The process obtains the attes
 Fields from the other attestor type are rejected. A remote attestor cannot set `chainId`, and a local attestor cannot set `grpc`. <!-- [cli/internal/config/config.go: AttestorConfig.Validate] -->
 
 Local attestor names must be unique. Two local attestors for the same chain must also use different signers. <!-- [cli/internal/config/config.go: Attestors.validateIdentities] -->
+
+Use separate signing keys for independent clients and chains. See [Attestor keys](../4-light-clients/2-attestors.md#attestor-keys) for the signature replay risk.
 
 ## `signers`
 
