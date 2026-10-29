@@ -15,7 +15,27 @@ header:
     # Specs move to Community-Spec-1.0 separately; remove this when that conversion lands.
     - "spec/**"
 
+    # Prose and agent tooling, not shipped source: design documents under
+    # specs/ and the skill definitions Claude Code reads from .claude/.
+    - "specs/**"
+    - ".claude/**"
+
+    # The Mintlify site. Prose and site assets carry no source header; the
+    # generators under docs/scripts/ do, via the catch-all rule above.
     - "docs/**/*.md"
+    - "docs/**/*.mdx"
+    - "docs/**/*.css"
+    # Note the asymmetry with docs/scripts/*.py, which does carry headers: the
+    # .js files are Mintlify site machinery under docs/mintlify/scripts/, run by
+    # this repository and not shipped, whereas the Python generators are the
+    # published build tooling for the docs. Excluding *.js keeps the exclusion
+    # list path-shaped rather than per-file; if first-party .js ever moves out
+    # of docs/, narrow this to "docs/mintlify/**/*.js" instead of dropping it.
+    - "docs/**/*.js"
+    - "docs/**/*.png"
+    - "docs/**/*.jpg"
+    - "docs/**/*.gif"
+    - "docs/**/*.webp"
 
     # Files and generated formats that cannot carry a source header.
     - "LICENSE"
@@ -29,6 +49,7 @@ header:
     - "**/*.png"
     - "**/*.jpg"
     - "**/*.excalidraw"
+    - "**/*.woff2"
     - "**/bun.lock"
     # Failing inputs Go fuzzing records, which must start with "go test fuzz v1".
     - "**/testdata/fuzz/**"

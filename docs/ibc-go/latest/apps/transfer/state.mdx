@@ -1,0 +1,12 @@
+---
+title: State
+description: >-
+  The IBC transfer application module keeps state of the port to which the
+  module is binded and the denomination trace information.
+---
+
+The IBC transfer application module keeps state of the port to which the module is binded and the denomination trace information.
+
+* `PortKey`: `0x01 -> ProtocolBuffer(string)`
+* `DenomTraceKey`: `0x02 | []bytes(traceHash) -> ProtocolBuffer(Denom)`
+* `DenomKey` : `0x03 | []bytes(traceHash) -> ProtocolBuffer(Denom)`

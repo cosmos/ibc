@@ -1,0 +1,85 @@
+---
+title: Integrating IBC middleware into a chain
+description: >-
+  Learn how to integrate IBC middleware(s) with a base application to your
+  chain. The following document only applies for Cosmos SDK chains.
+---
+
+Learn how to integrate IBC middleware(s) with a base application to your chain. The following document only applies for Cosmos SDK chains.
+
+If the middleware is maintaining its own state and/or processing SDK messages, then it should create and register its SDK module with the module manager in `app.go`.
+
+All middleware must be connected to the IBC router and wrap over an underlying base IBC application. An IBC application may be wrapped by many layers of middleware, only the top layer middleware should be hooked to the IBC router, with all underlying middlewares and application getting wrapped by it.
+
+The order of middleware **matters**, function calls from IBC to the application travel from top-level middleware to the bottom middleware and then to the application. Function calls from the application to IBC goes through the bottom middleware in order to the top middleware and then to core IBC handlers. Thus the same set of middleware put in different orders may produce different effects.
+
+## Example integration
+
+```go expandable
+// app.go pseudocode
+
+// middleware 1 and middleware 3 are stateful and maintain their own state.
+// Their keepers may accept channelKeeper for internal use (e.g. querying channels),
+// but do NOT store it as the ICS4Wrapper — that is wired by IBCStackBuilder.
+mw1Keeper := mw1.NewKeeper(storeKey1, ...) // used in stack 1 & 3
+mw3Keeper1 := mw3.NewKeeper(storeKey3, ...) // used in stack 1
+mw3Keeper2 := mw3.NewKeeper(storeKey3, ...) // used in stack 2
+
+// Only create App Module **once** and register in module manager
+// if the module maintains independent state and/or processes sdk.Msgs
+app.moduleManager = module.NewManager(
+  ...
+  mw1.NewAppModule(mw1Keeper),
+  mw3.NewAppModule(mw3Keeper1),
+  mw3.NewAppModule(mw3Keeper2),
+  transfer.NewAppModule(transferKeeper),
+  custom.NewAppModule(customKeeper)
+)
+
+// NOTE: IBC Modules may be initialized any number of times provided they use a separate
+// Keeper and underlying port.
+
+customKeeper1 := custom.NewKeeper(..., KeeperCustom1, ...)
+customKeeper2 := custom.NewKeeper(..., KeeperCustom2, ...)
+
+// initialize base IBC applications
+// if you want to create two different stacks with the same base application,
+// they must be given different Keepers and assigned different ports.
+transferIBCModule := transfer.NewIBCModule(transferKeeper)
+customIBCModule1 := custom.NewIBCModule(customKeeper1, "portCustom1")
+customIBCModule2 := custom.NewIBCModule(customKeeper2, "portCustom2")
+
+// create IBC stacks using IBCStackBuilder.
+// NewIBCStackBuilder takes the channel keeper as the top-level ICS4Wrapper.
+// Base() sets the bottom application; Next() adds middleware above it (bottom to top).
+// IBCStackBuilder wires SetUnderlyingApplication and SetICS4Wrapper automatically —
+// do NOT pass app or ics4Wrapper into middleware constructors directly.
+// NOTE: middleware2 is stateless so it does not require a Keeper.
+// stack 1 (top to bottom): mw1 -> mw3 -> transfer
+stack1 := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper).
+  Base(transferIBCModule).
+  Next(mw3.NewIBCMiddleware(mw3Keeper1)).
+  Next(mw1.NewIBCMiddleware(mw1Keeper)).
+  Build()
+// stack 2 (top to bottom): mw3 -> mw2 -> custom1
+stack2 := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper).
+  Base(customIBCModule1).
+  Next(mw2.NewIBCMiddleware()).
+  Next(mw3.NewIBCMiddleware(mw3Keeper2)).
+  Build()
+// stack 3 (top to bottom): mw2 -> mw1 -> custom2
+stack3 := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper).
+  Base(customIBCModule2).
+  Next(mw1.NewIBCMiddleware(mw1Keeper)).
+  Next(mw2.NewIBCMiddleware()).
+  Build()
+
+// associate each stack with the port name provided by the underlying application
+ibcRouter := porttypes.NewRouter()
+
+ibcRouter.AddRoute("transfer", stack1)
+ibcRouter.AddRoute("custom1", stack2)
+ibcRouter.AddRoute("custom2", stack3)
+
+app.IBCKeeper.SetRouter(ibcRouter)
+```

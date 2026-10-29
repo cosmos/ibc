@@ -1,0 +1,54 @@
+---
+title: Events
+---
+
+## `MsgTransfer`
+
+| Type          | Attribute Key | Attribute Value |
+| ------------- | ------------- | --------------- |
+| ibc\_transfer | sender        | `{sender}`        |
+| ibc\_transfer | receiver      | `{receiver}`      |
+| ibc\_transfer | denom         | `{denom}`         |
+| ibc\_transfer | denom\_hash   | `{denom\_hash}`   |
+| ibc\_transfer | amount        | `{amount}`        |
+| ibc\_transfer | memo          | `{memo}`          |
+| message       | module        | transfer        |
+
+## `OnRecvPacket` callback
+
+| Type                    | Attribute Key | Attribute Value |
+| ----------------------- | ------------- | --------------- |
+| fungible\_token\_packet | sender        | `{sender}`        |
+| fungible\_token\_packet | receiver      | `{receiver}`      |
+| fungible\_token\_packet | denom         | `{denom}`         |
+| fungible\_token\_packet | denom\_hash   | `{denom\_hash}`   |
+| fungible\_token\_packet | amount        | `{amount}`        |
+| fungible\_token\_packet | memo          | `{memo}`          |
+| fungible\_token\_packet | success       | `{ackSuccess}`    |
+| fungible\_token\_packet | error         | `{ackError}`      |
+| message                 | module        | transfer        |
+
+## `OnAcknowledgePacket` callback
+
+| Type                    | Attribute Key   | Attribute Value |
+| ----------------------- | --------------- | --------------- |
+| fungible\_token\_packet | sender          | `{sender}`        |
+| fungible\_token\_packet | receiver        | `{receiver}`      |
+| fungible\_token\_packet | denom           | `{denom}`         |
+| fungible\_token\_packet | denom\_hash     | `{denom\_hash}`   |
+| fungible\_token\_packet | amount          | `{amount}`        |
+| fungible\_token\_packet | memo            | `{memo}`          |
+| fungible\_token\_packet | acknowledgement | `{ack.String()}`  |
+| fungible\_token\_packet | success / error | `{ack.Response}`  |
+| message                 | module          | transfer        |
+
+## `OnTimeoutPacket` callback
+
+| Type    | Attribute Key    | Attribute Value |
+| ------- | ---------------- | --------------- |
+| timeout | refund\_receiver | `{receiver}`      |
+| timeout | refund\_tokens   | `{jsonTokens}`    |
+| timeout | denom            | `{denom}`         |
+| timeout | denom\_hash      | `{denom\_hash}`   |
+| timeout | memo             | `{memo}`          |
+| message | module           | transfer        |

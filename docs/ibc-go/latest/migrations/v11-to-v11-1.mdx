@@ -1,0 +1,35 @@
+---
+title: IBC-Go v11.0 to v11.1
+description: This guide provides instructions for migrating from ibc-go v11.0 to v11.1.
+---
+
+This guide assumes that your chain is already using ibc-go v11.0 and is upgrading to ibc-go v11.1. If you are upgrading directly from ibc-go v10 to ibc-go v11.1, see the [migration guide for v10 to v11](/ibc-go/latest/migrations/v10-to-v11).
+
+## Packet Forward Middleware
+
+Packet Forward Middleware (PFM) has been moved from [cosmos/ibc-apps](https://github.com/cosmos/ibc-apps) to ibc-go in this release. PFM is now available under `modules/apps/packet-forward-middleware`.
+
+This guide assumes that your chain has not previously integrated PFM from ibc-apps. If your chain already uses PFM from ibc-apps, follow the [migration guide for v10 to v11](/ibc-go/latest/migrations/v10-to-v11), which includes guidance for preserving existing PFM state.
+
+If you want to enable PFM, first follow the [integration instructions](/ibc-go/latest/middleware/packet-forward-middleware/integration).
+
+### Add `StoreUpgrades` for the PFM module
+
+If PFM is being added to an existing chain, you must [manually add store upgrades](https://docs.cosmos.network/sdk/latest/guides/upgrades/upgrade#adding-new-modules-during-an-upgrade) for the new PFM module and configure the store loader to apply those upgrades in `app.go`:
+
+```go
+if upgradeInfo.Name == "v11_1" && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+  storeUpgrades := store.StoreUpgrades{
+    Added: []string{packetforwardtypes.StoreKey},
+  }
+
+  app.SetStoreLoader(upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storeUpgrades))
+}
+```
+
+This ensures that the new module's stores are added to the multistore before the migrations begin.
+If a chain does not integrate PFM, it does not need to add the PFM key to the `Added` field.
+
+<Note>
+The PFM module name and store key intentionally preserve the original `packetfowardmiddleware` spelling for compatibility with the legacy implementation.
+</Note>
