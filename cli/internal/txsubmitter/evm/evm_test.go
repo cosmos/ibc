@@ -36,6 +36,7 @@ type testRPC struct {
 	gasCalls       int
 	gas            uint64
 	gasErr         error
+	callOutput     []byte
 	nonceErr       error
 	receipt        *types.Receipt
 	receiptErr     error
@@ -61,6 +62,9 @@ func (r *testRPC) PendingCodeAt(context.Context, common.Address) ([]byte, error)
 }
 
 func (r *testRPC) CallContract(context.Context, ethereum.CallMsg, *big.Int) ([]byte, error) {
+	if r.callOutput != nil {
+		return r.callOutput, nil
+	}
 	return nil, errors.New("unexpected call")
 }
 

@@ -9,8 +9,11 @@ import (
 	"testing"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
@@ -204,9 +207,10 @@ func TestTransferBesuIBFT2_AutoRelay(t *testing.T) {
 // Header voting brings three followers in as validators on chain B and votes
 // three of its four genesis validators out before any packet is relayed, so
 // only one validator chain A's client trusts seals B's head, short of the two
-// its default trust level needs. The relayer steps the client across the
-// changes in the transaction relaying the transfer: capped at floor(2n/3),
-// two thirds follows every single validator change.
+// its default trust level needs; capped at floor(2n/3), two thirds follows
+// every single validator change. The relayer steps the client across the
+// changes one update per transaction, the last of them being the transaction
+// relaying the transfer.
 func TestTransferBesuQBFT_ValidatorTurnover(t *testing.T) {
 	t.Parallel()
 	requireBesuValidatorTurnover(t, besu.QBFT)
@@ -251,6 +255,10 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	require.NoError(t, err)
 	require.ElementsMatch(t, slices.Concat(nodes[:1], nodes[4:]), current)
 
+	destination, err := env.Chain(route.Destination)
+	require.NoError(t, err)
+	relayStart, err := destination.Height(ctx)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	transfer, err := transferApp.Send(ctx, e2etest.TransferRequest{
 		Amount: big.NewInt(2_000_000),
@@ -262,6 +270,53 @@ func requireBesuValidatorTurnover(t *testing.T, consensus besu.Consensus) {
 	require.NoError(t, err)
 	require.NoError(t, transfer.VerifyDelivered(ctx))
 	require.NoError(t, transfer.VerifyAcknowledgementExecuted(ctx, status.GetAckTx().GetTxHash()))
+	requireUpdatesBeforeRecv(t, destination, deployment, route, relayStart, status.GetRecvTx().GetTxHash())
+}
+
+// requireUpdatesBeforeRecv checks that the destination's client was updated
+// in at least two transactions, the last of them being the receive.
+func requireUpdatesBeforeRecv(
+	t *testing.T,
+	destination *environment.Chain,
+	deployment *e2etest.Deployment,
+	route e2etest.Route,
+	fromHeight uint64,
+	recvTxHash string,
+) {
+	t.Helper()
+	ctx := t.Context()
+	evm, err := destination.EVM()
+	require.NoError(t, err)
+	apps, ok := deployment.Chain(route.Destination)
+	require.True(t, ok)
+	clients, ok := deployment.RouteClients(route.ID)
+	require.True(t, ok)
+	routerABI, err := ics26router.ContractMetaData.GetAbi()
+	require.NoError(t, err)
+
+	recv, err := evm.TransactionReceipt(ctx, common.HexToHash(recvTxHash))
+	require.NoError(t, err)
+	logs, err := evm.Logs(ctx, ethereum.FilterQuery{
+		FromBlock: new(big.Int).SetUint64(fromHeight),
+		ToBlock:   recv.BlockNumber,
+		Addresses: []common.Address{apps.ICS26Router},
+		Topics:    [][]common.Hash{{routerABI.Events["ICS02ClientUpdated"].ID}},
+	})
+	require.NoError(t, err)
+
+	updateTxs := map[common.Hash]bool{}
+	for _, log := range logs {
+		event, unpackErr := routerABI.Unpack("ICS02ClientUpdated", log.Data)
+		require.NoError(t, unpackErr)
+		if event[0] != clients.DestClientID {
+			continue
+		}
+		require.True(t, log.TxHash == recv.TxHash || log.BlockNumber < recv.BlockNumber.Uint64(),
+			"client update %s is mined before the receive", log.TxHash)
+		updateTxs[log.TxHash] = true
+	}
+	require.True(t, updateTxs[recv.TxHash], "the receive carries the last update")
+	require.GreaterOrEqual(t, len(updateTxs), 2, "the client crosses the turnover in several transactions")
 }
 
 // requireBesuAutoRelay relays a transfer between two Besu chains running
