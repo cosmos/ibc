@@ -10,7 +10,6 @@ on:
       - "cli/**"
       - "gen/go/solidity-abi/**"
       - ".github/workflows/ibc-cli-*.yml"
-    tags: ["*"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,16 +17,52 @@ concurrency:
 
 permissions: read-all
 
+defaults:
+  run:
+    shell: bash
+
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
   BUILD_SHA: ${{ github.sha }}
   GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
 
 jobs:
-  # Build binaries
-  build:
-    name: Build ${{ matrix.goos }}-${{ matrix.goarch }} binary
+  # Prepare Docker metadata
+  image-metadata:
+    name: Prepare Docker metadata
     runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+    steps:
+      - name: Select image tag
+        id: tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            echo "::error::Release images are published by release.yml"
+            exit 1
+          fi
+          # The only triggers are pushes to main and workflow_dispatch, so the ref is a branch here.
+          # Images of other branches get a branch- prefix, as in ibc-go, so no branch name can produce
+          # a tag that release.yml publishes, such as cli-v1.2.3 for a branch named cli-v1.2.3.
+          tag=$(printf '%s' "$REF_NAME" | tr '[:upper:]/' '[:lower:]-' | tr -c '[:alnum:]_.-' '-')
+          if [[ "$REF_NAME" != main ]]; then
+            tag="branch-${tag}"
+          fi
+          # Image tags are at most 128 characters; this leaves room for the -linux-<arch> suffix of
+          # the platform tags.
+          echo "image_tag=${tag:0:116}" >> "$GITHUB_OUTPUT"
+
+  # Build binaries. They do not depend on the image tag, so they build even when image-metadata
+  # fails, and only the image job can push to the registry.
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    # CGO is off, so every platform cross-compiles on one runner type.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -46,10 +81,11 @@ jobs:
       run:
         working-directory: cli
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.BUILD_SHA }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: cli/go.mod
           cache-dependency-path: |
@@ -63,91 +99,76 @@ jobs:
         run: |
           mkdir -p "dist/${{ matrix.artifact }}"
           go build ${{ env.GO_BUILD_FLAGS }} -o "dist/${{ matrix.artifact }}/ibc" ./cmd/ibc/...
+          cp ../LICENSE ../NOTICE "dist/${{ matrix.artifact }}/"
       - name: Checksum
         run: |
           cd "dist/${{ matrix.artifact }}"
           shasum -a 256 ibc > ibc.sha256
       - name: Upload artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.artifact }}
           path: cli/dist/${{ matrix.artifact }}
           if-no-files-found: error
+          overwrite: true
           retention-days: 30
 
-  # Prepare Docker metadata
-  image-metadata:
-    name: Prepare Docker metadata
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.tag.outputs.image_tag }}
-    steps:
-      - name: Select image tag
-        id: tag
-        env:
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-        run: |
-          if [[ "$REF_TYPE" == "branch" || "$REF_TYPE" == "tag" ]]; then
-            tag="$REF_NAME"
-          else
-            tag="${BUILD_SHA:0:8}"
-          fi
-
-          tag=$(printf '%s' "$tag" | tr '[:upper:]/' '[:lower:]-' | tr -c '[:alnum:]_.-' '-')
-          echo "image_tag=${tag:0:128}" >> "$GITHUB_OUTPUT"
-
-  # Publish Docker images
-  publish-image:
-    name: Publish linux-${{ matrix.goarch }} image
+  # Publish a Docker image for each linux platform from the binary the build job uploaded
+  image:
+    name: Image linux-${{ matrix.goarch }}
     needs: [image-metadata, build]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        goarch: [amd64, arm64]
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      ARTIFACT: ibc-linux-${{ matrix.goarch }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.BUILD_SHA }}
-      - name: Download Binary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+          persist-credentials: false
+          sparse-checkout: cli
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ibc-linux-${{ matrix.goarch }}
-          path: image
-      - name: Prepare image context
-        run: chmod +x image/ibc
-      # The runtime stage has a RUN instruction, so building the arm64 image on an
-      # x86_64 runner needs binfmt emulation registered first.
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
-        if: matrix.goarch == 'arm64'
-        with:
-          platforms: arm64
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+          name: ${{ env.ARTIFACT }}
+          path: cli/dist/${{ env.ARTIFACT }}
+      # Artifacts do not keep file permissions.
+      - name: Make binary executable
+        run: chmod +x "cli/dist/${ARTIFACT}/ibc"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build & Push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+      - name: Build & Push image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: image
+          context: cli/dist/${{ env.ARTIFACT }}
           file: cli/Dockerfile
           target: target-artifact
           platforms: linux/${{ matrix.goarch }}
           push: true
+          # Disable BuildKit's unsigned attestation, so the pushed digest is the platform image
+          # itself rather than an index wrapping it.
+          provenance: false
           tags: ${{ env.IMAGE_NAME }}:${{ needs.image-metadata.outputs.image_tag }}-linux-${{ matrix.goarch }}
 
   # Publish multi-platform image, so the same tag can be used for various architectures
   publish-manifest:
     name: Publish multi-platform image
-    needs: [image-metadata, publish-image]
+    needs: [image-metadata, image]
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -155,9 +176,9 @@ jobs:
     env:
       IMAGE_TAG: ${{ needs.image-metadata.outputs.image_tag }}
     steps:
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

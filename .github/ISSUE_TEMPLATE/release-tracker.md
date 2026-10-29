@@ -41,7 +41,7 @@ versions to guarantee that no regression is introduced -->
 <!-- Remove any items that are not applicable. -->
 
 - [ ] Branch off main to create release branch in the form of `release/vx.y.z` and add branch protection rules.
-- [ ] Push the release tag and confirm the [IBC CLI Build Artifacts](https://github.com/cosmos/ibc/actions/workflows/ibc-cli-build.yml) workflow publishes binaries and the container image.
+- [ ] Cut the release by following [`RELEASES.md`](https://github.com/cosmos/ibc/blob/main/RELEASES.md#cut-a-release).
 
 ## Post-release checklist
 
