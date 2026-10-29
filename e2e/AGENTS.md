@@ -1,30 +1,18 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Repository E2E Tests Guide for AI Agents
+# E2E tests
 
-This module contains one root repository-level acceptance package: linear Go tests over the
-`internal/harness` surface. Tests relay real IBC packets through the real relayer and
-Solidity IBC stack (ICS26Router, ICS20Transfer, ICS27GMP) with attestation light clients and
-managed attestors.
+Read the relevant [README.md](README.md) section first:
+- [Running the acceptance tests](README.md#running-the-acceptance-tests) before running tests
+- [Writing a test](README.md#writing-a-test) before adding one,
+- [Provider and topology matrix](README.md#provider-and-topology-matrix) before changing requirements or topology
+- [Debugging](README.md#debugging) for environment or cleanup behavior.
 
-- Run from the repository root: `make -C e2e test` uses fast mode;
-  `make -C e2e test E2E_MODE=complete|production` selects another mode, and
-  `E2E_FLAGS='-run TestTransfer_AutoRelay -count=1'` focuses a run. `-e2e.mode` in `E2E_FLAGS`
-  overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`; `E2E_LOAD=true` also enables load tests.
-- Tests declare portable EVM, controlled-mining, or node-lifecycle requirements. Fast mode may
-  skip an unresolved requirement; complete and production modes fail it. Fast and complete prefer
-  Anvil, while production prefers Besu where the requirements allow it.
-- Tests start an `Environment` (which realizes Chains, the IBC contract stack, attestation light
-  clients, and attestors), hold the temporary IBC CLI driver and relayer explicitly, and assert through
-  route-bound application bindings (ICS20 transfers, ICS27 GMP calls, IFT transfers). This e2e-only setup
-  lives in `internal/e2etest`; transport-contract tests may call the concrete driver or Relayer directly.
-- E2e may import the IBC CLI's public packages, such as its command transport types, generated RPC
-  clients, signer-keyfile package, and router access policy, but it must not import `cli/internal`
-  or invoke handlers in process.
-- Each test gets a fresh environment. Managed Anvil uses one-second mixed mining; after mining is
-  paused and resumed it is interval-only, so transaction inclusion may take one second.
-- `Environment` cleans up managed resources only. Attached chains remain caller-owned and expose no
-  harness mining or node-lifecycle controls.
-- Run `make -C e2e generate-matrix` after changing requirements or topology, and
-  `make -C e2e check-matrix` to check the committed matrix. Both require Docker.
-- After a hard crash: `make -C e2e clean-dry-run`, then `make -C e2e clean` from the repository root.
+- Transport-contract tests may call the concrete driver or relayer directly; acceptance tests follow
+  the sequence in "Writing a test".
+- Application-effect wait budgets derive from the resolved Chain's `environment.Timing`, never from a
+  literal tuned to instant Anvil.
+- After changing requirements or topology, run `make -C e2e generate-matrix` and
+  `make -C e2e check-matrix`; `make -C e2e test` does not check the matrix.
+- Preserve inner quotes in `E2E_FLAGS`, because Make expands it into a shell command:
+  `make -C e2e test E2E_FLAGS="-run '^(TestA|TestB)' -count=1"`.

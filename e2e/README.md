@@ -87,7 +87,8 @@ func TestTransfer_AutoRelay(t *testing.T) {
 
 `e2etest.NewSigner` creates an independent identity; tests create one per role and pass them explicitly — `Deploy` takes the deployer and relayer signers, the app constructors take the sender (the signer that deployed the apps). Managed Chains fund them through their resolved funding capability; an attached Chain must fund the public addresses out of band before `Deploy`. Credentials are written only to protected temporary signer files referenced by alias in the temporary IBC CLI configuration.
 
-Declare capabilities instead of naming a provider. For example, a controlled-mining test uses:
+Declare capabilities, naming a provider only when the test depends on it. For example, a
+controlled-mining test uses:
 
 ```go
 chains := e2etest.EVMChains(t, e2etest.EVMRequirements{ControlledMining: true},

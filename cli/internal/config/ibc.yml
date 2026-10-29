@@ -37,7 +37,7 @@ relayer:
   # relay specific chain settings
   chainOverrides:
     - chainId: "1"
-      packetBatchSize: 50
+      packetBatchSize: 25
 
   # each connection is relayed bidirectionally: clientA's counterparty is
   # simply clientB, and vice versa

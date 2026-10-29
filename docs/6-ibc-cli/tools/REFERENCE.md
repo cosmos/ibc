@@ -7,7 +7,9 @@ holds the rules; this one holds the detail you look up while following it.
 
 ## Plan entries
 
-`--plan` classifies every gap. Each entry carries the file and line to go to.
+`--plan` classifies generation gaps. Each entry carries the file and line to go to.
+`--report` summarizes the same plan. Neither checks notice placement or prose citations;
+resolve errors from `--check` as well as plan entries.
 
 | Kind | Meaning | What you do |
 |------|---------|-------------|
@@ -17,8 +19,6 @@ holds the rules; this one holds the detail you look up while following it.
 | `curation` | a choice the source cannot express | step 2 |
 | `unreadable_method` | a method's body could not be located, so any rule inside it is invisible | teach `_body_brace` the new signature shape |
 | `nested_proto_type` | a proto declares a message or enum inside another; only top-level types are documented | move it to the top level, or decide where nested types belong on the page |
-| `moved_citation` | a cited symbol is now declared in exactly one other file; the message names it | repoint, after confirming the sentence |
-| `stale_citation` | a sentence in the prose cites a symbol that is gone, or was never there | see below |
 
 `--list-regions` prints just the ids of the stale regions, one per line — the
 list of prose sections to re-read once the tables are rewritten.
@@ -112,7 +112,7 @@ Sentences outside the generated tables carry the code they came from:
 The path is from the repository root and is **required**; the symbol is a
 declaration in that file, and `Type.Member` must be that type's method or that
 struct's field. `--check` verifies all of this and refuses with `stale_citation`
-otherwise.
+otherwise. Citation errors appear in `--check` output, not in `--plan` or `--report`.
 
 A path is the one derived fact left in a citation, so a move is answered rather
 than merely refused. When the cited path no longer resolves but the symbol is
