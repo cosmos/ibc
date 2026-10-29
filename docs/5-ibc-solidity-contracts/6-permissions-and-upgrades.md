@@ -24,7 +24,7 @@ All other contracts carry their own access control.
 | [`ICS27GMP`](3-ics27-gmp-and-accounts.md#roles-pausing-and-upgrades) | The access manager | [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol) |
 | [`ICS27Account`](3-ics27-gmp-and-accounts.md#the-account-contracts-functions) | ICS27GMP, the only outside address that may drive an account. The manager's admin still reaches the account code, through `ICS27GMP.upgradeAccountTo` | [ICS27Account.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Account.sol) |
 | [`AttestationLightClient`](5-attestation-light-client.md#permissions-and-pausing) | The router it is bound to, fixed at construction. Pausing answers to that router's access manager | [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol) |
-| [`BesuLightClient`](../4-light-clients/3-besu-light-client.md) | The router it is bound to, fixed at construction. Pausing answers to that router's access manager | [BesuLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/besu/BesuLightClient.sol) |
+| [`BesuLightClient`](7-besu-light-client.md#permissions-and-pausing) | The router it is bound to, fixed at construction. Pausing answers to that router's access manager | [BesuLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/besu/BesuLightClient.sol) |
 | [`IFTOwnable`](4-ift-contracts.md#roles-and-permissions) | Its owner | [IFTOwnable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTOwnable.sol) |
 | [`IFTAccessManaged`](4-ift-contracts.md#roles-and-permissions) | An authority its issuer passes at initialization, which may or may not be this manager | [IFTAccessManaged.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTAccessManaged.sol) |
 
@@ -64,7 +64,7 @@ Visit the [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) for
 
 A light client sits outside the access manager's selector map, but it defers to the router it was constructed with. That address is immutable and must be nonzero. Only it may call `updateClient`, `verifyMembership`, `verifyNonMembership`, and `misbehaviour`, so proofs reach a client only through the router's own gates. `ibc deploy client` binds each client to this chain's router.
 
-Pausing is the one decision a client takes from the access manager. `pause` and `unpause` look the caller up in the bound router's current authority, under `PAUSER_ROLE` and `UNPAUSER_ROLE`, and reject a holder with an execution delay, because the client cannot consume a scheduled call. Granting or revoking either role on the manager takes effect at once on every client bound to that router. A paused client rejects updates and packet proofs, so packets on its connections stop. Whether it can still be frozen depends on the client type: the [Besu light client](../4-light-clients/3-besu-light-client.md#misbehaviour) accepts misbehaviour evidence while paused, but the [attestation light client](5-attestation-light-client.md) freezes only in `updateClient`, which pausing blocks.
+Pausing is the one decision a client takes from the access manager. `pause` and `unpause` look the caller up in the bound router's current authority, under `PAUSER_ROLE` and `UNPAUSER_ROLE`, and reject a holder with an execution delay, because the client cannot consume a scheduled call. Granting or revoking either role on the manager takes effect at once on every client bound to that router. A paused client rejects updates and packet proofs, so packets on its connections stop. Whether it can still be frozen depends on the client type: the [Besu light client](7-besu-light-client.md#permissions-and-pausing) accepts misbehaviour evidence while paused, but the [attestation light client](5-attestation-light-client.md) freezes only in `updateClient`, which pausing blocks.
 
 ## Configuration fixed at construction
 
@@ -73,7 +73,7 @@ A few inputs are set when a contract is constructed and have no setter afterward
 | Contract | Fixed at construction |
 |----------|-----------------------|
 | [`AttestationLightClient`](5-attestation-light-client.md) | The attestor addresses, the signature threshold, an initial height with its timestamp, and the router it is bound to |
-| [`BesuLightClient`](../4-light-clients/3-besu-light-client.md) | The counterparty router it proves, the trusting period (at most 30 days), the maximum clock drift (at most 12 seconds), the trust level, an initial trusted consensus state, and the router it is bound to |
+| [`BesuLightClient`](7-besu-light-client.md#constructor-and-configuration) | The counterparty router it proves, the trusting period (at most 30 days), the maximum clock drift (at most 12 seconds), the trust level, an initial trusted consensus state, and the router it is bound to |
 | `CosmosIFTSendCallConstructor` | The mint message type URL, the counterparty denom, and the interchain account address |
 
 ## Proxies and upgrade authority
@@ -114,6 +114,6 @@ Only an admin may call `migrateClient`. The role map registers its selector unde
 
 Migration is also how a frozen client is restarted. A frozen client keeps reverting its update and verification calls, so what returns the connection to service is a newly deployed client, migrated in under the same client ID. IBC-solidity's security model asks for that restart, and expects the admin role to sit with a timelocked Security Council.
 
-Each client type decides what freezes it. The [attestation light client](5-attestation-light-client.md) freezes on conflicting attested timestamps, and the [Besu light client](../4-light-clients/3-besu-light-client.md#misbehaviour) on the misbehaviour its page lists. Nothing in either clears that flag.
+Each client type decides what freezes it. The [attestation light client](5-attestation-light-client.md) freezes on conflicting attested timestamps, and the [Besu light client](7-besu-light-client.md#what-freezes-the-client) on the conflicts its page lists. Nothing in either clears that flag.
 
 The [tutorial](../6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md) deploys the access manager and leaves the deployer as the only address granted a role. [Grant, change, and revoke a role](../6-ibc-cli/9-grant-change-and-revoke-a-role.md) assigns roles on that deployment.
