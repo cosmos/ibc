@@ -78,6 +78,7 @@ chains:
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
+      waitForChain: false
       ics26Router: "0x0000000000000000000000000000000000000001"
       ibcMulticall: "0x0000000000000000000000000000000000000002"
 relayer:
@@ -238,11 +239,12 @@ from `otelFile` or from `OTEL_CONFIG_FILE`.
 | `chainId` | `string` | **required** | The chain's id, as the chain reports it. |
 | `deployer` | `string` | optional | Optional signer alias used by `ibc deploy` for this chain. |
 | `evm.rpc` | `string` | **required** | JSON-RPC endpoint for the chain. |
+| `evm.waitForChain` | `bool` | `true` | Waits for this RPC's latest block timestamp to pass the current time before relay simulation. Unset enables the wait. Set false for chains that produce blocks only when transactions arrive. |
 | `evm.ws` | `string` | optional | A websocket endpoint, required for chains sourcing auto-relayed routes. |
 | `evm.ics26Router` | `string` | **required** to run | Address of the ICS26 router on the chain. |
 | `evm.ibcMulticall` | `string` | **required** to relay | The batching contract address, required to run the relayer. |
 
-<!-- [config.go:L119](cli/internal/config/config.go#L119) -->
+<!-- [config.go:L119](cli/internal/config/config.go#L119) --> <!-- [client.go:L44](cli/internal/chains/evm/client.go#L44) -->
 
 <!-- GEN:config:chains END -->
 
@@ -349,7 +351,7 @@ Receive batches use the destination chain's settings. Acknowledgement and timeou
 | `signer` | `string` | **required** | The signer used to sign attestations. |
 | `finalityOffset` | `uint` | optional | Zero attests up to the chain's `finalized` tag; n > 0 attests up to `latest` - n instead. |
 
-<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
+<!-- [config.go:L150](cli/internal/config/config.go#L150) -->
 
 <!-- GEN:config:attestors:local END -->
 
@@ -377,7 +379,7 @@ attestors:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L146](cli/internal/config/config.go#L146) -->
+<!-- [config.go:L150](cli/internal/config/config.go#L150) -->
 
 <!-- GEN:config:attestors:remote END -->
 
@@ -403,7 +405,7 @@ Use separate signing keys for independent clients and chains. See [Attestor keys
 | `type` | `local` | **required** | Whether the key is a file on disk or a key held by a remote signer. |
 | `file` | `string` | **required** | Key file path for a local signer. |
 
-<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
+<!-- [config.go:L179](cli/internal/config/config.go#L179) -->
 
 <!-- GEN:config:signers:local END -->
 
@@ -433,7 +435,7 @@ signers:
 | `tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 
-<!-- [config.go:L175](cli/internal/config/config.go#L175) -->
+<!-- [config.go:L179](cli/internal/config/config.go#L179) -->
 
 <!-- GEN:config:signers:remote END -->
 

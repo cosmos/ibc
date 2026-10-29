@@ -78,7 +78,7 @@ type Client interface {
 	) (v2.WriteAckStatus, error)
 
 	// WaitForChain blocks until the chain's latest block time catches up to
-	// the current time.
+	// the current time, unless disabled for this client's RPC connection.
 	WaitForChain(ctx context.Context) error
 
 	// GetBlockHeader returns the header at height, used by the attestor to
@@ -121,7 +121,11 @@ func NewClientSetFromConfig(cfg config.Config) (*ClientSet, error) {
 			return nil, errors.Errorf("unsupported chain type for chain %q", chain.ChainID)
 		}
 
-		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.WS, chain.EVM.ICS26Router)
+		var opts []evm.Option
+		if chain.EVM.WaitForChain != nil {
+			opts = append(opts, evm.WithWaitForChain(*chain.EVM.WaitForChain))
+		}
+		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.WS, chain.EVM.ICS26Router, opts...)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating evm client for chain %q", chain.ChainID)
 		}

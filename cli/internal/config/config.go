@@ -128,6 +128,10 @@ type ChainConfig struct {
 type EVMChainConfig struct {
 	RPC string `yaml:"rpc"`
 
+	// WaitForChain waits for this RPC's latest block timestamp to pass the current time before relay simulation.
+	// Unset enables the wait. Set false for chains that produce blocks only when transactions arrive.
+	WaitForChain *bool `yaml:"waitForChain,omitempty"`
+
 	// WS is a websocket endpoint, required for chains sourcing auto-relayed routes.
 	WS string `yaml:"ws,omitempty"`
 

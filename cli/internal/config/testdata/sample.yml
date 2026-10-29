@@ -28,6 +28,7 @@ chains:
   - chainId: "8453"
     evm:
       rpc: https://base-rpc.example.com
+      waitForChain: false
       ics26Router: "0x0000000000000000000000000000000000000001"
       ibcMulticall: "0x0000000000000000000000000000000000000002"
 relayer:

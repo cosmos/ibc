@@ -117,6 +117,8 @@ TX=$(./bin/ibc tx ift send --chain 41001 --ift "$(./bin/ibc deploy show 41001 | 
 
 The relayer will pick up the packet automatically and relay it to the destination.
 
+Before simulation, the relayer waits for the target chain's block timestamp to advance past the current time. For a chain that produces blocks only when transactions arrive, set `waitForChain: false` beside that chain's `evm.rpc` URL. This skips the wait only for relay submissions to that chain entry; other RPC connections keep the default wait. Transaction simulation still validates the client updates and packets.
+
 3. Watch it settle:
 
 ```bash

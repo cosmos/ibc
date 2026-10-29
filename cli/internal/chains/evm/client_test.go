@@ -1300,3 +1300,11 @@ func TestWaitForChain(t *testing.T) {
 
 	require.NoError(t, client.WaitForChain(ctx))
 }
+
+func TestWaitForChainDisabledHonorsCancellation(t *testing.T) {
+	client, err := NewWithClient(chainIDEth, mocks.NewMockETHClient(t), routerAddress, WithWaitForChain(false))
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.ErrorIs(t, client.WaitForChain(ctx), context.Canceled)
+}
