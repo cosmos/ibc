@@ -1,0 +1,183 @@
+---
+title: "Upgrade an IBC contract"
+description: "Upgrade an IBC Solidity contract using the router as an example."
+---
+
+This guide demonstrates a contract upgrade using the IBC router (`ICS26Router`) as an example. You will replace the implementation behind each router proxy on the tutorial's two chains while preserving each proxy's address and state. The new logic is built from the same source the tutorial deployed, so these steps demonstrate the upgrade without changing its behavior.
+
+## Before you begin
+
+Complete the [Deploy IBC and send a token](/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token) tutorial first. This guide starts from the state it leaves:
+
+- IBC is deployed on chains 41001 and 41002.
+- At least one token transfer has been delivered.
+- The relayer is running in its own terminal.
+
+You also need:
+
+- [Foundry](https://getfoundry.sh/introduction/installation), for `forge` and `cast`.
+- [Bun](https://bun.com/docs/installation), to install the dependencies the contracts import.
+- The access manager's admin key. The tutorial's deployer key holds that role.
+
+Run every command from the `cli` directory of your IBC clone.
+
+## 1. Set your shell variables
+
+Read the values the steps use:
+
+```bash
+ROUTER_A=$(./bin/ibc deploy show 41001 | jq -r '.core.router')
+ROUTER_B=$(./bin/ibc deploy show 41002 | jq -r '.core.router')
+IFT_A=$(./bin/ibc deploy show 41001 | jq -r '.tokens[0].address')
+IFT_B=$(./bin/ibc deploy show 41002 | jq -r '.tokens[0].address')
+DEPLOYER_KEY=$(./bin/ibc keys show deployer --private | jq -r '.privateKey')
+```
+
+The last line reads the deployer's raw private key, because Foundry cannot read the CLI's key files. Run `unset DEPLOYER_KEY` when you finish, so the key does not stay in your shell.
+
+## 2. Get the router source
+
+For a different target version, review the contracts repository's [upgradeability overview](https://github.com/cosmos/ibc-contracts/blob/main/UPGRADEABILITY.md#solidity-contracts) and [release policy](https://github.com/cosmos/ibc-contracts/blob/main/RELEASES.md#solidity-contracts).
+The policy defines minor Solidity releases as requiring a new initializer for storage changes.
+Patch releases require neither storage changes nor a new initializer.
+Major releases introduce API-breaking changes.
+
+Check the target release for required initialization and function-role changes.
+See [Permissions and upgrades](/ibc/06-ibc-solidity-contracts/06-permissions-and-upgrades#proxies-and-upgrade-authority) for storage-layout and access-control considerations.
+
+This guide builds the new logic from the [ibc-contracts](https://github.com/cosmos/ibc-contracts) commit the IBC CLI pins, which is the source of the logic `ibc deploy core` deployed.
+
+For your own upgrade, check out the release you are shipping. Compare its `IBCRolesLib` and `DeployAccessManagerWithRoles` with your deployment's assignments. If the release newly marks a function `restricted`, assign its selector before you call `upgradeToAndCall`. The old logic does not consult the access manager for that function, so the assignment changes nothing until the upgrade, and callers the release admits never lose access.
+
+1. Read the commit the IBC CLI pins:
+
+```bash
+CONTRACTS_COMMIT=$(go list -m -f '{{.Version}}' github.com/cosmos/ibc-contracts/packages/go-abigen | cut -d- -f3) && echo "$CONTRACTS_COMMIT"
+```
+
+The IBC CLI pins the module at a pseudo-version, which ends in a 12-character commit hash. The command prints that hash.
+
+2. Clone the repository next to your IBC clone:
+
+```bash
+git clone https://github.com/cosmos/ibc-contracts.git ../../ibc-contracts
+```
+
+3. Check out the commit:
+
+```bash
+git -C ../../ibc-contracts checkout "$CONTRACTS_COMMIT"
+```
+
+4. Install the contracts' dependencies:
+
+```bash
+bun install --cwd ../../ibc-contracts/ibc-solidity --frozen-lockfile
+```
+
+## 3. Check the router before the upgrade
+
+Read which logic the router proxy on 41001 runs:
+
+```bash
+cast implementation "$ROUTER_A" --rpc-url http://localhost:8545
+```
+
+It prints the `targetData.ics26RouterImplementation` address from `./bin/ibc deploy show 41001`, in lowercase.
+
+## 4. Upgrade the router on each chain
+
+1. Build and deploy the new logic on 41001:
+
+```bash
+NEW_IMPL_A=$(forge create --root ../../ibc-contracts/ibc-solidity contracts/ICS26Router.sol:ICS26Router --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY" --broadcast --json | jq -r '.deployedTo') && echo "$NEW_IMPL_A"
+```
+
+<Warning>
+When changing contract versions, verify storage compatibility and follow the release's initialization or migration requirements. The upgrade transaction does not check storage compatibility.
+</Warning>
+
+2. Switch the 41001 router to `NEW_IMPL_A`:
+
+Use empty call data, `0x`, because this example redeploys the same contract version.
+If your target release requires an initializer or migration function, encode that call and its arguments.
+Pass the encoded data instead of `0x` in both upgrade calls.
+With nonempty data, `upgradeToAndCall` executes that call in the same transaction.
+
+```bash
+cast send "$ROUTER_A" "upgradeToAndCall(address,bytes)" "$NEW_IMPL_A" 0x --rpc-url http://localhost:8545 --private-key "$DEPLOYER_KEY"
+```
+
+The receipt it prints has a `status` line reading `1 (success)`.
+
+3. Build and deploy the new logic on 41002:
+
+```bash
+NEW_IMPL_B=$(forge create --root ../../ibc-contracts/ibc-solidity contracts/ICS26Router.sol:ICS26Router --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY" --broadcast --json | jq -r '.deployedTo') && echo "$NEW_IMPL_B"
+```
+
+4. Switch the 41002 router to `NEW_IMPL_B`:
+
+```bash
+cast send "$ROUTER_B" "upgradeToAndCall(address,bytes)" "$NEW_IMPL_B" 0x --rpc-url http://localhost:8745 --private-key "$DEPLOYER_KEY"
+```
+
+This example uses the same packet functions on both chains throughout the upgrade.
+
+## 5. Verify the upgrade
+
+1. Read which logic each router now runs:
+
+```bash
+cast implementation "$ROUTER_A" --rpc-url http://localhost:8545
+```
+
+```bash
+cast implementation "$ROUTER_B" --rpc-url http://localhost:8745
+```
+
+They must match `NEW_IMPL_A` and `NEW_IMPL_B`.
+
+2. Check that both routers still hold their clients and applications:
+
+```bash
+./bin/ibc deploy status | jq '[.[].checks[].status] | unique'
+```
+
+```json
+[
+  "ok"
+]
+```
+
+3. Send 10 tokens across the upgraded routers:
+
+```bash
+TX=$(./bin/ibc tx ift send --chain 41001 --ift "$IFT_A" --client-id cli-41001-41002 --to deployer --from deployer --amount 10000000000000000000 | jq -r '.txHash') && echo "$TX"
+```
+
+4. Poll for `PACKET_STATE_SUCCEEDED`:
+
+```bash
+./bin/ibc relayer packets --chain-id 41001 --tx-hash "$TX" | jq -r '.packets[0].state'
+```
+
+5. Confirm the tokens arrived on 41002:
+
+```bash
+./bin/ibc query ift balance --chain 41002 --ift "$IFT_B" --address deployer | jq -r '.balance'
+```
+
+If the tutorial's transfer is the only earlier transfer, the balance is `20000000000000000000`: the tutorial's 10 tokens plus this transfer's 10. Each additional transfer raises the balance by its amount.
+
+Clear the admin key when finished:
+
+```bash
+unset DEPLOYER_KEY
+```
+
+## Manifest drift
+
+The CLI does not currently have first-class support for contract upgrades.
+This guide upgrades the routers directly on chain, leaving each manifest's `targetData.ics26RouterImplementation` at its original address.
+Rerunning `ibc deploy core` reuses the deployed contracts without refreshing their implementation addresses in the manifests.

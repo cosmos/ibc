@@ -25,7 +25,7 @@ write a little note why.
 - [ ] Linked to GitHub issue with discussion and accepted design, OR link to spec that describes this work.
 - [ ] Include changelog entry when appropriate (e.g. chores should be omitted from changelog).
 - [ ] Wrote unit and [e2e tests](https://github.com/cosmos/ibc/blob/main/e2e/README.md) if relevant.
-- [ ] Updated documentation (`docs/`) if anything is changed.
+- [ ] Updated documentation (`docs/`) if anything is changed. See `docs/AGENTS.md`.
 - [ ] Added `godoc` [comments](https://go.dev/blog/godoc) if relevant.
 - [ ] Self-reviewed `Files changed` in the GitHub PR explorer.
 - [ ] Provide a [conventional commit message](https://www.conventionalcommits.org/en/v1.0.0/) to follow the repository standards.

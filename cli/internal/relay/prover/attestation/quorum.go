@@ -136,6 +136,25 @@ func (g *Generator) queryOne(
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
 	}
 
+	// AttestationLightClient reverts the whole proof on any non-member signer, so a
+	// signature only counts if it recovers to the address the attestor was admitted
+	// under (MatchAttestors verified that address against the on-chain set).
+	if expected := common.HexToAddress(a.Address()); signer != expected {
+		g.logger.Warn(
+			"Unexpected attestor address",
+			"attestor", a.Name(),
+			"expected", expected.Hex(),
+			"actual", signer.Hex(),
+		)
+
+		return quorumResponse{
+			name: a.Name(),
+			err: errors.Errorf(
+				"attestor %q: unexpected address: got %s, wanted %s", a.Name(), signer.Hex(), expected.Hex(),
+			),
+		}
+	}
+
 	return quorumResponse{name: a.Name(), signer: signer, sig: sig}
 }
 

@@ -34,9 +34,9 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 
 ## Documentation
 
-- [What is IBC](docs/1-introduction/1-what-is-ibc.md) is a high level overview of what IBC does and what it is for.
-- [How IBC works](docs/2-how-ibc-works/1-overview.md) covers the components that carry one packet between two chains.
-- [IBC CLI](docs/6-ibc-cli/1-overview.md) covers deploying IBC and running the processes that operate it.
+- [What is IBC](docs/ibc/01-introduction/01-what-is-ibc.mdx) is a high level overview of what IBC does and what it is for.
+- [How IBC works](docs/ibc/02-how-ibc-works/01-overview.mdx) covers the components that carry one packet between two chains.
+- [IBC CLI](docs/ibc/05-ibc-cli/01-overview.mdx) covers deploying IBC and running the processes that operate it.
 
 <!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of IBC, you can also read [this blog post](https://medium.com/the-interchain-foundation/eli5-what-is-ibc-def44d7b5b4c).

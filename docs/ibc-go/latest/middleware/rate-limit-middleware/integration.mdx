@@ -1,0 +1,219 @@
+---
+title: Integration
+description: Wire the rate limiting middleware into a chain for IBC v1 and v2.
+---
+
+This guide wires the rate limiting middleware into a chain's `app.go`, using simapp as the reference. It assumes an ibc-go application that already has the transfer module wired. Wire the middleware for IBC v1, IBC v2, or both.
+
+The middleware only understands ICS-20 transfer packets, so it must wrap the transfer application. It cannot sit on a non-transfer route.
+
+## Before you begin
+
+Confirm the application already has the middleware's dependencies:
+
+- The transfer keeper and, for IBC v2, the transfer v2 module.
+- The IBC keeper, including its `ChannelKeeper`, `ClientKeeper`, and for v2 its `ChannelKeeperV2`.
+- The bank keeper.
+- A governance authority address, the only account allowed to change limits.
+
+The module needs no manual genesis. It defaults to empty state: no limits, no whitelist, and no blacklist. To preload a whitelist or blacklist, see [configure rate limits](/ibc-go/latest/middleware/rate-limit-middleware/setting-limits).
+
+## Wire rate limiting for IBC v1
+
+These changes give a complete v1 integration. They add the keeper, register the middleware at the top of the transfer stack, and add the module to the manager.
+
+```go
+// app.go
+
+import (
+    // ...
+    porttypes "github.com/cosmos/ibc-go/v11/modules/core/05-port/types"
+    ratelimiting "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting"
+    ratelimitkeeper "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/keeper"
+    ratelimittypes "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/types"
+)
+
+// Add the keeper to the application struct.
+type App struct {
+    // ...
+    RateLimitKeeper *ratelimitkeeper.Keeper
+}
+
+// Register the module's store key.
+keys := storetypes.NewKVStoreKeys(
+    // ...
+    ratelimittypes.StoreKey,
+)
+
+// Create the rate limit keeper.
+app.RateLimitKeeper = ratelimitkeeper.NewKeeper(
+    appCodec,
+    app.AccountKeeper.AddressCodec(),
+    runtime.NewKVStoreService(keys[ratelimittypes.StoreKey]),
+    app.IBCKeeper.ChannelKeeper,
+    app.IBCKeeper.ClientKeeper,
+    app.BankKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String(), // authority
+)
+
+// Build the transfer stack with rate limiting on top.
+//
+// The stack, from top to bottom:
+// - core IBC
+// - rate limiting
+// - transfer
+transferStack := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper)
+transferStack.
+    Base(transfer.NewIBCModule(app.TransferKeeper)).
+    Next(ratelimiting.NewIBCMiddleware(app.RateLimitKeeper))
+
+// Add the stack to the IBC router.
+ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferStack.Build())
+
+// Register the app module with the module manager.
+app.ModuleManager = module.NewManager(
+    // ...
+    ratelimiting.NewAppModule(app.RateLimitKeeper),
+)
+
+// Add the module to the begin blocker, end blocker, and genesis orders.
+app.ModuleManager.SetOrderBeginBlockers(
+    // ...
+    ratelimittypes.ModuleName,
+)
+app.ModuleManager.SetOrderEndBlockers(
+    // ...
+    ratelimittypes.ModuleName,
+)
+genesisModuleOrder := []string{
+    // ...
+    ratelimittypes.ModuleName,
+}
+app.ModuleManager.SetOrderInitGenesis(genesisModuleOrder...)
+app.ModuleManager.SetOrderExportGenesis(genesisModuleOrder...)
+```
+
+Key details:
+
+- The last keeper argument is the governance authority. The keeper stores it and enforces it on every message. A chain that uses the standard governance module passes `authtypes.NewModuleAddress(govtypes.ModuleName).String()`.
+- The module runs a begin-block hook and has genesis state, so it must appear in the begin-blocker order and the init and export genesis orderings.
+- If the chain already wires other transfer middleware, add rate limiting to the same stack with another `Next` call rather than creating a new stack. See the packet forward example below.
+
+### With packet forward middleware
+
+If the chain runs packet forward middleware, place rate limiting above it in the same stack, so limits apply to the final inbound transfer before it is forwarded:
+
+```go
+// transfer stack, from top to bottom:
+// - rate limiting
+// - packet forward
+// - transfer
+//
+// SendPacket: transfer -> packet forward -> rate limiting -> core IBC
+// RecvPacket: core IBC -> rate limiting -> packet forward -> transfer
+transferStack := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper)
+transferStack.
+    Base(transfer.NewIBCModule(app.TransferKeeper)).
+    Next(packetforward.NewIBCMiddleware(
+        app.PFMKeeper,
+        0, // retries on timeout
+        packetforwardkeeper.DefaultForwardTransferPacketTimeoutTimestamp,
+    )).
+    Next(ratelimiting.NewIBCMiddleware(app.RateLimitKeeper))
+
+ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferStack.Build())
+```
+
+## Wire rate limiting for IBC v2
+
+These changes give a complete v2 integration. IBC v2 uses a separate router, and the middleware wraps the transfer v2 module directly.
+
+<Note>
+The keeper, store key, module registration, and ordering are shared across versions. If the chain already wired v1 rate limiting above, those parts are done. Only the v2 router wiring is new, so skip to the step that builds `transferModuleV2`.
+</Note>
+
+```go
+// app.go
+
+import (
+    // ...
+    ratelimiting "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting"
+    ratelimitkeeper "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/keeper"
+    ratelimittypes "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/types"
+    ratelimitingv2 "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/v2"
+)
+
+// Add the keeper to the application struct.
+type App struct {
+    // ...
+    RateLimitKeeper *ratelimitkeeper.Keeper
+}
+
+// Register the module's store key.
+keys := storetypes.NewKVStoreKeys(
+    // ...
+    ratelimittypes.StoreKey,
+)
+
+// Create the rate limit keeper.
+app.RateLimitKeeper = ratelimitkeeper.NewKeeper(
+    appCodec,
+    app.AccountKeeper.AddressCodec(),
+    runtime.NewKVStoreService(keys[ratelimittypes.StoreKey]),
+    app.IBCKeeper.ChannelKeeper,
+    app.IBCKeeper.ClientKeeper,
+    app.BankKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String(), // authority
+)
+
+// Wrap the transfer v2 module with rate limiting.
+transferModuleV2 := ratelimitingv2.NewIBCMiddleware(
+    *app.RateLimitKeeper, // v2 takes the keeper by value, so dereference it
+    transferv2.NewIBCModule(app.TransferKeeper),
+    app.IBCKeeper.ChannelKeeperV2, // write-acknowledgement wrapper
+    app.IBCKeeper.ChannelKeeperV2, // v2 channel keeper
+)
+
+// Add the wrapped module to the v2 router.
+ibcRouterV2.AddRoute(ibctransfertypes.PortID, transferModuleV2)
+
+// Register the app module with the module manager.
+app.ModuleManager = module.NewManager(
+    // ...
+    ratelimiting.NewAppModule(app.RateLimitKeeper),
+)
+
+// Add the module to the begin blocker, end blocker, and genesis orders.
+app.ModuleManager.SetOrderBeginBlockers(
+    // ...
+    ratelimittypes.ModuleName,
+)
+app.ModuleManager.SetOrderEndBlockers(
+    // ...
+    ratelimittypes.ModuleName,
+)
+genesisModuleOrder := []string{
+    // ...
+    ratelimittypes.ModuleName,
+}
+app.ModuleManager.SetOrderInitGenesis(genesisModuleOrder...)
+app.ModuleManager.SetOrderExportGenesis(genesisModuleOrder...)
+```
+
+The v2 constructor takes four arguments: the keeper by value, the module being wrapped, a write-acknowledgement wrapper, and the v2 channel keeper. In simapp the last two are both `app.IBCKeeper.ChannelKeeperV2`. Both are required, and the constructor panics if either is nil.
+
+The v2 middleware enforces the same limits as v1. It converts each v2 payload to the internal packet form and calls the same keeper logic, so a denom's limit applies identically regardless of which IBC version carried the transfer.
+
+<Warning>
+The transfer v2 route through rate limiting is added by [pull request #8984](https://github.com/cosmos/ibc-go/pull/8984). On an ibc-go version from before that change, only the v1 stack is wired. Confirm the version in use includes it before wiring v2.
+</Warning>
+
+## What can go wrong
+
+- The application panics on start. The store key is likely unregistered, or a nil dependency reached the v2 constructor.
+- Limits never trigger. Confirm the middleware is on the route the transfers use, and that the module is in the begin-blocker order so windows advance.
+
+## Next steps
+
+- [Configure rate limits](/ibc-go/latest/middleware/rate-limit-middleware/setting-limits) through governance.
+- Review how limits are evaluated in the [rate limiting overview](/ibc-go/latest/middleware/rate-limit-middleware/overview).
