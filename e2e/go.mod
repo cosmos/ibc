@@ -365,9 +365,6 @@ require (
 )
 
 replace (
-	// Matches link: the prover service pulls in link's signer package, which
-	// needs this cometbft.
-	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
 	github.com/cosmos/ibc/cli => ../cli
 	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )

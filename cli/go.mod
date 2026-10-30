@@ -367,7 +367,4 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace (
-	github.com/cometbft/cometbft => github.com/cometbft/cometbft v0.39.0-rc1.0.20260615134937-9ea34470f336
-	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
-)
+replace github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
