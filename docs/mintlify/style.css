@@ -7,19 +7,23 @@
 
 /* Accent color overrides */
 /* The accent is set per page by custom.js, which picks one of the six Cosmos
-   brand hues from a hash of the path. The fallbacks here are the brand blue,
+   brand hues by matching the path against an ordered table. The fallbacks here are the brand blue,
    so the nav still looks right if the script does not run. */
-.bg-primary\/10,
-.dark .bg-primary\/10,
-.dark\:bg-primary-light\/10:is(.dark *) {
+/* Scoped, so this cannot repaint a future Mintlify component that happens to
+   use the same utility. #navigation-items, not #sidebar: below 1024px the
+   sidebar is `hidden lg:block` and Mintlify renders a second copy of the
+   navigation in a portal under #mobile-nav, outside it. Scoping to #sidebar
+   left the drawer on Mintlify's default grey on every phone and tablet.
+   #navigation-items wraps the link list in both trees. */
+#navigation-items .bg-primary\/10,
+#navigation-items .dark\:bg-primary-light\/10:is(.dark *) {
   background-color: var(--nav-accent, #40b3ff);
 }
 
-.bg-primary\/10.text-primary,
-.bg-primary\/10 .text-primary,
-.dark\:bg-primary-light\/10:is(.dark *),
-.dark\:bg-primary-light\/10:is(.dark *) .text-primary,
-.dark\:bg-primary-light\/10:is(.dark *).dark\:text-primary-light {
+#navigation-items .bg-primary\/10.text-primary,
+#navigation-items .bg-primary\/10 .text-primary,
+#navigation-items .dark\:bg-primary-light\/10:is(.dark *),
+#navigation-items .dark\:bg-primary-light\/10:is(.dark *) .text-primary {
   color: var(--nav-accent-ink, #0e0e0e);
 }
 
@@ -258,7 +262,8 @@ header a:has(> span.absolute.bg-primary-dark) *,
   z-index: -1;
 }
 
-.nav-tabs-item:hover::before {
+.nav-tabs-item:hover::before,
+.nav-tabs-item:focus-visible::before {
   background-color: var(--tab-accent);
 }
 
@@ -268,14 +273,42 @@ header a:has(> span.absolute.bg-primary-dark) *,
    pseudo-class, so it outranks `.nav-tabs-item:hover` and the ink never
    applies. Scoped to the hover colour only. */
 .nav-tabs-item:hover,
-.nav-tabs-item:hover * {
+.nav-tabs-item:hover *,
+.nav-tabs-item:focus-visible,
+.nav-tabs-item:focus-visible * {
   color: var(--tab-ink) !important;
 }
 
-.nav-tabs-item[href^="/ibc/05-ibc-cli/"]              { --tab-accent: #22e2a8; --tab-ink: #0e0e0e; }
-.nav-tabs-item[href^="/ibc/06-ibc-solidity-contracts/"] { --tab-accent: #7522b5; --tab-ink: #ffffff; }
-.nav-tabs-item[href^="/ibc-go/"]                   { --tab-accent: #4b47ca; --tab-ink: #ffffff; }
-.nav-tabs-item[href^="/ibc/spec/"]                 { --tab-accent: #ef5628; --tab-ink: #0e0e0e; }
+/* `*=`, not `^=`: the deployed site is served under a base path, so these
+   hrefs render as /docs/ibc-go/... and a prefix match found none of them.
+   Every chip fell back to the default blue in production while looking
+   correct in `mint dev`, which serves from the root. */
+.nav-tabs-item[href*="/ibc/05-ibc-cli/"]:not([href^="http"])   { --tab-accent: #22e2a8; --tab-ink: #0e0e0e; }
+.nav-tabs-item[href*="/ibc/06-ibc-solidity-contracts/"]:not([href^="http"]) { --tab-accent: #7522b5; --tab-ink: #ffffff; }
+.nav-tabs-item[href*="/ibc-go/"]:not([href^="http"])           { --tab-accent: #4b47ca; --tab-ink: #ffffff; }
+.nav-tabs-item[href*="/ibc/spec/"]:not([href^="http"])         { --tab-accent: #ef5628; --tab-ink: #0e0e0e; }
+
+/* The underline under the tab you are on. Mintlify paints it from --primary
+   in light mode and --primary-light in dark, so it showed the configured
+   black or grey while the rest of the tab carried its section colour.
+
+   The two classes exist so the colour can differ per theme, and the accents
+   need that: each one has to clear 3:1 (WCAG 1.4.11, a non-text indicator)
+   against white here and against #0d0d0f there, and no single value does.
+   #22e2a8 is 1.68:1 on white; #7522b5 is 2.45:1 on the dark page. Mixing
+   toward the page colour fixes both ends. At these ratios the worst case is
+   3.87:1 in light and 3.78:1 in dark, and every accent stays recognisable.
+
+   --primary itself is left alone. Around 310 Mintlify rules read it, some as
+   text on white, and these accents are chosen to sit behind dark ink rather
+   than to be ink themselves. */
+.nav-tabs-item .bg-primary {
+  background-color: color-mix(in srgb, var(--tab-accent, #40b3ff) 65%, black);
+}
+
+.nav-tabs-item .dark\:bg-primary-light:is(.dark *) {
+  background-color: color-mix(in srgb, var(--tab-accent, #40b3ff) 80%, white);
+}
 
 /* Mintlify sizes the navbar logo with its own `h-7` utility (28px), which is
    too small for this lockup: the tagline sits on three lines, so at 28px each
