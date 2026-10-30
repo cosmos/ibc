@@ -40,6 +40,14 @@ type Handler interface {
 
 var errInternal = connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 
+const (
+	maxHeaderBytes    = 128 << 10
+	maxRequestBytes   = 1 << 20 // 1MB
+	readHeaderTimeout = 8 * time.Second
+	readTimeout       = 8 * time.Second
+	idleTimeout       = 30 * time.Second
+)
+
 // New Server constructor.
 func New(addr string, useReflection, enableObservability bool) *Server {
 	// Use h2c so we can serve HTTP/2 without TLS.
@@ -51,7 +59,7 @@ func New(addr string, useReflection, enableObservability bool) *Server {
 
 	mux := http.NewServeMux()
 	health := &healthChecker{handlers: make(map[string]Handler)}
-	mux.Handle(grpchealth.NewHandler(health))
+	mux.Handle(grpchealth.NewHandler(health, connect.WithReadMaxBytes(maxRequestBytes)))
 
 	return &Server{
 		mux:           mux,
@@ -59,9 +67,13 @@ func New(addr string, useReflection, enableObservability bool) *Server {
 		serviceNames:  []string{grpchealth.HealthV1ServiceName},
 		useReflection: useReflection,
 		server: &http.Server{
-			Addr:      addr,
-			Handler:   mux,
-			Protocols: protocols,
+			Addr:              addr,
+			Handler:           http.MaxBytesHandler(mux, maxRequestBytes),
+			Protocols:         protocols,
+			ReadHeaderTimeout: readHeaderTimeout,
+			ReadTimeout:       readTimeout,
+			IdleTimeout:       idleTimeout,
+			MaxHeaderBytes:    maxHeaderBytes,
 		},
 		enableObservability: enableObservability,
 		logger:              slog.With("module", "server"),
@@ -100,7 +112,7 @@ func (s *Server) Stop() error {
 
 // Register adds a service and its readiness check before Start is called.
 func (s *Server) Register(h Handler) {
-	var handlerOptions []connect.HandlerOption
+	handlerOptions := []connect.HandlerOption{connect.WithReadMaxBytes(maxRequestBytes)}
 	if s.enableObservability {
 		handlerOptions = append(handlerOptions, otel.WrapConnectHandler())
 	}
@@ -132,8 +144,9 @@ func (s *Server) setupReflection() {
 	}
 
 	reflector := grpcreflect.NewStaticReflector(s.serviceNames...)
-	s.mux.Handle(grpcreflect.NewHandlerV1(reflector))
-	s.mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+	readLimit := connect.WithReadMaxBytes(maxRequestBytes)
+	s.mux.Handle(grpcreflect.NewHandlerV1(reflector, readLimit))
+	s.mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector, readLimit))
 
 	s.reflectionRegistered = true
 }

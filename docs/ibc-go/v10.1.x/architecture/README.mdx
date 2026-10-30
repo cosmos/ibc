@@ -1,0 +1,48 @@
+---
+noindex: true
+canonical: '/ibc-go/latest/architecture/README'
+title: "Architecture Decision Records (ADR)"
+---
+
+This is a location to record all high-level architecture decisions in the ibc-go project.
+
+You can read more about the ADR concept in this [blog post](https://product.reverb.com/documenting-architecture-decisions-the-reverb-way-a3563bb24bd0#.78xhdix6t).
+
+An ADR should provide:
+
+- Context on the relevant goals and the current state
+- Proposed changes to achieve the goals
+- Summary of pros and cons
+- References
+- Changelog
+
+Note the distinction between an ADR and a spec. The ADR provides the context, intuition, reasoning, and
+justification for a change in architecture, or for the architecture of something
+new. The spec is much more compressed and streamlined summary of everything as
+it is or should be.
+
+If recorded decisions turned out to be lacking, convene a discussion, record the new decisions here, and then modify the code to match.
+
+Note the context/background should be written in the present tense.
+
+To suggest an ADR, please make use of the [ADR template](https://github.com/cosmos/ibc-go/blob/main/docs/architecture/adr.template.md) provided.
+
+## Table of Contents
+
+| ADR \# | Description | Status |
+| ------ | ----------- | ------ |
+| [001](/ibc-go/v10.1.x/architecture/adr-001-coin-source-tracing) | ICS-20 coin denomination format | Accepted, Implemented |
+| [002](/ibc-go/v10.1.x/architecture/adr-002-go-module-versioning) | Go module versioning | Accepted |
+| [003](/ibc-go/v10.1.x/architecture/adr-003-ics27-acknowledgement) | ICS27 acknowledgement format | Accepted |
+| [004](/ibc-go/v10.1.x/architecture/adr-004-ics29-lock-fee-module) | ICS29 module locking upon escrow out of balance | Accepted |
+| [005](/ibc-go/v10.1.x/architecture/adr-005-consensus-height-events) | `UpdateClient` events - `ClientState` consensus heights | Accepted |
+| [006](/ibc-go/v10.1.x/architecture/adr-006-02-client-refactor) | ICS02 client refactor | Accepted |
+| [007](/ibc-go/v10.1.x/architecture/adr-007-solomachine-signbytes) | ICS06 Solo machine sign bytes | Accepted |
+| [008](/ibc-go/v10.1.x/architecture/adr-008-app-caller-cbs) | Callback to IBC Actors | Accepted |
+| [009](/ibc-go/v10.1.x/architecture/adr-009-v6-ics27-msgserver) | ICS27 message server addition | Accepted |
+| [010](/ibc-go/v10.1.x/architecture/adr-010-light-clients-as-sdk-modules) | IBC light clients as SDK modules | Accepted |
+| [011](/ibc-go/v10.1.x/architecture/adr-011-transfer-total-escrow-state-entry) | ICS20 state entry for total amount of tokens in escrow | Accepted |
+| [015](/ibc-go/v10.1.x/architecture/adr-015-ibc-packet-receiver) | IBC Packet Routing | Accepted |
+| [025](/ibc-go/v10.1.x/architecture/adr-025-ibc-passive-channels) | IBC passive channels | Deprecated |
+| [026](/ibc-go/v10.1.x/architecture/adr-026-ibc-client-recovery-mechanisms) | IBC client recovery mechanisms | Accepted |
+| [027](/ibc-go/v10.1.x/architecture/adr-027-ibc-wasm) | Wasm based light clients | Accepted |

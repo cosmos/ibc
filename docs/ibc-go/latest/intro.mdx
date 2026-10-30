@@ -1,0 +1,28 @@
+---
+title: "IBC Documentation"
+description: "IBC (Inter-Blockchain Communication) protocol documentation"
+---
+
+IBC (Inter-Blockchain Communication) is an interoperability protocol for secure, verifiable, and permissionless messaging between blockchains. It powers token transfers, cross-chain contract calls, and arbitrary messaging across over 150+ blockchains, with support for EVM chains, Cosmos, and more.
+
+<CardGroup cols={2}>
+  <Card title="What is IBC?" icon="book-open" href="/ibc/01-introduction/01-what-is-ibc">
+    Learn what IBC is, how it works, and what you can build with it.
+  </Card>
+  <Card title="How IBC Works" icon="chevrons-left-right-ellipsis" href="/ibc/02-how-ibc-works/01-overview">
+    Understand how IBC solves chain isolation with light clients, relayers, and cryptographic proofs.
+  </Card>
+    <Card title="IBC Lifecycle" icon="refresh-cw" href="/ibc/02-how-ibc-works/06-packet-lifecycle">
+    Follow a packet from send to acknowledgement or timeout, with message and callback references.
+  </Card>
+  <Card title="Deploy IBC and send a token" icon="play" href="/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token">
+    Deploy IBC on two chains with IBC CLI and send a token end-to-end.
+  </Card>
+  <Card title="IBC Infra" icon="server" href="/ibc/05-ibc-cli/03-guides/02-run-a-standalone-relayer">
+    Run a relayer in its own process with IBC CLI, querying attestors it does not host.
+  </Card>
+  <Card title="Light Clients" icon="shield" href="/ibc-go/latest/light-clients/developer-guide/overview">
+    Learn about the available light client types and how to implement a custom client.
+  </Card>
+
+</CardGroup>

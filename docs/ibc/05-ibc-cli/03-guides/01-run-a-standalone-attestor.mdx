@@ -1,0 +1,144 @@
+---
+title: "Run a standalone attestor"
+description: "Run an attestor in its own process, separate from any relayer, so a relayer can query it and count its signatures toward a light client's quorum."
+---
+
+This guide runs an attestor as its own process, serving one chain. A relayer can then query it and count its signatures toward a light client's quorum.
+
+## Before you begin
+
+You need:
+
+- **A chain with IBC deployed, and a light client tracking it.** This guide continues from the [tutorial](/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token).
+- **Your signing address already in that client's attestation set.**
+- **Your signing key.**
+- **The chain's RPC endpoint and router address.** General configuration validation permits a missing router address, but attestor startup requires it.
+- [Go](https://go.dev/doc/install) 1.26.10 or later and a [build of the binary](/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token).
+
+The commands below move the tutorial's attestor for 41002 into its own process. The Besu client on 41002 verifies chain 41001 without an attestor.
+
+> **Warning:** Stop the tutorial's relayer with `Ctrl+C` in its terminal. It hosts the attestor that this guide moves into a separate process.
+
+## 1. Attestor config
+
+Create a second configuration file alongside the tutorial's:
+
+```bash
+./bin/ibc config new --config ibc-attestor-41002.yml
+```
+
+It shares the tutorial's keystore, so the attestor key generated there is already available. That key's address matches the one in the client's attestation set.
+
+<Warning>
+Use separate keys for independent clients and chains. Signatures are not bound to a chain, router, or verifying client.
+</Warning>
+
+## 2. Write its configuration
+
+Write the attestor's configuration file, reading the router address from the deployment:
+
+```bash
+cat > ~/.ibc/ibc-attestor-41002.yml <<EOF
+server:
+  listenAddr: 0.0.0.0:3001
+
+chains:
+- chainId: "41002"
+  evm:
+    rpc: http://localhost:8745
+    ics26Router: "$(./bin/ibc deploy show 41002 | jq -r '.core.router')"
+
+attestors:
+- name: attestor-41002
+  type: local
+  chainId: "41002"
+  signer: attestor-41002
+  finalityOffset: 1
+
+signers:
+- alias: attestor-41002
+  type: local
+  file: attestor-41002
+EOF
+```
+
+This guide names each attestor `attestor-<chain it watches>`. Names must be unique within the serving process.
+
+> **Warning:** The attestor's name has to match the name the relayer uses for it. A relayer sends that name in every query, and the process serves its attestors by name, so a mismatch makes every lookup fail.
+
+A finality offset of `1` signs one block behind the chain head. Zero waits for the chain's own finalized block instead.
+
+## 3. Start it and verify
+
+1. Validate the configuration:
+
+```bash
+./bin/ibc config validate attestor --config ibc-attestor-41002.yml
+```
+
+```json
+{
+  "attestor": "valid",
+  "path": "/home/you/.ibc/ibc-attestor-41002.yml",
+  "status": "valid"
+}
+```
+
+2. Start the process in a new terminal, and leave it running:
+
+```bash
+./bin/ibc attestor run --config ibc-attestor-41002.yml
+```
+
+```
+level=INFO msg="Starting attestor" module=bootstrap
+level=INFO msg=Readiness module=bootstrap readiness="{Event:ready HTTP:[::]:3001}"
+```
+
+That readiness line names the address it bound.
+
+3. Back in your first terminal, ask the process what its address is:
+
+```bash
+./bin/ibc attestor info attestor-41002 --host 127.0.0.1:3001
+```
+
+```json
+{
+  "chainId": "41002",
+  "address": "0xc7f148Da846781a9a1D9d22F699A7A88c592CCee"
+}
+```
+
+This should be the address of the attestor.
+
+4. Ask how far it can attest:
+
+```bash
+./bin/ibc attestor latest-height attestor-41002 --host 127.0.0.1:3001
+```
+
+```json
+{
+  "height": "25509"
+}
+```
+
+This shows the attestor's latest height.
+
+## Connect a relayer
+
+A relayer references your attestor by name and network address:
+
+```yaml
+attestors:
+- name: attestor-41002
+  type: remote
+  grpc: 127.0.0.1:3001
+```
+
+If the attestor is served behind TLS, write its address as `https://host`, which uses port 443 unless you add one, and add a `tls` block for a private CA or mTLS, as described in [TLS for remote services](/ibc/05-ibc-cli/04-reference/01-configuration#tls-for-remote-services).
+
+## Next steps
+
+- [Run a standalone relayer](/ibc/05-ibc-cli/03-guides/02-run-a-standalone-relayer) brings up a relayer that queries this attestor instead of hosting its own.

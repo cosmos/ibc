@@ -8,7 +8,7 @@ Single-container [grafana/otel-lgtm](https://github.com/grafana/docker-otel-lgtm
 IBC metrics testing. The collector supports both `simple` Prometheus scraping and
 OTEL push mode. It uses host networking so it can reach the IBC process.
 
-See [Observability and metrics](../../../docs/6-ibc-cli/8-observability-and-metrics.md)
+See [Observability and metrics](../../../docs/ibc/05-ibc-cli/04-reference/04-observability-and-metrics.mdx)
 for metric names, labels, and semantics.
 
 ## Usage

@@ -1,0 +1,123 @@
+---
+title: Migration
+description: Move an existing ibc-apps rate limiting integration to ibc-go.
+---
+
+The rate limiting middleware moved from the standalone `ibc-apps` repository into ibc-go. Migrating is a code change across `app.go`. The import paths, the package name, the keeper constructor, and both middleware constructors all change. This guide moves an integration from `ibc-apps` v10 to ibc-go v11.2. For the full current wiring, see [integrate the rate limiting middleware](/ibc-go/latest/middleware/rate-limit-middleware/integration).
+
+## Update the imports
+
+The module path changes, and the root package is renamed from `ratelimit` to `ratelimiting`.
+
+```diff
+- ratelimit "github.com/cosmos/ibc-apps/modules/rate-limiting/v10"
+- ratelimitkeeper "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/keeper"
+- ratelimittypes "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/types"
+- ratelimitv2 "github.com/cosmos/ibc-apps/modules/rate-limiting/v10/v2"
++ ratelimiting "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting"
++ ratelimitkeeper "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/keeper"
++ ratelimittypes "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/types"
++ ratelimitingv2 "github.com/cosmos/ibc-go/v11/modules/apps/rate-limiting/v2"
+```
+
+## Update the keeper
+
+The keeper field becomes a pointer. The constructor drops the parameter subspace and the trailing ICS4 wrapper argument, adds an address codec, and moves the authority to the end. It returns a pointer, so drop the dereference.
+
+```diff
+  // app struct field
+- RateLimitKeeper ratelimitkeeper.Keeper
++ RateLimitKeeper *ratelimitkeeper.Keeper
+
+  // keeper construction
+- app.RateLimitKeeper = *ratelimitkeeper.NewKeeper(
+-     appCodec,
+-     runtime.NewKVStoreService(keys[ratelimittypes.StoreKey]),
+-     app.GetSubspace(ratelimittypes.ModuleName),
+-     authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+-     app.BankKeeper,
+-     app.IBCKeeper.ChannelKeeper,
+-     app.IBCKeeper.ClientKeeper,
+-     app.IBCKeeper.ChannelKeeper, // ICS4Wrapper
+- )
++ app.RateLimitKeeper = ratelimitkeeper.NewKeeper(
++     appCodec,
++     app.AccountKeeper.AddressCodec(),
++     runtime.NewKVStoreService(keys[ratelimittypes.StoreKey]),
++     app.IBCKeeper.ChannelKeeper,
++     app.IBCKeeper.ClientKeeper,
++     app.BankKeeper,
++     authtypes.NewModuleAddress(govtypes.ModuleName).String(),
++ )
+```
+
+## Update the v1 wiring
+
+The v1 middleware no longer takes the wrapped app as an argument. Build the stack with `NewIBCStackBuilder`, which injects the underlying app and sets the ICS4 wrapper, replacing the ICS4 argument the old keeper constructor took.
+
+```diff
+- var transferStack ibcporttypes.IBCModule = transfer.NewIBCModule(app.TransferKeeper)
+- transferStack = ratelimit.NewIBCMiddleware(app.RateLimitKeeper, transferStack)
++ transferStack := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper)
++ transferStack.
++     Base(transfer.NewIBCModule(app.TransferKeeper)).
++     Next(ratelimiting.NewIBCMiddleware(app.RateLimitKeeper))
++ ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferStack.Build())
+```
+
+This example shows a minimal stack. If the chain already runs other transfer middleware, such as packet forward, keep those layers as additional `.Next(...)` calls; only the rate-limiting layer changes.
+
+## Update the v2 wiring
+
+The v2 constructor gains two required arguments, a write-acknowledgement wrapper and the v2 channel keeper, and takes the keeper by value.
+
+```diff
+- transferStackV2 := ratelimitv2.NewIBCMiddleware(
+-     app.RateLimitKeeper,
+-     transferv2.NewIBCModule(app.TransferKeeper),
+- )
++ transferModuleV2 := ratelimitingv2.NewIBCMiddleware(
++     *app.RateLimitKeeper,
++     transferv2.NewIBCModule(app.TransferKeeper),
++     app.IBCKeeper.ChannelKeeperV2,
++     app.IBCKeeper.ChannelKeeperV2,
++ )
++ ibcRouterV2.AddRoute(ibctransfertypes.PortID, transferModuleV2)
+```
+
+## Update the app module
+
+`NewAppModule` no longer takes the codec.
+
+```diff
+- ratelimit.NewAppModule(appCodec, app.RateLimitKeeper)
++ ratelimiting.NewAppModule(app.RateLimitKeeper)
+```
+
+## Add store upgrades
+
+If rate limiting is being added to a chain for the first time, you must [manually add store upgrades](https://docs.cosmos.network/sdk/next/guides/upgrades/upgrade#adding-new-modules-during-an-upgrade) for the new module and configure the store loader to apply them in `app.go`:
+
+```go
+if upgradeInfo.Name == "v11_2" && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+    storeUpgrades := store.StoreUpgrades{
+        Added: []string{ratelimittypes.StoreKey},
+    }
+    app.SetStoreLoader(upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storeUpgrades))
+}
+```
+
+This ensures the new module's stores are added to the multistore before the migrations begin.
+
+## Verify the migration
+
+After the app compiles, confirm the module is active by querying the existing limits.
+
+```bash
+simd query ratelimiting list-rate-limits
+```
+
+## Next steps
+
+- Confirm limits behave as expected using the [setting rate limits](/ibc-go/latest/middleware/rate-limit-middleware/setting-limits) queries.
+- Review the full wiring in [integrate the rate limiting middleware](/ibc-go/latest/middleware/rate-limit-middleware/integration).
