@@ -6,9 +6,11 @@ import (
 	"context"
 	"log/slog"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -35,6 +37,7 @@ func signedAttestor(t *testing.T, name string, attestedData []byte) *attestor.Mo
 
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
+	a.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 	a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
 		attestor.Attestation{Height: 10, AttestedData: attestedData, Signature: sig}, nil,
 	)
@@ -202,6 +205,7 @@ func TestQueryQuorum(t *testing.T) {
 
 		highSAttestor := attestor.NewMockAttestor(t)
 		highSAttestor.EXPECT().Name().Return("high-s").Maybe()
+		highSAttestor.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 		highSAttestor.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
 			attestor.Attestation{Height: 10, AttestedData: data, Signature: highS}, nil,
 		)
@@ -236,6 +240,7 @@ func TestQueryQuorum(t *testing.T) {
 		makeAttestor := func(name string) *attestor.MockAttestor {
 			a := attestor.NewMockAttestor(t)
 			a.EXPECT().Name().Return(name).Maybe()
+			a.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 			a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
 				attestor.Attestation{Height: 10, AttestedData: data, Signature: sig}, nil,
 			)
@@ -255,6 +260,121 @@ func TestQueryQuorum(t *testing.T) {
 			"quorum not met",
 			"the same recovered signer answering twice must not count twice",
 		)
+	})
+
+	// AttestationLightClient reverts the whole proof on a non-member signer, so a
+	// signature counts only when it recovers to the address the attestor was
+	// admitted under.
+	t.Run("signerAddress", func(t *testing.T) {
+		signerKey, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		digest := attestorevm.Digest(attestorevm.TagStateAttestation, data)
+		sig, err := crypto.Sign(digest[:], signerKey)
+		require.NoError(t, err)
+		signer := crypto.PubkeyToAddress(signerKey.PublicKey)
+
+		otherKey, err := crypto.GenerateKey()
+		require.NoError(t, err)
+		other := crypto.PubkeyToAddress(otherKey.PublicKey)
+
+		for _, tt := range []struct {
+			name        string
+			address     string
+			errContains string
+		}{
+			{
+				name:    "matchingAddressCounts",
+				address: signer.Hex(),
+			},
+			{
+				name:    "lowercaseAddressCounts",
+				address: strings.ToLower(signer.Hex()),
+			},
+			{
+				name:        "differentAddressExcluded",
+				address:     other.Hex(),
+				errContains: "unexpected address",
+			},
+			{
+				name:        "emptyAddressExcluded",
+				address:     "",
+				errContains: "unexpected address",
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				// ARRANGE
+				a := attestor.NewMockAttestor(t)
+				a.EXPECT().Name().Return("attestor-0").Maybe()
+				a.EXPECT().Address().Return(tt.address).Maybe()
+				gen := New("client-chain", "client-0", nil, 1, nil, slog.Default())
+
+				// ACT
+				response := gen.queryOne(
+					ctx,
+					a,
+					attestorevm.TagStateAttestation,
+					data,
+					func(context.Context, attestor.Attestor) (attestor.Attestation, error) {
+						return attestor.Attestation{AttestedData: data, Signature: sig}, nil
+					},
+				)
+
+				// ASSERT
+				if tt.errContains != "" {
+					require.ErrorContains(t, response.err, tt.errContains)
+					require.ErrorContains(t, response.err, signer.Hex())
+					require.ErrorContains(t, response.err, common.HexToAddress(tt.address).Hex())
+					assert.Empty(t, response.sig)
+					return
+				}
+
+				require.NoError(t, response.err)
+				assert.Equal(t, signer, response.signer)
+				assert.NotEmpty(t, response.sig)
+			})
+		}
+
+		t.Run("excludedFromQuorum", func(t *testing.T) {
+			// ARRANGE
+			mismatched := attestor.NewMockAttestor(t)
+			mismatched.EXPECT().Name().Return("mismatched").Maybe()
+			mismatched.EXPECT().Address().Return(other.Hex()).Maybe()
+			mismatched.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
+				attestor.Attestation{Height: 10, AttestedData: data, Signature: sig}, nil,
+			)
+			attestors := []attestor.Attestor{
+				signedAttestor(t, "a1", data),
+				signedAttestor(t, "a2", data),
+				mismatched,
+			}
+
+			// ACT
+			result, err := New(
+				"client-chain",
+				"client-0",
+				attestors,
+				2,
+				nil,
+				slog.Default(),
+			).queryStateQuorum(ctx, 10, data)
+
+			// ASSERT
+			require.NoError(t, err)
+			require.Len(t, result.Signatures, 2)
+
+			_, err = New(
+				"client-chain",
+				"client-0",
+				[]attestor.Attestor{mismatched},
+				1,
+				nil,
+				slog.Default(),
+			).queryStateQuorum(ctx, 10, data)
+			require.ErrorContains(t, err, "quorum not met")
+			require.ErrorContains(t, err, "unexpected address")
+			require.ErrorContains(t, err, signer.Hex())
+			require.ErrorContains(t, err, other.Hex())
+		})
 	})
 }
 
