@@ -264,15 +264,13 @@ const BesuTrustingPeriod = solidityibc.BesuTrustingPeriod
 
 // NewBesuClient declares a Besu IBC Client to create on its host IBC
 // Instance. It verifies the counterparty end's sealed Besu headers, so it needs
-// no Attestors; the counterparty Chain must run Besu, and its consensus picks
-// the contract. Authority follows the same rule as NewClient. Periods are
-// seconds; the contract rejects a zero TrustingPeriod at deploy time.
-// TrustLevel is besu.DefaultTrustLevel when zero.
+// no Attestors; the counterparty Chain must run Besu. Authority follows the
+// same rule as NewClient. TrustingPeriod is in seconds; the contract rejects
+// zero at deploy time. TrustLevel is besu.DefaultTrustLevel when zero.
 type NewBesuClient struct {
 	IBCInstance    IBCInstanceID
 	Authority      AuthorityID
 	TrustingPeriod uint64
-	MaxClockDrift  uint64
 	TrustLevel     besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 

@@ -1,6 +1,6 @@
 ---
 title: "AttestationLightClient"
-description: "Contract reference for the attestation light client: what it verifies, what the constructor fixes, its functions, wire formats, roles, and errors."
+description: "Contract reference for the attestation light client: what it verifies, what the constructor fixes, its functions, wire formats, permissions, and errors."
 ---
 
 AttestationLightClient is an IBC light client that trusts a fixed set of attestor addresses, and it accepts a claim once a quorum of that set has signed it. Attestors claim two things about the counterparty chain: the timestamp of a block at a given height, and the values held at commitment paths at that height.
@@ -69,7 +69,7 @@ interface ILightClient {
 }
 ```
 
-AttestationLightClient implements all five and adds two getters for its trust configuration, plus the public `PROOF_SUBMITTER_ROLE` identifier. It also inherits OpenZeppelin AccessControl, which brings its standard role functions and `supportsInterface`.
+AttestationLightClient implements all five and adds two getters for its trust configuration. It also inherits the router binding and the pause switch every IBC-solidity light client shares, described in [Permissions and pausing](#permissions-and-pausing).
 
 ### Client updates
 
@@ -124,9 +124,11 @@ Three getters expose the whole trust configuration and every stored timestamp, a
 
 A zero from `getConsensusTimestamp` means no usable timestamp is stored for that height, and no proof at that height verifies while it reads zero.
 
+Two more getters come with the router binding: `ICS26_ROUTER()` returns the router the client is bound to, and `paused()` whether the client is paused.
+
 ## State and storage
 
-The client's own storage is its trust configuration, the highest height it has seen, a frozen flag, and one timestamp per attested height. Role assignments live in the inherited AccessControl storage.
+The client's own storage is its trust configuration, the highest height it has seen, a frozen flag, and one timestamp per attested height. The router it is bound to is an immutable in its code, and the pause flag lives in the inherited OpenZeppelin Pausable storage.
 
 | What is stored | When it is written |
 |---|---|
@@ -135,11 +137,11 @@ The client's own storage is its trust configuration, the highest height it has s
 | The trusted consensus timestamp for a height | At construction for the initial height, then on every update that brings a new height |
 | `latestHeight` | At construction, then whenever an update brings a higher height |
 | `isFrozen` | Once, when an update carries a conflicting timestamp for a known height |
-| The role assignments | At construction, then on every grant or revoke |
+| The pause flag | On every `pause` or `unpause` |
 
 The contract has no delete path, so every attested height stays queryable for the life of the deployment.
 
-Progress is read through the getters rather than from events: `getClientState` for `latestHeight` and the frozen flag, `getConsensusTimestamp` for one height at a time. The only events it emits are the OpenZeppelin AccessControl events for granting and revoking a role.
+Progress is read through the getters rather than from events: `getClientState` for `latestHeight` and the frozen flag, `getConsensusTimestamp` for one height at a time. The only events it emits are OpenZeppelin Pausable's `Paused` and `Unpaused`.
 
 ## Freezing
 
@@ -147,7 +149,7 @@ One quorum-signed contradiction freezes the client, and the freeze is permanent.
 
 The client freezes when a state attestation passes the quorum check but carries a timestamp different from the one already stored for its height. That call sets `isFrozen` and returns `Misbehaviour`.
 
-A frozen client stops verifying. Calls to `updateClient`, `verifyMembership`, `verifyNonMembership`, and `misbehaviour` revert on the frozen guard, while the getters and role administration keep working.
+A frozen client stops verifying. Calls to `updateClient`, `verifyMembership`, `verifyNonMembership`, and `misbehaviour` revert on the frozen guard, while the getters and the pause switch keep working.
 
 The contract carries no unfreeze function, so recovery runs through a new deployment and a client migration, described in Deployment and replacement below.
 
@@ -175,29 +177,31 @@ The table lists every error the client declares.
 | `NotNonMember` | A non-membership path is attested with a nonzero commitment |
 | `InvalidState(height, timestamp)` | An update carries a zero height or a zero timestamp |
 | `FeatureNotSupported` | A call reaches `misbehaviour` |
+| `LightClientZeroICS26Router` | The constructor gets the zero address as its router |
+| `LightClientUnauthorizedCaller(caller)` | A gated function is called by an address other than the bound router |
+| `LightClientUnauthorizedRole(caller, roleId)` | `pause` or `unpause` is called by an address without the matching role, or with an execution delay on it, in the router's access manager |
 
-A call can also revert on the OpenZeppelin code the client inherits. A caller lacking the role a function requires gets `AccessControlUnauthorizedAccount`. The compiled ABI lists the inherited errors in full.
+A call can also revert on the OpenZeppelin code the client inherits. An update or verify call on a paused client gets `EnforcedPause`, pausing a paused client gets `EnforcedPause`, and unpausing an unpaused one gets `ExpectedPause`. The compiled ABI lists the inherited errors in full.
 
 A proof envelope that fails to decode reverts with no named error.
 
-## Roles and permissions
+## Permissions and pausing
 
-One role gates all four proof entry points, and the deployment decides whether that means everyone or a named holder.
+The client takes no role configuration of its own. It is bound at construction to one [router](2-ics26-router.md), and that router's [access manager](6-permissions-and-upgrades.md#the-access-manager-and-its-roles) decides who may pause it.
 
-| Role | What it gates | Typical holder |
-|---|---|---|
-| `PROOF_SUBMITTER_ROLE` | `updateClient`, `verifyMembership`, `verifyNonMembership`, `misbehaviour` | The ICS26Router, when the client backs an IBC connection |
-| `DEFAULT_ADMIN_ROLE` | Granting and revoking roles on this client | The `roleManager` passed to the constructor |
+| Function | Who may call it |
+|---|---|
+| `updateClient`, `verifyMembership`, `verifyNonMembership`, `misbehaviour` | Only the bound router, `ICS26_ROUTER` |
+| `pause` | A holder of `PAUSER_ROLE` in the router's access manager, with no execution delay |
+| `unpause` | A holder of `UNPAUSER_ROLE` in the router's access manager, with no execution delay |
 
-Holders of `PROOF_SUBMITTER_ROLE` may call the four gated functions. When the zero address holds that role, any caller passes the check. Otherwise the caller must hold the role itself.
+The router address cannot change, and the constructor rejects the zero address, so proof submission is never open to any caller. The pause roles are looked up in the router's current access manager on every call, so granting or revoking them there takes effect at once, and no setup on the client is needed. A holder whose role carries an execution delay is rejected, because the client cannot consume a scheduled operation.
 
-The interface says to grant the role to the ICS26Router when the client is used with IBC.
-
-The `roleManager` argument decides between those two cases. A nonzero address receives the AccessControl default admin role along with the submitter role, so whether the submitter role can change later depends on what that address is. `ibc deploy client` passes the [router](2-ics26-router.md), which exposes no way to call `grantRole`, so on a client the IBC CLI deployed those roles cannot be moved without upgrading the router. A zero address leaves submission open to anyone.
+A paused client rejects `updateClient`, `verifyMembership`, and `verifyNonMembership`, so packets on its connection stop until it is unpaused. The client freezes only on conflicting timestamps in `updateClient`, and its `misbehaviour` always reverts, so a paused client cannot be frozen.
 
 ## Constructor and configuration
 
-The constructor fixes what the client trusts: the attestor set, the quorum threshold, a first trusted height with its timestamp, and the address that manages roles.
+The constructor fixes what the client trusts: the attestor set, the quorum threshold, a first trusted height with its timestamp, and the router it is bound to.
 
 | Parameter | Type | What it sets |
 |---|---|---|
@@ -205,9 +209,9 @@ The constructor fixes what the client trusts: the attestor set, the quorum thres
 | `minRequiredSigs` | `uint8` | How many distinct attestor signatures a claim needs |
 | `initialHeight` | `uint64` | The first trusted height |
 | `initialTimestampSeconds` | `uint64` | The trusted timestamp for that height |
-| `roleManager` | `address` | Who administers roles and may submit proofs. Zero opens submission to anyone |
+| `ics26Router` | `address` | The router that alone may drive the client, and whose access manager decides who may pause it. Must be nonzero |
 
-The initial height becomes `latestHeight`, and its timestamp is stored as the trusted timestamp for that height. A nonzero timestamp there lets a proof at the deployment height verify with no prior update. Deployment reverts on an empty attestor set, a zero threshold, a threshold larger than the set, or a duplicate attestor address.
+The initial height becomes `latestHeight`, and its timestamp is stored as the trusted timestamp for that height. A nonzero timestamp there lets a proof at the deployment height verify with no prior update. Deployment reverts on an empty attestor set, a zero threshold, a threshold larger than the set, a duplicate attestor address, or a zero router.
 
 No function adds, removes, or replaces an attestor.
 

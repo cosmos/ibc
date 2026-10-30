@@ -13,16 +13,16 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 )
 
 // revertContracts contains known custom errors from relay calls.
-// Besu QBFT and IBFT2 share the same errors.
+// One Besu light client verifies both QBFT and IBFT2.
 var revertContracts = []*bind.MetaData{
-	ics26router.ContractMetaData, attestation.ContractMetaData, besuqbft.ContractMetaData,
+	ics26router.ContractMetaData, attestation.ContractMetaData, besulightclient.ContractMetaData,
 	ibcmulticall.ContractMetaData, ift.ContractMetaData,
 }
 

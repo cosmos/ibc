@@ -492,14 +492,12 @@ func specToClient(spec ClientSpec, address string) manifest.Client {
 			validators[i] = v.Hex()
 		}
 		client.Besu = &manifest.BesuParams{
-			Consensus:         string(p.Consensus),
 			IBCRouter:         p.IBCRouter.Hex(),
 			InitialHeight:     p.InitialHeight,
 			InitialTimestamp:  p.InitialConsensusState.Timestamp,
 			InitialStateRoot:  common.Hash(p.InitialConsensusState.StateRoot).Hex(),
 			InitialValidators: validators,
 			TrustingPeriod:    p.TrustingPeriod,
-			MaxClockDrift:     p.MaxClockDrift,
 			TrustLevel:        manifest.TrustLevel(p.TrustLevel),
 		}
 	}
@@ -525,10 +523,8 @@ func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
 		diffs = conflict(diffs, "threshold", d.Threshold, r.Threshold)
 	case requested.Besu != nil:
 		d, r := existing.Besu, requested.Besu
-		diffs = conflict(diffs, "consensus", d.Consensus, r.Consensus)
 		diffs = conflict(diffs, "ibcRouter", d.IBCRouter, r.IBCRouter)
 		diffs = conflict(diffs, "trustingPeriod", d.TrustingPeriod, r.TrustingPeriod)
-		diffs = conflict(diffs, "maxClockDrift", d.MaxClockDrift, r.MaxClockDrift)
 		diffs = conflict(diffs, "trustLevel", d.TrustLevel, r.TrustLevel)
 	}
 	return diffs

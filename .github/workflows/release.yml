@@ -1,0 +1,389 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+# Builds the IBC CLI archives for every cli/v* tag, generates an SBOM and build provenance for them,
+# signs a checksums file over them, and attaches everything to a draft release so the signed
+# assets exist before the release is published. Once the assets verify, it also publishes the signed
+# container image built from the same linux archives.
+#
+# The attesting, signing and publishing steps are the shared actions in .github/actions, which
+# cosmos/ibc-go and cosmos/ibc-contracts use too. This repository uses them from the tagged commit.
+
+on:
+  push:
+    tags: ["cli/v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
+  TAG: ${{ github.ref_name }}
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  validate-tag:
+    name: Validate tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      name: ${{ steps.tag.outputs.name }}
+      title: ${{ steps.tag.outputs.title }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+      image-tag: ${{ steps.tag.outputs.image-tag }}
+    steps:
+      - name: Check tag format
+        id: tag
+        run: |
+          # The cli/ prefix lets Go resolve the github.com/cosmos/ibc/cli module at this version.
+          if [[ ! "$TAG" =~ ^cli/(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "::error::Tag must match cli/vX.Y.Z, optionally followed by -<suffix>"
+            exit 1
+          fi
+          # Release file names and image tags cannot contain '/', so both use cli-<version>.
+          version="${BASH_REMATCH[1]}"
+          suffix="${BASH_REMATCH[2]}"
+          {
+            echo "name=ibc-cli-${version}"
+            echo "image-tag=cli-${version}"
+            echo "title=IBC CLI ${version}"
+            if [[ -n "$suffix" ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
+      - name: Check the release is not published with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Checked before any job pushes or attests an image, so a re-run after the release is
+          # published with its assets pushes nothing and cannot move a published image tag. A
+          # release published before its first run finished has no assets yet, so it continues and
+          # the release job attaches them. The by-tag endpoint returns published releases only: a
+          # 404 means there is none, and any other failure fails the step instead of reading as
+          # "not published". Same check as in publish-manifest; change both together.
+          log="${RUNNER_TEMP}/release-lookup.log"
+          if ! published_assets=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets | length' 2> "$log"); then
+            if ! grep -q 'HTTP 404' "$log"; then
+              cat "$log" >&2
+              exit 1
+            fi
+            published_assets=""
+          fi
+          if [[ -n "$published_assets" && "$published_assets" != 0 ]]; then
+            echo "::error::Release ${TAG} is already published with assets, so nothing is re-published"
+            exit 1
+          fi
+          if [[ -n "$published_assets" ]]; then
+            echo "::warning::Release ${TAG} was published before its signed assets were attached"
+          fi
+      # Full history without trees: enough to tell which branches contain the tagged commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: tree:0
+      - name: Check tagged commit is on main or a release branch
+        run: |
+          # The check runs from the tagged commit, so it only guards against tagging a commit outside
+          # main or a release/* branch by mistake; the tag ruleset is what limits who can get a
+          # commit signed.
+          branches=$(git branch --remotes --contains "$GITHUB_SHA" --format='%(refname:lstrip=3)')
+          while IFS= read -r branch; do
+            if [[ "$branch" == main || "$branch" == release/* ]]; then
+              exit 0
+            fi
+          done <<< "$branches"
+          echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch"
+          exit 1
+
+  # Builds and attests the archives. Only the image job pushes to the registry, so this job, which
+  # also builds darwin, has no packages permission.
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: [validate-tag]
+    # CGO is off, so every platform cross-compiles on one runner type.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    env:
+      NAME: ${{ needs.validate-tag.outputs.name }}
+      PLATFORM: ${{ matrix.goos }}-${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+      - name: Build
+        working-directory: cli
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build ${{ env.GO_BUILD_FLAGS }} -o dist/ibc ./cmd/ibc/...
+      - name: Collect assets
+        run: |
+          mkdir -p out/assets
+          cp LICENSE NOTICE cli/dist/
+          tar --sort=name --mtime="@$(git log -1 --format=%ct)" \
+            --owner=0 --group=0 --numeric-owner \
+            -C cli/dist -cf - ibc LICENSE NOTICE \
+            | gzip -n > "out/assets/${NAME}-${PLATFORM}.tar.gz"
+      - name: Attest release assets
+        uses: ./.github/actions/attest-release-assets
+        with:
+          name: ${{ env.NAME }}-${{ env.PLATFORM }}
+          platform: ${{ env.PLATFORM }}
+          sbom-file: cli/dist/ibc
+
+  # Builds each platform image from the attested linux archive, so the image holds exactly the
+  # released binary.
+  image:
+    name: Image linux-${{ matrix.goarch }}
+    needs: [validate-tag, verify]
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            runner: ubuntu-latest
+          - goarch: arm64
+            runner: ubuntu-24.04-arm
+    env:
+      NAME: ${{ needs.validate-tag.outputs.name }}
+      PLATFORM: linux-${{ matrix.goarch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions
+            cli
+      - name: Download release assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets-${{ env.PLATFORM }}
+          path: ${{ runner.temp }}/release-assets
+      - name: Extract archive
+        run: |
+          mkdir -p "${RUNNER_TEMP}/image-context"
+          tar -xzf "${RUNNER_TEMP}/release-assets/assets/${NAME}-${PLATFORM}.tar.gz" \
+            -C "${RUNNER_TEMP}/image-context"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build & Push image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ runner.temp }}/image-context
+          file: cli/Dockerfile
+          target: target-artifact
+          platforms: linux/${{ matrix.goarch }}
+          # Pushed by digest only. A platform tag could be moved before publish-manifest reads it.
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          # Disable BuildKit's unsigned attestation, so the pushed digest is the platform image
+          # itself rather than an index wrapping it.
+          provenance: false
+      # The platform image gets its provenance and SBOM; the index is signed in publish-manifest.
+      - name: Attest image
+        uses: ./.github/actions/attest-image
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          digest: ${{ steps.image.outputs.digest }}
+      # publish-manifest builds the index from these digests, so it only references images
+      # attested above.
+      - name: Save image digest
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/image-digest"
+          echo "$DIGEST" > "${RUNNER_TEMP}/image-digest/${PLATFORM}"
+      - name: Upload image digest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-digest-${{ env.PLATFORM }}
+          path: ${{ runner.temp }}/image-digest/${{ env.PLATFORM }}
+          if-no-files-found: error
+          # Kept as long as the release assets, so "re-run failed jobs" works days later.
+          retention-days: 7
+
+  # Checks every asset against its attestations before the image jobs push or attest anything, so
+  # no image is published for a release whose assets do not verify. The release job checks them
+  # again before signing.
+  verify:
+    name: Verify release assets
+    needs: [validate-tag, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - name: Verify release assets
+        uses: ./.github/actions/publish-draft-release
+        with:
+          name: ${{ needs.validate-tag.outputs.name }}
+          verify-only: "true"
+
+  # Publish multi-platform image, so the same tag can be used for various architectures
+  publish-manifest:
+    name: Publish multi-platform image
+    needs: [validate-tag, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    timeout-minutes: 10
+    env:
+      IMAGE_TAG: ${{ needs.validate-tag.outputs.image-tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          # imagetools create --metadata-file needs buildx v0.32.0 or later.
+          version: v0.38.1
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download image digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: image-digest-*
+          path: ${{ runner.temp }}/image-digest
+          merge-multiple: true
+      - name: Publish manifest
+        id: index
+        run: |
+          metadata="${RUNNER_TEMP}/index-metadata.json"
+          sources=()
+          # One file per image matrix job, so a platform added to that matrix is included here too.
+          for file in "${RUNNER_TEMP}"/image-digest/*; do
+            digest=$(< "$file")
+            sources+=("${IMAGE_NAME}@${digest}")
+          done
+          # Pushed by digest only, so no tag points at the index until it is signed. --dry-run prints
+          # the index it would push; $(...) strips the trailing newline it adds.
+          index=$(docker buildx imagetools create --dry-run "${sources[@]}")
+          index_digest="sha256:$(printf '%s' "$index" | sha256sum | cut -d' ' -f1)"
+          docker buildx imagetools create \
+            --metadata-file "$metadata" \
+            --tag "${IMAGE_NAME}@${index_digest}" \
+            "${sources[@]}"
+          pushed=$(jq -r '."containerimage.descriptor".digest' "$metadata")
+          if [[ "$pushed" != "$index_digest" ]]; then
+            echo "::error::Pushed index ${pushed} does not match its dry run ${index_digest}"
+            exit 1
+          fi
+          docker buildx imagetools inspect "${IMAGE_NAME}@${pushed}"
+          echo "digest=${pushed}" >> "$GITHUB_OUTPUT"
+      - name: Attest and sign image
+        uses: ./.github/actions/attest-image
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          digest: ${{ steps.index.outputs.digest }}
+          sbom: "false"
+          sign: "true"
+          # Also signs the platform manifests referenced by the index.
+          recursive: "true"
+      # Checked again right before the tag moves, in case the release was published while this run
+      # was building, or this job was re-run on its own after validate-tag. Same check as in
+      # validate-tag; change both together.
+      - name: Check the release is still not published with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          log="${RUNNER_TEMP}/release-lookup.log"
+          if ! published_assets=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets | length' 2> "$log"); then
+            if ! grep -q 'HTTP 404' "$log"; then
+              cat "$log" >&2
+              exit 1
+            fi
+            published_assets=""
+          fi
+          if [[ -n "$published_assets" && "$published_assets" != 0 ]]; then
+            echo "::error::Release ${TAG} is already published with assets, so nothing is re-published"
+            exit 1
+          fi
+      - name: Tag signed image
+        env:
+          DIGEST: ${{ steps.index.outputs.digest }}
+        run: |
+          # A single index source without annotations is pushed as is, so the release tag gets the
+          # signed digest. Checked with a dry run before the tag moves, since a re-encoded index
+          # would be unsigned.
+          index=$(docker buildx imagetools create --dry-run "${IMAGE_NAME}@${DIGEST}")
+          tagged="sha256:$(printf '%s' "$index" | sha256sum | cut -d' ' -f1)"
+          if [[ "$tagged" != "$DIGEST" ]]; then
+            echo "::error::Tagging would push ${tagged}, not the signed index ${DIGEST}"
+            exit 1
+          fi
+          docker buildx imagetools create --tag "${IMAGE_NAME}:${IMAGE_TAG}" "${IMAGE_NAME}@${DIGEST}"
+
+  # Waits for publish-manifest, so a draft release always comes with a signed image.
+  release:
+    name: Attach signed assets to draft release
+    needs: [validate-tag, publish-manifest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+      - name: Publish draft release
+        uses: ./.github/actions/publish-draft-release
+        with:
+          name: ${{ needs.validate-tag.outputs.name }}
+          title: ${{ needs.validate-tag.outputs.title }}
+          prerelease: ${{ needs.validate-tag.outputs.prerelease }}

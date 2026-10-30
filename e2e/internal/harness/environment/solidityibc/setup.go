@@ -3,6 +3,7 @@
 package solidityibc
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
@@ -465,6 +466,7 @@ type PreparedClient struct {
 	kind                 clientkind.Kind
 	id                   string
 	counterpartyClientID string
+	merklePrefix         [][]byte
 	deploy               func(*bind.TransactOpts) (common.Address, *types.Transaction, error)
 }
 
@@ -485,6 +487,7 @@ func (s *Setup) PrepareAttestationClient(
 		return nil, fmt.Errorf("solidity IBC prepare %s Client: %w", clientkind.Attestation, err)
 	}
 	return s.prepareClient(ctx, authority, router, clientkind.Attestation, config.ID, config.CounterpartyClientID,
+		evmMerklePrefix,
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			address, transaction, _, deployErr := attestation.DeployContract(
 				opts,
@@ -493,7 +496,7 @@ func (s *Setup) PrepareAttestationClient(
 				config.MinRequiredSignatures,
 				config.InitialHeight,
 				config.InitialTimestamp,
-				config.RoleManager,
+				router,
 			)
 			return address, transaction, deployErr
 		})
@@ -512,16 +515,16 @@ func (s *Setup) PrepareBesuClient(
 		return nil, fmt.Errorf("solidity IBC prepare Besu Client: %w", err)
 	}
 	return s.prepareClient(ctx, authority, router, clientkind.Besu, config.ID, config.CounterpartyClientID,
+		besu.MerklePrefix(config.CounterpartyRouter),
 		func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 			return besu.DeployLightClient(
 				opts,
 				s.backend,
-				config.Consensus,
 				besumsgs.IBesuLightClientMsgsClientState{
 					IbcRouter:      config.CounterpartyRouter,
 					LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: config.InitialHeight},
 					TrustingPeriod: config.TrustingPeriod,
-					MaxClockDrift:  config.MaxClockDrift,
+					MaxClockDrift:  besu.MaxClockDrift,
 					TrustLevel:     cmp.Or(config.TrustLevel, besu.DefaultTrustLevel),
 				},
 				besumsgs.IBesuLightClientMsgsConsensusState{
@@ -529,7 +532,7 @@ func (s *Setup) PrepareBesuClient(
 					StateRoot:  config.InitialStateRoot,
 					Validators: config.InitialValidators,
 				},
-				config.RoleManager,
+				router,
 			)
 		})
 }
@@ -548,6 +551,7 @@ func (s *Setup) prepareClient(
 	router common.Address,
 	kind clientkind.Kind,
 	id, counterpartyClientID string,
+	merklePrefix [][]byte,
 	deploy func(*bind.TransactOpts) (common.Address, *types.Transaction, error),
 ) (*PreparedClient, error) {
 	label := "solidity IBC prepare " + describeClient(kind, id)
@@ -571,6 +575,7 @@ func (s *Setup) prepareClient(
 		kind:                 kind,
 		id:                   id,
 		counterpartyClientID: counterpartyClientID,
+		merklePrefix:         merklePrefix,
 		deploy:               deploy,
 	}, nil
 }
@@ -593,7 +598,7 @@ func (p *PreparedClient) Deploy(ctx context.Context) (Client, error) {
 	_, tx, err := s.send(ctx, p.authority, func(opts *bind.TransactOpts) (common.Address, *types.Transaction, error) {
 		transaction, sendErr := router.AddClient(opts, p.id, ics26router.IICS02ClientMsgsCounterpartyInfo{
 			ClientId:     p.counterpartyClientID,
-			MerklePrefix: [][]byte{{}},
+			MerklePrefix: p.merklePrefix,
 		}, clientAddress)
 		return common.Address{}, transaction, sendErr
 	})
@@ -629,8 +634,8 @@ func (s *Setup) verifyClientVacant(ctx context.Context, instance Instance, clien
 }
 
 // AttachClient discovers the light-client address from the router, verifies
-// the reciprocal counterparty ID and EVM empty Merkle prefix, and confirms the
-// registered contract exposes valid state for the declared kind.
+// the reciprocal counterparty ID and the declared kind's Merkle prefix, and
+// confirms the registered contract exposes valid state for that kind.
 func (s *Setup) AttachClient(
 	ctx context.Context,
 	router common.Address,
@@ -644,7 +649,9 @@ func (s *Setup) AttachClient(
 	return s.verifyClient(ctx, instance, clientID, common.Address{}, counterpartyClientID, kind)
 }
 
-// verifyClient checks registration and the declared light client's state.
+// verifyClient checks registration and the declared light client's state and
+// Merkle prefix: empty for attestation, and for Besu the one naming the router
+// its client state proves.
 func (s *Setup) verifyClient(
 	ctx context.Context,
 	instance Instance,
@@ -653,10 +660,13 @@ func (s *Setup) verifyClient(
 	counterpartyClientID string,
 	kind clientkind.Kind,
 ) (Client, error) {
-	registered, err := s.verifyClientRegistration(ctx, instance, clientID, expectedAddress, counterpartyClientID)
+	registered, prefix, err := s.verifyClientRegistration(
+		ctx, instance, clientID, expectedAddress, counterpartyClientID,
+	)
 	if err != nil {
 		return Client{}, err
 	}
+	wantPrefix := evmMerklePrefix
 	client := Client{ID: clientID, Address: registered, CounterpartyClientID: counterpartyClientID}
 	switch kind {
 	case clientkind.Attestation:
@@ -675,41 +685,55 @@ func (s *Setup) verifyClient(
 		client.Attestors = slices.Clone(set.AttestorAddresses)
 		client.MinRequiredSignatures = set.MinRequiredSigs
 	case clientkind.Besu:
-		if _, err := besu.ReadClientState(ctx, s.backend, registered); err != nil {
+		state, err := besu.ReadClientState(ctx, s.backend, registered)
+		if err != nil {
 			return Client{}, fmt.Errorf("solidity IBC attach Client %q: %w", clientID, err)
 		}
+		wantPrefix = besu.MerklePrefix(state.IbcRouter)
 	default:
 		return Client{}, fmt.Errorf("unsupported client kind %q", kind)
+	}
+	if !slices.EqualFunc(prefix, wantPrefix, bytes.Equal) {
+		return Client{}, fmt.Errorf(
+			"solidity IBC attach Client %q: counterparty Merkle prefix is %x, want %x", clientID, prefix, wantPrefix,
+		)
 	}
 	return client, nil
 }
 
 // verifyClientRegistration proves clientID resolves to a deployed contract at
-// expectedAddress (when given) with the reciprocal counterparty id and the EVM
-// empty Merkle prefix, returning the registered address.
+// expectedAddress (when given) with the reciprocal counterparty id, returning
+// the registered address and counterparty Merkle prefix.
 func (s *Setup) verifyClientRegistration(
 	ctx context.Context,
 	instance Instance,
 	clientID string,
 	expectedAddress common.Address,
 	counterpartyClientID string,
-) (common.Address, error) {
+) (common.Address, [][]byte, error) {
 	if clientID == "" {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client: empty client id")
+		return common.Address{}, nil, fmt.Errorf("solidity IBC attach Client: empty client id")
 	}
 	if counterpartyClientID == "" {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: empty counterparty client id", clientID)
+		return common.Address{}, nil, fmt.Errorf(
+			"solidity IBC attach Client %q: empty counterparty client id",
+			clientID,
+		)
 	}
 	router, err := ics26router.NewContract(instance.Router, s.backend)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: bind ICS26Router: %w", clientID, err)
+		return common.Address{}, nil, fmt.Errorf("solidity IBC attach Client %q: bind ICS26Router: %w", clientID, err)
 	}
 	registered, err := router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: query router client: %w", clientID, err)
+		return common.Address{}, nil, fmt.Errorf(
+			"solidity IBC attach Client %q: query router client: %w",
+			clientID,
+			err,
+		)
 	}
 	if expectedAddress != (common.Address{}) && registered != expectedAddress {
-		return common.Address{}, fmt.Errorf(
+		return common.Address{}, nil, fmt.Errorf(
 			"solidity IBC attach Client %q: router has address %s, want %s",
 			clientID,
 			registered,
@@ -717,33 +741,27 @@ func (s *Setup) verifyClientRegistration(
 		)
 	}
 	if registered == (common.Address{}) {
-		return common.Address{}, fmt.Errorf(
+		return common.Address{}, nil, fmt.Errorf(
 			"solidity IBC attach Client %q: router returned a zero contract address",
 			clientID,
 		)
 	}
 	if codeErr := s.requireCode(ctx, "Client "+clientID, registered); codeErr != nil {
-		return common.Address{}, codeErr
+		return common.Address{}, nil, codeErr
 	}
 	counterparty, err := router.GetCounterparty(&bind.CallOpts{Context: ctx}, clientID)
 	if err != nil {
-		return common.Address{}, fmt.Errorf("solidity IBC attach Client %q: query counterparty: %w", clientID, err)
+		return common.Address{}, nil, fmt.Errorf("solidity IBC attach Client %q: query counterparty: %w", clientID, err)
 	}
 	if counterparty.ClientId != counterpartyClientID {
-		return common.Address{}, fmt.Errorf(
+		return common.Address{}, nil, fmt.Errorf(
 			"solidity IBC attach Client %q: counterparty id is %q, want %q",
 			clientID,
 			counterparty.ClientId,
 			counterpartyClientID,
 		)
 	}
-	if len(counterparty.MerklePrefix) != 1 || len(counterparty.MerklePrefix[0]) != 0 {
-		return common.Address{}, fmt.Errorf(
-			"solidity IBC attach Client %q: counterparty Merkle prefix is not the EVM empty prefix",
-			clientID,
-		)
-	}
-	return registered, nil
+	return registered, counterparty.MerklePrefix, nil
 }
 
 func (s *Setup) send(

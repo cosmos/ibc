@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuerrors"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/besu"
@@ -26,8 +26,8 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
-// besuHeadersMisbehaviour is MisbehaviourType.Headers in IBesuLightClientMsgs.
-const besuHeadersMisbehaviour uint8 = 1
+// besuConflictingHeadersMisbehaviour is MisbehaviourType.ConflictingHeaders in IBesuLightClientMsgs.
+const besuConflictingHeadersMisbehaviour uint8 = 1
 
 // Two headers at one height with different state roots, both sealed by a
 // quorum of the source validators, prove a double sign and freeze the client.
@@ -80,7 +80,7 @@ type besuMisbehaviour struct {
 	sender        e2etest.Signer
 	client        *environment.IBCClient
 	clientAddress common.Address
-	filterer      *besuqbft.ContractFilterer
+	filterer      *besulightclient.ContractFilterer
 	trusted       *besu.ParsedHeader
 }
 
@@ -118,7 +118,7 @@ func requireBesuMisbehaviourFreeze(t *testing.T, submit func(besuMisbehaviour)) 
 	require.NoError(t, err)
 	m.client = besuClientOn(t, env, route.Source, route.Destination)
 	m.clientAddress = common.HexToAddress(string(m.client.LightClientAddress()))
-	m.filterer, err = besuqbft.NewContractFilterer(m.clientAddress, nil)
+	m.filterer, err = besulightclient.NewContractFilterer(m.clientAddress, nil)
 	require.NoError(t, err)
 
 	installed := m.clientState()
@@ -176,23 +176,26 @@ func (m besuMisbehaviour) clientState() besumsgs.IBesuLightClientMsgsClientState
 func (m besuMisbehaviour) update(header *besu.ParsedHeader) besumsgs.IBesuLightClientMsgsMsgUpdateClient {
 	return besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 		HeaderRlp:              header.RLP,
+		CommitSeals:            header.CommitSeals,
 		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: m.trusted.Height},
 		ConsensusStatePreimage: m.trusted.ConsensusState(),
 	}
 }
 
-// submit sends both headers as Headers evidence through the router, which
+// submit sends both headers as ConflictingHeaders evidence through the router, which
 // anyone may call.
 func (m besuMisbehaviour) submit(header1, header2 *besu.ParsedHeader) *types.Receipt {
 	m.t.Helper()
 	bindings := besumsgs.NewBindings()
-	evidence, err := bindings.TryPackHeadersMisbehaviour(besumsgs.IBesuLightClientMsgsMsgHeadersMisbehaviour{
-		Update1: m.update(header1),
-		Update2: m.update(header2),
-	})
+	evidence, err := bindings.TryPackConflictingHeadersMisbehaviour(
+		besumsgs.IBesuLightClientMsgsMsgConflictingHeadersMisbehaviour{
+			Update1: m.update(header1),
+			Update2: m.update(header2),
+		},
+	)
 	require.NoError(m.t, err)
 	message, err := bindings.TryPackSubmitMisbehaviour(besumsgs.IBesuLightClientMsgsMsgSubmitMisbehaviour{
-		MisbehaviourType: besuHeadersMisbehaviour,
+		MisbehaviourType: besuConflictingHeadersMisbehaviour,
 		Misbehaviour:     evidence[4:], //nolint:misspell // generated binding field
 	})
 	require.NoError(m.t, err)
@@ -205,7 +208,7 @@ func (m besuMisbehaviour) submit(header1, header2 *besu.ParsedHeader) *types.Rec
 // event is the client's log in receipt with the named event's topic.
 func (m besuMisbehaviour) event(receipt *types.Receipt, name string) types.Log {
 	m.t.Helper()
-	clientABI, err := besuqbft.ContractMetaData.GetAbi()
+	clientABI, err := besulightclient.ContractMetaData.GetAbi()
 	require.NoError(m.t, err)
 	topic := clientABI.Events[name].ID
 	for _, log := range receipt.Logs {

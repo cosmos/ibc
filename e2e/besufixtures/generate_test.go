@@ -33,10 +33,9 @@ import (
 const (
 	fixturesDirEnv = "BESU_FIXTURES_DIR"
 
-	// The fixture tests deploy their clients with these, and warp time
-	// relative to them.
+	// The fixture tests deploy their clients with this and besu.MaxClockDrift,
+	// and warp time relative to them.
 	fixtureTrustingPeriod = 1_209_600
-	fixtureMaxClockDrift  = 15
 )
 
 // TestGenerateBesuFixtures writes <consensus>.json for every consensus: a
@@ -115,7 +114,7 @@ func generate(t *testing.T, consensus besu.Consensus) besutest.Fixture {
 		InitialTrustedStateRoot:  trusted.StateRoot,
 		InitialTrustedValidators: trusted.Validators,
 		TrustingPeriod:           fixtureTrustingPeriod,
-		MaxClockDrift:            fixtureMaxClockDrift,
+		MaxClockDrift:            besu.MaxClockDrift,
 		AdjacentUpdate:           update(trusted, g.headers.Sealed(send-1)),
 		NonAdjacentUpdate:        update(trusted, nonAdjacent),
 		LowQuorumUpdate:          g.lowQuorumUpdate(trusted, nonAdjacent),
@@ -134,6 +133,7 @@ func update(trusted, header *besu.ParsedHeader) besutest.UpdateFixture {
 	return besutest.UpdateFixture{
 		Height:             header.Height,
 		HeaderRLP:          header.RLP,
+		CommitSeals:        besutest.CommitSeals(header.CommitSeals),
 		TrustedHeight:      trusted.Height,
 		ExpectedTimestamp:  header.Timestamp,
 		ExpectedStateRoot:  header.StateRoot,
@@ -145,6 +145,7 @@ func rejected(trusted, header *besu.ParsedHeader) besutest.RejectedUpdateFixture
 	return besutest.RejectedUpdateFixture{
 		Height:        header.Height,
 		HeaderRLP:     header.RLP,
+		CommitSeals:   besutest.CommitSeals(header.CommitSeals),
 		TrustedHeight: trusted.Height,
 	}
 }

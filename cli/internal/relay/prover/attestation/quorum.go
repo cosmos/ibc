@@ -16,6 +16,7 @@ import (
 
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/cli/internal/chains"
+	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 )
 
@@ -127,8 +128,9 @@ func (g *Generator) queryOne(
 		}
 	}
 
-	// The proof must carry RecoverSigner's form: the light client rejects any other.
-	signer, sig, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), attestation.Signature)
+	// The proof must carry Recover's form: the light client rejects any other.
+	digest := attestorevm.Digest(typeTag, data)
+	signer, sig, err := ecrecover.Recover(digest[:], attestation.Signature)
 	if err != nil {
 		g.logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
