@@ -116,6 +116,21 @@ jobs:
       - run: docker info
       - run: make -C e2e test E2E_FLAGS='-count=1 -v'
 
+  # Not behind the changes filter, so it runs on every pull request.
+  ibc-contracts-pins:
+    name: ibc-contracts pins match
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: |
+            e2e/go.sum
+            gen/go/solidity-abi/go.sum
+      - run: go test ./internal/harness/environment/solidityibc -run '^TestIBCContractsPinsMatch$' -count=1 -v
+        working-directory: e2e
+
   matrix:
     runs-on: ubuntu-latest
     steps:

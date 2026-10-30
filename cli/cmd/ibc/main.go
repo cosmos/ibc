@@ -42,14 +42,14 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "ibc",
 	Short:   "IBC CLI",
-	Version: versionInfo(),
+	Version: versionInfo(debug.ReadBuildInfo()),
 }
 
 // versionInfo is printed by --version: the CLI version, the commit the binary was built from, and
 // the pinned ibc-contracts and ibc-go versions and commits.
-func versionInfo() string {
+func versionInfo(info *debug.BuildInfo, ok bool) string {
 	commit := "unknown"
-	if info, ok := debug.ReadBuildInfo(); ok {
+	if ok {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" {
 				commit = setting.Value

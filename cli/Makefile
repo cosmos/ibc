@@ -9,12 +9,13 @@ CI ?= false
 # github.com/<org>/ibc/cli. Set GO_ORG in the environment to use another one.
 GO_ORG ?= $(shell awk '$$1 == "module" { sub("/[^/]*/[^/]*$$", "", $$2); print $$2 }' go.mod)
 
-# The ibc-contracts version pinned in cli/go.mod, reported by `ibc --version`.
-CONTRACTS_VERSION := $(shell awk '$$1 == "$(GO_ORG)/ibc-contracts/packages/go-abigen" { print $$2 }' go.mod)
+# The ibc-contracts version pinned in cli/go.mod, reported by `ibc --version`. A replace entry for
+# the module also starts with its path, so lines with "=>" are skipped.
+CONTRACTS_VERSION := $(shell awk '$$1 == "$(GO_ORG)/ibc-contracts/packages/go-abigen" && $$2 != "=>" { print $$2 }' go.mod)
 
 # The ibc-go version pinned in cli/go.mod, reported by `ibc --version`. The module path ends in its
 # major version, such as /v11.
-IBC_GO_VERSION := $(shell awk '$$1 ~ "^$(GO_ORG)/ibc-go(/v[0-9]+)?$$" { print $$2 }' go.mod)
+IBC_GO_VERSION := $(shell awk '$$1 ~ "^$(GO_ORG)/ibc-go(/v[0-9]+)?$$" && $$2 != "=>" { print $$2 }' go.mod)
 
 VERSION_LDFLAGS := -X main.contractsVersion=$(CONTRACTS_VERSION) -X main.ibcGoVersion=$(IBC_GO_VERSION)
 
