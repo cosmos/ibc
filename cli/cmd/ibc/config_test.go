@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"path/filepath"
-	"runtime/debug"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,24 +27,23 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestVersionInfo(t *testing.T) {
-	previousContracts, previousIBCGo := contractsVersion, ibcGoVersion
-	t.Cleanup(func() { contractsVersion, ibcGoVersion = previousContracts, previousIBCGo })
-	contractsVersion = "v0.0.0-20261028174625-daaed552e739"
-	ibcGoVersion = "v11.2.0"
+	previous := []string{version, commit, contractsVersion, ibcGoVersion}
+	t.Cleanup(func() {
+		version, commit, contractsVersion, ibcGoVersion = previous[0], previous[1], previous[2], previous[3]
+	})
 
-	info := &debug.BuildInfo{Settings: []debug.BuildSetting{
-		{Key: "vcs.time", Value: "2026-10-30T09:56:11Z"},
-		{Key: "vcs.revision", Value: "b1a4cf0a1546c5a45da40f5da1fad9a81d3a7eef"},
-	}}
-	require.Equal(t, "ibc cli version devel, commit: b1a4cf0a1546c5a45da40f5da1fad9a81d3a7eef\n"+
+	// As set by `make build` for a release.
+	version, commit = "cli/v0.2.0", "b1a4cf0a1546"
+	contractsVersion, ibcGoVersion = "v0.0.0-20261028174625-daaed552e739", "v11.2.0"
+	require.Equal(t, "ibc cli version cli/v0.2.0, commit: b1a4cf0a1546\n"+
 		"ibc-contracts: v0.0.0-20261028174625-daaed552e739, commit: daaed552e739\n"+
-		"ibc-go: v11.2.0, commit: unknown", versionInfo(info, true))
+		"ibc-go: v11.2.0, commit: unknown", versionInfo())
 
-	// Without build info, as when the binary is built outside a git checkout.
-	contractsVersion, ibcGoVersion = "unknown", "unknown"
+	// As built without `make build`.
+	version, commit, contractsVersion, ibcGoVersion = "devel", "unknown", "unknown", "unknown"
 	require.Equal(t, "ibc cli version devel, commit: unknown\n"+
 		"ibc-contracts: unknown, commit: unknown\n"+
-		"ibc-go: unknown, commit: unknown", versionInfo(nil, false))
+		"ibc-go: unknown, commit: unknown", versionInfo())
 }
 
 func TestVersionFlag(t *testing.T) {

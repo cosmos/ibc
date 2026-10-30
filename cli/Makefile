@@ -16,8 +16,11 @@ IBC_GO_VERSION := $(shell awk '$$1 ~ "^github.com/cosmos/ibc-go(/v[0-9]+)?$$" &&
 # The CLI version `ibc --version` reports. The release workflow sets it to the release tag.
 IBC_VERSION ?= devel
 
-VERSION_LDFLAGS := -X main.version=$(IBC_VERSION) -X main.contractsVersion=$(CONTRACTS_VERSION) \
-	-X main.ibcGoVersion=$(IBC_GO_VERSION)
+# The commit `ibc --version` reports, 12 characters like the pinned versions' commits.
+IBC_COMMIT := $(or $(shell git rev-parse --short=12 HEAD 2>/dev/null),unknown)
+
+VERSION_LDFLAGS := -X main.version=$(IBC_VERSION) -X main.commit=$(IBC_COMMIT) \
+	-X main.contractsVersion=$(CONTRACTS_VERSION) -X main.ibcGoVersion=$(IBC_GO_VERSION)
 
 # Production linker flags, as in release builds: -s drops the symbol table, -w drops DWARF debug
 # information. Set GO_LDFLAGS= for a binary a debugger can read.

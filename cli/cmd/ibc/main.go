@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -30,10 +29,12 @@ const (
 	keyIFT    = "ift"
 )
 
-// version is the CLI version, and contractsVersion and ibcGoVersion the pinned ibc-contracts and
-// ibc-go versions, all set at build time by `make build`. Release builds set version to the tag.
+// version and commit identify the CLI, and contractsVersion and ibcGoVersion are the pinned
+// ibc-contracts and ibc-go versions, all set at build time by `make build`. Release builds set
+// version to the tag.
 var (
 	version          = "devel"
+	commit           = "unknown"
 	contractsVersion = "unknown"
 	ibcGoVersion     = "unknown"
 )
@@ -41,20 +42,12 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "ibc",
 	Short:   "IBC CLI",
-	Version: versionInfo(debug.ReadBuildInfo()),
+	Version: versionInfo(),
 }
 
 // versionInfo is printed by --version: the CLI version, the commit the binary was built from, and
 // the pinned ibc-contracts and ibc-go versions and commits.
-func versionInfo(info *debug.BuildInfo, ok bool) string {
-	commit := "unknown"
-	if ok {
-		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" {
-				commit = setting.Value
-			}
-		}
-	}
+func versionInfo() string {
 	return fmt.Sprintf("ibc cli version %s, commit: %s\nibc-contracts: %s, commit: %s\nibc-go: %s, commit: %s",
 		version, commit, contractsVersion, pinnedCommit(contractsVersion), ibcGoVersion, pinnedCommit(ibcGoVersion))
 }
