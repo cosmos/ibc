@@ -25,9 +25,15 @@
   ];
   var LEARN = ["#40b3ff", "#0e0e0e"]; // Learn, and the landing page
 
+  /* The deployed site is served under a base path, so a page sits at
+     /docs/ibc-go/... rather than /ibc-go/.... Matching the prefix at index 0
+     found nothing there and every section fell back to the Learn blue, while
+     `mint dev` serves from the root and looked correct. Search the whole path
+     instead. The order of SECTIONS still decides ties, so /ibc/spec/ is
+     tested before the /ibc/ catch-all. */
   function pick(path) {
     for (var i = 0; i < SECTIONS.length; i++) {
-      if (path.indexOf(SECTIONS[i][0]) === 0) {
+      if (path.indexOf(SECTIONS[i][0]) !== -1) {
         return [SECTIONS[i][1], SECTIONS[i][2]];
       }
     }

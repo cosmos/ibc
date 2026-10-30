@@ -6,3 +6,11 @@
 
 # Plain blob, not LFS: GitHub previews blobs, never LFS pointers.
 docs/MapOfZones_IBC_Report.pdf !filter !diff !merge -text
+
+# Same reason, for everything the docs site publishes: Mintlify's build does
+# not smudge LFS pointers, so it served the 131-byte pointer as the image and
+# every PNG on the site was broken. Resolving LFS at deploy is an Enterprise
+# feature; storing these as blobs works on any plan, and for GitHub's preview
+# too.
+docs/**/*.png !filter !diff !merge -text
+docs/**/*.jpg !filter !diff !merge -text
