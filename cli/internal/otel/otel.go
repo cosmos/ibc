@@ -99,7 +99,6 @@ func WrapConnectHandler() connect.Option {
 	// https://connectrpc.com/docs/go/observability
 	otelInterceptor, err := otelconnect.NewInterceptor(
 		otelconnect.WithoutTracing(),
-		otelconnect.WithoutServerPeerAttributes(),
 	)
 	if err != nil {
 		// should not happen
