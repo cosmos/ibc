@@ -69,9 +69,14 @@ func TestIBCContractsPinsMatch(t *testing.T) {
 			bunCommit = commit
 		}
 	}
-	require.NotEmpty(t, bunCommit, "contracts/package.json has no dependency on %s<commit>", bunSource)
+	const packageJSON = "e2e/internal/harness/environment/solidityibc/contracts/package.json"
+	require.NotEmpty(t, bunCommit, "%s has no dependency on %s<commit>", packageJSON, bunSource)
 
-	for name, modPath := range map[string]string{"e2e/go.mod": "../../../../go.mod", "cli/go.mod": "../../../../../cli/go.mod"} {
+	goMods := map[string]string{
+		"e2e/go.mod": "../../../../go.mod",
+		"cli/go.mod": "../../../../../cli/go.mod",
+	}
+	for name, modPath := range goMods {
 		data, err := os.ReadFile(modPath)
 		require.NoError(t, err)
 		file, err := modfile.ParseLax(modPath, data, nil)
@@ -85,8 +90,8 @@ func TestIBCContractsPinsMatch(t *testing.T) {
 		goCommit, err := module.PseudoVersionRev(version)
 		require.NoError(t, err, "%s: %s %q is not a pseudo-version", name, contractsModule, version)
 		require.True(t, strings.HasPrefix(bunCommit, goCommit),
-			"%s pins go-abigen at %s, but e2e/internal/harness/environment/solidityibc/contracts/package.json pins ibc-contracts at %s; pin both to the same commit",
-			name, goCommit, bunCommit)
+			"%s pins go-abigen at %s, but %s pins ibc-contracts at %s; pin both to the same commit",
+			name, goCommit, packageJSON, bunCommit)
 	}
 }
 
