@@ -174,12 +174,9 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 	}
 
 	// fetch seqs that were recorded by wss subscription between clear() ticks
-	var seqsExisting []uint64
-	if seqFrom <= seqTo {
-		seqsExisting, err = c.storage.ListPacketSequences(ctx, c.chainID, c.clientID, seqFrom, seqTo)
-		if err != nil {
-			return Result{}, errors.Wrapf(err, "listing recorded sequences")
-		}
+	seqsExisting, err := c.storage.ListPacketSequences(ctx, c.chainID, c.clientID, seqFrom, seqTo)
+	if err != nil {
+		return Result{}, errors.Wrapf(err, "listing recorded sequences")
 	}
 
 	// query unresolved packages one more time. This might succeed ONLY

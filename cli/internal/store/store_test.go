@@ -522,7 +522,8 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		assert.Empty(t, sequences)
 
 		_, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 12, 11)
-		require.ErrorContains(t, err, "fromSequence must not exceed toSequence")
+		require.NoError(t, err)
+		require.Empty(t, sequences)
 	})
 
 	t.Run("clearingState", func(t *testing.T) {

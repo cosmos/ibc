@@ -328,7 +328,7 @@ func (db *SqliteDB) ListPacketSequences(
 		return nil, errors.New("chainID and clientID are required")
 	}
 	if fromSequence > toSequence {
-		return nil, errors.New("fromSequence must not exceed toSequence")
+		return []uint64{}, nil
 	}
 
 	rows, err := db.repo.ListPacketSequences(ctx, reposqlite.ListPacketSequencesParams{
