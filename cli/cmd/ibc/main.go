@@ -31,8 +31,7 @@ const (
 )
 
 // version is the CLI version, and contractsVersion and ibcGoVersion the pinned ibc-contracts and
-// ibc-go versions, all set at build time. The release workflow sets version to the release tag, and
-// `make contracts-version` and `make ibc-go-version` print the other two.
+// ibc-go versions, all set at build time by `make build`. Release builds set version to the tag.
 var (
 	version          = "devel"
 	contractsVersion = "unknown"

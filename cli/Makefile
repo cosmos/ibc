@@ -5,23 +5,29 @@ BUF_VERSION ?= 1.70.0
 
 CI ?= false
 
-# The org's Go module prefix, such as github.com/<org>, taken from this module's path
-# github.com/<org>/ibc/cli. Set GO_ORG in the environment to use another one.
-GO_ORG ?= $(shell awk '$$1 == "module" { sub("/[^/]*/[^/]*$$", "", $$2); print $$2 }' go.mod)
-
 # The ibc-contracts version pinned in cli/go.mod, reported by `ibc --version`. A replace entry for
 # the module also starts with its path, so lines with "=>" are skipped.
-CONTRACTS_VERSION := $(shell awk '$$1 == "$(GO_ORG)/ibc-contracts/packages/go-abigen" && $$2 != "=>" { print $$2 }' go.mod)
+CONTRACTS_VERSION := $(shell awk '$$1 == "github.com/cosmos/ibc-contracts/packages/go-abigen" && $$2 != "=>" { print $$2 }' go.mod)
 
 # The ibc-go version pinned in cli/go.mod, reported by `ibc --version`. The module path ends in its
 # major version, such as /v11.
-IBC_GO_VERSION := $(shell awk '$$1 ~ "^$(GO_ORG)/ibc-go(/v[0-9]+)?$$" && $$2 != "=>" { print $$2 }' go.mod)
+IBC_GO_VERSION := $(shell awk '$$1 ~ "^github.com/cosmos/ibc-go(/v[0-9]+)?$$" && $$2 != "=>" { print $$2 }' go.mod)
 
-VERSION_LDFLAGS := -X main.contractsVersion=$(CONTRACTS_VERSION) -X main.ibcGoVersion=$(IBC_GO_VERSION)
+# The CLI version `ibc --version` reports. The release workflow sets it to the release tag.
+IBC_VERSION ?= devel
+
+VERSION_LDFLAGS := -X main.version=$(IBC_VERSION) -X main.contractsVersion=$(CONTRACTS_VERSION) \
+	-X main.ibcGoVersion=$(IBC_GO_VERSION)
+
+# Production linker flags, as in release builds: -s drops the symbol table, -w drops DWARF debug
+# information. Set GO_LDFLAGS= for a binary a debugger can read.
+GO_LDFLAGS ?= -s -w
+
+# Extra go build flags. The release workflow sets -trimpath.
+GO_BUILD_FLAGS ?=
 
 ifeq ($(CI),true)
-# On stderr, so contracts-version and ibc-go-version print only the version.
-$(shell echo "Makefile: using CI mode" >&2)
+$(info Makefile: using CI mode)
 ## Will use binaries from PATH
 SQLC ?= sqlc
 BUF ?= buf
@@ -35,20 +41,14 @@ help: ## List of commands
 
 build: ## Build the binary
 	mkdir -p bin
-	go build -ldflags "$(VERSION_LDFLAGS)" -o bin/ibc ./cmd/ibc/...
+	go build $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS) $(VERSION_LDFLAGS)" -o bin/ibc ./cmd/ibc/...
 
 build-test-bin: ## Build the binary used only by tests
 	mkdir -p bin
 	go build -o bin/testprover ./internal/testutil/proverservice/cmd/...
 
 install: ## Install the binary
-	go install -ldflags "$(VERSION_LDFLAGS)" ./cmd/ibc/...
-
-contracts-version: ## Print the pinned ibc-contracts version
-	@test -n "$(CONTRACTS_VERSION)" && echo "$(CONTRACTS_VERSION)"
-
-ibc-go-version: ## Print the pinned ibc-go version
-	@test -n "$(IBC_GO_VERSION)" && echo "$(IBC_GO_VERSION)"
+	go install $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS) $(VERSION_LDFLAGS)" ./cmd/ibc/...
 
 docker-build: ## Build the local Docker image
 	docker build --target target-builder -t ibc:latest .
@@ -81,7 +81,7 @@ check-stale: ## Run all checks for stale code
 		':(glob)cli/api/v2/**/*.connect.go')"; \
 		test -z "$$status" || { echo "IBC CLI API bindings are stale — run 'make codegen-proto' and commit the result" >&2; echo "$$status" >&2; exit 1; }
 	@test ! -e ../api || { echo "the removed standalone API module still exists" >&2; exit 1; }
-	@old_api='$(GO_ORG)/ibc/'api; \
+	@old_api='github.com/cosmos/ibc/'api; \
 		! git --no-pager -C .. grep -n -F "$$old_api" -- . || { echo "the removed API module is still referenced" >&2; exit 1; }
 
 run-all-checks: ## Run "all-in-one" code validation step.
@@ -99,6 +99,6 @@ run-all-checks: ## Run "all-in-one" code validation step.
 
 
 .PHONY: build-test-bin
-.PHONY: help build install contracts-version ibc-go-version docker-build lint lint-fix test
+.PHONY: help build install docker-build lint lint-fix test
 .PHONY: codegen codegen-sql codegen-proto codegen-mocks
 .PHONY: check-stale run-all-checks
