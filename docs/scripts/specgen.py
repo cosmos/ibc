@@ -257,9 +257,31 @@ def generate(root, out):
             elif name.lower().endswith(IMAGE_EXT):
                 dest = os.path.join(out, rel)
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
+                _refuse_lfs_pointer(full, rel)
                 shutil.copyfile(full, dest)
                 written.append(rel)
     return written
+
+
+
+_LFS_POINTER = b"version https://git-lfs.github.com/spec/v1"
+
+
+def _refuse_lfs_pointer(path, rel):
+    """Stop a Git LFS pointer from being published in place of an image.
+
+    `spec/` keeps its images in LFS. A clone without the LFS client leaves a
+    132-byte pointer on disk in place of each one, and copying that into
+    docs/ibc/spec/ publishes the pointer: the site renders the text, and
+    --check still passes because the copy does match its source. The docs
+    copies are plain blobs, so the pointer would be committed as one.
+    """
+    with open(path, "rb") as fh:
+        if fh.read(len(_LFS_POINTER)) == _LFS_POINTER:
+            raise ValueError(
+                f"spec/{rel} is a Git LFS pointer, not an image. Run "
+                "`git lfs pull` and generate again: copying the pointer "
+                "would publish it as the image.")
 
 
 def check(root, out):
