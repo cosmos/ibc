@@ -276,8 +276,8 @@ github.com/cosmos/ibc-go/v11 v11.2.0 h1:CgCJYCwf3FlA9U3IovQq/q7lfTJ0pll3GgqWAwWO
 github.com/cosmos/ibc-go/v11 v11.2.0/go.mod h1:iWlzLuCu+ctVbQwoVf5z51HE5e/NE8/pwnLVVDmP++4=
 github.com/cosmos/ics23/go v0.11.0 h1:jk5skjT0TqX5e5QJbEnwXIS2yI2vnmLOgpQPeM5RtnU=
 github.com/cosmos/ics23/go v0.11.0/go.mod h1:A8OjxPE67hHST4Icw94hOxxFEJMBG031xIGF/JHNIY0=
-github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e h1:PcYIIjwEN8bvnOvK2GjYKNEEQ9Qul27DBnfzFEBOxn8=
-github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e/go.mod h1:TaVPj19tphn9vL/420FWMKx19MHgL+nxOf0DiCkZAn4=
+github.com/cosmos/kms v0.1.0 h1:AsWm2fXs/rsESF2U5vHXldEkLYQyQhI8B2DjW3W43fo=
+github.com/cosmos/kms v0.1.0/go.mod h1:UwT811FNvVjYKYU100Zx8yF+qI3B5TKnS4Ds/3MiQrg=
 github.com/cosmos/ledger-cosmos-go v1.0.0 h1:jNKW89nPf0vR0EkjHG8Zz16h6p3zqwYEOxlHArwgYtw=
 github.com/cosmos/ledger-cosmos-go v1.0.0/go.mod h1:mGaw2wDOf+Z6SfRJsMGxU9DIrBa4du0MAiPlpPhLAOE=
 github.com/cpuguy83/dockercfg v0.3.2 h1:DlJTyZGBDlXqUZ2Dk2Q3xHs/FtnooJJVaad2S9GKorA=

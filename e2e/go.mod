@@ -11,7 +11,7 @@ ignore ./internal/harness/environment/solidityibc/contracts/node_modules
 require (
 	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261028174625-daaed552e739
 	github.com/cosmos/ibc-go/v11 v11.2.0
-	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
+	github.com/cosmos/kms v0.1.0
 	github.com/ethereum/go-ethereum v1.17.10
 	github.com/skip-mev/catalyst v0.0.0-beta.21.0.20261014033247-0901629c9945
 	github.com/stretchr/testify v1.12.1

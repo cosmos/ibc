@@ -9,11 +9,11 @@ require (
 	connectrpc.com/grpchealth v1.5.0
 	connectrpc.com/grpcreflect v1.3.1
 	connectrpc.com/otelconnect v0.12.0
-	github.com/cometbft/cometbft v0.39.3
+	github.com/cometbft/cometbft v0.40.0
 	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261028174625-daaed552e739
 	github.com/cosmos/ibc-go/v11 v11.2.0
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
-	github.com/cosmos/kms v0.0.0-20260709100357-9eeae77b051e
+	github.com/cosmos/kms v0.1.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
