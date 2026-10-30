@@ -4,14 +4,17 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/module"
 
 	"github.com/cosmos/ibc/cli/internal/config"
 	"github.com/cosmos/ibc/cli/internal/pkg/logging"
@@ -27,9 +30,43 @@ const (
 	keyIFT    = "ift"
 )
 
+// version is the CLI version, and contractsVersion and ibcGoVersion the pinned ibc-contracts and
+// ibc-go versions, all set at build time. The release workflow sets version to the release tag, and
+// `make contracts-version` and `make ibc-go-version` print the other two.
+var (
+	version          = "devel"
+	contractsVersion = "unknown"
+	ibcGoVersion     = "unknown"
+)
+
 var rootCmd = &cobra.Command{
-	Use:   "ibc",
-	Short: "IBC CLI",
+	Use:     "ibc",
+	Short:   "IBC CLI",
+	Version: versionInfo(),
+}
+
+// versionInfo is printed by --version: the CLI version, the commit the binary was built from, and
+// the pinned ibc-contracts and ibc-go versions and commits.
+func versionInfo() string {
+	commit := "unknown"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				commit = setting.Value
+			}
+		}
+	}
+	return fmt.Sprintf("ibc cli version %s, commit: %s\nibc-contracts: %s, commit: %s\nibc-go: %s, commit: %s",
+		version, commit, contractsVersion, pinnedCommit(contractsVersion), ibcGoVersion, pinnedCommit(ibcGoVersion))
+}
+
+// pinnedCommit returns the commit hash a pseudo-version ends in, or unknown for any other version.
+func pinnedCommit(version string) string {
+	rev, err := module.PseudoVersionRev(version)
+	if err != nil {
+		return "unknown"
+	}
+	return rev
 }
 
 func main() {
@@ -43,6 +80,8 @@ func main() {
 func init() {
 	// setup global flags
 	config.DeclarePersistentFlags(rootCmd, &globalFlags)
+	// versionInfo writes the whole --version output.
+	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
 	cobra.OnInitialize(func() {
 		slog.SetDefault(logging.Default(globalFlags.LogJSON, globalFlags.LogLevel))

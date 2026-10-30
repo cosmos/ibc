@@ -33,6 +33,7 @@ Commands are grouped here the way the binary groups them, so any of them prints 
 | `--log-json` |  | Enable JSON logging. |
 | `--log-level <string>` | `info` | Log level (debug, info, warn, error). |
 | `-q, --quiet` |  | Quiet mode. |
+| `-v, --version` |  | Version for ibc. |
 
 <!-- [flags.go:L40](cli/internal/config/flags.go#L40) -->
 
@@ -58,7 +59,7 @@ Add a chain entry to the config.
 | `--rpc <string>` | required | Chain RPC URL. |
 | `--ws <string>` |  | Chain websocket URL, required for chains sourcing auto-relayed routes. |
 
-<!-- [main.go:L65](cli/cmd/ibc/main.go#L65) -->
+<!-- [main.go:L104](cli/cmd/ibc/main.go#L104) -->
 
 <!-- GEN:cli:cmd:config-add-chain END -->
 
@@ -78,7 +79,7 @@ Create new config file.
 |---|---|---|
 | `--out` |  | Output the config to stdout. |
 
-<!-- [main.go:L63](cli/cmd/ibc/main.go#L63) -->
+<!-- [main.go:L102](cli/cmd/ibc/main.go#L102) -->
 
 <!-- GEN:cli:cmd:config-new END -->
 
@@ -94,7 +95,7 @@ Validate config structure and cross-references.
 |---|---|---|
 | `--live` |  | Extra validation checks. |
 
-<!-- [main.go:L64](cli/cmd/ibc/main.go#L64) -->
+<!-- [main.go:L103](cli/cmd/ibc/main.go#L103) -->
 
 <!-- GEN:cli:cmd:config-validate END -->
 
@@ -128,7 +129,7 @@ Import a private key into `<ibc-home>/keys/<name>`.
 | `--private-key <string>` | required | Hex-encoded private key. |
 | `-p, --populate-config` |  | Write key reference to the config. |
 
-<!-- [main.go:L80](cli/cmd/ibc/main.go#L80) -->
+<!-- [main.go:L119](cli/cmd/ibc/main.go#L119) -->
 
 <!-- GEN:cli:cmd:keys-import END -->
 
@@ -142,7 +143,7 @@ ibc keys import ecdsa deployer --private-key "$DEPLOYER_KEY" --populate-config
 
 Lists every key from `<ibc-home>/keys/`.
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:keys-list END -->
 
@@ -156,7 +157,7 @@ Saves key into `<ibc-home>/keys/<name>` or prints to stdout if name is not provi
 |---|---|---|
 | `-p, --populate-config` |  | Write key reference to the config. |
 
-<!-- [main.go:L82](cli/cmd/ibc/main.go#L82) -->
+<!-- [main.go:L121](cli/cmd/ibc/main.go#L121) -->
 
 <!-- GEN:cli:cmd:keys-new END -->
 
@@ -174,7 +175,7 @@ Show key details from `<ibc-home>/keys/<name>`; optionally print the private key
 |---|---|---|
 | `--private` |  | Show private key. |
 
-<!-- [main.go:L79](cli/cmd/ibc/main.go#L79) -->
+<!-- [main.go:L118](cli/cmd/ibc/main.go#L118) -->
 
 <!-- GEN:cli:cmd:keys-show END -->
 
@@ -217,7 +218,7 @@ Deploy and register an attestation light client.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L166](cli/cmd/ibc/main.go#L166) -->
+<!-- [main.go:L205](cli/cmd/ibc/main.go#L205) -->
 
 <!-- GEN:cli:cmd:deploy-client-attestation END -->
 
@@ -249,7 +250,7 @@ Deploy and register a Besu light client for the counterparty's consensus, trusti
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L182](cli/cmd/ibc/main.go#L182) -->
+<!-- [main.go:L221](cli/cmd/ibc/main.go#L221) -->
 
 <!-- GEN:cli:cmd:deploy-client-besu END -->
 
@@ -276,7 +277,7 @@ Deploy the core IBC routing stack on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L153](cli/cmd/ibc/main.go#L153) -->
+<!-- [main.go:L192](cli/cmd/ibc/main.go#L192) -->
 
 <!-- GEN:cli:cmd:deploy-core END -->
 
@@ -300,7 +301,7 @@ Deploy the ICS27-GMP app on one chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:deploy-gmp END -->
 
@@ -323,7 +324,7 @@ Deploy an IFT token on one chain and set its rate limit, which IFT requires befo
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L199](cli/cmd/ibc/main.go#L199) -->
+<!-- [main.go:L238](cli/cmd/ibc/main.go#L238) -->
 
 <!-- GEN:cli:cmd:deploy-ift END -->
 
@@ -352,7 +353,7 @@ Register both sides of an IFT bridge between two chains' tokens.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L209](cli/cmd/ibc/main.go#L209) -->
+<!-- [main.go:L248](cli/cmd/ibc/main.go#L248) -->
 
 <!-- GEN:cli:cmd:deploy-ift-bridge END -->
 
@@ -377,7 +378,7 @@ Print the existing config plus the settings to relay between two chains.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L191](cli/cmd/ibc/main.go#L191) -->
+<!-- [main.go:L230](cli/cmd/ibc/main.go#L230) -->
 
 <!-- GEN:cli:cmd:deploy-render-config END -->
 
@@ -399,7 +400,7 @@ Print the recorded deployment manifest for a chain.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:deploy-show END -->
 
@@ -421,7 +422,7 @@ Verify recorded deployments against live chain state.
 | `--manifest-dir <string>` | `deployments` | Manifest directory relative to home. |
 | `--yes` |  | Skip confirmation prompts. |
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:deploy-status END -->
 
@@ -441,7 +442,7 @@ Trigger relaying of the packets emitted by a source transaction.
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 | `--tx-hash <string>` | required | Source transaction hash. |
 
-<!-- [main.go:L89](cli/cmd/ibc/main.go#L89) -->
+<!-- [main.go:L128](cli/cmd/ibc/main.go#L128) -->
 
 <!-- GEN:cli:cmd:relayer-relay END -->
 
@@ -462,7 +463,7 @@ Run the relayer.
 | `--clear-on-start` | `true` | Clear outstanding packets at startup. |
 | `--no-migrate` |  | Skip database migrations. |
 
-<!-- [main.go:L88](cli/cmd/ibc/main.go#L88) -->
+<!-- [main.go:L127](cli/cmd/ibc/main.go#L127) -->
 
 <!-- GEN:cli:cmd:relayer-run END -->
 
@@ -488,7 +489,7 @@ List the packets the relayer is aware of, most recent first.
 | `--state <string>` |  | Relay state (not-selected, pending, rejected, relay-failed, succeeded, timed-out). |
 | `--tx-hash <string>` |  | Source transaction hash. |
 
-<!-- [main.go:L98](cli/cmd/ibc/main.go#L98) -->
+<!-- [main.go:L137](cli/cmd/ibc/main.go#L137) -->
 
 <!-- GEN:cli:cmd:relayer-packets END -->
 
@@ -514,7 +515,7 @@ Query a local attestor's identity.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L120](cli/cmd/ibc/main.go#L120) -->
+<!-- [main.go:L159](cli/cmd/ibc/main.go#L159) -->
 
 <!-- GEN:cli:cmd:attestor-info END -->
 
@@ -528,7 +529,7 @@ Query a local attestor's latest attestable height.
 |---|---|---|
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L120](cli/cmd/ibc/main.go#L120) -->
+<!-- [main.go:L159](cli/cmd/ibc/main.go#L159) -->
 
 <!-- GEN:cli:cmd:attestor-latest-height END -->
 
@@ -538,7 +539,7 @@ Query a local attestor's latest attestable height.
 
 Run the attestor.
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:attestor-run END -->
 
@@ -553,7 +554,7 @@ Query a local attestor for a state attestation at `--height`.
 | `--height <uint>` |  | Height to attest. |
 | `--host <string>` |  | Dial this address instead of resolving from config. |
 
-<!-- [main.go:L123](cli/cmd/ibc/main.go#L123) -->
+<!-- [main.go:L162](cli/cmd/ibc/main.go#L162) -->
 
 <!-- GEN:cli:cmd:attestor-state-attestation END -->
 
@@ -577,7 +578,7 @@ Mint `--amount` of the IFT token at `--ift` to `--to`. The `--from` signer must 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L235](cli/cmd/ibc/main.go#L235) -->
+<!-- [main.go:L274](cli/cmd/ibc/main.go#L274) -->
 
 <!-- GEN:cli:cmd:tx-ift-mint END -->
 
@@ -597,7 +598,7 @@ Initiate a cross-chain transfer of `--amount` of the IFT token at `--ift`, over 
 | `--from <string>` | required | Signer alias to submit the transaction with. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L240](cli/cmd/ibc/main.go#L240) -->
+<!-- [main.go:L279](cli/cmd/ibc/main.go#L279) -->
 
 <!-- GEN:cli:cmd:tx-ift-send END -->
 
@@ -624,7 +625,7 @@ Query an address's IFT token balance.
 | `--chain <string>` | required | Chain ID the IFT token is deployed on. |
 | `--ift <string>` | required | IFT token address. |
 
-<!-- [main.go:L134](cli/cmd/ibc/main.go#L134) -->
+<!-- [main.go:L173](cli/cmd/ibc/main.go#L173) -->
 
 <!-- GEN:cli:cmd:query-ift-balance END -->
 
@@ -638,7 +639,7 @@ These commands move the schema of the relayer's database up and down.
 
 Migrate DB down.
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:migrate-down END -->
 
@@ -650,7 +651,7 @@ Migrate DB down.
 
 Print migration status.
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:migrate-status END -->
 
@@ -660,7 +661,7 @@ Print migration status.
 
 Migrate DB up.
 
-<!-- [main.go:L51](cli/cmd/ibc/main.go#L51) -->
+<!-- [main.go:L90](cli/cmd/ibc/main.go#L90) -->
 
 <!-- GEN:cli:cmd:migrate-up END -->
 

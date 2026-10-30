@@ -24,7 +24,9 @@ defaults:
     shell: bash
 
 env:
-  GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
+  # The CLI reports the release tag and the ibc-contracts and ibc-go versions pinned in cli/go.mod,
+  # which validate-tag reads into CONTRACTS_VERSION and IBC_GO_VERSION.
+  GO_BUILD_FLAGS: -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.contractsVersion=${CONTRACTS_VERSION} -X main.ibcGoVersion=${IBC_GO_VERSION}"
   TAG: ${{ github.ref_name }}
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
@@ -39,12 +41,14 @@ jobs:
       name: ${{ steps.tag.outputs.name }}
       title: ${{ steps.tag.outputs.title }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
+      contracts-version: ${{ steps.versions.outputs.contracts }}
+      ibc-go-version: ${{ steps.versions.outputs.ibc-go }}
       image-tag: ${{ steps.tag.outputs.image-tag }}
     steps:
       - name: Check tag format
         id: tag
         run: |
-          # The cli/ prefix lets Go resolve the github.com/cosmos/ibc/cli module at this version.
+          # The cli/ prefix lets Go resolve this repository's cli module at this version.
           if [[ ! "$TAG" =~ ^cli/(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
             echo "::error::Tag must match cli/vX.Y.Z, optionally followed by -<suffix>"
             exit 1
@@ -102,6 +106,14 @@ jobs:
           done <<< "$branches"
           echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch"
           exit 1
+      - name: Read pinned ibc-contracts and ibc-go versions
+        id: versions
+        working-directory: cli
+        run: |
+          contracts=$(make -s contracts-version)
+          ibc_go=$(make -s ibc-go-version)
+          echo "contracts=${contracts}" >> "$GITHUB_OUTPUT"
+          echo "ibc-go=${ibc_go}" >> "$GITHUB_OUTPUT"
 
   # Builds and attests the archives. Only the image job pushes to the registry, so this job, which
   # also builds darwin, has no packages permission.
@@ -143,6 +155,8 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CONTRACTS_VERSION: ${{ needs.validate-tag.outputs.contracts-version }}
+          IBC_GO_VERSION: ${{ needs.validate-tag.outputs.ibc-go-version }}
         run: go build ${{ env.GO_BUILD_FLAGS }} -o dist/ibc ./cmd/ibc/...
       - name: Collect assets
         run: |
@@ -386,4 +400,5 @@ jobs:
         with:
           name: ${{ needs.validate-tag.outputs.name }}
           title: ${{ needs.validate-tag.outputs.title }}
+          notes: "Pinned ibc-contracts version: ${{ needs.validate-tag.outputs.contracts-version }}"
           prerelease: ${{ needs.validate-tag.outputs.prerelease }}
