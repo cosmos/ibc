@@ -174,7 +174,8 @@
             "icon": "server",
             "pages": [
               "ibc/05-ibc-cli/03-guides/01-run-a-standalone-attestor",
-              "ibc/05-ibc-cli/03-guides/02-run-a-standalone-relayer"
+              "ibc/05-ibc-cli/03-guides/02-run-a-standalone-relayer",
+              "ibc/05-ibc-cli/03-guides/02a-plan-a-production-deployment"
             ]
           },
           {
