@@ -149,20 +149,34 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 	seqFrom := state.LastProbed + 1
 
 	// latest sequence on the chain
-	seqLatest, err := c.chain.LatestPacketSequence(ctx, c.clientID, c.latestBlockHeight)
+	seqTo, err := c.chain.LatestPacketSequence(ctx, c.clientID, c.latestBlockHeight)
 	if err != nil {
 		return Result{}, errors.Wrapf(err, "reading the latest sequence")
 	}
 
-	// limit one Clear() run to fixed packets size
-	if seqLatest > state.LastProbed {
-		seqLatest = state.LastProbed + min(seqLatest-state.LastProbed, clearingSequenceLimit)
+	if seqTo > state.LastProbed {
+		seqRange := seqTo - state.LastProbed
+
+		// limit one Clear() run to fixed packets size
+		if seqRange > clearingSequenceLimit {
+			c.logger.Info(
+				"Limiting number of sequences to clear. Lower .clearInterval for faster clearing.",
+				"clientID", c.clientID,
+				"seqFrom", seqFrom,
+				"rangeWanted", seqRange,
+				"rangeCapped", clearingSequenceLimit,
+			)
+
+			seqRange = clearingSequenceLimit
+		}
+
+		seqTo = state.LastProbed + seqRange
 	}
 
 	// fetch seqs that were recorded by wss subscription between clear() ticks
 	var seqsExisting []uint64
-	if seqFrom <= seqLatest {
-		seqsExisting, err = c.storage.ListPacketSequences(ctx, c.chainID, c.clientID, seqFrom, seqLatest)
+	if seqFrom <= seqTo {
+		seqsExisting, err = c.storage.ListPacketSequences(ctx, c.chainID, c.clientID, seqFrom, seqTo)
 		if err != nil {
 			return Result{}, errors.Wrapf(err, "listing recorded sequences")
 		}
@@ -179,7 +193,7 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 	// builds an array of what seqs to query, then searches for their commitments on-chain
 	seqsLive, seqsQueried, err := c.queryLiveSequences(ctx, liveRequest{
 		seqFrom:        seqFrom,
-		seqTo:          seqLatest,
+		seqTo:          seqTo,
 		seqsExisting:   seqsExisting,
 		seqsUnresolved: seqsPreviouslyUnresolved,
 	})
@@ -215,7 +229,7 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 		result.SeqsUnresolved = len(unresolved)
 	}
 
-	if err := c.persist(ctx, toBeInserted, seqLatest, delta); err != nil {
+	if err := c.persist(ctx, toBeInserted, seqTo, delta); err != nil {
 		return Result{}, err
 	}
 
