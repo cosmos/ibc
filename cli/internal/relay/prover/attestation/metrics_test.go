@@ -57,6 +57,7 @@ func TestAttestationDataMatches(t *testing.T) {
 			reader := testMetrics(t)
 			a := attestor.NewMockAttestor(t)
 			a.EXPECT().Name().Return("attestor-0")
+			a.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 			gen := New("client-chain", "client-0", nil, 1, nil, slog.Default())
 			response := gen.queryOne(ctx, a, attestorevm.TagStateAttestation, expected,
 				func(context.Context, attestor.Attestor) (attestor.Attestation, error) {
