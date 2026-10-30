@@ -400,5 +400,4 @@ jobs:
         with:
           name: ${{ needs.validate-tag.outputs.name }}
           title: ${{ needs.validate-tag.outputs.title }}
-          notes: "Pinned ibc-contracts version: ${{ needs.validate-tag.outputs.contracts-version }}"
           prerelease: ${{ needs.validate-tag.outputs.prerelease }}
