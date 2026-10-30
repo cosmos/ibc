@@ -5,6 +5,30 @@ BUF_VERSION ?= 1.70.0
 
 CI ?= false
 
+# The ibc-contracts version pinned in cli/go.mod, reported by `ibc --version`. A replace entry for
+# the module also starts with its path, so lines with "=>" are skipped.
+CONTRACTS_VERSION := $(shell awk '$$1 == "github.com/cosmos/ibc-contracts/packages/go-abigen" && $$2 != "=>" { print $$2 }' go.mod)
+
+# The ibc-go version pinned in cli/go.mod, reported by `ibc --version`. The module path ends in its
+# major version, such as /v11.
+IBC_GO_VERSION := $(shell awk '$$1 ~ "^github.com/cosmos/ibc-go(/v[0-9]+)?$$" && $$2 != "=>" { print $$2 }' go.mod)
+
+# The CLI version `ibc --version` reports. The release workflow sets it to the release tag.
+IBC_VERSION ?= devel
+
+# The commit `ibc --version` reports, 12 characters like the pinned versions' commits.
+IBC_COMMIT := $(or $(shell git rev-parse --short=12 HEAD 2>/dev/null),unknown)
+
+VERSION_LDFLAGS := -X main.version=$(IBC_VERSION) -X main.commit=$(IBC_COMMIT) \
+	-X main.contractsVersion=$(CONTRACTS_VERSION) -X main.ibcGoVersion=$(IBC_GO_VERSION)
+
+# Production linker flags, as in release builds: -s drops the symbol table, -w drops DWARF debug
+# information. Set GO_LDFLAGS= for a binary a debugger can read.
+GO_LDFLAGS ?= -s -w
+
+# Extra go build flags. The release workflow sets -trimpath.
+GO_BUILD_FLAGS ?=
+
 ifeq ($(CI),true)
 $(info Makefile: using CI mode)
 ## Will use binaries from PATH
@@ -20,14 +44,14 @@ help: ## List of commands
 
 build: ## Build the binary
 	mkdir -p bin
-	go build -o bin/ibc ./cmd/ibc/...
+	go build $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS) $(VERSION_LDFLAGS)" -o bin/ibc ./cmd/ibc/...
 
 build-test-bin: ## Build the binary used only by tests
 	mkdir -p bin
 	go build -o bin/testprover ./internal/testutil/proverservice/cmd/...
 
 install: ## Install the binary
-	go install ./cmd/ibc/...
+	go install $(GO_BUILD_FLAGS) -ldflags "$(GO_LDFLAGS) $(VERSION_LDFLAGS)" ./cmd/ibc/...
 
 docker-build: ## Build the local Docker image
 	docker build --target target-builder -t ibc:latest .

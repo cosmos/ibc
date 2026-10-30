@@ -24,7 +24,8 @@ defaults:
     shell: bash
 
 env:
-  GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
+  # Extra go build flags for `make build`, which also embeds the versions `ibc --version` reports.
+  GO_BUILD_FLAGS: -trimpath
   TAG: ${{ github.ref_name }}
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
@@ -44,7 +45,7 @@ jobs:
       - name: Check tag format
         id: tag
         run: |
-          # The cli/ prefix lets Go resolve the github.com/cosmos/ibc/cli module at this version.
+          # The cli/ prefix lets Go resolve this repository's cli module at this version.
           if [[ ! "$TAG" =~ ^cli/(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
             echo "::error::Tag must match cli/vX.Y.Z, optionally followed by -<suffix>"
             exit 1
@@ -143,21 +144,21 @@ jobs:
           CGO_ENABLED: "0"
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build ${{ env.GO_BUILD_FLAGS }} -o dist/ibc ./cmd/ibc/...
+        run: make build IBC_VERSION="$TAG"
       - name: Collect assets
         run: |
           mkdir -p out/assets
-          cp LICENSE NOTICE cli/dist/
+          cp LICENSE NOTICE cli/bin/
           tar --sort=name --mtime="@$(git log -1 --format=%ct)" \
             --owner=0 --group=0 --numeric-owner \
-            -C cli/dist -cf - ibc LICENSE NOTICE \
+            -C cli/bin -cf - ibc LICENSE NOTICE \
             | gzip -n > "out/assets/${NAME}-${PLATFORM}.tar.gz"
       - name: Attest release assets
         uses: ./.github/actions/attest-release-assets
         with:
           name: ${{ env.NAME }}-${{ env.PLATFORM }}
           platform: ${{ env.PLATFORM }}
-          sbom-file: cli/dist/ibc
+          sbom-file: cli/bin/ibc
 
   # Builds each platform image from the attested linux archive, so the image holds exactly the
   # released binary.

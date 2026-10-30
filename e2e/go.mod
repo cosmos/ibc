@@ -16,6 +16,7 @@ require (
 	github.com/skip-mev/catalyst v0.0.0-beta.21.0.20261014033247-0901629c9945
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.27.1
+	golang.org/x/mod v0.41.0
 	google.golang.org/grpc v1.83.2
 )
 
@@ -273,7 +274,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
-	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
 	golang.org/x/term v0.46.0 // indirect

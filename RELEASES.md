@@ -69,6 +69,8 @@ Two flags change what this command checks:
 - `--predicate-type https://spdx.dev/Document/v<version>` checks the SBOM attestation instead of the build provenance. `<version>` is the SPDX version the SBOM declares. `jq -r .spdxVersion ibc-cli-vX.Y.Z-linux-amd64.spdx.json` prints it as `SPDX-<version>`.
 - `--bundle ibc-cli-vX.Y.Z.intoto.jsonl` checks against the attestation file attached to the release, without GitHub's attestations API.
 
+After you extract an archive, `ibc --version` prints the release tag, the commit it was built from, and the pinned ibc-contracts and ibc-go versions and commits.
+
 ### Verify the image
 
 Check the signature, with the same `--certificate` flags as for `checksums.txt`:

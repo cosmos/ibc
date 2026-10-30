@@ -4,8 +4,12 @@ package solidityibc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"math/big"
+	"os"
+	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +19,8 @@ import (
 	gethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/module"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
@@ -38,6 +44,55 @@ func (b *failSendBackend) SendTransaction(ctx context.Context, tx *gethtypes.Tra
 		return errors.New("injected transaction submission failure")
 	}
 	return b.contractBackend.SendTransaction(ctx, tx)
+}
+
+// TestIBCContractsPinsMatch checks that the ibc-contracts commit the shims compile against is the one
+// the go-abigen bindings in e2e/go.mod and cli/go.mod come from.
+func TestIBCContractsPinsMatch(t *testing.T) {
+	// The org is taken from this module's path, github.com/<org>/ibc/e2e, so an org change needs no
+	// edit here.
+	e2eMod, err := os.ReadFile("../../../../go.mod")
+	require.NoError(t, err)
+	org := path.Dir(path.Dir(modfile.ModulePath(e2eMod)))
+	contractsModule := org + "/ibc-contracts/packages/go-abigen"
+	bunSource := "github:" + path.Base(org) + "/ibc-contracts#"
+
+	data, err := os.ReadFile("contracts/package.json")
+	require.NoError(t, err)
+	var pkg struct {
+		Dependencies map[string]string `json:"dependencies"`
+	}
+	require.NoError(t, json.Unmarshal(data, &pkg))
+	var bunCommit string
+	for _, source := range pkg.Dependencies {
+		if commit, ok := strings.CutPrefix(source, bunSource); ok {
+			bunCommit = commit
+		}
+	}
+	const packageJSON = "e2e/internal/harness/environment/solidityibc/contracts/package.json"
+	require.NotEmpty(t, bunCommit, "%s has no dependency on %s<commit>", packageJSON, bunSource)
+
+	goMods := map[string]string{
+		"e2e/go.mod": "../../../../go.mod",
+		"cli/go.mod": "../../../../../cli/go.mod",
+	}
+	for name, modPath := range goMods {
+		data, err := os.ReadFile(modPath)
+		require.NoError(t, err)
+		file, err := modfile.ParseLax(modPath, data, nil)
+		require.NoError(t, err)
+		var version string
+		for _, req := range file.Require {
+			if req.Mod.Path == contractsModule {
+				version = req.Mod.Version
+			}
+		}
+		goCommit, err := module.PseudoVersionRev(version)
+		require.NoError(t, err, "%s: %s %q is not a pseudo-version", name, contractsModule, version)
+		require.True(t, strings.HasPrefix(bunCommit, goCommit),
+			"%s pins go-abigen at %s, but %s pins ibc-contracts at %s; pin both to the same commit",
+			name, goCommit, packageJSON, bunCommit)
+	}
 }
 
 func TestSetupDeploysAndAttachesSolidityIBCInstanceAndClient(t *testing.T) {

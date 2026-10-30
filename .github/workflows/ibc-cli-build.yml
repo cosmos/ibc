@@ -24,7 +24,8 @@ defaults:
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
   BUILD_SHA: ${{ github.sha }}
-  GO_BUILD_FLAGS: -trimpath -ldflags="-s -w"
+  # Extra go build flags for `make build`, which also embeds the versions `ibc --version` reports.
+  GO_BUILD_FLAGS: -trimpath
 
 jobs:
   # Prepare Docker metadata
@@ -97,8 +98,9 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
+          make build
           mkdir -p "dist/${{ matrix.artifact }}"
-          go build ${{ env.GO_BUILD_FLAGS }} -o "dist/${{ matrix.artifact }}/ibc" ./cmd/ibc/...
+          mv bin/ibc "dist/${{ matrix.artifact }}/ibc"
           cp ../LICENSE ../NOTICE "dist/${{ matrix.artifact }}/"
       - name: Checksum
         run: |
