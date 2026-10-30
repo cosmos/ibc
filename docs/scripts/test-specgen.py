@@ -427,6 +427,40 @@ def _():
         assert "IBC_V2/app/ics-027-gmp/README.mdx" in written, written[:5]
 
 
+@case("refuses to publish a Git LFS pointer as an image")
+def _():
+    with tempfile.TemporaryDirectory() as d:
+        src = os.path.join(d, "spec", "core", "ics-001-x")
+        os.makedirs(src)
+        open(os.path.join(src, "README.md"), "w").write("# X\n\nbody\n")
+        # What a clone without the LFS client leaves on disk.
+        open(os.path.join(src, "diagram.png"), "w").write(
+            "version https://git-lfs.github.com/spec/v1\n"
+            "oid sha256:" + "0" * 64 + "\nsize 109961\n")
+        with tempfile.TemporaryDirectory() as out:
+            try:
+                specgen.generate(d, out)
+            except ValueError as e:
+                assert "Git LFS pointer" in str(e), e
+                assert "git lfs pull" in str(e), e
+            else:
+                raise AssertionError("published the pointer instead of refusing")
+
+
+@case("copies a real image")
+def _():
+    with tempfile.TemporaryDirectory() as d:
+        src = os.path.join(d, "spec", "core", "ics-001-x")
+        os.makedirs(src)
+        open(os.path.join(src, "README.md"), "w").write("# X\n\nbody\n")
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+        open(os.path.join(src, "diagram.png"), "wb").write(png)
+        with tempfile.TemporaryDirectory() as out:
+            specgen.generate(d, out)
+            got = open(os.path.join(out, "core/ics-001-x/diagram.png"), "rb").read()
+            assert got == png, "image did not copy through unchanged"
+
+
 for name in PASS:
     print(f"  ok    {name}")
 for name, e, tb in FAIL:
