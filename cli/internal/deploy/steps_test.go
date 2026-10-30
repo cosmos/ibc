@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 )
 
@@ -683,7 +682,6 @@ func besuSpec() ClientSpec {
 		CounterpartyChainID:  "2",
 		CounterpartyClientID: "cli-1",
 		Params: BesuParams{
-			Consensus:     besu.QBFT,
 			IBCRouter:     common.HexToAddress("0x00000000000000000000000000000000000000cc"),
 			InitialHeight: 112,
 			InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{
@@ -692,7 +690,6 @@ func besuSpec() ClientSpec {
 				Validators: []common.Address{common.HexToAddress("0x00000000000000000000000000000000000000aa")},
 			},
 			TrustingPeriod: 1209600,
-			MaxClockDrift:  15,
 			TrustLevel:     besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3},
 		},
 	}
@@ -700,14 +697,12 @@ func besuSpec() ClientSpec {
 
 // besuRecord is the manifest record of besuSpec's params.
 const besuRecord = `{
-	"consensus": "qbft",
 	"ibcRouter": "0x00000000000000000000000000000000000000cc",
 	"initialHeight": 112,
 	"initialTimestamp": 1788192445,
 	"initialStateRoot": "0x69c8d1758a0375ec0d4ee22f16e3119c84ecb3aaaaaaaaaaaaaaaaaaaaaaaaaa",
 	"initialValidators": ["0x00000000000000000000000000000000000000AA"],
 	"trustingPeriod": 1209600,
-	"maxClockDrift": 15,
 	"trustLevel": {"numerator": 2, "denominator": 3}
 }`
 
@@ -752,11 +747,9 @@ func TestClientStepsBesu(t *testing.T) {
 			p.IBCRouter = common.HexToAddress("0x00000000000000000000000000000000000000dd")
 		},
 		"trustingPeriod": func(p *BesuParams) { p.TrustingPeriod = 1 },
-		"maxClockDrift":  func(p *BesuParams) { p.MaxClockDrift = 1 },
 		"trustLevel": func(p *BesuParams) {
 			p.TrustLevel = besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}
 		},
-		"consensus": func(p *BesuParams) { p.Consensus = besu.IBFT2 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			conflicting := besuSpec()

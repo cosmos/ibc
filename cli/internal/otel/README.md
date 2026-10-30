@@ -4,7 +4,7 @@
 
 # Observability
 
-See [Observability and metrics](../../../docs/6-ibc-cli/8-observability-and-metrics.md)
+See [Observability and metrics](../../../docs/ibc/05-ibc-cli/04-reference/04-observability-and-metrics.mdx)
 for metric modes, names, labels, and semantics.
 
 ## Guide on creating new metrics

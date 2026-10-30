@@ -26,6 +26,11 @@ import (
 // Host is the chain the light client lives on. It needs no Besu consensus:
 // any EVM chain hosting the contract qualifies.
 type Host interface {
+	RouterAddress() common.Address
+	// GetBlockHeader returns the head at v2.LatestBlock.
+	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)
+	// BesuClientRouter is the router clientID's light client is bound to.
+	BesuClientRouter(ctx context.Context, clientID string) (common.Address, error)
 	BesuClientState(ctx context.Context, clientID string) (besumsgs.IBesuLightClientMsgsClientState, error)
 	// BesuConsensusStateHash fails when the client stores no consensus state
 	// at height.
@@ -57,7 +62,8 @@ type Generator struct {
 }
 
 // NewGenerator builds the prover for clientID on host, tracking counterparty,
-// and fails fast unless the client proves counterparty's configured router.
+// and fails fast unless the client is bound to host's router and proves
+// counterparty's.
 func NewGenerator(
 	ctx context.Context,
 	clientID string,
@@ -65,6 +71,18 @@ func NewGenerator(
 	counterparty Counterparty,
 	logger *slog.Logger,
 ) (*Generator, error) {
+	bound, err := host.BesuClientRouter(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"reading client %q's router (a client deployed before ibc-contracts dfba365f has none; "+
+				"replace it with migrateClient): %w",
+			clientID, err,
+		)
+	}
+	if bound != host.RouterAddress() {
+		return nil, fmt.Errorf("client %q is bound to router %s, not %s", clientID, bound, host.RouterAddress())
+	}
+
 	state, err := host.BesuClientState(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -80,10 +98,11 @@ func NewGenerator(
 	return &Generator{host: host, counterparty: counterparty, clientID: clientID, logger: logger}, nil
 }
 
-// LatestProvableHeight returns the counterparty head, or the furthest header
-// the prover finds the client can reach when a validator set change it cannot
-// follow comes first. The light client rejects an update it cannot verify when
-// the relay is simulated.
+// LatestProvableHeight returns the counterparty head, or an earlier header
+// when the head is more than the client's max clock drift ahead of the host's
+// latest block, or the furthest header the prover finds the client can
+// reach when a validator set change it cannot follow comes first. The light
+// client rejects an update it cannot verify when the relay is simulated.
 func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time, error) {
 	head, err := g.counterparty.SealedHeader(ctx, v2.LatestBlock)
 	if err != nil {
@@ -93,6 +112,18 @@ func (g *Generator) LatestProvableHeight(ctx context.Context) (uint64, time.Time
 	state, err := g.host.BesuClientState(ctx, g.clientID)
 	if err != nil {
 		return 0, time.Time{}, err
+	}
+	hostHead, err := g.host.GetBlockHeader(ctx, v2.LatestBlock)
+	if err != nil {
+		return 0, time.Time{}, fmt.Errorf("reading host chain head: %w", err)
+	}
+	// Gas is estimated on the latest block, so its time bounds the header.
+	notAfter := uint64(hostHead.Timestamp.Unix()) + state.MaxClockDrift //nolint:gosec // block times are positive
+	if head.Timestamp > notAfter {
+		height := max(besu.HeightNotAfter(head, notAfter), state.LatestHeight.RevisionHeight)
+		if head, err = g.sealedHeader(ctx, height); err != nil {
+			return 0, time.Time{}, err
+		}
 	}
 	if head.Height <= state.LatestHeight.RevisionHeight {
 		return head.Height, blockTime(head), nil
@@ -184,6 +215,7 @@ func (g *Generator) ClientUpdatePayloads(ctx context.Context, target uint64) ([]
 	for i, header := range headers {
 		updates[i], err = besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 			HeaderRlp:              header.RLP,
+			CommitSeals:            header.CommitSeals,
 			TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trusted.Height},
 			ConsensusStatePreimage: trusted.ConsensusState(),
 		})

@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Mintlify parses and serves every Markdown file under this directory that is
+# not listed here, whether or not docs.json puts it in the navigation. These
+# are internal to the repository and must not become public pages.
+
+# Generator sources, not site pages. Without this Mintlify tries to parse the
+# Markdown under scripts/ as MDX and chokes on its SPDX comment header.
+scripts/
+
+# How to work on this site: the layout, the generators and their contracts.
+# Written for contributors and for Claude, not for readers of the docs.
+README.md
+AGENTS.md
+
+# The deploy runbook: an open plan-tier decision and a known-breakage list,
+# neither of which belongs on a public page. Only this file -- the rest of
+# mintlify/ is the stylesheet, brand assets, fonts and images the site serves,
+# and ignoring the directory would unpublish all of them.
+mintlify/DEPLOYMENT.md
+
+# Written into the page tree (docs/<product>/<version>/) by
+# mintlify/scripts/version-manager.js at the first real freeze: a marker file
+# and the freeze metadata, not content.
+.version-frozen
+.version-metadata.json

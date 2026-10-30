@@ -20,6 +20,8 @@ func TestRecover(t *testing.T) {
 	digest := crypto.Keccak256([]byte("signed"))
 	sig, err := crypto.Sign(digest, key)
 	require.NoError(t, err)
+	want := append([]byte(nil), sig...)
+	want[64] += 27
 
 	t.Run("acceptsEveryFormAndReturnsCanonical", func(t *testing.T) {
 		for _, form := range [][]byte{sig, malleate(sig)} {
@@ -31,7 +33,7 @@ func TestRecover(t *testing.T) {
 				signer, canonical, err := ecrecover.Recover(digest, input)
 				require.NoError(t, err)
 				require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), signer)
-				require.Equal(t, sig, canonical)
+				require.Equal(t, want, canonical)
 				require.Equal(t, original, input, "input must not be mutated")
 			}
 		}
@@ -85,8 +87,9 @@ func FuzzRecover(f *testing.F) {
 		require.NoError(t, err, "rejected a signature go-ethereum recovers")
 		require.Equal(t, want, signer)
 
+		require.Contains(t, []byte{27, 28}, canonical[64])
 		r, s := new(big.Int).SetBytes(canonical[:32]), new(big.Int).SetBytes(canonical[32:64])
-		require.True(t, crypto.ValidateSignatureValues(canonical[64], r, s, true), "not canonical")
+		require.True(t, crypto.ValidateSignatureValues(canonical[64]-27, r, s, true), "not canonical")
 		got, err := gethSigner(digest, canonical)
 		require.NoError(t, err)
 		require.Equal(t, signer, got, "canonical form recovers a different signer")

@@ -16,6 +16,9 @@ examples/besu-to-besu/logs/
 go.work
 go.work.sum
 
-# Python bytecode from docs/6-ibc-cli/tools
+# Python bytecode from docs/scripts
 __pycache__/
 *.pyc
+
+# Local dev-server config for the docs preview
+.claude/launch.json
