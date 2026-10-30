@@ -1,0 +1,90 @@
+---
+title: "Plan a production deployment"
+description: "Choose production trust parameters, permissions, signing, and service configuration for IBC Solidity and IBC CLI."
+---
+
+The tutorial uses development-friendly keys, permissions, and configuration. Do not copy it into production unchanged.
+
+## Configure light-client security
+
+### Attestor set and threshold
+
+An `n`-attestor set with threshold `t` tolerates `n - t` unavailable attestors; forging state requires `t` compromised keys. There is no universal production threshold. Choose `n` and `t` by stating how many unavailable and compromised keys the deployment must tolerate. For example, 2-of-3 tolerates one unavailable or compromised key, while 3-of-5 tolerates two. These are example profiles, not protocol requirements.
+
+The attestor set and `minRequiredSigs` are fixed in the on-chain client. Verify both on chain before enabling relaying.
+
+<Warning>
+- **Quorum:** Never use a one-of-one attestor set in production. One unavailable attestor stops the connection, and one compromised key can forge state.
+- **Key reuse:** Never reuse an attestor key across clients or chains because signatures are not bound to a chain, router, or verifying client.
+</Warning>
+
+### Besu clients
+
+For a QBFT or IBFT 2.0 counterparty, see [Besu light clients](/ibc/04-light-clients/03-besu-light-client) for the parameter mechanics and update rules. In production:
+
+- Keep the default `trustLevel` of `2/3` unless the deployment's threat model explicitly selects a lower value.
+- Choose `trustingPeriod` from the counterparty's validator governance and key-retirement policy. It must be long enough that packet activity advances the client before expiry, but no longer than historical validators remain trustworthy.
+
+## Set contract permissions deliberately
+
+`ibc deploy core` makes relaying public. In production, prefer permissioned relaying: grant `RELAYER_ROLE` to the relayer account for `IBCMulticall.multicall` and to `IBCMulticall` for the router's relay functions before replacing `PUBLIC_ROLE`. Use permissionless relaying only as an explicit policy choice. See [Grant, change, and revoke a role](/ibc/05-ibc-cli/03-guides/05-grant-change-and-revoke-a-role).
+
+At minimum, transfer `ADMIN_ROLE` and each IFT's authority from the deployer to a multisig. Best practice is a timelocked governance executor controlled by a multisig or on-chain governance, with an on-chain delay for upgrades, role changes, client migrations, and IFT configuration. OpenZeppelin's [`TimelockController`](https://docs.openzeppelin.com/contracts/5.x/api/governance#TimelockController) is one implementation.
+
+## Configure IFT rate limits
+
+Configure and verify a rate limit independently on every IFT deployment. Choose its capacity and window from the maximum loss or issuance acceptable before governance can intervene, not merely from expected throughput. Account for token decimals and traffic across every registered bridge.
+
+See [IFT rate limits](/ibc/06-ibc-solidity-contracts/04-ift-contracts#rate-limits) for contract behavior and [`ibc deploy ift`](/ibc/05-ibc-cli/04-reference/02-cli-commands#ibc-deploy-ift) for configuration flags.
+
+## Configure signing and services
+
+### Signing
+
+Use separate keys for administration, deployment, each relayer chain account, and every attestor identity.
+
+- A local signer stores an unencrypted private key on the host. Mount it read-only from a secret store and protect the host, volume, and backups.
+- A remote signer keeps the key outside the CLI. Prefer a KMS or HSM.
+
+### Attestors
+
+<Warning>
+Never run attestors in-process with the relayer in production. Run each attestor as a standalone process with a unique signer, and configure it as a remote attestor in the relayer.
+</Warning>
+
+Configure enough remote attestors to satisfy each client's on-chain threshold.
+
+An attestor trusts its configured chain RPC for state correctness. Use an endpoint whose operator and data you trust; changing that endpoint changes the attestor's trust assumptions.
+
+Each local attestor selects its highest attestable height:
+
+- `finalityOffset: 0` uses the RPC endpoint's `finalized` block.
+- A positive value uses `latest - finalityOffset` without proving that block final.
+
+Besu chains do not support `finalityOffset: 0`. Omitting the field also selects zero, so configure a positive offset for every Besu attestor.
+
+Use the same `finalityOffset` for every attestor in the quorum.
+
+### Relayers
+
+For each client end, verify the chain ID, client ID, light-client type, signer, and `autoRelay` setting. Use a separate funded signer for each destination chain.
+
+The light client prevents a relayer RPC from forging packet state, but the RPC still controls the relayer's view of heads, receipts, nonces, gas, and fees.
+
+A relayer database must have only one active relayer process. Multiple active relayers sharing a database are not supported.
+
+## Validate before launch
+
+```sh
+ibc config validate relayer --config /etc/ibc/relayer.yml --live
+ibc config validate attestor --config /etc/ibc/attestor.yml --live
+```
+
+## Related guides
+
+- [Run a standalone attestor](/ibc/05-ibc-cli/03-guides/01-run-a-standalone-attestor)
+- [Run a standalone relayer](/ibc/05-ibc-cli/03-guides/02-run-a-standalone-relayer)
+- [Configuration reference](/ibc/05-ibc-cli/04-reference/01-configuration)
+- [Permissions and upgrades](/ibc/06-ibc-solidity-contracts/06-permissions-and-upgrades)
+- [Rotate an attestor set](/ibc/05-ibc-cli/03-guides/06-rotate-an-attestor-set)
+- [Observability and metrics](/ibc/05-ibc-cli/04-reference/04-observability-and-metrics)
