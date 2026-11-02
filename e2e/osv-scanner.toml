@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+
+# Vulnerabilities that cannot be fixed by a dependency bump and have been
+# reviewed as not affecting this repository. The one list of accepted
+# advisories: read by osv-scanner and OpenSSF Scorecard, which only apply this
+# file to manifests in the same directory, and by the Dependency Review workflow
+# (scripts/vulncheck-report.sh).
+#
+# Edit cli/osv-scanner.toml, then copy it over the identical copies next to
+# every other go.mod (e2e/, gen/go/solidity-abi/). They are copies rather than
+# symlinks because Scorecard skips symlinks.
+#
+# Re-review each entry when the upstream dependency is upgraded.
+
+[[IgnoredVulns]]
+id = "GO-2025-3442"
+reason = "Ignored because it is a false positive: cometbft v0.40.0 already contains the BlockPool.SetPeerRange fix from v0.38.17. It is flagged only through the advisory's v1 range (fixed in 1.0.1), which covers the v1-only internal/blocksync package; moving to cometbft v1 would leave the v0.40 line cosmos-sdk uses."
+
+[[IgnoredVulns]]
+id = "GO-2023-1821"
+reason = "Ignored because no fixed cosmos-sdk release exists. Not exploitable here: the bug is in x/crisis, which no module in this repository imports."
+
+[[IgnoredVulns]]
+id = "GO-2023-1881"
+reason = "Ignored because no fixed cosmos-sdk release exists. Not exploitable here: the bug is in x/crisis, which no module in this repository imports."
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "Ignored because no fixed golang.org/x/crypto release exists (the openpgp package is deprecated). It reaches cli and e2e only through cosmos-sdk crypto/armor (keyring key import/export) and has to be removed upstream in cosmos-sdk."
+
+[[IgnoredVulns]]
+id = "GO-2025-3684"
+reason = "Ignored because it is a false positive: GHSA-mjfq-3qr2-6g84 affects only cosmos/evm v0.1.0, but the Go database records it with no fixed version. e2e uses a later release and does not import the cosmos/evm precompiles."
+
+[[IgnoredVulns]]
+id = "GO-2026-4479"
+reason = "Ignored because no fixed pion/dtls/v2 release exists (AES-GCM random nonce generation risks leaking the authentication key). It reaches the module graph through libp2p -> pion/stun. Tracking: https://github.com/libp2p/go-libp2p/issues/3464"
