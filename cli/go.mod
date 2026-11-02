@@ -10,7 +10,7 @@ require (
 	connectrpc.com/grpcreflect v1.3.1
 	connectrpc.com/otelconnect v0.12.0
 	github.com/cometbft/cometbft v0.40.0
-	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261028174625-daaed552e739
+	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261030132820-35388c8547b3
 	github.com/cosmos/ibc-go/v11 v11.2.0
 	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.1.0

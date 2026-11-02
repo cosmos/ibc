@@ -4,6 +4,7 @@ package evm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -55,6 +56,11 @@ var namedReverts = []struct {
 		besulightclient.ContractMetaData, "ConsensusStateExpired",
 		[]any{uint64(100), big.NewInt(121), uint64(20)},
 		"ConsensusStateExpired(100, 121, 20)",
+	},
+	{
+		besulightclient.ContractMetaData, "InvalidStorageRoot",
+		[]any{[32]byte{31: 1}},
+		fmt.Sprintf("InvalidStorageRoot(%v)", [32]byte{31: 1}),
 	},
 }
 

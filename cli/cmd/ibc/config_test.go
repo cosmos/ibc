@@ -34,9 +34,9 @@ func TestVersionInfo(t *testing.T) {
 
 	// As set by `make build` for a release.
 	version, commit = "cli/v0.2.0", "b1a4cf0a1546"
-	contractsVersion, ibcGoVersion = "v0.0.0-20261028174625-daaed552e739", "v11.2.0"
+	contractsVersion, ibcGoVersion = "v0.0.0-20261030132820-35388c8547b3", "v11.2.0"
 	require.Equal(t, "ibc cli version cli/v0.2.0, commit: b1a4cf0a1546\n"+
-		"ibc-contracts: v0.0.0-20261028174625-daaed552e739, commit: daaed552e739\n"+
+		"ibc-contracts: v0.0.0-20261030132820-35388c8547b3, commit: 35388c8547b3\n"+
 		"ibc-go: v11.2.0, commit: unknown", versionInfo())
 
 	// As built without `make build`.
