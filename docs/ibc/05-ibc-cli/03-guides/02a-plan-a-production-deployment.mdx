@@ -43,7 +43,7 @@ See [IFT rate limits](/ibc/06-ibc-solidity-contracts/04-ift-contracts#rate-limit
 
 Use a dedicated key for every role and trust boundary: one administration key, one deployment key, one relayer account per chain, and one key per attestor. Never reuse keys across roles, chains, services, or hosts.
 
-In production, keep administration and attestor keys in an HSM or KMS. Protect the administration role with multisig approval where supported. Treat the deployment key as temporary: fund it only for deployment, then revoke its privileges and remove it.
+In production, use [Cosmos KMS](https://github.com/cosmos/kms) as the remote signer for relayer and attestor keys. Protect the administration role with multisig approval where supported. Treat the deployment key as temporary: fund it only for deployment, then revoke its privileges and remove it.
 
 ### Attestors
 
@@ -58,7 +58,7 @@ Each local attestor selects its highest attestable height:
 - `finalityOffset: 0` uses the RPC endpoint's `finalized` block.
 - A positive value uses `latest - finalityOffset` without proving that block final.
 
-Besu chains do not support `finalityOffset: 0`. Omitting the field also selects zero, so configure a positive offset for every Besu attestor.
+Besu QBFT and IBFT 2.0 chains do not support `finalityOffset: 0`. Use `finalityOffset: 1`; their committed blocks have immediate finality, so a larger offset only delays attestations. Omitting the field selects zero.
 
 Use the same `finalityOffset` for every attestor in the quorum.
 
