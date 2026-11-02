@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Vulnerabilities that cannot be fixed by a dependency bump and have been
-# reviewed as not affecting this repository. Read by osv-scanner and OpenSSF
-# Scorecard, which only apply this file to manifests in the same directory.
+# reviewed as not affecting this repository. The one list of accepted
+# advisories: read by osv-scanner and OpenSSF Scorecard, which only apply this
+# file to manifests in the same directory, and by the Dependency Review workflow
+# (scripts/vulncheck-report.sh).
 #
 # Edit cli/osv-scanner.toml, then copy it over the identical copies next to
 # every other go.mod (e2e/, gen/go/solidity-abi/). They are copies rather than
@@ -29,3 +31,7 @@ reason = "Ignored because no fixed golang.org/x/crypto release exists (the openp
 [[IgnoredVulns]]
 id = "GO-2025-3684"
 reason = "Ignored because it is a false positive: GHSA-mjfq-3qr2-6g84 affects only cosmos/evm v0.1.0, but the Go database records it with no fixed version. e2e uses a later release and does not import the cosmos/evm precompiles."
+
+[[IgnoredVulns]]
+id = "GO-2026-4479"
+reason = "Ignored because no fixed pion/dtls/v2 release exists (AES-GCM random nonce generation risks leaking the authentication key). It reaches the module graph through libp2p -> pion/stun. Tracking: https://github.com/libp2p/go-libp2p/issues/3464"
