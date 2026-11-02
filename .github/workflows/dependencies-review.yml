@@ -30,7 +30,7 @@ jobs:
         id: allowlist
         run: |
           set -euo pipefail
-          ghsas="$(./scripts/govulncheck-ignore-ghsas.sh)"
+          ghsas="$(./scripts/vulncheck-report.sh --allow-ghsas)"
           echo "Accepted GHSAs: ${ghsas:-none}"
           printf 'ghsas=%s\n' "$ghsas" >> "$GITHUB_OUTPUT"
 
