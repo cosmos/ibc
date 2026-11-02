@@ -41,18 +41,15 @@ See [IFT rate limits](/ibc/06-ibc-solidity-contracts/04-ift-contracts#rate-limit
 
 ### Signing
 
-Use separate keys for administration, deployment, each relayer chain account, and every attestor identity.
+Use a dedicated key for every role and trust boundary: one administration key, one deployment key, one relayer account per chain, and one key per attestor. Never reuse keys across roles, chains, services, or hosts.
 
-- A local signer stores an unencrypted private key on the host. Mount it read-only from a secret store and protect the host, volume, and backups.
-- A remote signer keeps the key outside the CLI. Prefer a KMS or HSM.
+In production, keep administration and attestor keys in an HSM or KMS. Protect the administration role with multisig approval where supported. Treat the deployment key as temporary: fund it only for deployment, then revoke its privileges and remove it.
 
 ### Attestors
 
 <Warning>
 Never run attestors in-process with the relayer in production. Run each attestor as a standalone process with a unique signer, and configure it as a remote attestor in the relayer.
 </Warning>
-
-Configure enough remote attestors to satisfy each client's on-chain threshold.
 
 An attestor trusts its configured chain RPC for state correctness. Use an endpoint whose operator and data you trust; changing that endpoint changes the attestor's trust assumptions.
 
