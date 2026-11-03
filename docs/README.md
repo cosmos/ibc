@@ -65,6 +65,7 @@ IBC CLI is an all-in-one binary for deploying and running an IBC connection.
 
 - [Run a standalone attestor](ibc/05-ibc-cli/03-guides/01-run-a-standalone-attestor.mdx): An attestor in its own process.
 - [Run a standalone relayer](ibc/05-ibc-cli/03-guides/02-run-a-standalone-relayer.mdx): Connect a relayer to an existing connection.
+- [Plan a production deployment](ibc/05-ibc-cli/03-guides/02a-plan-a-production-deployment.mdx): Production trust parameters, permissions, signing, and service configuration.
 
 ### Guides
 
