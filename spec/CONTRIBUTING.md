@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Contribution Guidelines
 
 Thanks for your interest in contributing to IBC! Contributions are always welcome. 
@@ -20,6 +22,8 @@ Contributing to this repo can mean many things such as participating in discussi
 - If you would like to propose a new standard for inclusion in the IBC standards, please take a look at [PROCESS.md](./PROCESS.md) for a detailed description of the standardisation process.
   - To start a new standardisation document, copy the [template](../spec/ics-template.md) and open a PR.
 
+- If you would like to record an architecture decision for the standards or for cosmos/ibc, cosmos/ibc-go or cosmos/ibc-contracts, write an [architecture decision record](./adr/README.md) (ADR) and open a PR here.
+
 If you have any questions, you can usually find some IBC team members on the [Cosmos Discord](https://discord.gg/cosmosnetwork).
 
 ## Pull Requests
@@ -29,6 +33,8 @@ Each PR should address only a single issue and **a single standard**.
 The PR name should be prefixed by the standard number, 
 e.g., `ICS4: Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
 If fixing an issue requires changes to multiple standards, create multiple PRs and mention the inter-dependencies.
+
+A PR that adds or updates an ADR is titled `ADR NNN: short title` instead of with a standard number; see the [ADR README](./adr/README.md#process).
 
 ### Process for reviewing PRs
 

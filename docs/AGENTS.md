@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # AGENTS.md — the docs tree
 
 The Mintlify site lives here. `docs/` is the site root: Mintlify resolves every
@@ -14,7 +16,7 @@ Navigation is five `tabs`, which Mintlify renders as a horizontal bar:
 **Learn** (14 — the protocol, its applications and light clients, plus the site's
 landing page), **IBC CLI** (7 — get started, run the services, reference),
 **IBC-Solidity** (6 — the contracts), **IBC-Go** (`latest` and `v10.1.x`, via a
-`versions` block nested inside the tab) and **Specification** (42 generated
+`versions` block nested inside the tab) and **Specification** (68 generated
 pages, grouped by section).
 
 The split is by subject, not by task: each tab answers "what am I reading

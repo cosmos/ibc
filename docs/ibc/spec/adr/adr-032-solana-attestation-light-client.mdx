@@ -1,0 +1,160 @@
+---
+title: "ADR 032: Solana Attestation Light Client"
+---
+{/* Generated from spec/adr/adr-032-solana-attestation-light-client.md by docs/scripts/specgen.py. Edits here are overwritten. */}
+{/* Regenerate: python3 docs/scripts/specgen.py */}
+
+{/* SPDX-License-Identifier: Apache-2.0 */}
+
+# ADR 032: Solana Attestation Light Client
+
+## Status
+
+Implemented
+
+## Context
+
+IBC (Inter-Blockchain Communication) requires light clients to verify state from counterparty chains. The Solidity attestation light client already exists for Ethereum, providing a trust-minimized approach where a set of attestors sign state commitments.
+
+The goal of the Solana implementation is to **mirror the Solidity attestation light client** as closely as possible while adapting to Solana's programming model. This ensures:
+
+- Consistent behavior across chains
+- Shared attestor infrastructure
+- Predictable verification semantics
+
+## Decision
+
+### Core Design
+
+The attestation light client trusts an m-of-n set of attestors to honestly report state from the counterparty chain. Attestors sign:
+
+- **State attestations**: height and timestamp for client updates
+- **Packet attestations**: commitment paths and values for membership proofs
+
+### Architecture
+
+```text
+                              ┌─────────────────────────────────────┐
+                              │         COUNTERPARTY CHAIN          │
+                              │       (Ethereum, Cosmos, etc.)      │
+                              │                                     │
+                              │  • Commitments stored at paths      │
+                              │  • Block heights with timestamps    │
+                              └──────────────┬──────────────────────┘
+                                             │
+                        ┌────────────────────┘
+                        │ Observe state
+                        ▼
+              ┌─────────────────────┐
+              │      ATTESTORS      │
+              │     (off-chain)     │
+              │                     │
+              │  • N trusted nodes  │
+              │  • Sign attestations│
+              │  • M-of-N threshold │
+              └──────────┬──────────┘
+                         │
+                         │ Signed attestations
+                         │ (height, timestamp, packets)
+                         ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                     SOLANA ATTESTATION LIGHT CLIENT                        │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  ┌──────────────┐    ┌───────────────────┐    ┌──────────────────────┐     │
+│  │ ClientState  │    │ ConsensusState    │    │ Instructions         │     │
+│  │              │    │ (per height PDA)  │    │                      │     │
+│  │ • client_id  │    │                   │    │ • initialize         │     │
+│  │ • attestors  │    │ • height          │    │ • update_client      │     │
+│  │ • threshold  │    │ • timestamp       │    │ • verify_membership  │     │
+│  │ • is_frozen  │    │                   │    │ • verify_non_member  │     │
+│  └──────────────┘    └───────────────────┘    └──────────────────────┘     │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Flow:**
+
+1. **Initialize** — Create client with attestor addresses and M-of-N threshold
+2. **Update Client** — Attestors sign `(height, timestamp, packets[])`, client verifies signatures and stores consensus state
+3. **Verify Membership** — Prove a commitment exists at a path using stored attestation
+4. **Verify Non-Membership** — Prove a path has zero commitment
+5. **Misbehaviour** — If conflicting timestamps for same height, client freezes
+
+### Key Design Decisions
+
+#### 1. Signature Scheme: ECDSA with secp256k1
+
+Uses Ethereum-compatible ECDSA signatures. Attestors are Ethereum addresses (20-byte), reusing existing key infrastructure. Solana provides native `secp256k1_recover` syscall. Each signature is 65 bytes.
+
+#### 2. Proof Serialization: Borsh
+
+Uses Borsh (~2.5x more compact than JSON). Each signature adds ~69 bytes vs ~165 bytes with JSON.
+
+#### 3. Consensus State Storage: Per-Height PDAs
+
+Each consensus state is stored in a separate PDA derived from (client_id, height):
+
+```rust
+seeds = [ConsensusStateStore::SEED, client_state.key().as_ref(), &height.to_le_bytes()]
+```
+
+Account existence serves as implicit "height trusted" check.
+
+#### 4. Misbehaviour Detection
+
+Uses `init_if_needed` constraint with timestamp comparison (matches Solidity behavior):
+
+- Consensus state doesn't exist → create and store
+- Same timestamp → NoOp (return early)
+- Different timestamp → freeze client, emit `MisbehaviourDetected` event, return success (must return Ok to persist frozen state; errors revert all changes in Solana)
+
+#### 5. Access Control
+
+Delegates to separate `access_manager` program for reusability across IBC programs.
+
+### Transaction Size Constraints
+
+Solana's 1232-byte limit restricts signatures per transaction:
+
+| Component               | Size           |
+| ----------------------- | -------------- |
+| Transaction overhead    | ~200 bytes     |
+| Instruction data (base) | ~300 bytes     |
+| Per-signature (Borsh)   | ~69 bytes      |
+| Account references      | ~32 bytes each |
+
+**Tested Limit**: 11 attestor signatures without chunking.
+
+**Future Option**: Signature chunking (pattern exists in ICS07 Tendermint LC).
+
+## Alternatives Considered
+
+### Signature Chunking
+
+Upload signatures across multiple transactions. **Deferred** - current 11-signature limit is sufficient for initial deployment.
+
+## Solidity Comparison
+
+### Feature Parity
+
+Full parity: initialization, updates, membership/non-membership verification, misbehaviour detection, frozen client checks, access control.
+
+### Implementation Differences
+
+| Aspect                 | Solidity                       | Solana                                |
+| ---------------------- | ------------------------------ | ------------------------------------- |
+| Consensus storage      | `mapping(height => timestamp)` | Per-height PDA accounts               |
+| Signature verification | OpenZeppelin ECDSA             | Native `secp256k1_recover` syscall    |
+| Access control         | OpenZeppelin AccessControl     | Separate `access_manager` program     |
+| Signature limit        | None (gas scales linearly)     | 11 per transaction                    |
+| Initialize validation  | No height/timestamp validation | Requires height > 0 and timestamp > 0 |
+
+### Error Handling Differences
+
+- **Misbehaviour**: Solidity returns `UpdateResult.Misbehaviour`, Solana emits `MisbehaviourDetected` event and returns success (errors revert state in Solana)
+- **Invalid timestamp**: Solana validates `timestamp > 0` in initialize, Solidity does not
+
+## References
+
+- [Solidity Attestation Light Client](https://github.com/cosmos/ibc-contracts/tree/main/ibc-solidity/contracts/light-clients/attestation)

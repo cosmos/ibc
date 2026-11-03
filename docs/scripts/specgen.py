@@ -59,6 +59,7 @@ EXCLUDE = {
     "PROCESS.md",
     "STANDARDS_COMMITTEE.md",
     "ics-template.md",
+    "adr-template.md",
 }
 
 IMAGE_EXT = (".png", ".svg", ".jpg", ".jpeg", ".gif", ".webp")

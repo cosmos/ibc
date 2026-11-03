@@ -24,6 +24,7 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 | Path | What it is                                                                                                  |
 | ---- |-------------------------------------------------------------------------------------------------------------|
 | [`spec/`](spec/) | The Interchain Standards: the specifications for the protocol itself.                                       |
+| [`spec/adr/`](spec/adr/README.md) | Architecture decision records for the standards and for the implementations in cosmos/ibc, cosmos/ibc-go and cosmos/ibc-contracts. |
 | [`cli/`](cli/README.md) | IBC CLI: deploys IBC onto a chain, and runs the relayer and attestor processes that carry packets across it. |
 | [`docs/`](docs/README.md) | How IBC works, the contracts, and the CLI: tutorials and reference.                                         |
 | [`e2e/`](e2e/README.md) | Repository-wide black-box acceptance tests.                                                                 |

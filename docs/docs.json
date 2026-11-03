@@ -90,6 +90,166 @@
       "source": "/ibc/05-ibc-cli/08-api",
       "destination": "/ibc/05-ibc-cli/04-reference/03-api",
       "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/README",
+      "destination": "/ibc/spec/adr/README",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-001-coin-source-tracing",
+      "destination": "/ibc/spec/adr/adr-001-coin-source-tracing",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-002-go-module-versioning",
+      "destination": "/ibc/spec/adr/adr-002-go-module-versioning",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-003-ics27-acknowledgement",
+      "destination": "/ibc/spec/adr/adr-003-ics27-acknowledgement",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-004-ics29-lock-fee-module",
+      "destination": "/ibc/spec/adr/adr-004-ics29-lock-fee-module",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-005-consensus-height-events",
+      "destination": "/ibc/spec/adr/adr-005-consensus-height-events",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-006-02-client-refactor",
+      "destination": "/ibc/spec/adr/adr-006-02-client-refactor",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-007-solomachine-signbytes",
+      "destination": "/ibc/spec/adr/adr-007-solomachine-signbytes",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-008-app-caller-cbs",
+      "destination": "/ibc/spec/adr/adr-008-app-caller-cbs",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-009-v6-ics27-msgserver",
+      "destination": "/ibc/spec/adr/adr-009-v6-ics27-msgserver",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-010-light-clients-as-sdk-modules",
+      "destination": "/ibc/spec/adr/adr-010-light-clients-as-sdk-modules",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-011-transfer-total-escrow-state-entry",
+      "destination": "/ibc/spec/adr/adr-011-transfer-total-escrow-state-entry",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-015-ibc-packet-receiver",
+      "destination": "/ibc/spec/adr/adr-015-ibc-packet-receiver",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-025-ibc-passive-channels",
+      "destination": "/ibc/spec/adr/adr-025-ibc-passive-channels",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-026-ibc-client-recovery-mechanisms",
+      "destination": "/ibc/spec/adr/adr-026-ibc-client-recovery-mechanisms",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/latest/architecture/adr-027-ibc-wasm",
+      "destination": "/ibc/spec/adr/adr-027-ibc-wasm",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/README",
+      "destination": "/ibc/spec/adr/README",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-001-coin-source-tracing",
+      "destination": "/ibc/spec/adr/adr-001-coin-source-tracing",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-002-go-module-versioning",
+      "destination": "/ibc/spec/adr/adr-002-go-module-versioning",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-003-ics27-acknowledgement",
+      "destination": "/ibc/spec/adr/adr-003-ics27-acknowledgement",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-004-ics29-lock-fee-module",
+      "destination": "/ibc/spec/adr/adr-004-ics29-lock-fee-module",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-005-consensus-height-events",
+      "destination": "/ibc/spec/adr/adr-005-consensus-height-events",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-006-02-client-refactor",
+      "destination": "/ibc/spec/adr/adr-006-02-client-refactor",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-007-solomachine-signbytes",
+      "destination": "/ibc/spec/adr/adr-007-solomachine-signbytes",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-008-app-caller-cbs",
+      "destination": "/ibc/spec/adr/adr-008-app-caller-cbs",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-009-v6-ics27-msgserver",
+      "destination": "/ibc/spec/adr/adr-009-v6-ics27-msgserver",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-010-light-clients-as-sdk-modules",
+      "destination": "/ibc/spec/adr/adr-010-light-clients-as-sdk-modules",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-011-transfer-total-escrow-state-entry",
+      "destination": "/ibc/spec/adr/adr-011-transfer-total-escrow-state-entry",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-015-ibc-packet-receiver",
+      "destination": "/ibc/spec/adr/adr-015-ibc-packet-receiver",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-025-ibc-passive-channels",
+      "destination": "/ibc/spec/adr/adr-025-ibc-passive-channels",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-026-ibc-client-recovery-mechanisms",
+      "destination": "/ibc/spec/adr/adr-026-ibc-client-recovery-mechanisms",
+      "permanent": true
+    },
+    {
+      "source": "/ibc-go/v10.1.x/architecture/adr-027-ibc-wasm",
+      "destination": "/ibc/spec/adr/adr-027-ibc-wasm",
+      "permanent": true
     }
   ],
   "navigation": {
@@ -495,28 +655,6 @@
                 ]
               },
               {
-                "group": "Architecture Decision Records",
-                "icon": "scroll-text",
-                "pages": [
-                  "ibc-go/latest/architecture/README",
-                  "ibc-go/latest/architecture/adr-001-coin-source-tracing",
-                  "ibc-go/latest/architecture/adr-002-go-module-versioning",
-                  "ibc-go/latest/architecture/adr-003-ics27-acknowledgement",
-                  "ibc-go/latest/architecture/adr-004-ics29-lock-fee-module",
-                  "ibc-go/latest/architecture/adr-005-consensus-height-events",
-                  "ibc-go/latest/architecture/adr-006-02-client-refactor",
-                  "ibc-go/latest/architecture/adr-007-solomachine-signbytes",
-                  "ibc-go/latest/architecture/adr-008-app-caller-cbs",
-                  "ibc-go/latest/architecture/adr-009-v6-ics27-msgserver",
-                  "ibc-go/latest/architecture/adr-010-light-clients-as-sdk-modules",
-                  "ibc-go/latest/architecture/adr-011-transfer-total-escrow-state-entry",
-                  "ibc-go/latest/architecture/adr-015-ibc-packet-receiver",
-                  "ibc-go/latest/architecture/adr-025-ibc-passive-channels",
-                  "ibc-go/latest/architecture/adr-026-ibc-client-recovery-mechanisms",
-                  "ibc-go/latest/architecture/adr-027-ibc-wasm"
-                ]
-              },
-              {
                 "group": "Changelog",
                 "icon": "rotate-ccw",
                 "pages": [
@@ -755,28 +893,6 @@
                 ]
               },
               {
-                "group": "Architecture Decision Records",
-                "icon": "scroll-text",
-                "pages": [
-                  "ibc-go/v10.1.x/architecture/README",
-                  "ibc-go/v10.1.x/architecture/adr-001-coin-source-tracing",
-                  "ibc-go/v10.1.x/architecture/adr-002-go-module-versioning",
-                  "ibc-go/v10.1.x/architecture/adr-003-ics27-acknowledgement",
-                  "ibc-go/v10.1.x/architecture/adr-004-ics29-lock-fee-module",
-                  "ibc-go/v10.1.x/architecture/adr-005-consensus-height-events",
-                  "ibc-go/v10.1.x/architecture/adr-006-02-client-refactor",
-                  "ibc-go/v10.1.x/architecture/adr-007-solomachine-signbytes",
-                  "ibc-go/v10.1.x/architecture/adr-008-app-caller-cbs",
-                  "ibc-go/v10.1.x/architecture/adr-009-v6-ics27-msgserver",
-                  "ibc-go/v10.1.x/architecture/adr-010-light-clients-as-sdk-modules",
-                  "ibc-go/v10.1.x/architecture/adr-011-transfer-total-escrow-state-entry",
-                  "ibc-go/v10.1.x/architecture/adr-015-ibc-packet-receiver",
-                  "ibc-go/v10.1.x/architecture/adr-025-ibc-passive-channels",
-                  "ibc-go/v10.1.x/architecture/adr-026-ibc-client-recovery-mechanisms",
-                  "ibc-go/v10.1.x/architecture/adr-027-ibc-wasm"
-                ]
-              },
-              {
                 "group": "Changelog",
                 "icon": "rotate-ccw",
                 "pages": [
@@ -873,6 +989,38 @@
               "ibc/spec/app/ics-031-crosschain-queries/README",
               "ibc/spec/app/ics-100-atomic-swap/README",
               "ibc/spec/app/ics-721-nft-transfer/README"
+            ]
+          },
+          {
+            "group": "Architecture Decision Records",
+            "icon": "scroll-text",
+            "pages": [
+              "ibc/spec/adr/README",
+              "ibc/spec/adr/adr-001-coin-source-tracing",
+              "ibc/spec/adr/adr-002-go-module-versioning",
+              "ibc/spec/adr/adr-003-ics27-acknowledgement",
+              "ibc/spec/adr/adr-004-ics29-lock-fee-module",
+              "ibc/spec/adr/adr-005-consensus-height-events",
+              "ibc/spec/adr/adr-006-02-client-refactor",
+              "ibc/spec/adr/adr-007-solomachine-signbytes",
+              "ibc/spec/adr/adr-008-app-caller-cbs",
+              "ibc/spec/adr/adr-009-v6-ics27-msgserver",
+              "ibc/spec/adr/adr-010-light-clients-as-sdk-modules",
+              "ibc/spec/adr/adr-011-transfer-total-escrow-state-entry",
+              "ibc/spec/adr/adr-015-ibc-packet-receiver",
+              "ibc/spec/adr/adr-025-ibc-passive-channels",
+              "ibc/spec/adr/adr-026-ibc-client-recovery-mechanisms",
+              "ibc/spec/adr/adr-027-ibc-wasm",
+              "ibc/spec/adr/adr-028-solana-storage-architecture",
+              "ibc/spec/adr/adr-029-solana-upgradability",
+              "ibc/spec/adr/adr-030-solana-ics27-gmp-architecture",
+              "ibc/spec/adr/adr-031-solana-ift-architecture",
+              "ibc/spec/adr/adr-032-solana-attestation-light-client",
+              "ibc/spec/adr/adr-033-proof-api-version-specific-compatibility-modules",
+              "ibc/spec/adr/adr-034-solidity-ift-ratelimit",
+              "ibc/spec/adr/adr-035-solidity-pausability",
+              "ibc/spec/adr/adr-036-e2e-environments-as-owned-resource-graphs",
+              "ibc/spec/adr/adr-037-e2e-providers-from-test-requirements"
             ]
           },
           {

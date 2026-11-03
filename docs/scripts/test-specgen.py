@@ -357,9 +357,12 @@ def _():
 @case("excludes the governance files from publication")
 def _():
     for name in ("CONTRIBUTING.md", "PROCESS.md",
-                 "STANDARDS_COMMITTEE.md", "ics-template.md"):
+                 "STANDARDS_COMMITTEE.md", "ics-template.md",
+                 "adr/adr-template.md"):
         assert specgen.excluded(name), name
     assert not specgen.excluded("core/ics-004-channel-and-packet-semantics/README.md")
+    assert not specgen.excluded("adr/README.md")
+    assert not specgen.excluded("adr/adr-001-coin-source-tracing.md")
 
 
 @case("generating twice changes nothing the second time")
