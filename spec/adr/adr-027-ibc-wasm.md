@@ -58,7 +58,7 @@ clientKeeper.SetParams(ctx, params)
 ```
 
 Adding a new light client contract is governance-gated. To upload a new light client users need to submit 
-a [governance v1 proposal](https://docs.cosmos.network/main/modules/gov#proposals) that contains the `sdk.Msg` for storing
+a [governance v1 proposal](https://docs.cosmos.network/sdk/latest/modules/gov/README#proposals) that contains the `sdk.Msg` for storing
 the Wasm contract's bytecode. The required message is `MsgStoreCode` and the bytecode is provided in the field `wasm_byte_code`:
 
 ```proto

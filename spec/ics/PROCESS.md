@@ -18,7 +18,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
   - Describe the shape of a potential solution
   - Identify challenges to this proposal
 - ***Entrance Criteria***:
-  - Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/{area}/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repository.
+  - Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/ics/{area}/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repository.
     This file should contain:
     - List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
     - Discussion of key algorithms, abstractions, and semantics
@@ -29,7 +29,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
   
     For more details on submitting a PR, take a look at the [Pull Requests](../CONTRIBUTING.md#pull-requests) section in the contribution guidelines.
   - Identified `author(s)` who will advance the proposal in the header of the standard file
-  - Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
+  - Any additional reference documentation or media in the `./spec/ics/{area}/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
   - The specification team expects that this proposal will be finalised and eventually included in the IBC standard set.
 - ***Spec Quality***:
   - Follows the structure laid out in ICS 1 and provides a reasonable overview of the proposed addition.
@@ -68,7 +68,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
   - At least two specification-compatible implementations exist, and they have been tested against each other
   - All relevant ecosystem stakeholders approve the specification (any holdout can block this stage)
   - Acceptance tests are written and merged into the relevant repositories
-  - All files in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repository
+  - All files in the `./spec/ics/{area}/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/` directory are up to date and merged into the `cosmos/ibc` repository
 - ***Acceptance Requirements***:
   - The PR changing the stage to "finalised" has been approved by representatives from all relevant ecosystem stakeholders, and all members of the core specification team.
 - ***Spec Quality***:
