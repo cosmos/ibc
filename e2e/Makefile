@@ -3,6 +3,7 @@
 E2E_FLAGS ?= -count=1
 E2E_MODE ?= fast
 E2E_LOAD ?= 0
+E2E_SHARD ?=
 FORGE_BUILD_FLAGS ?=
 
 HARNESS_DIR := internal/harness
@@ -37,9 +38,11 @@ test-apps: ## Rebuild test-app artifacts and typed Go bindings (requires bun, fo
 	forge build $(FORGE_BUILD_FLAGS) --root $(HARNESS_DIR)/environment/solidityibc/contracts
 	../scripts/generate-contract-bindings.sh
 
-test: _build-cli _ensure-observability-stack ## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=...)
-	# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
-	E2E_MODE=$(E2E_MODE) E2E_LOAD=$(E2E_LOAD) go test . -timeout 60m -parallel 4 $(E2E_FLAGS)
+# -parallel caps concurrent Docker environments; the GOMAXPROCS default can overload a large machine.
+test: _build-cli _ensure-observability-stack ## Run e2e tests (E2E_MODE=... E2E_LOAD=... E2E_FLAGS=... E2E_SHARD=i/n)
+	run=; \
+	if [ -n "$(E2E_SHARD)" ]; then run="-run=$$(./scripts/shard-tests.sh $(E2E_SHARD))" || exit 1; fi; \
+	E2E_MODE=$(E2E_MODE) E2E_LOAD=$(E2E_LOAD) go test . -timeout 60m -parallel 4 $${run:+"$$run"} $(E2E_FLAGS)
 
 BESU_FIXTURES_DIR := $(abspath ../cli/besu/besutest/testdata)
 BESU_SOLIDITY_FIXTURES := ibc-solidity/test/besu-bft/fixtures
