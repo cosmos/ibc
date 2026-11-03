@@ -4,7 +4,7 @@
 
 ## Changelog
 
-- January 28th, 2022: Initial Draft
+- Jan 28, 2022: Initial Draft
 
 ## Status
 

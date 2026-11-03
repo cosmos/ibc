@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 100
 title: Atomic Swap
 stage: draft
@@ -6,8 +7,8 @@ category: IBC/APP
 requires: 25, 26
 kind: instantiation
 author: Ping Liang <ping@side.one>, Edward Gunawan <edward@s16.ventures>
-created: 2022-07-27
-modified: 2022-10-07
+created: Jul 27, 2022
+modified: Oct 7, 2022
 ---
 
 <p style="text-align:center;border-style:solid">This specification has been reviewed by the Spec Committee, but it is not responsible for maintaining it.</p>

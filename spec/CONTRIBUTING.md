@@ -34,7 +34,7 @@ The PR name should be prefixed by the standard number,
 e.g., `ICS4: Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
 If fixing an issue requires changes to multiple standards, create multiple PRs and mention the inter-dependencies.
 
-A PR that adds or updates an ADR is titled `ADR NNN: short title` instead of with a standard number; see the [ADR README](./adr/README.md#process).
+A PR that adds or updates an ADR is titled `docs(adr): ADR NNN short title` instead of being prefixed by a standard number; see the [ADR README](./adr/README.md#process).
 
 ### Process for reviewing PRs
 

@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 5
 title: Port Allocation
 stage: Draft
@@ -8,8 +9,8 @@ category: IBC/TAO
 kind: interface
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-06-20
-modified: 2019-08-25
+created: Jun 20, 2019
+modified: Aug 25, 2019
 ---
 
 ## Synopsis

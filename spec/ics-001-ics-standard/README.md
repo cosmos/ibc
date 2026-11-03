@@ -1,12 +1,13 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 1
 title: ICS Specification Standard
 stage: draft
 category: meta
 kind: meta
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-02-12
-modified: 2019-08-25
+created: Feb 12, 2019
+modified: Aug 25, 2019
 ---
 
 ## What is an ICS?

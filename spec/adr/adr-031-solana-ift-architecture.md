@@ -3,8 +3,8 @@
 # ADR 031: Interchain Fungible Token (IFT) Architecture for Solana
 
 **Status**: Implemented
-**Date**: 2025-01-04
-**Last Updated**: 2026-01-28
+**Date**: Jan 4, 2025
+**Last Updated**: Jan 28, 2026
 
 IFT for Solana uses a **burn-and-mint pattern** with ICS27-GMP for cross-chain messaging—no escrow accounts, minimal SPL token operations.
 

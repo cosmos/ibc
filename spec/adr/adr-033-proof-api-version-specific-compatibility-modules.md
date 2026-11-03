@@ -3,7 +3,7 @@
 # ADR 033: Version-Specific Proof API Compatibility Modules
 
 **Status**: Implemented
-**Date**: 2026-06-17
+**Date**: Jun 17, 2026
 
 ## Context
 

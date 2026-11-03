@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 2
 title: Client Semantics
 stage: draft
@@ -8,8 +9,8 @@ requires: 24
 required-by: 4
 version compatibility: ibc-go v10.0.0
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
-created: 2019-02-25
-modified: 2024-08-22
+created: Feb 25, 2019
+modified: Aug 22, 2024
 ---
 
 ## Synopsis
@@ -503,9 +504,9 @@ Jan 26, 2020 - Addition of query interface
 
 Jul 27, 2022 - Addition of `verifyClientState` function, and move `ClientState` to the `provableStore`
 
-August 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: <https://github.com/cosmos/ibc-go/pull/1871>
+Aug 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: <https://github.com/cosmos/ibc-go/pull/1871>
 
-August 22, 2024 - [Changes for IBC/TAO V2](https://github.com/cosmos/ibc/pull/1147)  
+Aug 22, 2024 - [Changes for IBC/TAO V2](https://github.com/cosmos/ibc/pull/1147)
 
 ## Copyright
 

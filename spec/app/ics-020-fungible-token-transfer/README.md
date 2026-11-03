@@ -9,8 +9,8 @@ requires: 25, 26
 kind: instantiation
 version compatibility: ibc-go v10.0.0, ibc-rs v0.53.0
 author: Christopher Goes <cwgoes@interchain.berlin>
-created: 2019-07-15 
-modified: 2020-02-24
+created: Jul 15, 2019
+modified: Feb 24, 2020
 ---
 
 ## Synopsis
@@ -439,7 +439,7 @@ Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
 
 Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 
-July 27, 2020 - Re-addition of source field
+Jul 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
 

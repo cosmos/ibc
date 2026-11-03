@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 24
 title: Host State Machine Requirements
 stage: draft
@@ -7,8 +8,8 @@ kind: interface
 required-by: 4
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
-created: 2024-08-21
-modified: 2024-08-21
+created: Aug 21, 2024
+modified: Aug 21, 2024
 ---
 
 ## Synopsis

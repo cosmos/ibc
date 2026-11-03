@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 7
 title: Tendermint Client
 stage: draft
@@ -7,8 +8,8 @@ kind: instantiation
 implements: 2
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-12-10
-modified: 2019-12-19
+created: Dec 10, 2019
+modified: Dec 19, 2019
 ---
 
 ## Synopsis
@@ -451,8 +452,8 @@ Not applicable. Alterations to the client verification algorithm will require a 
 
 ## History
 
-December 10th, 2019 - Initial version
-December 19th, 2019 - Final first draft
+Dec 10, 2019 - Initial version
+Dec 19, 2019 - Final first draft
 
 ## Copyright
 

@@ -3,8 +3,8 @@
 # ADR 030: ICS27 General Message Passing (GMP) Architecture for Solana
 
 **Status**: Implemented
-**Date**: 2025-09-18
-**Last Updated**: 2026-03-02
+**Date**: Sep 18, 2025
+**Last Updated**: Mar 2, 2026
 
 ## Executive Summary
 
@@ -520,12 +520,12 @@ The account stores:
 
 - `status` (Acknowledged/TimedOut)
 - `sender` (original sender address)
-- `sequence` (per-sender counter from `ClientSequence` PDA)
+- `sequence` (the packet's caller-chosen sequence)
 - `source_client` / `dest_client` (client IDs)
 - `ack_commitment` (SHA256 hash of acknowledgement bytes, or zeros for timeout)
 - `result_timestamp` (Unix seconds)
 
-See [Per-Sender Sequence Counter](adr-028-solana-storage-architecture.md#per-sender-sequence-counter) for details on sequence management.
+See [Caller-Chosen Sequence](adr-028-solana-storage-architecture.md#caller-chosen-sequence) in ADR 028 for details on sequence management.
 
 **Relayer Integration**: The relayer computes and returns `gmp_result_pda` in `SolanaPacketTxs` for each ack/timeout packet, allowing callers to query results after relay.
 

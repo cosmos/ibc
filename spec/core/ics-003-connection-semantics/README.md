@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 3
 title: Connection Semantics
 stage: draft
@@ -8,8 +9,8 @@ requires: 2, 24
 required-by: 4, 25
 version compatibility: ibc-go v9.0.0
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
-created: 2019-03-07
-modified: 2024-07-23
+created: Mar 7, 2019
+modified: Jul 23, 2024
 ---
 
 ## Synopsis

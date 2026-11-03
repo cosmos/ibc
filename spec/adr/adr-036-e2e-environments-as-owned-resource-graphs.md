@@ -3,7 +3,7 @@
 # ADR 036: Model E2E environments as owned resource graphs
 
 - Status: Proposed
-- Date: 2026-08-05
+- Date: Aug 5, 2026
 
 ## Context
 

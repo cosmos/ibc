@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 4
 title: Channel & Packet Semantics
 stage: draft
@@ -7,8 +8,8 @@ kind: instantiation
 requires: 2, 3, 5, 24
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-03-07
-modified: 2019-08-25
+created: Mar 7, 2019
+modified: Aug 25, 2019
 ---
 
 ## Synopsis

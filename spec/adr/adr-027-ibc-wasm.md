@@ -4,9 +4,9 @@
 
 ## Changelog
 
-- 26/11/2020: Initial Draft
-- 26/05/2023: Update after 02-client refactor and re-implementation by Strangelove
-- 13/12/2023: Update after upstreaming of module to ibc-go
+- Nov 26, 2020: Initial Draft
+- May 26, 2023: Update after 02-client refactor and re-implementation by Strangelove
+- Dec 13, 2023: Update after upstreaming of module to ibc-go
 
 ## Status
 

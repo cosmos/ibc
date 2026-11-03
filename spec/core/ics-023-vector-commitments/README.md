@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 23
 title: Vector Commitments
 stage: draft
@@ -7,8 +8,8 @@ category: IBC/TAO
 kind: interface
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-04-16
-modified: 2019-08-25
+created: Apr 16, 2019
+modified: Aug 25, 2019
 ---
 
 ## Synopsis

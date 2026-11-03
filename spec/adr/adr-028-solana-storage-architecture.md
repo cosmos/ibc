@@ -3,8 +3,8 @@
 # ADR 028: Solana IBC Storage Architecture
 
 **Status**: Implemented
-**Date**: 2025-06-17
-**Updated**: 2025-12-19
+**Date**: Jun 17, 2025
+**Updated**: Dec 19, 2025
 
 ## Context
 

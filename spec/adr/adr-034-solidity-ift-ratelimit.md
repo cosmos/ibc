@@ -3,8 +3,8 @@
 # ADR 034: Rate Limiting in IFT in Solidity
 
 **Status**: Accepted
-**Date**: 2026-09-10
-**Last Updated**: 2026-09-24
+**Date**: Sep 10, 2026
+**Last Updated**: Sep 24, 2026
 
 ## Context
 

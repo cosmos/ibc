@@ -1,9 +1,10 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 title: IBC v2
 stage: EXPERIMENTAL
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchainlabs.io>
-created: 2024-08-15
+created: Aug 15, 2024
 ---
 
 ## IBC v2

@@ -4,8 +4,8 @@
 
 ## Changelog
 
-- 2020-07-09: Initial Draft
-- 2020-08-11: Implementation changes
+- Jul 9, 2020: Initial Draft
+- Aug 11, 2020: Implementation changes
 
 ## Status
 
@@ -201,7 +201,7 @@ func (msg MsgTransfer) ValidateBasic() error {
 // ValidateIBCDenom validates that the given denomination is either:
 //
 //  - A valid base denomination (eg: 'uatom')
-//  - A valid fungible token representation (i.e 'ibc/{hash}') per ADR 001 https://github.com/cosmos/ibc-go/blob/main/docs/architecture/adr-001-coin-source-tracing.md
+//  - A valid fungible token representation (i.e 'ibc/{hash}') per ADR 001 https://github.com/cosmos/ibc/blob/main/spec/adr/adr-001-coin-source-tracing.md
 func ValidateIBCDenom(denom string) error {
   denomSplit := strings.SplitN(denom, "/", 2)
 

@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 26
 title: IBC Application Callbacks
 stage: Draft
@@ -6,7 +7,7 @@ category: IBC/TAO
 kind: instantiation
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
-created: 2025-03-19
+created: Mar 19, 2025
 ---
 
 ## Synopsis

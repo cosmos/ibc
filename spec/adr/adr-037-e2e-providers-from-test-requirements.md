@@ -3,7 +3,7 @@
 # ADR 037: Select E2E providers from test requirements
 
 - Status: Proposed
-- Date: 2026-08-05
+- Date: Aug 5, 2026
 
 ## Context
 

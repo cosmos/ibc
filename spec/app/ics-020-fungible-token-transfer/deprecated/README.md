@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 20
 title: Fungible Token Transfer
 version: 2 
@@ -8,8 +9,8 @@ requires: 25, 26
 kind: instantiation
 version compatibility:
 author: Christopher Goes <cwgoes@interchain.berlin>, Aditya Sripal <aditya@interchain.io>
-created: 2019-07-15 
-modified: 2024-03-05
+created: Jul 15, 2019
+modified: Mar 5, 2024
 ---
 
 ## Synopsis
@@ -821,15 +822,15 @@ Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
 
 Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 
-July 27, 2020 - Re-addition of source field
+Jul 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
 
 Sep 22, 2023 - [Support for multi-token packets](https://github.com/cosmos/ibc/pull/1020)
 
-March 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
+Mar 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
 
-June 18, 2024 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
+Jun 18, 2024 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
 
 ## Copyright
 

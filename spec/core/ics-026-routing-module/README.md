@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 26
 title: Routing Module
 stage: Draft
@@ -6,8 +7,8 @@ category: IBC/TAO
 kind: instantiation
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-06-09
-modified: 2019-08-25
+created: Jun 9, 2019
+modified: Aug 25, 2019
 ---
 
 ## Synopsis

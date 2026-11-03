@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 31
 title: Cross-chain Queries
 stage: draft
@@ -6,8 +7,8 @@ category: IBC/APP
 requires: 2, 5, 18, 23, 24
 kind: instantiation
 author: Joe Schnetzler <schnetzlerjoe@gmail.com>, Manuel Bravo <manuel@informal.systems>
-created: 2022-01-06
-modified: 2022-07-28
+created: Jan 6, 2022
+modified: Jul 28, 2022
 ---
 
 ## Synopsis
@@ -397,13 +398,13 @@ function checkQueryTimeout(
 
 ## History
 
-January 6, 2022 - First draft
+Jan 6, 2022 - First draft
 
 May 11, 2022 - Major revision
 
-June 14, 2022 - Adds pruning, localTimeoutTimestamp and adds relayer address for incentivization
+Jun 14, 2022 - Adds pruning, localTimeoutTimestamp and adds relayer address for incentivization
 
-July 28, 2022 - Revision of the assumptions
+Jul 28, 2022 - Revision of the assumptions
 
 ## Copyright
 

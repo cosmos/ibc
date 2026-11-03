@@ -3,7 +3,7 @@
 # ADR 035: Pausing and Freezing in IBC-Solidity
 
 **Status**: Accepted
-**Date**: 2026-10-08
+**Date**: Oct 8, 2026
 
 ## Context
 

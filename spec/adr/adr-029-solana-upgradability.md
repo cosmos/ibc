@@ -3,7 +3,7 @@
 # ADR 029: Solana IBC Contract Upgradability
 
 **Status**: Proposed
-**Date**: 2025-07-15
+**Date**: Jul 15, 2025
 
 ## Context
 

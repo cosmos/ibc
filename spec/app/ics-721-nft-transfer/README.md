@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 721
 title: Non-Fungible Token Transfer
 stage: draft
@@ -6,8 +7,8 @@ category: IBC/APP
 requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
-created: 2021-11-10
-modified: 2022-12-15
+created: Nov 10, 2021
+modified: Dec 15, 2022
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -475,11 +476,11 @@ A future version of this standard could use a different version in the channel h
 | Nov 17, 2021 | Renamed from ICS 21 to ICS 721                           |
 | Nov 18, 2021 | Revised to allow for multiple tokens in one packet       |
 | Feb 10, 2022 | Revised to incorporate feedbacks from IBC team           |
-| Mar 03, 2022 | Revised to make TRY callback consistent with PR#629      |
+| Mar 3, 2022 | Revised to make TRY callback consistent with PR#629      |
 | Mar 11, 2022 | Added example to illustrate the prefix concept           |
 | Mar 30, 2022 | Added NFT module definition and fixed pseudo-code errors |
 | May 18, 2022 | Added paragraph about NFT metadata mutability            |
-| Nov 08, 2022 | Added `tokenData` to PacketData                          |
+| Nov 8, 2022 | Added `tokenData` to PacketData                          |
 | Dec 14, 2022 | Added `classData` and `memo` to PacketData               |
 | Dec 15, 2022 | Tightened spec on `classData` and `tokenData`            |
 

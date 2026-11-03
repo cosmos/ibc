@@ -29,7 +29,7 @@ ADRs 001 to 027 were written in ibc-go and keep their numbers; the numbers missi
 An ADR opens with its title and a list of four required header lines:
 
 - `**Status**`: one of the statuses below.
-- `**Date**`: the date the ADR was proposed, and optionally `**Last Updated**`.
+- `**Date**`: the date the ADR was proposed, and optionally `**Last Updated**`. Write every date in an ADR, including changelog entries, like `Jun 5, 2019`: the three-letter month, the day without a leading zero, a comma and the year.
 - `**Scope**`: what the decision applies to, from the table below. List every scope it applies to.
 - `**ICS**`: the standards the decision changes, implements or depends on, or empty if there are none. IBC v1 and IBC v2 reuse some ICS numbers for different documents (ICS-26 is the routing module in IBC v1 and application callbacks in IBC v2), so give each standard as `ICS-<number> (IBC v1)` for a document under `spec/core`, `spec/client`, `spec/app` or `spec/relayer`, or `ICS-<number> (IBC v2)` for a document under `spec/IBC_V2`, for example `ICS-26 (IBC v2)`. The qualifier says which tree the document lives in, not which protocol an implementation runs: an IBC v2 application that implements ICS-20 still cites `ICS-20 (IBC v1)`, because that is where ICS-20 is specified. Where a standard has more than one version, also give the version from the document's `version` field, for example `ICS-20 v1 (IBC v1)`.
 
@@ -57,7 +57,7 @@ ADRs 001 to 037 were written before this directory existed and keep their origin
 
 ## Process
 
-1. Copy the [ADR template](https://github.com/cosmos/ibc/blob/main/spec/adr/adr-template.md) to `adr-NNN-short-title.md`, set the status to `Proposed`, and add a row to the [index](#index). Run `python3 docs/scripts/specgen.py` and add the new page to the "Architecture Decision Records" group in `docs/docs.json`. Open a pull request in this repository titled `ADR NNN: short title`.
+1. Copy the [ADR template](https://github.com/cosmos/ibc/blob/main/spec/adr/adr-template.md) to `adr-NNN-short-title.md`, set the status to `Proposed`, and add a row to the [index](#index). Run `python3 docs/scripts/specgen.py` and add the new page to the "Architecture Decision Records" group in `docs/docs.json`. Open a pull request in this repository titled `docs(adr): ADR NNN short title`, a conventional-commit title as the PR lint check requires.
 2. For a decision scoped to `spec`, the changes to the standards follow in their own pull requests, one per standard as [CONTRIBUTING.md](https://github.com/cosmos/ibc/blob/main/spec/CONTRIBUTING.md#pull-requests) requires, each linking the ADR. For a decision about an implementation, the pull requests that implement it link the ADR.
 3. Every ADR pull request needs the approvals that [CONTRIBUTING.md](https://github.com/cosmos/ibc/blob/main/spec/CONTRIBUTING.md#process-for-reviewing-prs) requires for any pull request to this repository, and also an approving review from a maintainer (someone with write access) of every repository in its scope other than this one. Whoever merges the pull request checks that these reviews are there.
 4. Set the status to `Accepted` before the pull request merges. If the decision is not taken, either close the pull request or merge the ADR as `Rejected`.

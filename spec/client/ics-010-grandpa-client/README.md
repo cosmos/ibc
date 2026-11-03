@@ -1,11 +1,12 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 10
 title: GRANDPA Client
 stage: draft
 category: IBC/TAO
 kind: instantiation
 author: Yuanchao Sun <ys@cdot.network>, John Wu <john@cdot.network>
-created: 2020-03-15
+created: Mar 15, 2020
 implements: 2
 ---
 
@@ -363,7 +364,7 @@ None yet.
 
 ## History
 
-March 15, 2020 - Initial version
+Mar 15, 2020 - Initial version
 
 ## Copyright
 

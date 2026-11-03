@@ -4,13 +4,13 @@
 
 ## Changelog
 
-- 2020/06/23: Initial version
-- 2020/08/06: Revisions per review & to reference version
-- 2021/01/15: Revision to support substitute clients for unfreezing
-- 2021/05/20: Revision to simplify consensus state copying, remove initial height
-- 2022/04/08: Revision to deprecate AllowUpdateAfterExpiry and AllowUpdateAfterMisbehaviour
-- 2022/07/15: Revision to allow updating of TrustingPeriod
-- 2023/09/05: Revision to migrate from gov v1beta1 to gov v1
+- Jun 23, 2020: Initial version
+- Aug 6, 2020: Revisions per review & to reference version
+- Jan 15, 2021: Revision to support substitute clients for unfreezing
+- May 20, 2021: Revision to simplify consensus state copying, remove initial height
+- Apr 8, 2022: Revision to deprecate AllowUpdateAfterExpiry and AllowUpdateAfterMisbehaviour
+- Jul 15, 2022: Revision to allow updating of TrustingPeriod
+- Sep 5, 2023: Revision to migrate from gov v1beta1 to gov v1
 
 ## Status
 

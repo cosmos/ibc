@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 30
 title: IBC Middleware
 stage: draft
@@ -7,8 +8,8 @@ requires: 4, 25, 26
 kind: instantiation
 version compatibility: ibc-go v7.0.0
 author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
-created: 2021-06-01
-modified: 2022-07-06
+created: Jun 1, 2021
+modified: Jul 6, 2022
 ---
 
 ## Synopsis
@@ -357,9 +358,9 @@ Not applicable.
 
 ## History
 
-June 22, 2021 - Draft submitted
+Jun 22, 2021 - Draft submitted
 
-July 6, 2022 - Update with latest changes from implementation
+Jul 6, 2022 - Update with latest changes from implementation
 
 ## Copyright
 

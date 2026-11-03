@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Apache-2.0
 ics: 6
 title: Solo Machine Client
 stage: draft
@@ -7,8 +8,8 @@ kind: instantiation
 implements: 2
 version compatibility: ibc-go v7.3.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-12-09
-modified: 2019-12-09
+created: Dec 9, 2019
+modified: Dec 9, 2019
 ---
 
 ## Synopsis
@@ -369,10 +370,10 @@ Not applicable. Alterations to the client verification algorithm will require a 
 
 ## History
 
-December 9th, 2019 - Initial version
-December 17th, 2019 - Final first draft
-August 15th, 2022 - Changes to align with 02-client-refactor in [\#813](https://github.com/cosmos/ibc/pull/813)
-September 14th, 2022 - Changes to align with changes in [\#4429](https://github.com/cosmos/ibc-go/pull/4429)
+Dec 9, 2019 - Initial version
+Dec 17, 2019 - Final first draft
+Aug 15, 2022 - Changes to align with 02-client-refactor in [\#813](https://github.com/cosmos/ibc/pull/813)
+Sep 14, 2022 - Changes to align with changes in [\#4429](https://github.com/cosmos/ibc-go/pull/4429)
 
 ## Copyright
 
