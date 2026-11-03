@@ -67,10 +67,10 @@ func TestNewSetFromConfig(t *testing.T) {
 	})
 }
 
-// TestSetStartUnwinds covers the watchers a failed start leaves behind: the
-// ones already running have to be stopped, or their subscriptions outlive the
-// startup that failed.
-func TestSetStartUnwinds(t *testing.T) {
+// TestSetStartKeepsSiblings covers a chain whose first subscribe fails: the
+// set still starts, the chain that did subscribe stays up, and Stop tears
+// both the live subscription and the clearer-only watcher down.
+func TestSetStartKeepsSiblings(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		running, failing := newFakeChain(t), newFakeChain(t)
 		failing.failNextSub(errors.New("dial failed"))
@@ -80,9 +80,13 @@ func TestSetStartUnwinds(t *testing.T) {
 			newTestWatcher(failing, watcherStore(t)),
 		}
 
-		require.ErrorContains(t, set.Start(), sourceChainID)
+		require.NoError(t, set.Start())
 		synctest.Wait()
 
+		assert.False(t, running.latestSub().unsubscribed)
+		assert.Zero(t, failing.openedSubs())
+
+		require.NoError(t, set.Stop())
 		assert.True(t, running.latestSub().unsubscribed)
 	})
 }
