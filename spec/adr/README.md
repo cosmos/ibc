@@ -15,8 +15,8 @@ An Interchain Standard (ICS) says **what** IBC requires. An ADR records **why** 
 | Applies to | Every implementation, in any language or on any chain | Usually one implementation: cosmos/ibc, cosmos/ibc-go or cosmos/ibc-contracts |
 | Changes | One living document per standard, edited in place, with a History section | One document per decision; a later decision supersedes it rather than editing it |
 | Number | Names a subject, for example ICS-20 for token transfer | The next free number in one series, for example ADR 008 |
-| Location | `spec/<area>/ics-NNN-name/` | `spec/adr/adr-NNN-short-title.md` |
-| Process | [PROCESS.md](../PROCESS.md) and the [ICS template](../ics-template.md) | [Process](#process) below and the [ADR template](adr-template.md) |
+| Location | `spec/ics/<area>/ics-NNN-name/` | `spec/adr/adr-NNN-short-title.md` |
+| Process | [PROCESS.md](../ics/PROCESS.md) and the [ICS template](../ics/ics-template.md) | [Process](#process) below and the [ADR template](adr-template.md) |
 
 An ADR can relate to no standard (ADR 002, Go module versioning), to one (ADR 001, how ibc-go traces ICS-20 denominations) or to several (ADR 028, Solana storage for ICS-24 and ICS-26). Its `**ICS**` header line names the standards it relates to.
 
@@ -24,7 +24,7 @@ An ADR can relate to no standard (ADR 002, Go module versioning), to one (ADR 00
 
 | You want to | Write |
 | --- | --- |
-| Define a new protocol, client type or application that other implementations must interoperate with | A new ICS, following [PROCESS.md](../PROCESS.md) |
+| Define a new protocol, client type or application that other implementations must interoperate with | A new ICS, following [PROCESS.md](../ics/PROCESS.md) |
 | Change what implementations must, should or may do under an existing standard | A pull request to that ICS, with a History entry. Add an ADR only if the reasoning needs more room than the pull request gives it, and scope it `spec`. |
 | Fix a typo, link or wording in a standard without changing a requirement | A pull request to that ICS; no ADR |
 | Change the architecture, a public interface, or the behaviour an implementation exposes to its users and counterparties | An ADR scoped to that implementation |
@@ -44,7 +44,7 @@ An ADR's header is the authoritative record of its status; the [index](#index) r
 - `**Status**`: one of the statuses below.
 - `**Date**`: the date the ADR was proposed, and optionally `**Last Updated**`. Write every date in an ADR, including changelog entries, like `Jun 5, 2019`: the three-letter month, the day without a leading zero, a comma and the year.
 - `**Scope**`: what the decision applies to, from the table below. List every scope it applies to.
-- `**ICS**`: the standards the decision changes, implements or depends on, or empty if there are none. IBC v1 and IBC v2 reuse some ICS numbers for different documents (ICS-26 is the routing module in IBC v1 and application callbacks in IBC v2), so give each standard as `ICS-<number> (IBC v1)` for a document under `spec/core`, `spec/client`, `spec/app` or `spec/relayer`, or `ICS-<number> (IBC v2)` for a document under `spec/IBC_V2`, for example `ICS-26 (IBC v2)`. The qualifier says which tree the document lives in, not which protocol an implementation runs: an IBC v2 application that implements ICS-20 still cites `ICS-20 (IBC v1)`, because that is where ICS-20 is specified. Where a standard has more than one version, also give the version from the document's `version` field, for example `ICS-20 v1 (IBC v1)`.
+- `**ICS**`: the standards the decision changes, implements or depends on, or empty if there are none. IBC v1 and IBC v2 reuse some ICS numbers for different documents (ICS-26 is the routing module in IBC v1 and application callbacks in IBC v2), so give each standard as `ICS-<number> (IBC v1)` for a document under `spec/ics/core`, `spec/ics/client`, `spec/ics/app` or `spec/ics/relayer`, or `ICS-<number> (IBC v2)` for a document under `spec/ics/IBC_V2`, for example `ICS-26 (IBC v2)`. The qualifier says which tree the document lives in, not which protocol an implementation runs: an IBC v2 application that implements ICS-20 still cites `ICS-20 (IBC v1)`, because that is where ICS-20 is specified. Where a standard has more than one version, also give the version from the document's `version` field, for example `ICS-20 v1 (IBC v1)`.
 
 | Scope | Covers |
 | --- | --- |
@@ -70,7 +70,7 @@ ADRs 001 to 037 were written before this directory existed. Their headers were c
 
 ## Process
 
-1. Copy the [ADR template](adr-template.md) to `adr-NNN-short-title.md`, set the status to `Proposed`, and add a row to the [index](#index). Run `python3 docs/scripts/specgen.py` and add the new page to the "Architecture Decision Records" group in `docs/docs.json`. Open a pull request in this repository titled `docs(adr): ADR NNN short title`, a conventional-commit title as the PR lint check requires.
+1. Copy the [ADR template](adr-template.md) to `adr-NNN-short-title.md`, set the status to `Proposed`, and add a row to the [index](#index). Open a pull request in this repository titled `docs(adr): ADR NNN short title`, a conventional-commit title as the PR lint check requires.
 2. For a decision scoped to `spec`, the changes to the standards follow in their own pull requests, one per standard as [CONTRIBUTING.md](../CONTRIBUTING.md#pull-requests) requires, each linking the ADR. For a decision about an implementation, the pull requests that implement it link the ADR.
 3. Every ADR pull request needs the approvals that [CONTRIBUTING.md](../CONTRIBUTING.md#process-for-reviewing-prs) requires for any pull request to this repository, and also an approving review from a maintainer (someone with write access) of every repository in its scope other than this one. Whoever merges the pull request checks that these reviews are there.
 4. Set the status to `Accepted` before the pull request merges. If the decision is not taken, either close the pull request or merge the ADR as `Rejected`.

@@ -572,4 +572,4 @@ The key innovation is the split of responsibilities: senders provide minimal inf
 ## References
 
 - [Solana Program Derived Addresses](https://docs.solana.com/developing/programming-model/calling-between-programs#program-derived-addresses)
-- [ICS27 Interchain Accounts Specification](https://github.com/cosmos/ibc/tree/main/spec/app/ics-027-interchain-accounts)
+- [ICS27 Interchain Accounts Specification](https://github.com/cosmos/ibc/tree/main/spec/ics/app/ics-027-interchain-accounts)

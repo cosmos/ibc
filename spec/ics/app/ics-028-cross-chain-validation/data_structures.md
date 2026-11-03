@@ -246,7 +246,8 @@ This section describes the internal state of the CCV module. For simplicity, the
     // the list is modified
     Remove(chainId: string)
   }
-```
+  ```
+
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
 - `vscSendTimestamps: Map<(string, uint64), uint64>` is a mapping from `(chainId, vscId)` tuples to the timestamps of sending `VSCPacket`s.

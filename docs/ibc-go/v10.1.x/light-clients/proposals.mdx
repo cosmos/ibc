@@ -50,7 +50,7 @@ a substitute client *after* the subject has become frozen to avoid the substitut
 An active substitute client allows headers to be submitted during the voting period to prevent accidental expiry
 once the proposal passes.
 
-See also the relevant documentation: [ADR 026, IBC client recovery mechanisms](/ibc/spec/adr/adr-026-ibc-client-recovery-mechanisms)
+See also the relevant documentation: [ADR 026, IBC client recovery mechanisms](https://github.com/cosmos/ibc/blob/main/spec/adr/adr-026-ibc-client-recovery-mechanisms.md)
 
 ## Preconditions
 
@@ -74,7 +74,7 @@ Check if the client is attached to the expected `chain_id`. For example, for an 
 }
 ```
 
-The client is attached to the expected Akash `chain_id`. Note that although the parameters (`allow_update_after_expiry` and `allow_update_after_misbehaviour`) exist to signal intent, these parameters have been deprecated and will not enforce any checks on the revival of client. See [ADR 026](/ibc/spec/adr/adr-026-ibc-client-recovery-mechanisms) for more context on this deprecation.
+The client is attached to the expected Akash `chain_id`. Note that although the parameters (`allow_update_after_expiry` and `allow_update_after_misbehaviour`) exist to signal intent, these parameters have been deprecated and will not enforce any checks on the revival of client. See [ADR 026](https://github.com/cosmos/ibc/blob/main/spec/adr/adr-026-ibc-client-recovery-mechanisms.md) for more context on this deprecation.
 
 ### Step 2
 

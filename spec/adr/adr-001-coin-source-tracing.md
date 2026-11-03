@@ -16,13 +16,13 @@
 ## Context
 
 The specification for IBC cross-chain fungible token transfers
-([ICS20](https://github.com/cosmos/ibc/tree/master/spec/app/ics-020-fungible-token-transfer)), needs to
+([ICS20](https://github.com/cosmos/ibc/tree/master/spec/ics/app/ics-020-fungible-token-transfer)), needs to
 be aware of the origin of any token denomination in order to relay a `Packet` which contains the sender
 and recipient addresses in the
-[`FungibleTokenPacketData`](https://github.com/cosmos/ibc/tree/master/spec/app/ics-020-fungible-token-transfer#data-structures).
+[`FungibleTokenPacketData`](https://github.com/cosmos/ibc/tree/master/spec/ics/app/ics-020-fungible-token-transfer#data-structures).
 
 The Packet relay sending works based in 2 cases (per
-[specification](https://github.com/cosmos/ibc/tree/master/spec/app/ics-020-fungible-token-transfer#packet-relay) and [Colin Axnér](https://github.com/colin-axner)'s description):
+[specification](https://github.com/cosmos/ibc/tree/master/spec/ics/app/ics-020-fungible-token-transfer#packet-relay) and [Colin Axnér](https://github.com/colin-axner)'s description):
 
 1. Sender chain is acting as the source zone. The coins are transferred
 to an escrow address (i.e locked) on the sender chain and then transferred
@@ -100,7 +100,7 @@ of a coin's denom is performed according to a
 where only lowercase alphanumeric characters are accepted. While this is desirable for native denominations
 to keep a clean UX, it presents a challenge for IBC as ports and channels might be randomly
 generated with special and uppercase characters as per the [ICS 024 - Host
-Requirements](https://github.com/cosmos/ibc/tree/master/spec/core/ics-024-host-requirements#paths-identifiers-separators)
+Requirements](https://github.com/cosmos/ibc/tree/master/spec/ics/core/ics-024-host-requirements#paths-identifiers-separators)
 specification.
 
 ## Decision
@@ -375,5 +375,5 @@ Additional validation logic, such as verifying the length of the hash, the  may 
 
 ## References
 
-- [ICS 20 - Fungible token transfer](https://github.com/cosmos/ibc/tree/master/spec/app/ics-020-fungible-token-transfer)
+- [ICS 20 - Fungible token transfer](https://github.com/cosmos/ibc/tree/master/spec/ics/app/ics-020-fungible-token-transfer)
 - [Custom Coin Denomination validation](https://github.com/cosmos/cosmos-sdk/pull/6755)

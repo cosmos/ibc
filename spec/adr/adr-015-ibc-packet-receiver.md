@@ -13,7 +13,7 @@
 
 ## Context
 
-[ICS 26 - Routing Module](https://github.com/cosmos/ibc/tree/master/spec/core/ics-026-routing-module) defines a function [`handlePacketRecv`](https://github.com/cosmos/ibc/tree/master/spec/core/ics-026-routing-module#packet-relay).
+[ICS 26 - Routing Module](https://github.com/cosmos/ibc/tree/master/spec/ics/core/ics-026-routing-module) defines a function [`handlePacketRecv`](https://github.com/cosmos/ibc/tree/master/spec/ics/core/ics-026-routing-module#packet-relay).
 
 In ICS 26, the routing module is defined as a layer above each application module
 which verifies and routes messages to the destination modules. It is possible to
@@ -299,4 +299,4 @@ func handleMsgChannelOpen(sdk.Context, k Keeper, msg MsgOpenChannel) Result {
 ## References
 
 - Relevant comment: [cosmos/ics#289](https://github.com/cosmos/ibc/issues/289#issuecomment-544533583)
-- [ICS26 - Routing Module](https://github.com/cosmos/ibc/tree/master/spec/core/ics-026-routing-module)
+- [ICS26 - Routing Module](https://github.com/cosmos/ibc/tree/master/spec/ics/core/ics-026-routing-module)

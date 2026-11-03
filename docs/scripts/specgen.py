@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate docs/ibc/spec/ from the canonical spec/ at the repository root.
+"""Generate docs/ibc/spec/ from the standards in spec/ics/ at the repository root.
 
 The specs are versioned source, not prose written for the docs site. They live
-at spec/ and are edited there. This script renders them as Mintlify pages so
+at spec/ics/ and are edited there. This script renders them as Mintlify pages so
 the site can publish them without a second copy drifting out of date -- which
 is exactly what happened to the copy in cosmos/docs, frozen at 2026-04-09 and
 missing the ICS-027 GMP spec entirely.
@@ -14,7 +14,8 @@ missing the ICS-027 GMP spec entirely.
 
 The transform is deliberately narrow:
 
-  1. .md -> .mdx
+  1. .md -> .mdx, and spec/ics/<path> publishes as docs/ibc/spec/<path>, so
+     the site URLs do not carry the ics/ segment
   2. internal links lose their .md suffix; a link written at a directory
      resolves to that directory's published README
   3. internal links become absolute site paths, resolved per file against the
@@ -59,8 +60,11 @@ EXCLUDE = {
     "PROCESS.md",
     "STANDARDS_COMMITTEE.md",
     "ics-template.md",
-    "adr-template.md",
 }
+
+# Only the standards are published. Architecture decision records (spec/adr/)
+# are read on GitHub.
+PUBLISHED = "ics"
 
 IMAGE_EXT = (".png", ".svg", ".jpg", ".jpeg", ".gif", ".webp")
 
@@ -91,7 +95,13 @@ HEADER = ("{{/* Generated from spec/{rel} by docs/scripts/specgen.py. "
 
 def excluded(rel):
     """True if this spec/-relative path is not published."""
-    return rel in EXCLUDE or os.path.basename(rel) in EXCLUDE
+    return (rel in EXCLUDE or os.path.basename(rel) in EXCLUDE
+            or rel.split("/")[0] != PUBLISHED)
+
+
+def site_rel(rel):
+    """The published path of a spec/-relative path: spec/ics/x -> x."""
+    return rel[len(PUBLISHED) + 1:] if rel.startswith(PUBLISHED + "/") else rel
 
 
 def check_fences(text, rel):
@@ -132,7 +142,7 @@ def _link(path, rel):
     if target.startswith("..") or excluded(target):
         # Never a page: point at the source on GitHub, derived from the path.
         return GITHUB_BLOB + os.path.normpath(os.path.join("spec", target))
-    return SITE_BASE + "/" + target[:-len(".md")]
+    return SITE_BASE + "/" + site_rel(target)[:-len(".md")]
 
 
 def _dir_link(path, rel):
@@ -151,13 +161,13 @@ def _dir_link(path, rel):
     readme = os.path.join(target, "README.md")
     if not os.path.isfile(os.path.join(SRC, readme)) or excluded(readme):
         return None
-    return SITE_BASE + "/" + target + "/README"
+    return SITE_BASE + "/" + site_rel(target) + "/README"
 
 
 def transform(text, rel):
     """Rewrite one document. `rel` is its path relative to spec/."""
-    site_dir = SITE_BASE + "/" + os.path.dirname(rel) if os.path.dirname(rel) \
-        else SITE_BASE
+    site_dir = SITE_BASE + "/" + os.path.dirname(site_rel(rel)) \
+        if os.path.dirname(site_rel(rel)) else SITE_BASE
 
     def fix(chunk):
         chunk = _LINK.sub(lambda m: "](" + _link(m.group(1), rel)
@@ -173,6 +183,9 @@ def transform(text, rel):
 
         def img(m):
             alt, path = m.group(1), m.group(2)
+            # `?raw=true` makes GitHub serve the file itself; on the site it
+            # only hides the extension, so drop the query.
+            path = path.split("?", 1)[0]
             if not path.lower().endswith(IMAGE_EXT):
                 return m.group(0)
             clean = path[2:] if path.startswith("./") else path
@@ -234,7 +247,7 @@ def add_header(text, rel):
 
 
 def generate(root, out):
-    """Render spec/ into `out`. Returns the written paths, relative to `out`."""
+    """Render spec/ics/ into `out`. Returns the written paths, relative to `out`."""
     src = os.path.join(root, "spec")
     written = []
     for dirpath, _, names in os.walk(src):
@@ -244,7 +257,7 @@ def generate(root, out):
             if excluded(rel):
                 continue
             if name.endswith(".md"):
-                dest_rel = rel[:-len(".md")] + ".mdx"
+                dest_rel = site_rel(rel)[:-len(".md")] + ".mdx"
                 dest = os.path.join(out, dest_rel)
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 with open(full, encoding="utf-8") as fh:
@@ -256,11 +269,11 @@ def generate(root, out):
                     fh.write(body)
                 written.append(dest_rel)
             elif name.lower().endswith(IMAGE_EXT):
-                dest = os.path.join(out, rel)
+                dest = os.path.join(out, site_rel(rel))
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 _refuse_lfs_pointer(full, rel)
                 shutil.copyfile(full, dest)
-                written.append(rel)
+                written.append(site_rel(rel))
     return written
 
 

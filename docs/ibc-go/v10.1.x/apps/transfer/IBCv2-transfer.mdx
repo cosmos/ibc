@@ -41,7 +41,7 @@ The code snippet shows the structure of the `Payload` bytes for token transfer
 ```go expandable
 // FungibleTokenPacketData defines a struct for the packet payload
 // See FungibleTokenPacketData spec:
-// https://github.com/cosmos/ibc/tree/master/spec/app/ics-020-fungible-token-transfer#data-structures
+// https://github.com/cosmos/ibc/tree/master/spec/ics/app/ics-020-fungible-token-transfer#data-structures
 type FungibleTokenPacketData struct {
 	// the token denomination to be transferred
 	Denom string `protobuf:"bytes,1,opt,name=denom,proto3" json:"denom,omitempty"`

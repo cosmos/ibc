@@ -23,7 +23,7 @@ type MsgRegisterInterchainAccount struct {
 This message is expected to fail if:
 
 * `Owner` is an empty string or contains more than 2048 bytes.
-* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
+* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/ics/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
 
 This message will construct a new `MsgChannelOpenInit` on chain and route it to the core IBC message server to initiate the opening step of the channel handshake.
 
@@ -55,7 +55,7 @@ type MsgSendTx struct {
 This message is expected to fail if:
 
 * `Owner` is an empty string or contains more than 2048 bytes.
-* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
+* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/ics/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
 * `PacketData` contains an `UNSPECIFIED` type enum, the length of `Data` bytes is zero or the `Memo` field exceeds 256 characters in length.
 * `RelativeTimeout` is zero.
 

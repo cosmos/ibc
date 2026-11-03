@@ -47,7 +47,7 @@ An ICS header contains metadata relevant to the ICS.
 
 `stage` - Current ICS stage, see [PROCESS.md](../PROCESS.md) for the list of possible stages.
 
-See [README.md](../../README.md) for a description of the ICS acceptance stages.
+See [README.md](../../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
 

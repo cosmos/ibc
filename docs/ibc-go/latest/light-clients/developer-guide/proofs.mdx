@@ -68,6 +68,6 @@ VerifyNonMembership(
 error
 ```
 
-Both are expected to be provided with a standardised key path, `exported.Path`, as defined in [ICS-24 host requirements](https://github.com/cosmos/ibc/tree/main/spec/core/ics-024-host-requirements). Membership verification requires callers to provide the value marshalled as `[]byte`. Delay period values should be zero for non-packet processing verification. A zero proof height is now allowed by core IBC and may be passed into `VerifyMembership` and `VerifyNonMembership`. Light clients are responsible for returning an error if a zero proof height is invalid behaviour.
+Both are expected to be provided with a standardised key path, `exported.Path`, as defined in [ICS-24 host requirements](https://github.com/cosmos/ibc/tree/main/spec/ics/core/ics-024-host-requirements). Membership verification requires callers to provide the value marshalled as `[]byte`. Delay period values should be zero for non-packet processing verification. A zero proof height is now allowed by core IBC and may be passed into `VerifyMembership` and `VerifyNonMembership`. Light clients are responsible for returning an error if a zero proof height is invalid behaviour.
 
 Please refer to the [ICS-23 implementation](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/23-commitment/types/merkle.go#L131-L205) for a concrete example.

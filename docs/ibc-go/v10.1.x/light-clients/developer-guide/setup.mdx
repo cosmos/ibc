@@ -97,7 +97,7 @@ GetQueryCmd() *cobra.Command {
 ## Creating clients
 
 A client is created by executing a new `MsgCreateClient` transaction composed with a valid `ClientState` and initial `ConsensusState` encoded as protobuf `Any`s.
-Generally, this is performed by an off-chain process known as an [IBC relayer](https://github.com/cosmos/ibc/tree/main/spec/relayer/ics-018-relayer-algorithms) however, this is not a strict requirement.
+Generally, this is performed by an off-chain process known as an [IBC relayer](https://github.com/cosmos/ibc/tree/main/spec/ics/relayer/ics-018-relayer-algorithms) however, this is not a strict requirement.
 
 See below for a list of IBC relayer implementations:
 

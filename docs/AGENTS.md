@@ -28,7 +28,7 @@ version switcher appears on the ibc-go tab alone.
 | `ibc/` | This monorepo's docs. Unversioned, tracks `main`. |
 | `ibc-go/latest/` | ibc-go docs. Edit here. |
 | `ibc-go/v10.1.x/` | Frozen. Do not edit except to fix a critical error. |
-| `ibc/spec/` | **Generated** from the repo's `spec/`. Never edit by hand. |
+| `ibc/spec/` | **Generated** from the repo's `spec/ics/`. Never edit by hand. |
 | `scripts/` | Generators that read repo source code. |
 | `mintlify/` | Site machinery: stylesheet, images, brand assets, and versioning scripts. |
 | `README.md` | What this directory is, for a human arriving from the repo root. |
@@ -39,7 +39,7 @@ version switcher appears on the ibc-go tab alone.
 
 - **No Solidity in `ibc-go/`.** It documents the Go implementation. Link to
   `ibc/06-ibc-solidity-contracts/` instead.
-- **Never hand-edit `ibc/spec/`.** Edit `spec/` at the repo root and regenerate.
+- **Never hand-edit `ibc/spec/`.** Edit `spec/ics/` at the repo root and regenerate.
 - **Numbered prefixes** order the hand-authored pages under `ibc/`: directories
   `01-introduction/`, `02-how-ibc-works/` …, files `01-`, `02-` within each.
   The numbers are a sort key for reading the repo on GitHub — Mintlify takes
@@ -147,7 +147,7 @@ Copy anchors from a render rather than deriving them.
 | Script | Reads | Writes |
 |---|---|---|
 | `scripts/refgen.py` | `cli/`, `proto/`, `gen/` | CLI reference tables in `ibc/05-ibc-cli/` |
-| `scripts/specgen.py` | `spec/` | `ibc/spec/` |
+| `scripts/specgen.py` | `spec/ics/` | `ibc/spec/` |
 
 Both have a `--check` mode. Nothing in CI runs it, so after changing `cli/`,
 `proto/` or `gen/`, follow `scripts/AGENTS.md` and run it yourself.

@@ -1,7 +1,7 @@
 ---
 title: "CCV: Overview and Basic Concepts"
 ---
-{/* Generated from spec/app/ics-028-cross-chain-validation/overview_and_basic_concepts.md by docs/scripts/specgen.py. Edits here are overwritten. */}
+{/* Generated from spec/ics/app/ics-028-cross-chain-validation/overview_and_basic_concepts.md by docs/scripts/specgen.py. Edits here are overwritten. */}
 {/* Regenerate: python3 docs/scripts/specgen.py */}
 
 {/* omit in toc */}
@@ -156,7 +156,7 @@ In both cases, consumer chains are created through governance proposals. For an 
 
 The following figure shows an overview of the CCV Channel initialization for new chains. 
 
-![Channel Initialization Overview: New Chain](./figures/ccv-init-overview.png?raw=true)
+![Channel Initialization Overview: New Chain](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-init-overview.png)
 
 The channel initialization for new chains consists of three phases:
 
@@ -185,7 +185,7 @@ The channel initialization for new chains consists of three phases:
 
 The following figure shows an overview of the CCV Channel initialization for existing chains. 
 
-![Channel Initialization Overview: Existing Chain](./figures/ccv-preccv-init-overview.png?raw=true)
+![Channel Initialization Overview: Existing Chain](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-preccv-init-overview.png)
 
 The channel initialization for existing chains consists of three phases:
 
@@ -234,7 +234,7 @@ In the context of VSCs, the CCV module enables the following functionalities:
 These functionalities are depicted in the following figure that shows an overview of the Validator Set Update operation of CCV. 
 For a more detailed description of Validator Set Update, take a look at the [technical specification](/ibc/spec/app/ics-028-cross-chain-validation/methods#validator-set-update).
 
-![Validator Set Update Overview](./figures/ccv-vsc-overview.png?raw=true)
+![Validator Set Update Overview](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-vsc-overview.png)
 
 #### Completion of Unbonding Operations
 
@@ -265,7 +265,7 @@ This approach is depicted in the following figure that shows an overview of the 
   As a result, the provider Staking module CANNOT complete `undelegate-2` in `Block k`. 
   The unbonding operation is completed later once the provider CCV module registered maturity notifications for `VSC2` from all consumer chains.
 
-![Completion of Unbonding Operations](./figures/ccv-unbonding-overview.png?raw=true)
+![Completion of Unbonding Operations](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-unbonding-overview.png)
 
 ### Consumer Initiated Slashing
 
@@ -296,12 +296,12 @@ Also, note that the three white blocks between the green and the yellow blocks o
 As a result, a validator misbehaving on the consumer chain, e.g., in either of the two green blocks, is slashed the same as if misbehaving on the provider chain, e.g., in the green block. 
 This ensures that once unbonding operations are initiated, the corresponding unbonding tokens are not slashed for infractions committed in the subsequent blocks, e.g., the tokens unbonding due to `undelegate-3` are not slashed for infractions committed in or after the green blocks.
 
-![Intuition of Mapping Between Provider and Consumer Heights](./figures/ccv-mapping-intuition.png?raw=true)
+![Intuition of Mapping Between Provider and Consumer Heights](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-mapping-intuition.png)
 
 The following figure shows describes how CCV creates the mapping from consumer chain heights to provider chain heights.
 For clarity, we use `Hp*` and `Hc*` to denote block heights on the provider chain and consumer chain, respectively. 
 
-![Mapping Between Provider and Consumer Heights](./figures/ccv-height-mapping-overview.png?raw=true)
+![Mapping Between Provider and Consumer Heights](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-height-mapping-overview.png)
 
 - For every block, the provider CCV module maps the ID of the VSC it provides to the consumer chains to the height of the subsequent block, i.e., `VSCtoH[VSC.id] = Hp + 1`, for a VSC provided at height `Hp`. 
   Intuitively, this means that the validator updates in a provided VSC will update the voting power at height `VSCtoH[VSC.id]`.
@@ -316,7 +316,7 @@ For clarity, we use `Hp*` and `Hc*` to denote block heights on the provider chai
 
 The following figure shows an overview of the Consumer Initiated Slashing operation of CCV. 
 
-![Consumer Initiated Slashing](./figures/ccv-evidence-overview.png?raw=true)
+![Consumer Initiated Slashing](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-evidence-overview.png)
 
 - At (evidence) height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at (infraction) height `Hc1`. 
   As a result, the consumer CCV module sends a `SlashPacket` to the provider chain: 
@@ -342,7 +342,7 @@ At the beginning of every block, the rewards for the previous block are pooled i
 The Reward Distribution operation of CCV enables every consumer chain to transfer a fraction of these rewards to the provider chain. 
 The operation consists of two steps that are depicted in the following figure:
 
-![Reward Distribution](./figures/ccv-distribution-overview.png?raw=true)
+![Reward Distribution](/ibc/spec/app/ics-028-cross-chain-validation/figures/ccv-distribution-overview.png)
 
 - At the beginning of every block on the consumer chain, a fraction of the rewards are transferred to an account on the consumer CCV module.
 - At regular intervals (e.g., every `1000` blocks), the consumer CCV module sends the accumulated rewards to the distribution module account on the provider chain through an IBC token transfer packet (as defined in [ICS 20](/ibc/spec/app/ics-020-fungible-token-transfer/README)). 

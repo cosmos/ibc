@@ -27,7 +27,7 @@ def case(name):
     return deco
 
 
-REL = "core/ics-004-channel-and-packet-semantics/README.md"
+REL = "ics/core/ics-004-channel-and-packet-semantics/README.md"
 
 
 @case("strips the .md suffix from internal links")
@@ -77,6 +77,13 @@ def _():
 def _():
     out = specgen.transform("![Dataflow](dataflow.png)", REL)
     want = "/ibc/spec/core/ics-004-channel-and-packet-semantics/dataflow.png"
+    assert want in out, out
+
+
+@case("absolutizes an image path with a query and drops the query")
+def _():
+    out = specgen.transform("![Init](./figures/init.png?raw=true)", REL)
+    want = "](/ibc/spec/core/ics-004-channel-and-packet-semantics/figures/init.png)"
     assert want in out, out
 
 
@@ -189,26 +196,26 @@ def _():
 
 @case("keeps the #fragment when rewriting a link")
 def _():
-    out = specgen.transform("[x](data_structures.md#ccv-state)", "app/a/b.md")
+    out = specgen.transform("[x](data_structures.md#ccv-state)", "ics/app/a/b.md")
     assert out == "[x](/ibc/spec/app/a/data_structures#ccv-state)", out
 
 
 @case("same filename in different directories resolves per file")
 def _():
-    a = specgen.transform("[u](UPGRADES.md)", "core/one/README.md")
-    b = specgen.transform("[u](UPGRADES.md)", "core/two/README.md")
+    a = specgen.transform("[u](UPGRADES.md)", "ics/core/one/README.md")
+    b = specgen.transform("[u](UPGRADES.md)", "ics/core/two/README.md")
     assert a != b, (a, b)
 
 
 @case("a link to an excluded governance file becomes a GitHub URL")
 def _():
-    out = specgen.transform("[p](../PROCESS.md)", "ics-001-ics-standard/README.md")
-    assert out == "[p](https://github.com/cosmos/ibc/blob/main/spec/PROCESS.md)", out
+    out = specgen.transform("[p](../PROCESS.md)", "ics/ics-001-ics-standard/README.md")
+    assert out == "[p](https://github.com/cosmos/ibc/blob/main/spec/ics/PROCESS.md)", out
 
 
 @case("a link escaping spec/ becomes a GitHub URL")
 def _():
-    out = specgen.transform("[r](../../README.md)", "ics-001-ics-standard/README.md")
+    out = specgen.transform("[r](../../../README.md)", "ics/ics-001-ics-standard/README.md")
     assert out == "[r](https://github.com/cosmos/ibc/blob/main/README.md)", out
 
 
@@ -260,8 +267,8 @@ def _():
 @case("a failed regeneration leaves the existing tree intact")
 def _():
     with tempfile.TemporaryDirectory() as root:
-        os.makedirs(os.path.join(root, "spec"))
-        open(os.path.join(root, "spec", "bad.md"), "w").write("no heading\n")
+        os.makedirs(os.path.join(root, "spec", "ics"))
+        open(os.path.join(root, "spec", "ics", "bad.md"), "w").write("no heading\n")
         out = os.path.join(root, "docs", "ibc", "spec")
         os.makedirs(out)
         open(os.path.join(out, "old.mdx"), "w").write("old")
@@ -293,8 +300,8 @@ def _():
 @case("a failed swap restores the existing tree")
 def _():
     with tempfile.TemporaryDirectory() as root:
-        os.makedirs(os.path.join(root, "spec"))
-        open(os.path.join(root, "spec", "a.md"), "w").write("# A\n")
+        os.makedirs(os.path.join(root, "spec", "ics"))
+        open(os.path.join(root, "spec", "ics", "a.md"), "w").write("# A\n")
         out = os.path.join(root, "docs", "ibc", "spec")
         os.makedirs(out)
         open(os.path.join(out, "old.mdx"), "w").write("old")
@@ -322,8 +329,8 @@ def _():
 @case("write_tree recovers a tree stranded in .old by an interrupted run")
 def _():
     with tempfile.TemporaryDirectory() as root:
-        os.makedirs(os.path.join(root, "spec"))
-        open(os.path.join(root, "spec", "a.md"), "w").write("# A\n")
+        os.makedirs(os.path.join(root, "spec", "ics"))
+        open(os.path.join(root, "spec", "ics", "a.md"), "w").write("# A\n")
         base = os.path.join(root, "docs", "ibc")
         os.makedirs(os.path.join(base, "spec.old"))
         specgen.write_tree(root, os.path.join(base, "spec"))
@@ -344,8 +351,8 @@ def _():
 @case("fails loudly with no frontmatter and no H1 when run through generate")
 def _():
     with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-        os.makedirs(os.path.join(root, "spec", "core"))
-        open(os.path.join(root, "spec", "core", "x.md"), "w").write("prose\n")
+        os.makedirs(os.path.join(root, "spec", "ics", "core"))
+        open(os.path.join(root, "spec", "ics", "core", "x.md"), "w").write("prose\n")
         try:
             specgen.generate(root, out)
         except ValueError as e:
@@ -354,15 +361,30 @@ def _():
             raise AssertionError("expected ValueError")
 
 
-@case("excludes the governance files from publication")
+@case("publishes only the standards under spec/ics/")
 def _():
-    for name in ("CONTRIBUTING.md", "PROCESS.md",
-                 "STANDARDS_COMMITTEE.md", "ics-template.md",
-                 "adr/adr-template.md"):
+    for name in ("CONTRIBUTING.md", "ics/PROCESS.md",
+                 "ics/STANDARDS_COMMITTEE.md", "ics/ics-template.md",
+                 "adr/README.md", "adr/adr-template.md",
+                 "adr/adr-001-coin-source-tracing.md",
+                 "core/README.md", "IBC_V2/README.md"):
         assert specgen.excluded(name), name
-    assert not specgen.excluded("core/ics-004-channel-and-packet-semantics/README.md")
-    assert not specgen.excluded("adr/README.md")
-    assert not specgen.excluded("adr/adr-001-coin-source-tracing.md")
+    assert not specgen.excluded("ics/core/ics-004-channel-and-packet-semantics/README.md")
+    assert not specgen.excluded("ics/IBC_V2/README.md")
+
+
+@case("drops the ics/ segment from published paths")
+def _():
+    assert specgen.site_rel("ics/core/x/README.md") == "core/x/README.md"
+    assert specgen.site_rel("adr/README.md") == "adr/README.md"
+
+
+@case("links to an ADR point at GitHub, not the site")
+def _():
+    out = specgen.transform("[ADR 001](../../../adr/adr-001-coin-source-tracing.md#context)",
+                            "ics/app/ics-020-fungible-token-transfer/README.md")
+    assert out == ("[ADR 001](https://github.com/cosmos/ibc/blob/main/"
+                   "spec/adr/adr-001-coin-source-tracing.md#context)"), out
 
 
 @case("generating twice changes nothing the second time")
@@ -433,7 +455,7 @@ def _():
 @case("refuses to publish a Git LFS pointer as an image")
 def _():
     with tempfile.TemporaryDirectory() as d:
-        src = os.path.join(d, "spec", "core", "ics-001-x")
+        src = os.path.join(d, "spec", "ics", "core", "ics-001-x")
         os.makedirs(src)
         open(os.path.join(src, "README.md"), "w").write("# X\n\nbody\n")
         # What a clone without the LFS client leaves on disk.
@@ -453,7 +475,7 @@ def _():
 @case("copies a real image")
 def _():
     with tempfile.TemporaryDirectory() as d:
-        src = os.path.join(d, "spec", "core", "ics-001-x")
+        src = os.path.join(d, "spec", "ics", "core", "ics-001-x")
         os.makedirs(src)
         open(os.path.join(src, "README.md"), "w").write("# X\n\nbody\n")
         png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64

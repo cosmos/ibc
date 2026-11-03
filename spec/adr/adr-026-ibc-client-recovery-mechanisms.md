@@ -66,7 +66,7 @@ We elect not to deal with chains which have actually halted, which is necessaril
 
 Note that clients frozen due to misbehaviour must wait for the evidence to expire to avoid becoming refrozen.
 
-This ADR does not address planned upgrades, which are handled separately as per the [specification](https://github.com/cosmos/ibc/tree/master/spec/client/ics-007-tendermint-client#upgrades).
+This ADR does not address planned upgrades, which are handled separately as per the [specification](https://github.com/cosmos/ibc/tree/master/spec/ics/client/ics-007-tendermint-client#upgrades).
 
 ## Consequences
 

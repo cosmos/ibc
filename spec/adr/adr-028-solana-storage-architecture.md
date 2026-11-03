@@ -384,7 +384,7 @@ The following features are not currently implemented but may be added:
 
 ## References
 
-- [IBC Packet Lifecycle](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics)
+- [IBC Packet Lifecycle](https://github.com/cosmos/ibc/tree/main/spec/ics/core/ics-004-channel-and-packet-semantics)
 - [Solana Account Model](https://solana.com/docs/core/accounts)
 - [Solana PDAs](https://solana.com/docs/core/pda)
 - [Solana Rent Economics](https://solana.com/docs/core/fees)

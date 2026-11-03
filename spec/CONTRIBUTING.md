@@ -19,8 +19,8 @@ Contributing to this repo can mean many things such as participating in discussi
   - Be sure to submit the PR early in `Draft` mode, even if it's incomplete as this indicates to the community you're working on something and allows them to provide comments at an early stage.
   - When the PR is complete it can be marked `Ready for Review`.
 
-- If you would like to propose a new standard for inclusion in the IBC standards, please take a look at [PROCESS.md](./PROCESS.md) for a detailed description of the standardisation process.
-  - To start a new standardisation document, copy the [template](../spec/ics-template.md) and open a PR.
+- If you would like to propose a new standard for inclusion in the IBC standards, please take a look at [PROCESS.md](./ics/PROCESS.md) for a detailed description of the standardisation process.
+  - To start a new standardisation document, copy the [template](ics/ics-template.md) and open a PR.
 
 - If you would like to record an architecture decision for the standards or for cosmos/ibc, cosmos/ibc-go or cosmos/ibc-contracts, write an [architecture decision record](./adr/README.md) (ADR) and open a PR here. An ICS says what IBC requires; an ADR records why a design was chosen. See [ADRs and ICS standards](./adr/README.md#adrs-and-ics-standards) for when to use each.
 
@@ -31,14 +31,14 @@ If you have any questions, you can usually find some IBC team members on the [Co
 To accommodate the review process we suggest that PRs are categorically broken up.
 Each PR should address only a single issue and **a single standard**. 
 The PR name should be prefixed by the standard number, 
-e.g., `ICS4: Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
+e.g., `ICS4: Some improvements` should contain only changes to [ICS 4](ics/core/ics-004-channel-and-packet-semantics/README.md).
 If fixing an issue requires changes to multiple standards, create multiple PRs and mention the inter-dependencies.
 
 A PR that adds or updates an ADR is titled `docs(adr): ADR NNN short title` instead of being prefixed by a standard number; see the [ADR README](./adr/README.md#process).
 
 ### Process for reviewing PRs
 
-All PRs require an approval from at least two members of the [standardisation committee](./STANDARDS_COMMITTEE.md) before merge. 
+All PRs require an approval from at least two members of the [standardisation committee](./ics/STANDARDS_COMMITTEE.md) before merge. 
 The PRs submitted by one of the members of the standardisation committee require an approval from only one other member before merge. 
 When reviewing PRs please use the following review explanations:
 
@@ -46,7 +46,7 @@ When reviewing PRs please use the following review explanations:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
   - The changes must be consistent with the other IBC standards, especially the [core IBC standards](../README.md#core-transport). 
-  - The modified standard must be consistent with the description from [ICS 1](../spec/ics-001-ics-standard/README.md).
+  - The modified standard must be consistent with the description from [ICS 1](ics/ics-001-ics-standard/README.md).
 - If you are only making "surface level" reviews, submit any notes as `Comments` without adding a review.
 
 ### PR Targeting
