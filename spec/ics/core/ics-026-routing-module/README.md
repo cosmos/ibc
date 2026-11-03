@@ -7,8 +7,8 @@ category: IBC/TAO
 kind: instantiation
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Jun 9, 2019
-modified: Aug 25, 2019
+created: 2019-06-09
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -811,13 +811,13 @@ routing modules are closely tied to the IBC handler interface.
 
 ## History
 
-Jun 9, 2019 - Draft submitted
+2019-06-09 - Draft submitted
 
-Jul 28, 2019 - Major revisions
+2019-07-28 - Major revisions
 
-Aug 25, 2019 - Major revisions
+2019-08-25 - Major revisions
 
-Mar 28, 2023 - Fix order of executing module handler and application callback
+2023-03-28 - Fix order of executing module handler and application callback
 
 ## Copyright
 

@@ -3,13 +3,13 @@
 # ADR 007: Solo machine sign bytes
 
 - **Status**: Implemented
-- **Date**: Aug 2, 2022
+- **Date**: 2022-08-02
 - **Scope**: `ibc-go`
 - **ICS**: ICS-6 (IBC v1)
 
 ## Changelog
 
-- Aug 2, 2022: Initial draft
+- 2022-08-02: Initial draft
 
 ## Context
 

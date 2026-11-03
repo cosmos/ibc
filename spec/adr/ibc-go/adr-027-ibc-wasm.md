@@ -3,16 +3,16 @@
 # ADR 027: Add support for Wasm based light client
 
 - **Status**: Implemented
-- **Date**: Nov 26, 2020
-- **Last Updated**: Dec 13, 2023
+- **Date**: 2020-11-26
+- **Last Updated**: 2023-12-13
 - **Scope**: `ibc-go`
 - **ICS**: ICS-8 (IBC v1)
 
 ## Changelog
 
-- Nov 26, 2020: Initial Draft
-- May 26, 2023: Update after 02-client refactor and re-implementation by Strangelove
-- Dec 13, 2023: Update after upstreaming of module to ibc-go
+- 2020-11-26: Initial Draft
+- 2023-05-26: Update after 02-client refactor and re-implementation by Strangelove
+- 2023-12-13: Update after upstreaming of module to ibc-go
 
 ## Abstract
 

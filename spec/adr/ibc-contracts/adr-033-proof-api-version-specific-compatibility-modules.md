@@ -3,7 +3,7 @@
 # ADR 033: Version-Specific Proof API Compatibility Modules
 
 - **Status**: Implemented
-- **Date**: Jun 17, 2026
+- **Date**: 2026-06-17
 - **Scope**: `ibc-contracts/proof-api`
 - **ICS**:
 

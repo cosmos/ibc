@@ -7,7 +7,7 @@ category: IBC/TAO
 kind: instantiation
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
-created: Mar 19, 2025
+created: 2025-03-19
 ---
 
 ## Synopsis

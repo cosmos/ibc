@@ -3,13 +3,13 @@
 # ADR 005: UpdateClient Events - ClientState Consensus Heights
 
 - **Status**: Implemented
-- **Date**: Apr 25, 2022
+- **Date**: 2022-04-25
 - **Scope**: `ibc-go`
 - **ICS**: ICS-2 (IBC v1)
 
 ## Changelog
 
-- Apr 25, 2022: initial draft
+- 2022-04-25: initial draft
 
 ## Context
 

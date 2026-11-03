@@ -3,7 +3,7 @@
 # ADR 035: Pausing and Freezing in IBC-Solidity
 
 - **Status**: Implemented
-- **Date**: Oct 8, 2026
+- **Date**: 2026-10-08
 - **Scope**: `ibc-contracts/solidity`
 - **ICS**: ICS-26 (IBC v2)
 

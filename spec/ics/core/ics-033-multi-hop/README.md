@@ -7,8 +7,8 @@ required-by: 4
 category: IBC/TAO
 kind: instantiation
 author: Derek Shiell <derek@polymerlabs.org>, Wenwei Xiong <wenwei@polymerlabs.org>, Bo Du <bo@polymerlabs.org>
-created: Nov 11, 2022
-modified: Dec 16, 2022
+created: 2022-11-11
+modified: 2022-12-16
 ---
 
 ## Synopsis
@@ -569,9 +569,9 @@ Coming soon.
 
 ## History
 
-Dec 16, 2022 - Revisions to channel spec and proof verification
+2022-12-16 - Revisions to channel spec and proof verification
 
-Nov 11, 2022 - Initial draft
+2022-11-11 - Initial draft
 
 ## Copyright
 

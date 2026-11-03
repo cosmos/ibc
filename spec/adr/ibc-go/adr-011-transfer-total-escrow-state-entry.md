@@ -3,13 +3,13 @@
 # ADR 011: ICS-20 transfer state entry for total amount of tokens in escrow
 
 - **Status**: Implemented
-- **Date**: May 24, 2023
+- **Date**: 2023-05-24
 - **Scope**: `ibc-go`
 - **ICS**: ICS-20 v1 (IBC v1)
 
 ## Changelog
 
-- May 24, 2023: Initial draft
+- 2023-05-24: Initial draft
 
 ## Context
 

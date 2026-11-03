@@ -3,13 +3,13 @@
 # ADR 003: ICS27 Acknowledgement Format
 
 - **Status**: Implemented
-- **Date**: Jan 28, 2022
+- **Date**: 2022-01-28
 - **Scope**: `ibc-go`
 - **ICS**: ICS-27 (IBC v1)
 
 ## Changelog
 
-- Jan 28, 2022: Initial Draft
+- 2022-01-28: Initial Draft
 
 ## Context
 

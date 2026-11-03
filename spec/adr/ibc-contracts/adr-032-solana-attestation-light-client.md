@@ -3,7 +3,7 @@
 # ADR 032: Solana Attestation Light Client
 
 - **Status**: Implemented
-- **Date**: Jan 30, 2026
+- **Date**: 2026-01-30
 - **Scope**: `ibc-contracts/solana`
 - **ICS**: ICS-2 (IBC v2)
 

@@ -3,8 +3,8 @@
 # ADR 031: Interchain Fungible Token (IFT) Architecture for Solana
 
 - **Status**: Implemented
-- **Date**: Jan 4, 2026
-- **Last Updated**: Mar 25, 2026
+- **Date**: 2026-01-04
+- **Last Updated**: 2026-03-25
 - **Scope**: `ibc-contracts/solana`
 - **ICS**: ICS-27 (IBC v2)
 

@@ -8,8 +8,8 @@ kind: instantiation
 implements: 2
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Dec 10, 2019
-modified: Dec 19, 2019
+created: 2019-12-10
+modified: 2019-12-19
 ---
 
 ## Synopsis
@@ -452,8 +452,8 @@ Not applicable. Alterations to the client verification algorithm will require a 
 
 ## History
 
-Dec 10, 2019 - Initial version
-Dec 19, 2019 - Final first draft
+2019-12-10 - Initial version
+2019-12-19 - Final first draft
 
 ## Copyright
 

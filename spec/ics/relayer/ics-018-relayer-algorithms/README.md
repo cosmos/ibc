@@ -7,8 +7,8 @@ category: IBC/TAO
 kind: interface
 requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Mar 7, 2019
-modified: Aug 25, 2019
+created: 2019-03-07
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -282,11 +282,11 @@ Not applicable. The relayer process is off-chain and can be upgraded or downgrad
 
 ## History
 
-Mar 30, 2019 - Initial draft submitted
+2019-03-30 - Initial draft submitted
 
-Apr 15, 2019 - Revisions for formatting and clarity
+2019-04-15 - Revisions for formatting and clarity
 
-Apr 23, 2019 - Revisions from comments; draft merged
+2019-04-23 - Revisions from comments; draft merged
 
 ## Copyright
 

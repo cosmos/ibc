@@ -3,7 +3,7 @@
 # ADR 036: Model E2E environments as owned resource graphs
 
 - **Status**: Implemented
-- **Date**: Aug 5, 2026
+- **Date**: 2026-08-05
 - **Scope**: `ibc/e2e`
 - **ICS**:
 

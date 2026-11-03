@@ -3,17 +3,17 @@
 # ADR 008: Callback to IBC Actors
 
 - **Status**: Implemented
-- **Date**: Aug 10, 2022
-- **Last Updated**: Feb 24, 2025
+- **Date**: 2022-08-10
+- **Last Updated**: 2025-02-24
 - **Scope**: `ibc-go`
 - **ICS**:
 
 ## Changelog
 
-- Aug 10, 2022: Initial Draft
-- Mar 22, 2023: Merged
-- Sep 13, 2023: Updated with decisions made in implementation
-- Feb 24, 2025: RecvPacket callback error now returns error acknowledgement
+- 2022-08-10: Initial Draft
+- 2023-03-22: Merged
+- 2023-09-13: Updated with decisions made in implementation
+- 2025-02-24: RecvPacket callback error now returns error acknowledgement
 
 ## Context
 

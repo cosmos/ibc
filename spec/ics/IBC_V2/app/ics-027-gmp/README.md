@@ -7,8 +7,8 @@ category: IBC/APP
 kind: instantiation
 requires: 26
 author: Serdar Turkmenafsar <serdar@cosmoslabs.io>
-created: Jan 26, 2026
-modified: Jan 26, 2026
+created: 2026-01-26
+modified: 2026-01-26
 ---
 
 ## Synopsis
@@ -250,7 +250,7 @@ The protocol reserves the `encoding` field for future additions and allows desti
 ## History
 
 - 2025: Proof-of-concept implementations across Cosmos SDK, EVM, and Solana
-- Jan 26, 2026: Initial draft of ICS27-GMP specification
+- 2026-01-26: Initial draft of ICS27-GMP specification
 
 ## Copyright
 

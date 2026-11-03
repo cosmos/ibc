@@ -3,13 +3,13 @@
 # ADR 006: ICS-02 client refactor
 
 - **Status**: Implemented
-- **Date**: Aug 1, 2022
+- **Date**: 2022-08-01
 - **Scope**: `ibc-go`
 - **ICS**: ICS-2 (IBC v1)
 
 ## Changelog
 
-- Aug 1, 2022: Initial Draft
+- 2022-08-01: Initial Draft
 
 ## Context
 

@@ -6,8 +6,8 @@ stage: draft
 category: IBC/APP
 requires: 25, 26, 20
 author: Marius Poke <marius@informal.systems>, Aditya Sripal <aditya@interchain.io>, Jovan Komatovic <jovan.komatovic@epfl.ch>, Cezara Dragoi <cezara.dragoi@inria.fr>, Josef Widder <josef@informal.systems>
-created: Jun 27, 2022
-modified: Dec 2, 2022
+created: 2022-06-27
+modified: 2022-12-02
 ---
 
 <!-- omit in toc -->
@@ -51,15 +51,15 @@ The communication between the provider and the consumer chains is done through t
 
 ## History
 
-Jun 27, 2022 - Draft written
+2022-06-27 - Draft written
 
-Aug 3, 2022 - Revision of *Bond-Based Consumer Voting Power* property
+2022-08-03 - Revision of *Bond-Based Consumer Voting Power* property
 
-Aug 29, 2022 - Notify Staking module of matured unbondings in `EndBlock()`
+2022-08-29 - Notify Staking module of matured unbondings in `EndBlock()`
 
-Dec 2, 2022 - Enable existing chains to become consumer chains
+2022-12-02 - Enable existing chains to become consumer chains
 
-Dec 7, 2022 - Add provider-based timeouts
+2022-12-07 - Add provider-based timeouts
 
 ## Copyright
 

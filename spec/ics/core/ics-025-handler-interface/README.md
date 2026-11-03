@@ -8,8 +8,8 @@ kind: instantiation
 requires: 2, 3, 4, 23, 24
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Apr 23, 2019
-modified: Aug 25, 2019
+created: 2019-04-23
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -80,9 +80,9 @@ Coming soon.
 
 ## History
 
-Jun 9, 2019 - Draft written
+2019-06-09 - Draft written
 
-Aug 24, 2019 - Revisions, cleanup
+2019-08-24 - Revisions, cleanup
 
 ## Copyright
 

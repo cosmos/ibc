@@ -7,8 +7,8 @@ category: IBC/TAO
 kind: instantiation
 implements: 2
 author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>, Blas Rodriguez Irizar <blas@composable.finance>, Steve Miskovetz <steve@strange.love>
-created: Oct 13, 2020
-modified: Mar 22, 2024
+created: 2020-10-13
+modified: 2024-03-22
 ---
 
 ## Synopsis
@@ -562,13 +562,13 @@ Implementation of ICS 08 in Go can be found in [ibc-go PR](https://github.com/co
 
 ## History
 
-Oct 8, 2021 - Final first draft
+2021-10-08 - Final first draft
 
-Mar 15, 2022 - Update for 02-client refactor
+2022-03-15 - Update for 02-client refactor
 
-Sep 7, 2023 - Update for changes during implementation
+2023-09-07 - Update for changes during implementation
 
-Mar 22, 2024 - Update for changes after release of ibc-go's 08-wasm module
+2024-03-22 - Update for changes after release of ibc-go's 08-wasm module
 
 ## Copyright
 

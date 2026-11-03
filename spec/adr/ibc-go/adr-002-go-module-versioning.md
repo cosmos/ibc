@@ -3,13 +3,13 @@
 # ADR 002: Go module versioning
 
 - **Status**: Implemented
-- **Date**: Jan 5, 2022
+- **Date**: 2022-01-05
 - **Scope**: `ibc-go`
 - **ICS**:
 
 ## Changelog
 
-- Jan 5, 2022: initial draft
+- 2022-01-05: initial draft
 
 ## Context
 
@@ -113,3 +113,7 @@ This only affects clients relying directly on the go code.
 Multiple ibc-go versions cannot be imported.
 
 ### Neutral
+
+## References
+
+- Implemented: every ibc-go major release from v2.0.0 carries its major version in the module path, from `github.com/cosmos/ibc-go/v2` to `github.com/cosmos/ibc-go/v10`

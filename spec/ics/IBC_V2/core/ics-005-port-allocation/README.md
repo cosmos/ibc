@@ -8,7 +8,7 @@ category: IBC/TAO
 kind: interface
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
-created: May 17, 2024
+created: 2024-05-17
 ---
 
 ## Synopsis

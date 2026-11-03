@@ -8,8 +8,8 @@ requires: 25, 26
 kind: instantiation
 version compatibility:
 author: Tony Yun <tony@chainapsis.com>, Dogemos <josh@tendermint.com>, Sean King <sean@interchain.io>
-created: Aug 1, 2019
-modified: Jul 14, 2020
+created: 2019-08-01
+modified: 2020-07-14
 ---
 
 ## Synopsis
@@ -799,23 +799,23 @@ The "active channel" setting and unsetting is currently necessary to allow inter
 
 ## History
 
-Aug 1, 2019 - Concept discussed
+2019-08-01 - Concept discussed
 
-Sep 24, 2019 - Draft suggested
+2019-09-24 - Draft suggested
 
-Nov 8, 2019 - Major revisions
+2019-11-08 - Major revisions
 
-Dec 2, 2019 - Minor revisions (Add more specific description & Add interchain account on Ethereum)
+2019-12-02 - Minor revisions (Add more specific description & Add interchain account on Ethereum)
 
-Jul 14, 2020 - Major revisions
+2020-07-14 - Major revisions
 
-Apr 27, 2021 - Redesign of ics27 specification
+2021-04-27 - Redesign of ics27 specification
 
-Nov 11, 2021 - Update with latest changes from implementation
+2021-11-11 - Update with latest changes from implementation
 
-Dec 14, 2021 - Revisions to spec based on audits and maintainer reviews
+2021-12-14 - Revisions to spec based on audits and maintainer reviews
 
-Aug 1, 2023 - Implemented channel upgrades callbacks
+2023-08-01 - Implemented channel upgrades callbacks
     
 ## Copyright
 

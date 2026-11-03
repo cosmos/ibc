@@ -3,8 +3,8 @@
 # ADR 034: Rate Limiting in IFT in Solidity
 
 - **Status**: Implemented
-- **Date**: Sep 10, 2026
-- **Last Updated**: Sep 24, 2026
+- **Date**: 2026-09-10
+- **Last Updated**: 2026-09-24
 - **Scope**: `ibc-contracts/solidity`
 - **ICS**: ICS-27 (IBC v2)
 

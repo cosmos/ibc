@@ -9,8 +9,8 @@ requires: 23
 required-by: 2, 3, 4, 5, 18
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Apr 16, 2019
-modified: Sep 14, 2022
+created: 2019-04-16
+modified: 2022-09-14
 ---
 
 ## Synopsis
@@ -391,17 +391,17 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 ## History
 
-Apr 29, 2019 - Initial draft
+2019-04-29 - Initial draft
 
-May 11, 2019 - Rename "RootOfTrust" to "ConsensusState"
+2019-05-11 - Rename "RootOfTrust" to "ConsensusState"
 
-Jun 25, 2019 - Use "ports" instead of module names
+2019-06-25 - Use "ports" instead of module names
 
-Aug 18, 2019 - Revisions to module system, definitions
+2019-08-18 - Revisions to module system, definitions
 
-Jul 5, 2022 - Lower the minimal allowed length of a channel identifier to 8
+2022-07-05 - Lower the minimal allowed length of a channel identifier to 8
 
-Jul 27, 2022 - Move `ClientState` to the `provableStore`, and add "Client state validation" section
+2022-07-27 - Move `ClientState` to the `provableStore`, and add "Client state validation" section
 
 ## Copyright
 

@@ -8,8 +8,8 @@ kind: interface
 required-by: 4
 version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
-created: Aug 21, 2024
-modified: Aug 21, 2024
+created: 2024-08-21
+modified: 2024-08-21
 ---
 
 ## Synopsis
@@ -138,7 +138,7 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 ## History
 
-Aug 21, 2024 - [Initial draft](https://github.com/cosmos/ibc/pull/1144)
+2024-08-21 - [Initial draft](https://github.com/cosmos/ibc/pull/1144)
 
 ## Copyright
 

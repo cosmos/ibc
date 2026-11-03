@@ -7,8 +7,8 @@ category: IBC/APP
 requires: 25, 26
 kind: instantiation
 author: Ping Liang <ping@side.one>, Edward Gunawan <edward@s16.ventures>
-created: Jul 27, 2022
-modified: Oct 7, 2022
+created: 2022-07-27
+modified: 2022-10-07
 ---
 
 <p style="text-align:center;border-style:solid">This specification has been reviewed by the Spec Committee, but it is not responsible for maintaining it.</p>
@@ -641,11 +641,11 @@ and safely alter the packet data format & packet handler semantics.
 
 ## History
 
-Aug 15, 2022 - Draft written
+2022-08-15 - Draft written
 
-Oct 6, 2022 - Draft revised
+2022-10-06 - Draft revised
 
-Nov 11, 2022 - Draft revised
+2022-11-11 - Draft revised
 
 ## Copyright
 

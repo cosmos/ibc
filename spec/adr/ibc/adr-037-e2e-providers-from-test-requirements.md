@@ -3,7 +3,7 @@
 # ADR 037: Select E2E providers from test requirements
 
 - **Status**: Implemented
-- **Date**: Aug 5, 2026
+- **Date**: 2026-08-05
 - **Scope**: `ibc/e2e`
 - **ICS**:
 

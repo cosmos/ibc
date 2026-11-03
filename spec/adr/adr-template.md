@@ -3,13 +3,13 @@
 # ADR NNN: Short Title
 
 - **Status**: Proposed
-- **Date**: Mon D, YYYY
+- **Date**: YYYY-MM-DD
 - **Scope**: (every scope the decision applies to, from README.md, e.g. `ibc-go`)
 - **ICS**: (standards the decision changes, implements or depends on, e.g. ICS-26 (IBC v2); empty if none)
 
 <!--
 See README.md for when to write an ADR and how it is approved. Copy this
-template to spec/adr/adr-NNN-short-title.md.
+template to spec/adr/<directory>/adr-NNN-short-title.md.
 -->
 
 ## Context

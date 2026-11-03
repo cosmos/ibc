@@ -9,8 +9,8 @@ category: IBC/TAO
 kind: interface
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Jun 20, 2019
-modified: Aug 25, 2019
+created: 2019-06-20
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -240,7 +240,7 @@ Port binding is not a wire protocol, so interfaces can change independently on s
 
 ## History
 
-Jun 29, 2019 - Initial draft
+2019-06-29 - Initial draft
 
 ## Copyright
 

@@ -132,7 +132,7 @@ Both directions share the capacity and window but track usage separately, across
 - **Outbound** covers the burn in `iftTransfer`. A send over the limit reverts, so no packet is sent.
 - **Inbound** covers `iftMint` and refunds. A mint over the limit fails the receive and produces an error acknowledgement, which refunds the sender. A refund over the limit reverts and the pending transfer stays recorded, so the relayer can retry once the bucket has refilled.
 
-Flow in one direction never restores allowance in the other, and the authority's local `mint` is not limited. Changing the limit keeps the refill accrued under the old settings and applies the new rate from then on. [The IFT rate limiting ADR](https://github.com/cosmos/ibc/blob/main/spec/adr/adr-034-solidity-ift-ratelimit.md) explains these choices.
+Flow in one direction never restores allowance in the other, and the authority's local `mint` is not limited. Changing the limit keeps the refill accrued under the old settings and applies the new rate from then on. [The IFT rate limiting ADR](https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-contracts/adr-034-solidity-ift-ratelimit.md) explains these choices.
 
 ## Sending a transfer
 

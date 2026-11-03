@@ -3,13 +3,13 @@
 # ADR 009: ICS27 message server addition
 
 - **Status**: Implemented
-- **Date**: Sep 7, 2022
+- **Date**: 2022-09-07
 - **Scope**: `ibc-go`
 - **ICS**: ICS-27 (IBC v1)
 
 ## Changelog
 
-- Sep 7, 2022: Initial draft
+- 2022-09-07: Initial draft
 
 ## Context
 

@@ -3,13 +3,13 @@
 # ADR 015: IBC Packet Receiver
 
 - **Status**: Proposed
-- **Date**: Oct 22, 2019
+- **Date**: 2019-10-22
 - **Scope**: `ibc-go`
 - **ICS**: ICS-26 (IBC v1)
 
 ## Changelog
 
-- Oct 22, 2019: Initial Draft
+- 2019-10-22: Initial Draft
 
 ## Context
 

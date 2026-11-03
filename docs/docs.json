@@ -98,77 +98,77 @@
     },
     {
       "source": "/ibc-go/latest/architecture/adr-001-coin-source-tracing",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-001-coin-source-tracing.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-001-coin-source-tracing.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-002-go-module-versioning",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-002-go-module-versioning.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-002-go-module-versioning.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-003-ics27-acknowledgement",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-003-ics27-acknowledgement.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-003-ics27-acknowledgement.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-004-ics29-lock-fee-module",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-004-ics29-lock-fee-module.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-004-ics29-lock-fee-module.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-005-consensus-height-events",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-005-consensus-height-events.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-005-consensus-height-events.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-006-02-client-refactor",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-006-02-client-refactor.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-006-02-client-refactor.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-007-solomachine-signbytes",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-007-solomachine-signbytes.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-007-solomachine-signbytes.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-008-app-caller-cbs",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-008-app-caller-cbs.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-008-app-caller-cbs.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-009-v6-ics27-msgserver",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-009-v6-ics27-msgserver.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-009-v6-ics27-msgserver.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-010-light-clients-as-sdk-modules",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-010-light-clients-as-sdk-modules.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-010-light-clients-as-sdk-modules.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-011-transfer-total-escrow-state-entry",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-011-transfer-total-escrow-state-entry.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-011-transfer-total-escrow-state-entry.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-015-ibc-packet-receiver",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-015-ibc-packet-receiver.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-015-ibc-packet-receiver.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-025-ibc-passive-channels",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-025-ibc-passive-channels.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-025-ibc-passive-channels.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-026-ibc-client-recovery-mechanisms",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-026-ibc-client-recovery-mechanisms.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-026-ibc-client-recovery-mechanisms.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/latest/architecture/adr-027-ibc-wasm",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-027-ibc-wasm.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-027-ibc-wasm.md",
       "permanent": true
     },
     {
@@ -178,77 +178,77 @@
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-001-coin-source-tracing",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-001-coin-source-tracing.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-001-coin-source-tracing.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-002-go-module-versioning",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-002-go-module-versioning.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-002-go-module-versioning.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-003-ics27-acknowledgement",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-003-ics27-acknowledgement.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-003-ics27-acknowledgement.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-004-ics29-lock-fee-module",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-004-ics29-lock-fee-module.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-004-ics29-lock-fee-module.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-005-consensus-height-events",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-005-consensus-height-events.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-005-consensus-height-events.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-006-02-client-refactor",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-006-02-client-refactor.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-006-02-client-refactor.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-007-solomachine-signbytes",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-007-solomachine-signbytes.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-007-solomachine-signbytes.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-008-app-caller-cbs",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-008-app-caller-cbs.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-008-app-caller-cbs.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-009-v6-ics27-msgserver",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-009-v6-ics27-msgserver.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-009-v6-ics27-msgserver.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-010-light-clients-as-sdk-modules",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-010-light-clients-as-sdk-modules.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-010-light-clients-as-sdk-modules.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-011-transfer-total-escrow-state-entry",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-011-transfer-total-escrow-state-entry.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-011-transfer-total-escrow-state-entry.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-015-ibc-packet-receiver",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-015-ibc-packet-receiver.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-015-ibc-packet-receiver.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-025-ibc-passive-channels",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-025-ibc-passive-channels.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-025-ibc-passive-channels.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-026-ibc-client-recovery-mechanisms",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-026-ibc-client-recovery-mechanisms.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-026-ibc-client-recovery-mechanisms.md",
       "permanent": true
     },
     {
       "source": "/ibc-go/v10.1.x/architecture/adr-027-ibc-wasm",
-      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/adr-027-ibc-wasm.md",
+      "destination": "https://github.com/cosmos/ibc/blob/main/spec/adr/ibc-go/adr-027-ibc-wasm.md",
       "permanent": true
     }
   ],

@@ -3,16 +3,16 @@
 # ADR 025: IBC Passive Channels
 
 - **Status**: Deprecated
-- **Date**: May 18, 2020
-- **Last Updated**: Apr 23, 2021
+- **Date**: 2020-05-18
+- **Last Updated**: 2021-04-23
 - **Scope**: `ibc-go`
 - **ICS**: ICS-4 (IBC v1)
 
 ## Changelog
 
-- Apr 23, 2021: Deprecated when the IBC ADRs moved from cosmos-sdk to ibc-go in [ibc-go#139](https://github.com/cosmos/ibc-go/pull/139). No reason was recorded, and the `channel_meta` events this ADR proposes were never added to ibc-go.
-- May 23, 2020: Provide sample Go code and more details
-- May 18, 2020: Initial Draft
+- 2021-04-23: Deprecated when the IBC ADRs moved from cosmos-sdk to ibc-go in [ibc-go#139](https://github.com/cosmos/ibc-go/pull/139). No reason was recorded, and the `channel_meta` events this ADR proposes were never added to ibc-go.
+- 2020-05-23: Provide sample Go code and more details
+- 2020-05-18: Initial Draft
 
 ## Context
 

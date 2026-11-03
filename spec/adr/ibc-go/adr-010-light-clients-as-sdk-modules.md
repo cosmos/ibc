@@ -3,15 +3,15 @@
 # ADR 010: IBC light clients as SDK modules
 
 - **Status**: Implemented
-- **Date**: Dec 12, 2022
-- **Last Updated**: Nov 3, 2026
+- **Date**: 2022-12-12
+- **Last Updated**: 2026-11-03
 - **Scope**: `ibc-go`
 - **ICS**: ICS-2 (IBC v1)
 
 ## Changelog
 
-- Dec 12, 2022: initial draft
-- Nov 3, 2026: Implemented in ibc-go v9 through a 02-client router and the `LightClientModule` interface ([#5806](https://github.com/cosmos/ibc-go/pull/5806)), not through SDK intermodule communication as decided below
+- 2022-12-12: initial draft
+- 2026-11-03: Implemented in ibc-go v9 through a 02-client router and the `LightClientModule` interface ([#5806](https://github.com/cosmos/ibc-go/pull/5806)), not through SDK intermodule communication as decided below
 
 ## Context
 

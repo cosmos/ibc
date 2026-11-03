@@ -6,7 +6,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 author: Yuanchao Sun <ys@cdot.network>, John Wu <john@cdot.network>
-created: Mar 15, 2020
+created: 2020-03-15
 implements: 2
 ---
 
@@ -364,7 +364,7 @@ None yet.
 
 ## History
 
-Mar 15, 2020 - Initial version
+2020-03-15 - Initial version
 
 ## Copyright
 

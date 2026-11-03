@@ -3,8 +3,8 @@
 # ADR 030: ICS27 General Message Passing (GMP) Architecture for Solana
 
 - **Status**: Implemented
-- **Date**: Sep 18, 2025
-- **Last Updated**: Apr 3, 2026
+- **Date**: 2025-09-18
+- **Last Updated**: 2026-04-03
 - **Scope**: `ibc-contracts/solana`
 - **ICS**: ICS-27 (IBC v2)
 

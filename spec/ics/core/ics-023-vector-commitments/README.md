@@ -8,8 +8,8 @@ category: IBC/TAO
 kind: interface
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Apr 16, 2019
-modified: Aug 25, 2019
+created: 2019-04-16
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -295,7 +295,7 @@ Security definitions are mostly sourced from these papers (and simplified somewh
 
 Thanks to Dev Ojha for extensive comments on this specification.
 
-Apr 25, 2019 - Draft submitted
+2019-04-25 - Draft submitted
 
 ## Copyright
 

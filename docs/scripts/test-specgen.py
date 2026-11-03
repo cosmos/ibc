@@ -381,10 +381,10 @@ def _():
 
 @case("links to an ADR point at GitHub, not the site")
 def _():
-    out = specgen.transform("[ADR 001](../../../adr/adr-001-coin-source-tracing.md#context)",
+    out = specgen.transform("[ADR 001](../../../adr/ibc-go/adr-001-coin-source-tracing.md#context)",
                             "ics/app/ics-020-fungible-token-transfer/README.md")
     assert out == ("[ADR 001](https://github.com/cosmos/ibc/blob/main/"
-                   "spec/adr/adr-001-coin-source-tracing.md#context)"), out
+                   "spec/adr/ibc-go/adr-001-coin-source-tracing.md#context)"), out
 
 
 @case("generating twice changes nothing the second time")

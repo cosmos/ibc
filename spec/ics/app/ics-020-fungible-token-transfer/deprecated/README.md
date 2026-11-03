@@ -9,8 +9,8 @@ requires: 25, 26
 kind: instantiation
 version compatibility:
 author: Christopher Goes <cwgoes@interchain.berlin>, Aditya Sripal <aditya@interchain.io>
-created: Jul 15, 2019
-modified: Mar 5, 2024
+created: 2019-07-15
+modified: 2024-03-05
 ---
 
 ## Synopsis
@@ -812,25 +812,25 @@ and safely alter the packet data format & packet handler semantics.
 
 ## History
 
-Jul 15, 2019 - Draft written
+2019-07-15 - Draft written
 
-Jul 29, 2019 - Major revisions; cleanup
+2019-07-29 - Major revisions; cleanup
 
-Aug 25, 2019 - Major revisions, more cleanup
+2019-08-25 - Major revisions, more cleanup
 
-Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
+2020-02-03 - Revisions to handle acknowledgements of success & failure
 
-Feb 24, 2020 - Revisions to infer source field, inclusion of version string
+2020-02-24 - Revisions to infer source field, inclusion of version string
 
-Jul 27, 2020 - Re-addition of source field
+2020-07-27 - Re-addition of source field
 
-Nov 11, 2022 - Addition of a memo field
+2022-11-11 - Addition of a memo field
 
-Sep 22, 2023 - [Support for multi-token packets](https://github.com/cosmos/ibc/pull/1020)
+2023-09-22 - [Support for multi-token packets](https://github.com/cosmos/ibc/pull/1020)
 
-Mar 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
+2024-03-05 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
 
-Jun 18, 2024 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
+2024-06-18 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
 
 ## Copyright
 

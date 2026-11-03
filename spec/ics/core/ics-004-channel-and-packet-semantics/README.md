@@ -8,8 +8,8 @@ kind: instantiation
 requires: 2, 3, 5, 24
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
-created: Mar 7, 2019
-modified: Aug 25, 2019
+created: 2019-03-07
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -1522,23 +1522,23 @@ Data structures & encoding can be versioned at the connection or channel level. 
 
 ## History
 
-Jun 5, 2019 - Draft submitted
+2019-06-05 - Draft submitted
 
-Jul 4, 2019 - Modifications for unordered channels & acknowledgements
+2019-07-04 - Modifications for unordered channels & acknowledgements
 
-Jul 16, 2019 - Alterations for multi-hop routing future compatibility
+2019-07-16 - Alterations for multi-hop routing future compatibility
 
-Jul 29, 2019 - Revisions to handle timeouts after connection closure
+2019-07-29 - Revisions to handle timeouts after connection closure
 
-Aug 13, 2019 - Various edits
+2019-08-13 - Various edits
 
-Aug 25, 2019 - Cleanup
+2019-08-25 - Cleanup
 
-Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
+2022-01-10 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
 
-Mar 28, 2023 - Add `writeChannel` function to write channel end after executing application callback
+2023-03-28 - Add `writeChannel` function to write channel end after executing application callback
 
-Dec 4, 2024 - Remove the description for optimistic packet sending
+2024-12-04 - Remove the description for optimistic packet sending
 
 ## Copyright
 
