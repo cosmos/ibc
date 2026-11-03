@@ -2,12 +2,14 @@
 
 # ADR 035: Pausing and Freezing in IBC-Solidity
 
-**Status**: Accepted
-**Date**: Oct 8, 2026
+- **Status**: Implemented
+- **Date**: Oct 8, 2026
+- **Scope**: `ibc-contracts/solidity`
+- **ICS**: ICS-26 (IBC v2)
 
 ## Context
 
-Rate limits bound how quickly funds can move during an exploit, but they cannot stop one (see the [IFT rate limit ADR](./adr-034-solidity-ift-ratelimit.md)). Once an exploit is detected, operators need a way to halt the affected flows while they investigate, patch, or migrate. In this document, we decide which IBC-Solidity contracts can be halted, what a halt blocks, and who is allowed to trigger it.
+Rate limits bound how quickly funds can move during an exploit, but they cannot stop one (see [ADR 034](./adr-034-solidity-ift-ratelimit.md)). Once an exploit is detected, operators need a way to halt the affected flows while they investigate, patch, or migrate. In this document, we decide which IBC-Solidity contracts can be halted, what a halt blocks, and who is allowed to trigger it.
 
 Some of this already exists. [`ICS20Transfer`](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS20Transfer.sol) and [`ICS27GMP`](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol) inherit OpenZeppelin's `PausableUpgradeable`, and the [deployment script](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/scripts/deployments/DeployAccessManagerWithRoles.sol) wires their `pause()` and `unpause()` to `PAUSER_ROLE` and `UNPAUSER_ROLE` from [`IBCRolesLib`](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCRolesLib.sol). Light clients freeze permanently when misbehaviour is proven. The router, the IFT contracts, and the light clients have no halt that an operator can trigger. Pausing was added without an ADR, so this document records the reasoning behind the existing behaviour and decides on new knobs.
 
@@ -107,7 +109,7 @@ Two existing knobs are not a substitute for the pause. Setting the IFT rate limi
 
 - **Sends** revert, so no packet is committed.
 - **Receives**: the router wraps `onRecvPacket` in a try/catch and writes the universal error acknowledgement when the app reverts. A receive on a paused app is therefore not left pending. The source chain refunds the sender when it processes the error acknowledgement. Leaving the packet pending is not possible without changing the router, and would gain little: timeouts are capped at one day (`MAX_TIMEOUT_DURATION`), and IFT transfers default to fifteen minutes.
-- **Acknowledgements and timeouts**: app reverts here propagate through the router, so the whole transaction reverts and the packet commitment is kept. After the app is unpaused, a relayer can submit the same acknowledgement or timeout again. Blocking refunds is deliberate. A refund mints or releases funds, and as the [refund section of the IFT ADR](./adr-034-solidity-ift-ratelimit.md#refund-handling) shows, an attacker who can forge timeouts can use refunds to double spend. While an exploit is suspected, refunds are as dangerous as receives.
+- **Acknowledgements and timeouts**: app reverts here propagate through the router, so the whole transaction reverts and the packet commitment is kept. After the app is unpaused, a relayer can submit the same acknowledgement or timeout again. Blocking refunds is deliberate. A refund mints or releases funds, and as the [refund section of ADR 034](./adr-034-solidity-ift-ratelimit.md#refund-handling) shows, an attacker who can forge timeouts can use refunds to double spend. While an exploit is suspected, refunds are as dangerous as receives.
 - **Admin functions** stay callable, for example `setRateLimit`, `setCustomERC20`, beacon upgrades, `registerIFTBridge`, `setIFTRateLimit` and contract upgrades. Operators need them to fix the configuration before they unpause.
 
 A pause does not freeze tokens. ICS20 vouchers and IFT tokens remain transferable on the local chain. A token issuer who also wants a token freeze can override `_update`, which is a token policy rather than a bridge policy.
@@ -179,3 +181,10 @@ Unrelated inconsistencies found while writing this ADR:
 
 - The `ICS02ClientUpgradeable` contract comment still describes a migrator role granted to the caller of `addClient`. In fact, `migrateClient` is restricted by the AccessManager.
 - A zero limit means unlimited in the ICS20 escrow rate limiter but blocks every transfer in the IFT rate limiter.
+
+## References
+
+- IFT hooks: [ibc-contracts#1187](https://github.com/cosmos/ibc-contracts/pull/1187)
+- IFT pause: [ibc-contracts#1196](https://github.com/cosmos/ibc-contracts/pull/1196)
+- Light client pause: [ibc-contracts#1209](https://github.com/cosmos/ibc-contracts/pull/1209)
+- Router registration pause: [ibc-contracts#1221](https://github.com/cosmos/ibc-contracts/pull/1221)

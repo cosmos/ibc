@@ -2,9 +2,11 @@
 
 # ADR 031: Interchain Fungible Token (IFT) Architecture for Solana
 
-**Status**: Implemented
-**Date**: Jan 4, 2025
-**Last Updated**: Jan 28, 2026
+- **Status**: Implemented
+- **Date**: Jan 4, 2026
+- **Last Updated**: Mar 25, 2026
+- **Scope**: `ibc-contracts/solana`
+- **ICS**: ICS-27 (IBC v2)
 
 IFT for Solana uses a **burn-and-mint pattern** with ICS27-GMP for cross-chain messaging—no escrow accounts, minimal SPL token operations.
 
@@ -287,4 +289,4 @@ This PDA-based validation is more efficient and Solana-native than instruction s
 
 - [ICS-20 Fungible Token Transfer](https://github.com/cosmos/ibc/tree/main/spec/app/ics-020-fungible-token-transfer)
 - [SPL Token Program](https://spl.solana.com/token)
-- [ICS27-GMP ADR](./adr-030-solana-ics27-gmp-architecture.md)
+- [ADR 030: ICS27-GMP](./adr-030-solana-ics27-gmp-architecture.md)

@@ -8,9 +8,11 @@ title: "ADR 034: Rate Limiting in IFT in Solidity"
 
 # ADR 034: Rate Limiting in IFT in Solidity
 
-**Status**: Accepted
-**Date**: Sep 10, 2026
-**Last Updated**: Sep 24, 2026
+- **Status**: Implemented
+- **Date**: Sep 10, 2026
+- **Last Updated**: Sep 24, 2026
+- **Scope**: `ibc-contracts/solidity`
+- **ICS**: ICS-27 (IBC v2)
 
 ## Context
 
@@ -18,7 +20,7 @@ IFT (Interchain Fungible Token) requires rate limiting to prevent funds from bei
 
 The objective is to bound how quickly tokens can be minted or moved across chains, giving operators time to detect an exploit and respond. Rate limiting cannot establish that an incoming transfer is legitimate, and an attacker can continue using capacity as it refills until the affected route is disabled.
 
-This ADR describes the proposed IFT policy. The existing [IFT base contract](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol) burns on send and mints on receive, but does not yet enforce this policy. The [ICS20 escrow rate limiter](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/RateLimitUpgradeable.sol) uses a different, fixed-window design.
+This ADR describes the proposed IFT policy. When it was written, the [IFT base contract](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol) burned on send and minted on receive, but did not yet enforce this policy. The [ICS20 escrow rate limiter](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/RateLimitUpgradeable.sol) uses a different, fixed-window design.
 
 ## Summary
 
@@ -104,3 +106,7 @@ Choosing per token limits now does not prevent us from adding per client limits 
 The policy is implemented in [`IFTRateLimitUpgradeable`](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTRateLimitUpgradeable.sol) on top of OpenZeppelin's `RateLimiter.RefillingBucket`. A single limiter holds the shared capacity and window, and each direction is a separate entry in it, keyed by the direction. An unset limiter has zero capacity, which is what makes the limits mandatory.
 
 - **Capacity updates:** Before the authority changes the capacity or window, both directions are synced: the refill accrued under the old rate is applied and the usage timestamp is moved to now. Consumed usage is therefore preserved and the new rate only applies going forward. Lowering the capacity below a direction's current usage leaves that direction empty until its usage drains at the new rate.
+
+## References
+
+- Implemented in [ibc-contracts#1147](https://github.com/cosmos/ibc-contracts/pull/1147)

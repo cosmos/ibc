@@ -22,7 +22,7 @@ Contributing to this repo can mean many things such as participating in discussi
 - If you would like to propose a new standard for inclusion in the IBC standards, please take a look at [PROCESS.md](./PROCESS.md) for a detailed description of the standardisation process.
   - To start a new standardisation document, copy the [template](../spec/ics-template.md) and open a PR.
 
-- If you would like to record an architecture decision for the standards or for cosmos/ibc, cosmos/ibc-go or cosmos/ibc-contracts, write an [architecture decision record](./adr/README.md) (ADR) and open a PR here.
+- If you would like to record an architecture decision for the standards or for cosmos/ibc, cosmos/ibc-go or cosmos/ibc-contracts, write an [architecture decision record](./adr/README.md) (ADR) and open a PR here. An ICS says what IBC requires; an ADR records why a design was chosen. See [ADRs and ICS standards](./adr/README.md#adrs-and-ics-standards) for when to use each.
 
 If you have any questions, you can usually find some IBC team members on the [Cosmos Discord](https://discord.gg/cosmosnetwork).
 

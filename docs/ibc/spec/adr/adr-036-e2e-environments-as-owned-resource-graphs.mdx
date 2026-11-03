@@ -8,8 +8,10 @@ title: "ADR 036: Model E2E environments as owned resource graphs"
 
 # ADR 036: Model E2E environments as owned resource graphs
 
-- Status: Proposed
-- Date: Aug 5, 2026
+- **Status**: Implemented
+- **Date**: Aug 5, 2026
+- **Scope**: `ibc/e2e`
+- **ICS**:
 
 ## Context
 
@@ -33,3 +35,7 @@ Traffic workflows bind applications and routes above the environment and exercis
 - Tests may spell out complete graphs when their topology is unusual; this is intentional.
 - Attached resources cannot accidentally gain lifecycle or mining control from connectivity alone.
 - Supporting another chain family requires its own declarations, realization, and family-specific access rather than additions to a universal chain interface.
+
+## References
+
+- Implemented in [cosmos/ibc#1310](https://github.com/cosmos/ibc/pull/1310)

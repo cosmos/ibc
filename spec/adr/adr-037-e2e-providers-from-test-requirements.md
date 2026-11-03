@@ -2,8 +2,10 @@
 
 # ADR 037: Select E2E providers from test requirements
 
-- Status: Proposed
-- Date: Aug 5, 2026
+- **Status**: Implemented
+- **Date**: Aug 5, 2026
+- **Scope**: `ibc/e2e`
+- **ICS**:
 
 ## Context
 
@@ -31,3 +33,7 @@ Selection produces the concrete environment graph consumed by the harness. That 
 - Local and pull-request runs remain fast without weakening the requirement that complete modes cover every test.
 - Scheduled runs exercise production-like providers wherever test requirements allow.
 - Adding a provider changes selection policy and coverage configuration; portable tests do not change.
+
+## References
+
+- Implemented in [cosmos/ibc#1310](https://github.com/cosmos/ibc/pull/1310)

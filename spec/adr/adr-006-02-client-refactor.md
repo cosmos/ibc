@@ -2,13 +2,14 @@
 
 # ADR 006: ICS-02 client refactor
 
+- **Status**: Implemented
+- **Date**: Aug 1, 2022
+- **Scope**: `ibc-go`
+- **ICS**: ICS-2 (IBC v1)
+
 ## Changelog
 
 - Aug 1, 2022: Initial Draft
-
-## Status
-
-Accepted and applied in v7 of ibc-go
 
 ## Context
 
@@ -202,4 +203,4 @@ Issues:
 
 PRs:
 
-- [#1871](https://github.com/cosmos/ibc-go/pull/1871)
+- [#1871](https://github.com/cosmos/ibc-go/pull/1871), released in ibc-go v7.0.0

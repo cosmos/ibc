@@ -2,8 +2,10 @@
 
 # ADR 029: Solana IBC Contract Upgradability
 
-**Status**: Proposed
-**Date**: Jul 15, 2025
+- **Status**: Proposed
+- **Date**: Jul 15, 2025
+- **Scope**: `ibc-contracts/solana`
+- **ICS**:
 
 ## Context
 

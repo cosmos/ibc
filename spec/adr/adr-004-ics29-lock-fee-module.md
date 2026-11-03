@@ -2,13 +2,16 @@
 
 # ADR 004: Lock fee module upon escrow out of balance
 
+- **Status**: Deprecated
+- **Date**: Mar 3, 2022
+- **Last Updated**: Nov 3, 2026
+- **Scope**: `ibc-go`
+- **ICS**: ICS-29 (IBC v1)
+
 ## Changelog
 
+- Nov 3, 2026: Deprecated. [ibc-go#8000](https://github.com/cosmos/ibc-go/pull/8000) removed the ICS-29 fee middleware, first released in ibc-go v10.1.0 (v10.0.0, which also omitted it, was retracted). As [ibc-go#7965](https://github.com/cosmos/ibc-go/issues/7965) records, the middleware was little used and its design had proven less than optimal.
 - Mar 3, 2022: initial draft
-
-## Status
-
-Accepted
 
 ## Context
 

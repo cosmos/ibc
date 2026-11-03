@@ -2,13 +2,14 @@
 
 # ADR 003: ICS27 Acknowledgement Format
 
+- **Status**: Implemented
+- **Date**: Jan 28, 2022
+- **Scope**: `ibc-go`
+- **ICS**: ICS-27 (IBC v1)
+
 ## Changelog
 
 - Jan 28, 2022: Initial Draft
-
-## Status
-
-Accepted
 
 ## Context
 
@@ -120,3 +121,7 @@ A test has been [written](https://github.com/cosmos/ibc-go/blob/v3.0.0/modules/a
 ### Neutral
 
 No neutral consequences.
+
+## References
+
+- Implemented in ibc-go v3.0.0: [#811](https://github.com/cosmos/ibc-go/pull/811), [#794](https://github.com/cosmos/ibc-go/pull/794); moved to the SDK v0.46 `MsgResponses` format in ibc-go v5.0.0: [#1653](https://github.com/cosmos/ibc-go/pull/1653)

@@ -2,13 +2,14 @@
 
 # ADR 007: Solo machine sign bytes
 
+- **Status**: Implemented
+- **Date**: Aug 2, 2022
+- **Scope**: `ibc-go`
+- **ICS**: ICS-6 (IBC v1)
+
 ## Changelog
 
 - Aug 2, 2022: Initial draft
-
-## Status
-
-Accepted, applied in v7
 
 ## Context
 
@@ -52,3 +53,4 @@ No notable consequences
 ## References
 
 - [#1141](https://github.com/cosmos/ibc-go/issues/1141)
+- Implemented in ibc-go v7.0.0: [#1687](https://github.com/cosmos/ibc-go/pull/1687)

@@ -2,16 +2,18 @@
 
 # ADR 008: Callback to IBC Actors
 
+- **Status**: Implemented
+- **Date**: Aug 10, 2022
+- **Last Updated**: Feb 24, 2025
+- **Scope**: `ibc-go`
+- **ICS**:
+
 ## Changelog
 
 - Aug 10, 2022: Initial Draft
 - Mar 22, 2023: Merged
 - Sep 13, 2023: Updated with decisions made in implementation
 - Feb 24, 2025: RecvPacket callback error now returns error acknowledgement
-
-## Status
-
-Accepted, middleware implemented
 
 ## Context
 
@@ -550,7 +552,7 @@ Chains are expected to specify a `maxCallbackGas` to ensure that callbacks do no
 ### Positive
 
 - IBC Actors can now programmatically execute logic that involves sending a packet and then performing some additional logic once the packet lifecycle is complete
-- Middleware implementing ADR-8 can be generally used for any application
+- Middleware implementing ADR 008 can be generally used for any application
 - Leverages a similar callback architecture to the one used between core IBC and IBC applications
 
 ### Negative
@@ -560,7 +562,7 @@ Chains are expected to specify a `maxCallbackGas` to ensure that callbacks do no
 
 ### Neutral
 
-- Application packets that want to support ADR-8 must additionally have their packet data implement `PacketDataProvider` and `PacketData` interfaces.
+- Application packets that want to support ADR 008 must additionally have their packet data implement `PacketDataProvider` and `PacketData` interfaces.
 - Applications must implement `PacketDataUnmarshaler` interface
 - Callback receiving module must implement the `ContractKeeper` interface
 
@@ -569,3 +571,4 @@ Chains are expected to specify a `maxCallbackGas` to ensure that callbacks do no
 - [Original issue](https://github.com/cosmos/ibc-go/issues/1660)
 - [CallbackPacketData interface implementation](https://github.com/cosmos/ibc-go/pull/3287) 
 - [ICS 20, ICS 27 implementations of the CallbackPacketData interface](https://github.com/cosmos/ibc-go/pull/3287)
+- [Callbacks middleware](https://github.com/cosmos/ibc-go/pull/3939), first released as `modules/apps/callbacks` v0.1.0

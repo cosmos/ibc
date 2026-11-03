@@ -2,13 +2,14 @@
 
 # ADR 009: ICS27 message server addition
 
+- **Status**: Implemented
+- **Date**: Sep 7, 2022
+- **Scope**: `ibc-go`
+- **ICS**: ICS-27 (IBC v1)
+
 ## Changelog
 
 - Sep 7, 2022: Initial draft
-
-## Status
-
-Accepted, implemented in v6 of ibc-go
 
 ## Context
 
@@ -79,7 +80,7 @@ See issue [#2145](https://github.com/cosmos/ibc-go/issues/2145)
 
 ### Future considerations
 
-[ADR 008](https://github.com/cosmos/ibc-go/pull/1976) proposes the creation of a middleware which enables callers of an IBC packet send to perform application logic in conjunction with the IBC application.
+[ADR 008](./adr-008-app-caller-cbs.md) proposes the creation of a middleware which enables callers of an IBC packet send to perform application logic in conjunction with the IBC application.
 The underlying application can be removed at the availability of such a middleware as that will be the preferred method for executing application logic upon a ICS 27 packet send.
 
 ### Miscellaneous
@@ -115,3 +116,7 @@ See issue [#2165](https://github.com/cosmos/ibc-go/issues/2165)
 ### Neutral
 
 - A major release is required
+
+## References
+
+- Implemented in ibc-go v6.0.0: [#2068](https://github.com/cosmos/ibc-go/pull/2068), [#2110](https://github.com/cosmos/ibc-go/pull/2110)

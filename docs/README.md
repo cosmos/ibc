@@ -87,4 +87,4 @@ IBC CLI is an all-in-one binary for deploying and running an IBC connection.
 Not edited here. Both are published on the site alongside the pages above.
 
 - [`ibc/spec/`](ibc/spec): 68 pages generated from `spec/` at the repo root by `scripts/specgen.py`. Edit the source, then regenerate.
-- [`ibc-go/`](ibc-go): 236 pages imported for the Go implementation, in `latest/` and the frozen `v10.1.x/`.
+- [`ibc-go/`](ibc-go): 204 pages imported for the Go implementation, in `latest/` and the frozen `v10.1.x/`.

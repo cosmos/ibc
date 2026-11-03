@@ -2,13 +2,14 @@
 
 # ADR 002: Go module versioning
 
+- **Status**: Implemented
+- **Date**: Jan 5, 2022
+- **Scope**: `ibc-go`
+- **ICS**:
+
 ## Changelog
 
 - Jan 5, 2022: initial draft
-
-## Status
-
-Accepted
 
 ## Context
 

@@ -2,14 +2,16 @@
 
 # ADR 001: Coin Source Tracing
 
+- **Status**: Implemented
+- **Date**: Jul 9, 2020
+- **Last Updated**: Aug 11, 2020
+- **Scope**: `ibc-go`
+- **ICS**: ICS-20 v1 (IBC v1)
+
 ## Changelog
 
 - Jul 9, 2020: Initial Draft
 - Aug 11, 2020: Implementation changes
-
-## Status
-
-Accepted, Implemented
 
 ## Context
 

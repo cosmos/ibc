@@ -2,9 +2,14 @@
 
 # ADR 015: IBC Packet Receiver
 
+- **Status**: Proposed
+- **Date**: Oct 22, 2019
+- **Scope**: `ibc-go`
+- **ICS**: ICS-26 (IBC v1)
+
 ## Changelog
 
-- 2019 Oct 22: Initial Draft
+- Oct 22, 2019: Initial Draft
 
 ## Context
 
@@ -274,10 +279,6 @@ func handleMsgChannelOpen(sdk.Context, k Keeper, msg MsgOpenChannel) Result {
   return sdk.Result{}
 }
 ```
-
-## Status
-
-Proposed
 
 ## Consequences
 

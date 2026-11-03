@@ -2,13 +2,14 @@
 
 # ADR 011: ICS-20 transfer state entry for total amount of tokens in escrow
 
+- **Status**: Implemented
+- **Date**: May 24, 2023
+- **Scope**: `ibc-go`
+- **ICS**: ICS-20 v1 (IBC v1)
+
 ## Changelog
 
 - May 24, 2023: Initial draft
-
-## Status
-
-Accepted and applied in v7.1 of ibc-go
 
 ## Context
 
@@ -143,5 +144,5 @@ Issues:
 
 PRs:
 
-- [#3019](https://github.com/cosmos/ibc-go/pull/3019)
+- [#3019](https://github.com/cosmos/ibc-go/pull/3019), released in ibc-go v7.1.0
 - [#3558](https://github.com/cosmos/ibc-go/pull/3558)

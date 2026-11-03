@@ -2,9 +2,11 @@
 
 # ADR 030: ICS27 General Message Passing (GMP) Architecture for Solana
 
-**Status**: Implemented
-**Date**: Sep 18, 2025
-**Last Updated**: Mar 2, 2026
+- **Status**: Implemented
+- **Date**: Sep 18, 2025
+- **Last Updated**: Apr 3, 2026
+- **Scope**: `ibc-contracts/solana`
+- **ICS**: ICS-27 (IBC v2)
 
 ## Executive Summary
 
@@ -553,7 +555,7 @@ After executing the target program, GMP wraps the CPI return data in an `Acknowl
 - **CPI Depth**: 2 levels for target programs (vs unlimited on Ethereum)
 - **Account Pre-declaration**: All accounts must be known upfront
 - **Transaction Size**: 1232-byte limit constrains complexity
-- **No error ack on CPI failure**: If the target app reverts, the whole tx rolls back - no error ack, packet stuck until timeout. See [IFT ADR](./adr-031-solana-ift-architecture.md#limitations).
+- **No error ack on CPI failure**: If the target app reverts, the whole tx rolls back - no error ack, packet stuck until timeout. See [ADR 031](./adr-031-solana-ift-architecture.md#limitations).
 
 ### Mitigation Strategies
 
