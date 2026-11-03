@@ -177,6 +177,10 @@ The `--attestors` flag resolves the key alias to its address. That address becom
 
 The `--threshold 1` flag requires one signature for each proof. The set and threshold are fixed when the client is deployed.
 
+<Warning>
+This one-of-one attestor set is for the local tutorial only. Do not use it in production: one unavailable attestor stops the connection, and one compromised key can forge a proof. See [Plan a production deployment](/ibc/05-ibc-cli/03-guides/02a-plan-a-production-deployment#attestor-set-and-threshold) for quorum guidance.
+</Warning>
+
 3. Deploy a Besu consensus light client on 41002 to verify chain 41001:
 
 ```bash
