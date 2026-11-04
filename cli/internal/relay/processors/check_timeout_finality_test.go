@@ -11,29 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
-
-func TestNewCheckTimeoutFinality(t *testing.T) {
-	route := testSendFinalityRoute()
-
-	t.Run("missingProverErrors", func(t *testing.T) {
-		_, err := NewCheckTimeoutFinality(staticProvers{}, route)
-		require.Error(t, err)
-	})
-
-	t.Run("resolvesProver", func(t *testing.T) {
-		_, err := NewCheckTimeoutFinality(
-			staticProvers{
-				prover.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProver(t),
-			},
-			route,
-		)
-		require.NoError(t, err)
-	})
-}
 
 func TestCheckTimeoutFinalityProcess(t *testing.T) {
 	route := testSendFinalityRoute()
@@ -53,11 +33,7 @@ func TestCheckTimeoutFinalityProcess(t *testing.T) {
 		mockProver := mocks.NewMockProver(t)
 		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Unix(2000, 0), nil).Once()
 
-		p, err := NewCheckTimeoutFinality(
-			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): mockProver},
-			route,
-		)
-		require.NoError(t, err)
+		p := NewCheckTimeoutFinality(RouteDeps{Route: route, Source: RouteEnd{Prover: mockProver}})
 
 		tr := newTransfer(time.Unix(1000, 0))
 		out, err := p.Process(context.Background(), tr)
@@ -69,14 +45,10 @@ func TestCheckTimeoutFinalityProcess(t *testing.T) {
 		mockProver := mocks.NewMockProver(t)
 		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Unix(500, 0), nil).Once()
 
-		p, err := NewCheckTimeoutFinality(
-			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): mockProver},
-			route,
-		)
-		require.NoError(t, err)
+		p := NewCheckTimeoutFinality(RouteDeps{Route: route, Source: RouteEnd{Prover: mockProver}})
 
 		tr := newTransfer(time.Unix(1000, 0))
-		_, err = p.Process(context.Background(), tr)
+		_, err := p.Process(context.Background(), tr)
 		require.ErrorIs(t, err, ErrTimeoutNotFinalized)
 	})
 }

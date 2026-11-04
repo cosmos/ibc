@@ -7,14 +7,15 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/store"
 )
 
 // CheckRecvPacketDelivery populates the recv tx details when another relayer
 // already delivered the packet on the destination chain.
 type CheckRecvPacketDelivery struct {
-	chains  ChainClients
-	storage RecvTxStorage
+	destination chains.Client
+	storage     RecvTxStorage
 }
 
 // RecvTxStorage persists recv tx details.
@@ -22,15 +23,12 @@ type RecvTxStorage interface {
 	UpdatePacketRecvTx(ctx context.Context, key store.PacketKey, tx store.PacketTx) error
 }
 
-func NewCheckRecvPacketDelivery(chainClients ChainClients, storage RecvTxStorage) CheckRecvPacketDelivery {
-	return CheckRecvPacketDelivery{chains: chainClients, storage: storage}
+func NewCheckRecvPacketDelivery(route RouteDeps, storage RecvTxStorage) CheckRecvPacketDelivery {
+	return CheckRecvPacketDelivery{destination: route.Destination.Chain, storage: storage}
 }
 
 func (p CheckRecvPacketDelivery) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	client, ok := p.chains.Get(tr.DestinationChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
-	}
+	client := p.destination
 
 	received, err := client.IsPacketReceived(ctx, tr.PacketDestinationClientID, tr.PacketSequenceNumber)
 	if err != nil {

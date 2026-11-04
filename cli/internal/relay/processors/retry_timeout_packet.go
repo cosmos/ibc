@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -21,19 +22,16 @@ type ClearTimeoutTxStorage interface {
 // RetryTimeoutPacket clears transactions that failed, stalled, or did not time
 // out this packet so it can be retried.
 type RetryTimeoutPacket struct {
-	chains      ChainClients
+	source      chains.Client
 	txSubmitter txsubmitter.TxSubmitter
 	storage     ClearTimeoutTxStorage
 	route       Route
 }
 
-func NewRetryTimeoutPacket(
-	chains ChainClients,
-	txSubmitter txsubmitter.TxSubmitter,
-	storage ClearTimeoutTxStorage,
-	route Route,
-) RetryTimeoutPacket {
-	return RetryTimeoutPacket{chains: chains, txSubmitter: txSubmitter, storage: storage, route: route}
+func NewRetryTimeoutPacket(route RouteDeps, storage ClearTimeoutTxStorage) RetryTimeoutPacket {
+	return RetryTimeoutPacket{
+		source: route.Source.Chain, txSubmitter: route.Source.TxSubmitter, storage: storage, route: route.Route,
+	}
 }
 
 func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -48,11 +46,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 
 	if !retry {
 		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.TimeoutTxHash)
-		client, ok := p.chains.Get(p.route.SourceChainID)
-		if !ok {
-			return nil, errors.Errorf("no configured chain client for source chain %s", p.route.SourceChainID)
-		}
-		executed, err := client.PacketRelayExecuted(ctx, *tr.TimeoutTxHash, v2.RelayKindTimeout,
+		executed, err := p.source.PacketRelayExecuted(ctx, *tr.TimeoutTxHash, v2.RelayKindTimeout,
 			tr.PacketSequenceNumber, tr.PacketSourceClientID, tr.PacketDestinationClientID)
 		if err != nil {
 			return nil, errors.Wrapf(err, "checking timeout event in tx %s", *tr.TimeoutTxHash)

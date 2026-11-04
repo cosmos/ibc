@@ -5,11 +5,15 @@ package pipeline
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/deliveryhero/pipeline/v2"
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/relay/processors"
+	"github.com/cosmos/ibc/cli/internal/relay/prover"
+	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
 )
 
@@ -39,12 +43,27 @@ type TxSubmitters interface {
 	Get(chainID, signerAlias string) (txsubmitter.TxSubmitter, bool)
 }
 
+// ChainClients resolves chain clients by chain id.
+type ChainClients interface {
+	Get(chainID string) (chains.Client, bool)
+}
+
+// Provers resolves provers by (chainID, clientID).
+type Provers interface {
+	Get(chainID, clientID string) (prover.Prover, bool)
+}
+
+// TxBuilders resolves tx builders by chain id.
+type TxBuilders interface {
+	Get(chainID string) (txbuilder.TxBuilder, bool)
+}
+
 // Deps the external systems a pipeline relays through.
 type Deps struct {
 	Storage      Storage
-	Chains       processors.ChainClients
-	Provers      processors.Provers
-	TxBuilders   processors.TxBuilders
+	Chains       ChainClients
+	Provers      Provers
+	TxBuilders   TxBuilders
 	TxSubmitters TxSubmitters
 }
 
@@ -75,20 +94,9 @@ func NewPipeline(
 	route processors.Route,
 	opts Options,
 ) (*Pipeline, error) {
-	srcTxSubmitter, ok := deps.TxSubmitters.Get(route.SourceChainID, opts.SourceSignerAlias)
-	if !ok {
-		return nil, errors.Errorf(
-			"no configured tx submitter for source chain %s and signer %q",
-			route.SourceChainID, opts.SourceSignerAlias,
-		)
-	}
-
-	dstTxSubmitter, ok := deps.TxSubmitters.Get(route.DestinationChainID, opts.DestSignerAlias)
-	if !ok {
-		return nil, errors.Errorf(
-			"no configured tx submitter for destination chain %s and signer %q",
-			route.DestinationChainID, opts.DestSignerAlias,
-		)
+	resolved, err := resolveRoute(deps, route, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	logger = logger.With(
@@ -104,138 +112,119 @@ func NewPipeline(
 		return <-input
 	})
 
-	// populate the recv tx if the packet was already delivered by someone else
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewCheckRecvPacketDelivery(deps.Chains, deps.Storage)), output)
+	for _, step := range stages(logger, deps.Storage, resolved, opts) {
+		if step.single == nil {
+			output = BatchProcess(ctx, logger, batchConcurrency, step.batchSize, step.batchTimeout, output, step.batch)
+			continue
+		}
 
-	// populate the ack or timeout tx if the packet commitment is already gone;
-	// the packet may have been timed out before we saw it
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
-
-	// wait for the send tx's packet event to be at or before what the
-	// destination client can currently prove
-	checkSendFinality, err := processors.NewCheckSendFinality(deps.Chains, deps.Provers, route)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing check send finality processor")
+		output = pipeline.ProcessConcurrently(ctx, stageConcurrency, step.single, output)
 	}
-
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, checkSendFinality), output)
-
-	// before timing out, wait for the source client to be able to prove a
-	// destination-chain timestamp past the timeout
-	checkTimeoutFinality, err := processors.NewCheckTimeoutFinality(deps.Provers, route)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing check timeout finality processor")
-	}
-
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, checkTimeoutFinality), output)
-
-	// deliver timeouts in batches on the source chain
-	batchTimeoutPacket, err := processors.NewBatchTimeoutPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route, logger,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing batch timeout packet processor")
-	}
-
-	output = BatchProcess(
-		ctx,
-		logger,
-		batchConcurrency,
-		opts.TimeoutBatchSize,
-		opts.TimeoutBatchTimeout,
-		output,
-		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
-	)
-
-	// clear timeout txs that failed, stalled, or omitted this packet
-	output = pipeline.ProcessConcurrently(
-		ctx,
-		stageConcurrency,
-		NewProcessorMW(
-			deps.Storage,
-			processors.NewRetryTimeoutPacket(deps.Chains, srcTxSubmitter, deps.Storage, route),
-		),
-		output,
-	)
-
-	// deliver recvs in batches on the destination chain
-	batchRecvPacket, err := processors.NewBatchRecvPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, dstTxSubmitter, route, logger,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing batch recv packet processor")
-	}
-
-	output = BatchProcess(
-		ctx,
-		logger,
-		batchConcurrency,
-		opts.RecvBatchSize,
-		opts.RecvBatchTimeout,
-		output,
-		NewBatchProcessorMW(deps.Storage, batchRecvPacket),
-	)
-
-	// clear stuck or failed recv txs so they are redelivered next run
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxSubmitter, deps.Storage, route)), output)
-
-	// extract the write ack from the recv tx on the destination chain
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewWaitForWriteAck(deps.Chains, deps.Storage)), output)
-
-	// wait for the write ack tx's packet event to be at or before what the
-	// source client can currently prove
-	checkWriteAckFinality, err := processors.NewCheckWriteAckFinality(deps.Chains, deps.Provers, route)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing check write ack finality processor")
-	}
-
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, checkWriteAckFinality), output)
-
-	// populate the ack or timeout tx if the packet commitment is now gone
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewCheckPacketCommitment(deps.Chains, deps.Storage)), output)
-
-	// deliver acks in batches on the source chain
-	batchAckPacket, err := processors.NewBatchAckPacket(
-		deps.Chains, deps.Provers, deps.TxBuilders, deps.Storage, srcTxSubmitter, route, logger,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "constructing batch ack packet processor")
-	}
-
-	output = BatchProcess(
-		ctx,
-		logger,
-		batchConcurrency,
-		opts.AckBatchSize,
-		opts.AckBatchTimeout,
-		output,
-		NewBatchProcessorMW(deps.Storage, batchAckPacket),
-	)
-
-	// clear ack txs that failed, stalled, or omitted this packet
-	output = pipeline.ProcessConcurrently(
-		ctx,
-		stageConcurrency,
-		NewProcessorMW(
-			deps.Storage,
-			processors.NewRetryAckPacket(deps.Chains, srcTxSubmitter, deps.Storage, route),
-		),
-		output,
-	)
-
-	// assign terminal statuses
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		processors.NewStateFinisher(deps.Storage), output)
 
 	return &Pipeline{input: input, output: output}, nil
+}
+
+// resolveRoute looks up everything the route relays through, failing on the
+// first piece of configuration that is missing.
+func resolveRoute(deps Deps, route processors.Route, opts Options) (processors.RouteDeps, error) {
+	end := func(chainID, clientID, signerAlias, side string) (processors.RouteEnd, error) {
+		chain, ok := deps.Chains.Get(chainID)
+		if !ok {
+			return processors.RouteEnd{}, errors.Errorf("no configured chain client for %s chain %s", side, chainID)
+		}
+
+		prover, ok := deps.Provers.Get(chainID, clientID)
+		if !ok {
+			return processors.RouteEnd{}, errors.Errorf(
+				"no prover configured for client %q on chain %q",
+				clientID,
+				chainID,
+			)
+		}
+
+		txBuilder, ok := deps.TxBuilders.Get(chainID)
+		if !ok {
+			return processors.RouteEnd{}, errors.Errorf("no tx builder configured for %s chain %s", side, chainID)
+		}
+
+		txSubmitter, ok := deps.TxSubmitters.Get(chainID, signerAlias)
+		if !ok {
+			return processors.RouteEnd{}, errors.Errorf(
+				"no configured tx submitter for %s chain %s and signer %q", side, chainID, signerAlias,
+			)
+		}
+
+		return processors.RouteEnd{Chain: chain, Prover: prover, TxBuilder: txBuilder, TxSubmitter: txSubmitter}, nil
+	}
+
+	source, err := end(route.SourceChainID, route.SourceClientID, opts.SourceSignerAlias, "source")
+	if err != nil {
+		return processors.RouteDeps{}, err
+	}
+
+	destination, err := end(route.DestinationChainID, route.DestinationClientID, opts.DestSignerAlias, "destination")
+	if err != nil {
+		return processors.RouteDeps{}, err
+	}
+
+	return processors.RouteDeps{Route: route, Source: source, Destination: destination}, nil
+}
+
+// stage one step of the pipeline: a per-transfer processor, or, when single
+// is nil, a batch processor with the limits its batches are collected under.
+type stage struct {
+	single       pipeline.Processor[*processors.Transfer, *processors.Transfer]
+	batch        BatchProcessorMW
+	batchSize    int
+	batchTimeout time.Duration
+}
+
+// stages lists the route's pipeline steps in the order transfers pass
+// through them.
+func stages(logger *slog.Logger, storage Storage, route processors.RouteDeps, opts Options) []stage {
+	single := func(p Processor) stage { return stage{single: NewProcessorMW(storage, p)} }
+	batch := func(p BatchProcessor, size int, timeout time.Duration) stage {
+		return stage{batch: NewBatchProcessorMW(storage, p), batchSize: size, batchTimeout: timeout}
+	}
+
+	return []stage{
+		// populate the recv tx if the packet was already delivered by someone else
+		single(processors.NewCheckRecvPacketDelivery(route, storage)),
+		// populate the ack or timeout tx if the packet commitment is already gone;
+		// the packet may have been timed out before we saw it
+		single(processors.NewCheckPacketCommitment(route, storage)),
+		// wait for the send tx's packet event to be at or before what the
+		// destination client can currently prove
+		single(processors.NewCheckSendFinality(route)),
+		// before timing out, wait for the source client to be able to prove a
+		// destination-chain timestamp past the timeout
+		single(processors.NewCheckTimeoutFinality(route)),
+		// deliver timeouts in batches on the source chain
+		batch(
+			processors.NewBatchTimeoutPacket(route, storage, logger),
+			opts.TimeoutBatchSize,
+			opts.TimeoutBatchTimeout,
+		),
+		// clear timeout txs that failed, stalled, or omitted this packet
+		single(processors.NewRetryTimeoutPacket(route, storage)),
+		// deliver recvs in batches on the destination chain
+		batch(processors.NewBatchRecvPacket(route, storage, logger), opts.RecvBatchSize, opts.RecvBatchTimeout),
+		// clear stuck or failed recv txs so they are redelivered next run
+		single(processors.NewRetryRecvPacket(route, storage)),
+		// extract the write ack from the recv tx on the destination chain
+		single(processors.NewWaitForWriteAck(route, storage)),
+		// wait for the write ack tx's packet event to be at or before what the
+		// source client can currently prove
+		single(processors.NewCheckWriteAckFinality(route)),
+		// populate the ack or timeout tx if the packet commitment is now gone
+		single(processors.NewCheckPacketCommitment(route, storage)),
+		// deliver acks in batches on the source chain
+		batch(processors.NewBatchAckPacket(route, storage, logger), opts.AckBatchSize, opts.AckBatchTimeout),
+		// clear ack txs that failed, stalled, or omitted this packet
+		single(processors.NewRetryAckPacket(route, storage)),
+		// assign terminal statuses
+		{single: processors.NewStateFinisher(storage)},
+	}
 }
 
 func (p *Pipeline) Push(ctx context.Context, tr *processors.Transfer) bool {

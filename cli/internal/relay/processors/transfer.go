@@ -85,14 +85,6 @@ func (t *Transfer) IsComplete() bool {
 	return t.AckTxHash != nil
 }
 
-// Route identifies the client pair a pipeline relays.
-type Route struct {
-	SourceChainID       string
-	SourceClientID      string
-	DestinationChainID  string
-	DestinationClientID string
-}
-
 // Retryable pipeline conditions
 var (
 	ErrSendNotFinalized     = errors.New("send tx not finalized")

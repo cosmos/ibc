@@ -11,34 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
-
-func TestNewCheckWriteAckFinality(t *testing.T) {
-	route := testSendFinalityRoute()
-
-	t.Run("missingChainClientErrors", func(t *testing.T) {
-		_, err := NewCheckWriteAckFinality(
-			staticChains{},
-			staticProvers{
-				prover.Key(route.SourceChainID, route.SourceClientID): mocks.NewMockProver(t),
-			},
-			route,
-		)
-		require.Error(t, err)
-	})
-
-	t.Run("missingProverErrors", func(t *testing.T) {
-		_, err := NewCheckWriteAckFinality(
-			staticChains{route.DestinationChainID: mocks.NewMockClient(t)},
-			staticProvers{},
-			route,
-		)
-		require.Error(t, err)
-	})
-}
 
 func TestCheckWriteAckFinalityProcess(t *testing.T) {
 	route := testSendFinalityRoute()
@@ -63,12 +38,13 @@ func TestCheckWriteAckFinalityProcess(t *testing.T) {
 		mockProver := mocks.NewMockProver(t)
 		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
-		p, err := NewCheckWriteAckFinality(
-			staticChains{route.DestinationChainID: destinationChainClient},
-			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): mockProver},
-			route,
+		p := NewCheckWriteAckFinality(
+			RouteDeps{
+				Route:       route,
+				Source:      RouteEnd{Prover: mockProver},
+				Destination: RouteEnd{Chain: destinationChainClient},
+			},
 		)
-		require.NoError(t, err)
 
 		tr := newTransfer()
 		out, err := p.Process(context.Background(), tr)
@@ -83,15 +59,16 @@ func TestCheckWriteAckFinalityProcess(t *testing.T) {
 		mockProver := mocks.NewMockProver(t)
 		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
-		p, err := NewCheckWriteAckFinality(
-			staticChains{route.DestinationChainID: destinationChainClient},
-			staticProvers{prover.Key(route.SourceChainID, route.SourceClientID): mockProver},
-			route,
+		p := NewCheckWriteAckFinality(
+			RouteDeps{
+				Route:       route,
+				Source:      RouteEnd{Prover: mockProver},
+				Destination: RouteEnd{Chain: destinationChainClient},
+			},
 		)
-		require.NoError(t, err)
 
 		tr := newTransfer()
-		_, err = p.Process(context.Background(), tr)
+		_, err := p.Process(context.Background(), tr)
 		require.ErrorIs(t, err, ErrWriteAckNotFinalized)
 	})
 }

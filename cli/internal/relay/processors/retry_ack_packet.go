@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
@@ -21,19 +22,16 @@ type ClearAckTxStorage interface {
 // RetryAckPacket clears transactions that failed, stalled, or did not acknowledge
 // this packet so it can be retried.
 type RetryAckPacket struct {
-	chains      ChainClients
+	source      chains.Client
 	txSubmitter txsubmitter.TxSubmitter
 	storage     ClearAckTxStorage
 	route       Route
 }
 
-func NewRetryAckPacket(
-	chains ChainClients,
-	txSubmitter txsubmitter.TxSubmitter,
-	storage ClearAckTxStorage,
-	route Route,
-) RetryAckPacket {
-	return RetryAckPacket{chains: chains, txSubmitter: txSubmitter, storage: storage, route: route}
+func NewRetryAckPacket(route RouteDeps, storage ClearAckTxStorage) RetryAckPacket {
+	return RetryAckPacket{
+		source: route.Source.Chain, txSubmitter: route.Source.TxSubmitter, storage: storage, route: route.Route,
+	}
 }
 
 func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
@@ -48,11 +46,7 @@ func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, e
 
 	if !retry {
 		metrics.txConfirmed(ctx, p.route.SourceChainID, p.route.SourceClientID, *tr.AckTxHash)
-		client, ok := p.chains.Get(p.route.SourceChainID)
-		if !ok {
-			return nil, errors.Errorf("no configured chain client for source chain %s", p.route.SourceChainID)
-		}
-		executed, err := client.PacketRelayExecuted(ctx, *tr.AckTxHash, v2.RelayKindAck,
+		executed, err := p.source.PacketRelayExecuted(ctx, *tr.AckTxHash, v2.RelayKindAck,
 			tr.PacketSequenceNumber, tr.PacketSourceClientID, tr.PacketDestinationClientID)
 		if err != nil {
 			return nil, errors.Wrapf(err, "checking ack event in tx %s", *tr.AckTxHash)

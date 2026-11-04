@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/store"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -21,27 +22,22 @@ type WriteAckStorage interface {
 // WaitForWriteAck extracts the write acknowledgement from the recv tx. Only
 // synchronous acks are supported: the write ack is expected in the recv tx.
 type WaitForWriteAck struct {
-	chains  ChainClients
-	storage WriteAckStorage
+	destination chains.Client
+	storage     WriteAckStorage
 }
 
-func NewWaitForWriteAck(chainClients ChainClients, storage WriteAckStorage) WaitForWriteAck {
-	return WaitForWriteAck{chains: chainClients, storage: storage}
+func NewWaitForWriteAck(route RouteDeps, storage WriteAckStorage) WaitForWriteAck {
+	return WaitForWriteAck{destination: route.Destination.Chain, storage: storage}
 }
 
 func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	client, ok := p.chains.Get(tr.DestinationChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for destination chain %s", tr.DestinationChainID)
-	}
-
 	if tr.RecvTxHash == nil {
 		return nil, errors.New("transfer has no recv tx hash, violates ShouldProcess")
 	}
 
 	recvTxHash := *tr.RecvTxHash
 
-	ackStatus, err := client.PacketWriteAckStatus(
+	ackStatus, err := p.destination.PacketWriteAckStatus(
 		ctx,
 		recvTxHash,
 		tr.PacketSequenceNumber,

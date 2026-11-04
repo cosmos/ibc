@@ -30,41 +30,16 @@ type BatchTimeoutPacket struct {
 	logger            *slog.Logger
 }
 
-func NewBatchTimeoutPacket(
-	chainClients ChainClients,
-	provers Provers,
-	txBuilders TxBuilders,
-	storage TxStorage,
-	txSubmitter txsubmitter.TxSubmitter,
-	route Route,
-	logger *slog.Logger,
-) (BatchTimeoutPacket, error) {
-	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
-	if !ok {
-		return BatchTimeoutPacket{}, errors.Errorf("no configured chain client for chain %s", route.SourceChainID)
-	}
-
-	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
-	if !ok {
-		return BatchTimeoutPacket{}, errors.Errorf(
-			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
-		)
-	}
-
-	txBuilder, ok := txBuilders.Get(route.SourceChainID)
-	if !ok {
-		return BatchTimeoutPacket{}, errors.Errorf("no tx builder configured for chain %s", route.SourceChainID)
-	}
-
+func NewBatchTimeoutPacket(route RouteDeps, storage TxStorage, logger *slog.Logger) BatchTimeoutPacket {
 	return BatchTimeoutPacket{
-		sourceChainClient: sourceChainClient,
-		route:             route,
-		prover:            prover,
-		txBuilder:         txBuilder,
-		txSubmitter:       txSubmitter,
+		sourceChainClient: route.Source.Chain,
+		route:             route.Route,
+		prover:            route.Source.Prover,
+		txBuilder:         route.Source.TxBuilder,
+		txSubmitter:       route.Source.TxSubmitter,
 		storage:           storage,
 		logger:            logger,
-	}, nil
+	}
 }
 
 func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {
