@@ -30,7 +30,7 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 		return tr, nil
 	}
 
-	if isTerminalStatus(tr.Status) {
+	if store.IsTerminal(tr.Status) {
 		return tr, nil
 	}
 
@@ -73,18 +73,6 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 	tr.GetLogger().Info("Transfer complete", "status", tr.Status)
 
 	return tr, nil
-}
-
-func isTerminalStatus(status store.RelayStatus) bool {
-	switch status {
-	case store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithWriteAckError,
-		store.RelayStatusCompleteWithTimeout,
-		store.RelayStatusFailed:
-		return true
-	default:
-		return false
-	}
 }
 
 func (p StateFinisher) Cancel(tr *Transfer, err error) {
