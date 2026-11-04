@@ -36,7 +36,7 @@ func NewRetryAckPacket(route RouteDeps, storage ClearAckTxStorage) RetryAckPacke
 
 func (p RetryAckPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.AckTxHash == nil || tr.AckTxTime == nil {
-		return nil, errors.New("transfer has no ack tx details, violates ShouldProcess")
+		return nil, errors.Wrap(ErrInvariant, "transfer has no ack tx details, violates ShouldProcess")
 	}
 
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.AckTxHash, *tr.AckTxTime)

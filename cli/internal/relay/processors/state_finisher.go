@@ -53,8 +53,8 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 			terminalStatus = store.RelayStatusCompleteWithWriteAckError
 		}
 	default:
-		tr.GetLogger().
-			Warn("This is a bug! Completed transfer has neither a timeout nor an ack tx, not finishing")
+		tr.ProcessingError = errors.Wrap(ErrInvariant, "completed transfer has neither a timeout nor an ack tx")
+		tr.GetLogger().Error("Not finishing transfer", "err", tr.ProcessingError)
 
 		return tr, nil
 	}

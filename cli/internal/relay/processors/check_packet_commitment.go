@@ -85,11 +85,7 @@ func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Tran
 
 	switch {
 	case ackTx != nil && timeoutTx != nil:
-		return nil, errors.Errorf(
-			"found both ack tx %s and timeout tx %s, should not be possible",
-			ackTx.Hash,
-			timeoutTx.Hash,
-		)
+		return nil, errors.Wrapf(ErrInvariant, "found both ack tx %s and timeout tx %s", ackTx.Hash, timeoutTx.Hash)
 	case ackTx != nil:
 		tx := store.PacketTx{Hash: ackTx.Hash, Time: ackTx.Timestamp, RelayerAddress: ackTx.RelayerAddress}
 		if err := p.storage.UpdatePacketAckTx(ctx, tr.Key(), tx); err != nil {

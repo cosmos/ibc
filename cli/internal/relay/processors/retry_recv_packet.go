@@ -31,7 +31,7 @@ func NewRetryRecvPacket(route RouteDeps, storage ClearRecvTxStorage) RetryRecvPa
 
 func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.RecvTxHash == nil || tr.RecvTxTime == nil {
-		return nil, errors.New("transfer has no recv tx details, violates ShouldProcess")
+		return nil, errors.Wrap(ErrInvariant, "transfer has no recv tx details, violates ShouldProcess")
 	}
 
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.RecvTxHash, *tr.RecvTxTime)

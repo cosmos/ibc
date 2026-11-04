@@ -29,7 +29,7 @@ func NewCheckWriteAckFinality(route RouteDeps) CheckWriteAckFinality {
 
 func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.WriteAckTxHash == nil {
-		return nil, errors.New("transfer has no write ack tx hash, violates ShouldProcess")
+		return nil, errors.Wrap(ErrInvariant, "transfer has no write ack tx hash, violates ShouldProcess")
 	}
 
 	proofHeight, _, err := p.prover.LatestProvableHeight(ctx)

@@ -95,3 +95,7 @@ var (
 	ErrRetryingAckPacket     = errors.New("retrying ack packet")
 	ErrRetryingTimeoutPacket = errors.New("retrying timeout packet")
 )
+
+// ErrInvariant a transfer reached a state the pipeline's own checks rule out.
+// It marks a relayer bug rather than a chain or network condition.
+var ErrInvariant = errors.New("relayer invariant violated")

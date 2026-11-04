@@ -36,7 +36,7 @@ func NewRetryTimeoutPacket(route RouteDeps, storage ClearTimeoutTxStorage) Retry
 
 func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.TimeoutTxHash == nil || tr.TimeoutTxTime == nil {
-		return nil, errors.New("transfer has no timeout tx details, violates ShouldProcess")
+		return nil, errors.Wrap(ErrInvariant, "transfer has no timeout tx details, violates ShouldProcess")
 	}
 
 	retry, err := p.txSubmitter.ShouldRetry(ctx, *tr.TimeoutTxHash, *tr.TimeoutTxTime)

@@ -4,7 +4,6 @@ package processors
 
 import (
 	"context"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -32,7 +31,7 @@ func NewWaitForWriteAck(route RouteDeps, storage WriteAckStorage) WaitForWriteAc
 
 func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.RecvTxHash == nil {
-		return nil, errors.New("transfer has no recv tx hash, violates ShouldProcess")
+		return nil, errors.Wrap(ErrInvariant, "transfer has no recv tx hash, violates ShouldProcess")
 	}
 
 	recvTxHash := *tr.RecvTxHash
@@ -66,16 +65,14 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	}
 	status := writeAckStatusFromV2(ackStatus)
 
-	// the write ack shares the recv tx, so it shares its time
-	var writeAckTime time.Time
+	// the write ack shares the recv tx, so it shares its time. The two are
+	// only ever recorded together; a transfer missing one retries every pass
+	// until the bug is fixed.
 	if tr.RecvTxTime == nil {
-		// a recv tx hash without a time is a bug, but not worth failing over
-		tr.GetLogger().Error("Transfer has a recv tx hash but no recv tx time", "recvTxHash", recvTxHash)
-	} else {
-		writeAckTime = *tr.RecvTxTime
+		return nil, errors.Wrapf(ErrInvariant, "recv tx %s has no recorded time", recvTxHash)
 	}
 
-	ack := store.WriteAck{TxHash: recvTxHash, TxTime: writeAckTime, Status: status}
+	ack := store.WriteAck{TxHash: recvTxHash, TxTime: *tr.RecvTxTime, Status: status}
 	if err := p.storage.UpdatePacketWriteAck(ctx, tr.Key(), ack); err != nil {
 		return nil, errors.Wrapf(err, "recording write ack from tx %s", recvTxHash)
 	}
