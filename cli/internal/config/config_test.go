@@ -767,21 +767,6 @@ func TestAttestorsValidate(t *testing.T) {
 			},
 			errContains: `duplicate local attestor name: "same"`,
 		},
-		{
-			name: "duplicate local signer on the same chain",
-			attestors: Attestors{
-				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
-				{Name: "attestor-b", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
-			},
-			errContains: `duplicate local attestor signer "same" on chain "chain-a"`,
-		},
-		{
-			name: "same local signer across different chains is allowed",
-			attestors: Attestors{
-				{Name: "attestor-a", ChainID: "chain-a", Type: AttestorTypeLocal, Signer: "same"},
-				{Name: "attestor-b", ChainID: "chain-b", Type: AttestorTypeLocal, Signer: "same"},
-			},
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// ACT
@@ -961,6 +946,159 @@ func TestChainDeployerCrossValidation(t *testing.T) {
 		RemoteKeyID: "k1",
 	}}
 	require.NoError(t, base.Validate())
+}
+
+func TestConfigValidateSignersAssignment(t *testing.T) {
+	// A local attestor's key is its on-chain identity and its signatures are
+	// not chain-bound, so the signer must not back anything else.
+	//
+	// validConfig passes Validate as is: a relayer key that relays both ends
+	// and deploys chain 1, and a dedicated attestor key watching chain 2.
+	// Each case patches it into the shape under test.
+	validConfig := func() Config {
+		cfg := DefaultConfig()
+		cfg.Signers = Signers{
+			{Alias: "relayer-key", Type: SignerRemote, GRPC: "localhost:9000", RemoteKeyID: "k1"},
+			{Alias: "attestor-key", Type: SignerRemote, GRPC: "localhost:9000", RemoteKeyID: "k2"},
+			{Alias: "spare-key", Type: SignerRemote, GRPC: "localhost:9000", RemoteKeyID: "k3"},
+		}
+		cfg.Chains = Chains{
+			{
+				ChainID:  "1",
+				Deployer: "relayer-key",
+				EVM: &EVMChainConfig{
+					RPC:         "http://localhost:8545",
+					ICS26Router: "0x0000000000000000000000000000000000000001",
+				},
+			},
+			{
+				ChainID: "2",
+				EVM: &EVMChainConfig{
+					RPC:         "http://localhost:8546",
+					ICS26Router: "0x0000000000000000000000000000000000000001",
+				},
+			},
+		}
+		cfg.Relayer.Connections = []ConnectionConfig{{
+			Alias:   "1-2",
+			ClientA: ClientEnd{ChainID: "1", Signer: "relayer-key", ClientID: "client-2", Type: ClientTypeAttestation},
+			ClientB: ClientEnd{ChainID: "2", Signer: "relayer-key", ClientID: "client-1", Type: ClientTypeAttestation},
+		}}
+		cfg.Attestors = Attestors{{Name: "watcher", ChainID: "2", Type: AttestorTypeLocal, Signer: "attestor-key"}}
+		return cfg
+	}
+
+	for _, tt := range []struct {
+		name        string
+		patch       func(*Config)
+		errContains string
+	}{
+		{
+			name:  "dedicated attestor key",
+			patch: func(*Config) {},
+		},
+		{
+			name:  "relayer key may also deploy every chain",
+			patch: func(cfg *Config) { cfg.Chains[1].Deployer = "relayer-key" },
+		},
+		{
+			name: "distinct keys per attestor",
+			patch: func(cfg *Config) {
+				cfg.Attestors = append(cfg.Attestors, AttestorConfig{Name: "second", ChainID: "1", Type: AttestorTypeLocal, Signer: "spare-key"})
+			},
+		},
+		{
+			name: "same signer on two attestors for the same chain",
+			patch: func(cfg *Config) {
+				cfg.Attestors = append(cfg.Attestors, AttestorConfig{Name: "second", ChainID: "2", Type: AttestorTypeLocal, Signer: "attestor-key"})
+			},
+			errContains: `attestors[1].signer: signer "attestor-key" is already assigned to attestors[0] (watcher)`,
+		},
+		{
+			name: "same signer on two attestors across chains",
+			patch: func(cfg *Config) {
+				cfg.Attestors = append(cfg.Attestors, AttestorConfig{Name: "second", ChainID: "1", Type: AttestorTypeLocal, Signer: "attestor-key"})
+			},
+			errContains: `attestors[1].signer: signer "attestor-key" is already assigned to attestors[0] (watcher)`,
+		},
+		{
+			name:        "attestor key relays on another chain",
+			patch:       func(cfg *Config) { cfg.Relayer.Connections[0].ClientA.Signer = "attestor-key" },
+			errContains: `attestors[0].signer: signer "attestor-key" is already assigned to relayer.connections[0].clientA`,
+		},
+		{
+			name:        "attestor key relays on its own chain",
+			patch:       func(cfg *Config) { cfg.Relayer.Connections[0].ClientB.Signer = "attestor-key" },
+			errContains: `attestors[0].signer: signer "attestor-key" is already assigned to relayer.connections[0].clientB`,
+		},
+		{
+			name:        "attestor key deploys",
+			patch:       func(cfg *Config) { cfg.Chains[0].Deployer = "attestor-key" },
+			errContains: `attestors[0].signer: signer "attestor-key" is already assigned to chains[0].deployer`,
+		},
+		{
+			name: "remote attestors claim nothing",
+			patch: func(cfg *Config) {
+				cfg.Attestors = Attestors{{Name: "remote", Type: AttestorTypeRemote, GRPC: "attestor.example.com:3000"}}
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ARRANGE
+			cfg := validConfig()
+			tt.patch(&cfg)
+
+			// ACT
+			err := cfg.Validate()
+
+			// ASSERT
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+
+	t.Run("validateIdentitiesEnforcesIt", func(t *testing.T) {
+		cfg := validConfig()
+		cfg.Relayer.Connections[0].ClientB.Signer = "attestor-key"
+
+		err := cfg.ValidateIdentities()
+
+		require.ErrorContains(
+			t,
+			err,
+			`attestors[0].signer: signer "attestor-key" is already assigned to relayer.connections[0].clientB`,
+		)
+	})
+
+	t.Run("validateIdentitiesSkipsUnresolvedDraftSigners", func(t *testing.T) {
+		cfg := validConfig()
+		cfg.Relayer.Connections[0].ClientA.Signer = ""
+		cfg.Relayer.Connections[0].ClientB.Signer = ""
+		cfg.Attestors = Attestors{
+			{Name: "a", ChainID: "1", Type: AttestorTypeLocal},
+			{Name: "b", ChainID: "2", Type: AttestorTypeLocal},
+		}
+
+		require.NoError(t, cfg.ValidateIdentities())
+	})
+
+	t.Run("validateIdentitiesAllowsUndeclaredRelayerSigners", func(t *testing.T) {
+		// A hand-edited draft may name a relayer key before declaring it;
+		// only Validate requires the alias to resolve.
+		cfg := validConfig()
+		cfg.Relayer.Connections[0].ClientA.Signer = "not-yet-declared"
+
+		require.NoError(t, cfg.ValidateIdentities())
+		require.ErrorContains(
+			t,
+			cfg.Validate(),
+			`relayer.connections[0].clientA.signer: references unknown signer "not-yet-declared"`,
+		)
+	})
 }
 
 func loadSampleConfig(t *testing.T) Config {
