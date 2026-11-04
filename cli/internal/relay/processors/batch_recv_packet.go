@@ -112,6 +112,10 @@ func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]
 			continue
 		}
 
+		if failInvalidPacket(ctx, p.storage, tr, event.Packet) {
+			continue
+		}
+
 		events = append(events, event)
 	}
 

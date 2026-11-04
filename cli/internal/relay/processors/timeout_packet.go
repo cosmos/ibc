@@ -107,6 +107,10 @@ func (p BatchTimeoutPacket) Process(ctx context.Context, transfers []*Transfer) 
 			continue
 		}
 
+		if failInvalidPacket(ctx, p.storage, tr, sendEvent.Packet) {
+			continue
+		}
+
 		events = append(events, sendEvent)
 	}
 

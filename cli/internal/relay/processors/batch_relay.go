@@ -14,12 +14,59 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	"github.com/cosmos/ibc/cli/attestor/evm/ibc"
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
+	"github.com/cosmos/ibc/cli/internal/service/attestor"
+	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
+
+// packetSizeError reports a packet whose ABI encoding exceeds the attestor's
+// per-packet cap. An attestor refuses the whole request over any such packet
+// and PacketProofs is all-or-nothing, so one oversize packet in a batch would
+// make every packet batched with it unprovable, on every retry.
+func packetSizeError(packet channeltypesv2.Packet) error {
+	encoded, err := ibc.EncodePacket(packet)
+	if err != nil {
+		return errors.Wrap(err, "encoding packet")
+	}
+
+	if len(encoded) > attestor.MaxPacketSizeBytes {
+		return errors.Errorf("packet size %d exceeds %d", len(encoded), attestor.MaxPacketSizeBytes)
+	}
+
+	return nil
+}
+
+// failInvalidPacket marks a packet FAILED if it can never be relayed and
+// reports whether it did, keeping it out of this batch and out of the
+// dispatcher's retries.
+func failInvalidPacket(ctx context.Context, storage TxStorage, tr *Transfer, packet channeltypesv2.Packet) bool {
+	err := packetSizeError(packet)
+	if err == nil {
+		return false
+	}
+
+	logger := tr.GetLogger()
+	logger.Warn("Packet can never be relayed, marking packet failed", "err", err)
+	tr.ProcessingError = err
+
+	errUpdate := storage.Transact(ctx, func(repo store.Repository) error {
+		return repo.UpdatePacketStatus(ctx, tr.Key(), store.RelayStatusFailed)
+	})
+	if errUpdate != nil {
+		logger.Error("Marking packet failed", "err", errUpdate)
+
+		return true
+	}
+
+	tr.Status = store.RelayStatusFailed
+
+	return true
+}
 
 // findPacketEvent returns the event among events matching sequence and clientID
 func findPacketEvent(

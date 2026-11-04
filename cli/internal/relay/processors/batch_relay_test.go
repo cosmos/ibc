@@ -18,9 +18,66 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	"github.com/cosmos/ibc/cli/attestor/evm/ibc"
+	"github.com/cosmos/ibc/cli/internal/service/attestor"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
+
+// TestPacketSizeError pins the cap to the attestor's own rule, which refuses
+// a packet strictly larger than MaxPacketSizeBytes: a packet encoding to
+// exactly the cap must pass, one byte over must fail.
+func TestPacketSizeError(t *testing.T) {
+	// ARRANGE
+	packetWithValue := func(size int) channeltypesv2.Packet {
+		return channeltypesv2.Packet{
+			Sequence:          1,
+			SourceClient:      "base-0",
+			DestinationClient: "ethereum-0",
+			Payloads:          []channeltypesv2.Payload{{Value: make([]byte, size)}},
+		}
+	}
+
+	// the ABI encoding pads every field to 32-byte words, so the overhead
+	// around an empty value is itself word-aligned and the value length that
+	// lands exactly on the cap is cap minus that overhead
+	empty, err := ibc.EncodePacket(packetWithValue(0))
+	require.NoError(t, err)
+	atCap := attestor.MaxPacketSizeBytes - len(empty)
+
+	for _, tt := range []struct {
+		name        string
+		valueSize   int
+		errContains string
+	}{
+		{
+			name:      "emptyValue",
+			valueSize: 0,
+		},
+		{
+			name:      "exactlyAtCap",
+			valueSize: atCap,
+		},
+		{
+			name:        "oneByteOverCap",
+			valueSize:   atCap + 1,
+			errContains: "packet size",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ACT
+			err := packetSizeError(packetWithValue(tt.valueSize))
+
+			// ASSERT
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
 
 func TestValidateRelaySimulation(t *testing.T) {
 	update := v2.OperationResult{Type: v2.OperationTypeUpdate, Success: true}
