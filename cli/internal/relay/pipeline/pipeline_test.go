@@ -517,6 +517,55 @@ func TestPipelineLifecycle(t *testing.T) {
 		assert.Nil(t, stored.RecvTxHash)
 	})
 
+	t.Run("ackedByAnotherRelayerRecordsTheirRecv", func(t *testing.T) {
+		env, deps := newPipelineEnv(t)
+		tr := env.createPacket(t, time.Now().Add(time.Hour))
+
+		// another relayer received and acked the packet while our recv was
+		// pending; ours landed as a no-op and was cleared, leaving their ack
+		// recorded with no recv
+		const otherRecvTxHash = "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+		ackTime := time.Now().UTC().Truncate(time.Second)
+		require.NoError(t, env.store.UpdatePacketAckTx(ctx, tr.Key(), store.PacketTx{
+			Hash: ackTxHash, Time: ackTime, RelayerAddress: "0xother",
+		}))
+		tr = processors.NewTransfer(env.storedPacket(t, tr), slog.Default())
+
+		// the recv that landed is found and recorded
+		recvTime := ackTime.Add(-time.Minute)
+		env.dstClient.EXPECT().
+			IsPacketReceived(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(true, nil).
+			Once()
+		env.dstClient.EXPECT().
+			FindRecvTx(mock.Anything, testRoute.DestinationClientID, uint64(42)).
+			Return(&v2.Tx{Hash: otherRecvTxHash, Timestamp: recvTime, RelayerAddress: "0xother"}, nil).
+			Once()
+		env.dstTxSubmitter.EXPECT().ShouldRetry(mock.Anything, otherRecvTxHash, recvTime).Return(false, nil).Once()
+		env.dstClient.EXPECT().
+			PacketWriteAckStatus(mock.Anything, otherRecvTxHash, uint64(42),
+				testRoute.SourceClientID, testRoute.DestinationClientID).
+			Return(chainsWriteAckSuccess(), nil).
+			Once()
+
+		// their ack is confirmed
+		env.srcTxSubmitter.EXPECT().ShouldRetry(mock.Anything, ackTxHash, ackTime).Return(false, nil).Once()
+		env.srcClient.EXPECT().PacketRelayExecuted(mock.Anything, ackTxHash, v2.RelayKindAck,
+			uint64(42), testRoute.SourceClientID, testRoute.DestinationClientID).Return(true, nil).Once()
+
+		out := runPipeline(t, deps, fastOpts(), tr)
+
+		require.Empty(t, out.Error())
+		assert.Equal(t, store.RelayStatusCompleteWithAck, out.Status)
+
+		stored := env.storedPacket(t, out)
+		assert.Equal(t, store.RelayStatusCompleteWithAck, stored.Status)
+		require.NotNil(t, stored.RecvTxHash)
+		assert.Equal(t, otherRecvTxHash, *stored.RecvTxHash)
+		require.NotNil(t, stored.AckTxHash)
+		assert.Equal(t, ackTxHash, *stored.AckTxHash)
+	})
+
 	t.Run("sendNotFinalizedPoisonsForRun", func(t *testing.T) {
 		env, deps := newPipelineEnv(t)
 		tr := env.createPacket(t, time.Now().Add(time.Hour))
