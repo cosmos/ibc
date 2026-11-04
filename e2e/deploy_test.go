@@ -417,9 +417,13 @@ func TestDeployConnection(t *testing.T) {
 	// the config declares no routers: no command here may read a router from
 	// config
 	d.deployCore(t)
+	// Each local attestor needs its own key, separate from the deployer and
+	// relay signer. The keys only sign attestations, so they need no funds.
+	attestorA := d.importKey(t, "attestor-a", "--populate-config")
+	attestorB := d.importKey(t, "attestor-b", "--populate-config")
 	d.deployIFTConnection(t,
-		attestationClient(d.chainAID, d.chainBID, d.deployer.Hex()),
-		attestationClient(d.chainBID, d.chainAID, d.deployer.Hex()))
+		attestationClient(d.chainAID, d.chainBID, attestorB.Hex()),
+		attestationClient(d.chainBID, d.chainAID, attestorA.Hex()))
 
 	// core provisioning binds the relaying selectors to PUBLIC_ROLE;
 	// prove an unrelated address can call recvPacket on each router. The
@@ -437,13 +441,13 @@ func TestDeployConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	// render-config pairs the two manifests into one relayer.connections[]
-	// entry, and each attestation end gets the deployer as a local attestor
-	// watching the chain it tracks
+	// entry, and each attestation end gets a dedicated local attestor
+	// watching the chain it tracks. The deployer may still relay on both ends.
 	cfg := d.renderConfig(t, deployerAlias)
 	require.Equal(t, d.wantConnection(deployerAlias, clientkind.Attestation, clientkind.Attestation), cfg.Connections)
 	require.ElementsMatch(t, []ibccli.AttestorFileConfig{
-		wantAttestor(d.chainAID, deployerAlias, d.deployer),
-		wantAttestor(d.chainBID, deployerAlias, d.deployer),
+		wantAttestor(d.chainAID, "attestor-a", attestorA),
+		wantAttestor(d.chainBID, "attestor-b", attestorB),
 	}, cfg.Attestors)
 }
 
