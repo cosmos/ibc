@@ -30,6 +30,7 @@ import (
 
 	attestorv2 "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
 	"github.com/lfdt-ibc/ibc/cli/keyfile"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/poll"
 )
 
 const (
@@ -204,7 +205,7 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		return err
 	}
 	p.address = address
-	if err := awaitHealth(startupCtx, address, p.handle.doneCh()); err != nil {
+	if err = awaitHealth(startupCtx, address, p.handle.doneCh()); err != nil {
 		return fmt.Errorf("attestor readiness: %w; logs: %s", err, p.logTail())
 	}
 	p.client = attestorv2.NewAttestationServiceClient(
@@ -212,32 +213,29 @@ func (p *AttestorProcess) awaitReady(ctx context.Context) error {
 		"http://"+address,
 	)
 
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
 	var lastProbeErr error
-	for {
-		probeCtx, probeCancel := context.WithTimeout(startupCtx, probeRequestTimeout)
-		_, probeErr := p.LatestHeight(probeCtx)
-		probeCancel()
-		if probeErr == nil {
-			return nil
-		}
-		lastProbeErr = probeErr
-
+	err = poll.Until(startupCtx, 50*time.Millisecond, func(ctx context.Context) (bool, error) {
 		select {
 		case <-p.handle.doneCh():
-			return p.readinessExitError()
-		case <-startupCtx.Done():
-			return fmt.Errorf(
-				"attestor was not ready at %s: %w (last probe: %s); logs: %s",
-				p.address,
-				startupCtx.Err(),
-				lastProbeErr.Error(),
-				p.logTail(),
-			)
-		case <-ticker.C:
+			return false, p.readinessExitError()
+		default:
 		}
+
+		probeCtx, probeCancel := context.WithTimeout(ctx, probeRequestTimeout)
+		defer probeCancel()
+		_, lastProbeErr = p.LatestHeight(probeCtx)
+		return lastProbeErr == nil, nil
+	})
+	if err != nil && startupCtx.Err() != nil {
+		return fmt.Errorf(
+			"attestor was not ready at %s: %w (last probe: %w); logs: %s",
+			p.address,
+			startupCtx.Err(),
+			lastProbeErr,
+			p.logTail(),
+		)
 	}
+	return err
 }
 
 func (p *AttestorProcess) awaitAddress(ctx context.Context) (string, error) {
