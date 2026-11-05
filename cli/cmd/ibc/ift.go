@@ -6,13 +6,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -245,13 +243,9 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q is not an EVM chain", flagTxIFTChain)
 	}
 
-	keyHex, err := deployerKeyHex(cfg, flagTxIFTFrom)
+	key, err := deployerKey(cfg, flagTxIFTFrom)
 	if err != nil {
 		return nil, nil, nil, config.Config{}, err
-	}
-	key, err := crypto.HexToECDSA(strings.TrimPrefix(keyHex, "0x"))
-	if err != nil {
-		return nil, nil, nil, config.Config{}, errors.Wrap(err, "signer key")
 	}
 
 	backend, err := ethclient.DialContext(ctx, chain.EVM.RPC)

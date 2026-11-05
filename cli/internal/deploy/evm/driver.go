@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -56,22 +55,14 @@ type Driver struct {
 
 // Options configures an EVM driver.
 type Options struct {
-	ChainID        string
-	RPCURL         string
-	DeployerKeyHex string
+	ChainID     string
+	RPCURL      string
+	DeployerKey *ecdsa.PrivateKey
 }
 
-// New connects to the chain and validates its ID. Empty DeployerKeyHex
-// builds a read-only driver: queries only, no provisioning or wiring.
+// New connects to the chain and validates its ID. A nil DeployerKey builds a
+// read-only driver: queries only, no provisioning or wiring.
 func New(ctx context.Context, opts Options) (*Driver, error) {
-	var key *ecdsa.PrivateKey
-	if opts.DeployerKeyHex != "" {
-		var err error
-		key, err = crypto.HexToECDSA(strings.TrimPrefix(opts.DeployerKeyHex, "0x"))
-		if err != nil {
-			return nil, fmt.Errorf("deployer key: %w", err)
-		}
-	}
 	client, err := ethclient.DialContext(ctx, opts.RPCURL)
 	if err != nil {
 		return nil, fmt.Errorf("dial %s: %w", opts.RPCURL, err)
@@ -83,7 +74,7 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 	if chainID.String() != opts.ChainID {
 		return nil, fmt.Errorf("rpc %s reports chain id %s, config says %s", opts.RPCURL, chainID, opts.ChainID)
 	}
-	return &Driver{chainID: chainID, key: key, backend: client}, nil
+	return &Driver{chainID: chainID, key: opts.DeployerKey, backend: client}, nil
 }
 
 // requireSigner errors if called on a driver built without a deployer

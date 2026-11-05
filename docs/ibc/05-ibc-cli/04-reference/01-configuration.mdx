@@ -251,7 +251,7 @@ See [Observability and metrics](/ibc/05-ibc-cli/04-reference/04-observability-an
 
 `ibc deploy core` deploys the router and multicall. {/* [cli/internal/deploy/steps.go: CoreSteps] */} Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. {/* [cli/cmd/ibc/deploy.go: renderedChain] */}
 
-The deployer must be a local signer, because deployment requires direct access to the key. {/* [cli/cmd/ibc/deploy.go: deployerKeyHex] */}
+The deployer must be a local signer, because deployment requires direct access to the key. {/* [cli/cmd/ibc/deploy.go: deployerKey] */}
 
 ## `relayer`
 
