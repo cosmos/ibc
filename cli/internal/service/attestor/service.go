@@ -113,16 +113,16 @@ func (s *Service) Get(alias string) (Attestor, bool) {
 }
 
 // Info returns identity information for the attestor registered under alias.
-func (s *Service) Info(alias string) (Info, bool) {
+func (s *Service) Info(alias string) (Info, error) {
 	a, ok := s.attestors[alias]
 	if !ok {
-		return Info{}, false
+		return Info{}, ErrNotFound
 	}
 
 	return Info{
 		ChainID: a.ChainID(),
 		Address: a.Address(),
-	}, true
+	}, nil
 }
 
 func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {
