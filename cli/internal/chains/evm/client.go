@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"iter"
 	"log/slog"
 	"math/big"
 	"net/http"
@@ -201,9 +202,9 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 	txHash := common.BytesToHash(rawTxHash)
 
 	// TODO: cache the call
-	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
+	receipt, err := c.receipt(ctx, txHash)
 	if err != nil {
-		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+		return nil, err
 	}
 
 	sendPacketID := c.routerABI.Events[sendPacketEvent].ID
@@ -211,11 +212,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 
 	var events []v2.PacketEvent
 
-	for _, log := range receipt.Logs {
-		if log == nil || len(log.Topics) == 0 || log.Address != c.routerAddress {
-			continue
-		}
-
+	for log := range c.routerLogs(receipt) {
 		switch log.Topics[0] {
 		case sendPacketID:
 			sendPacket, errParse := c.router.ParseSendPacket(*log)
@@ -272,9 +269,9 @@ func (c *Client) TxHeight(ctx context.Context, rawTxHash []byte) (uint64, error)
 
 	txHash := common.BytesToHash(rawTxHash)
 
-	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
+	receipt, err := c.receipt(ctx, txHash)
 	if err != nil {
-		return 0, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+		return 0, err
 	}
 
 	return receipt.BlockNumber.Uint64(), nil
@@ -936,20 +933,17 @@ func (c *Client) PacketRelayExecuted(
 		return false, errors.Errorf("unsupported relay kind %v", kind)
 	}
 
-	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(txHash))
-	if errors.Is(err, ethereum.NotFound) {
-		return false, v2.ErrTxNotFound
-	}
+	receipt, err := c.receipt(ctx, common.HexToHash(txHash))
 	if err != nil {
-		return false, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+		return false, err
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
 		return false, nil
 	}
 
 	eventID := c.routerABI.Events[eventName].ID
-	for _, log := range receipt.Logs {
-		if log == nil || len(log.Topics) == 0 || log.Address != c.routerAddress || log.Topics[0] != eventID {
+	for log := range c.routerLogs(receipt) {
+		if log.Topics[0] != eventID {
 			continue
 		}
 
@@ -984,25 +978,14 @@ func (c *Client) PacketWriteAckStatus(
 	sourceClientID string,
 	destClientID string,
 ) (v2.WriteAckStatus, error) {
-	receipt, err := c.eth.TransactionReceipt(ctx, common.HexToHash(recvTxHash))
+	receipt, err := c.receipt(ctx, common.HexToHash(recvTxHash))
 	if err != nil {
-		if errors.Is(err, ethereum.NotFound) {
-			return v2.WriteAckStatusUnknown, v2.ErrTxNotFound
-		}
-
-		return v2.WriteAckStatusUnknown, errors.Wrapf(
-			err,
-			"getting receipt for tx %s on chain %s",
-			recvTxHash,
-			c.chainID,
-		)
+		return v2.WriteAckStatusUnknown, err
 	}
 
-	for _, log := range receipt.Logs {
-		switch {
-		case log == nil, len(log.Topics) == 0, log.Address != c.routerAddress:
-			continue
-		case log.Topics[0] != c.routerABI.Events[writeAckEvent].ID:
+	writeAckID := c.routerABI.Events[writeAckEvent].ID
+	for log := range c.routerLogs(receipt) {
+		if log.Topics[0] != writeAckID {
 			continue
 		}
 
@@ -1029,6 +1012,35 @@ func (c *Client) PacketWriteAckStatus(
 	}
 
 	return v2.WriteAckStatusUnknown, v2.ErrWriteAckNotFoundForPacket
+}
+
+// receipt fetches the receipt of txHash. A tx the chain does not know is
+// v2.ErrTxNotFound.
+func (c *Client) receipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	receipt, err := c.eth.TransactionReceipt(ctx, txHash)
+	switch {
+	case errors.Is(err, ethereum.NotFound):
+		return nil, errors.Wrapf(v2.ErrTxNotFound, "tx %s on chain %s", txHash, c.chainID)
+	case err != nil:
+		return nil, errors.Wrapf(err, "getting receipt for tx %s on chain %s", txHash, c.chainID)
+	}
+
+	return receipt, nil
+}
+
+// routerLogs yields the receipt's logs emitted by the router. Each has a topic.
+func (c *Client) routerLogs(receipt *types.Receipt) iter.Seq[*types.Log] {
+	return func(yield func(*types.Log) bool) {
+		for _, log := range receipt.Logs {
+			if log == nil || len(log.Topics) == 0 || log.Address != c.routerAddress {
+				continue
+			}
+
+			if !yield(log) {
+				return
+			}
+		}
+	}
 }
 
 func (c *Client) WaitForChain(ctx context.Context) error {
