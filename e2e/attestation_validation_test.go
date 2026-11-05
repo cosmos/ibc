@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -33,7 +32,6 @@ type commitmentCorruptingAttestor struct {
 	attestorv2.AttestationServiceClient
 	name             string
 	endpoint         string
-	logPath          string
 	key              *ecdsa.PrivateKey
 	corrupt          atomic.Bool
 	receiptResponses atomic.Int64
@@ -113,7 +111,6 @@ func newCommitmentCorruptingAttestor(
 }
 
 func (a *commitmentCorruptingAttestor) configureRelayer(cfg *ibccli.RelayerConfig) {
-	a.logPath = filepath.Join(filepath.Dir(cfg.DBPath), "relayer.log")
 	for i := range cfg.Attestors {
 		if cfg.Attestors[i].Name == a.name {
 			cfg.Attestors[i].GRPC = a.endpoint
@@ -121,13 +118,15 @@ func (a *commitmentCorruptingAttestor) configureRelayer(cfg *ibccli.RelayerConfi
 	}
 }
 
-func (a *commitmentCorruptingAttestor) requireRejected(t *testing.T) {
+func requireRejected(t *testing.T, relayer *ibccli.Relayer, route e2etest.Route) {
 	t.Helper()
+	policy, ok := relayer.WaitPolicy(string(route.ID))
+	require.True(t, ok, "relayer has no wait policy for route %q", route.ID)
 	// Pending alone could mean the on-chain verifier rejected the proof.
 	require.Eventually(t, func() bool {
-		logs, err := os.ReadFile(a.logPath)
+		logs, err := os.ReadFile(relayer.LogPath())
 		return err == nil && strings.Contains(string(logs), "attested data does not match expected claim")
-	}, 30*time.Second, 100*time.Millisecond, "relayer must reject the signed commitment before submission")
+	}, policy.CompletionBudget, policy.StatusPoll, "relayer must reject the signed commitment before submission")
 }
 
 func TestAttestation_RejectsWrongPacketCommitment(t *testing.T) {
@@ -148,7 +147,7 @@ func TestAttestation_RejectsWrongPacketCommitment(t *testing.T) {
 	transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 
-	proxy.requireRejected(t)
+	requireRejected(t, relayer, route)
 	require.NoError(
 		t,
 		e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_PENDING),
@@ -183,7 +182,7 @@ func TestAttestation_RejectsWrongAcknowledgementCommitment(t *testing.T) {
 	transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(1_234_000)})
 	require.NoError(t, err)
 
-	proxy.requireRejected(t)
+	requireRejected(t, relayer, route)
 	require.NoError(
 		t,
 		e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_PENDING),
@@ -226,7 +225,7 @@ func TestAttestation_RejectsWrongTimeoutCommitment(t *testing.T) {
 	relayer := e2etest.StartRelayer(t, driver, env)
 	require.NoError(t, e2etest.RelayAll(ctx, relayer, transfer.PacketTx()))
 
-	proxy.requireRejected(t)
+	requireRejected(t, relayer, route)
 	require.NoError(
 		t,
 		e2etest.AwaitStable(ctx, relayer, transfer.PacketTx(), relayerv2.PacketState_PACKET_STATE_PENDING),
