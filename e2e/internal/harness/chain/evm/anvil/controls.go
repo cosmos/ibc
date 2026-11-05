@@ -37,11 +37,12 @@ func (ac *Chain) PauseMining(ctx context.Context) error {
 	})
 }
 
-// ResumeMining restores interval mining only. Transactions may wait up to one second.
+// ResumeMining restores interval mining only. Transactions may wait up to one
+// BlockInterval.
 func (ac *Chain) ResumeMining(ctx context.Context) error {
 	return ac.WithEVMClient(func(client *evm.EVMClient) error {
-		if err := client.RPCClient().CallContext(ctx, nil, "evm_setIntervalMining", 1); err != nil {
-			return fmt.Errorf("evm_setIntervalMining 1: %w", err)
+		if err := client.RPCClient().CallContext(ctx, nil, "evm_setIntervalMining", blockTimeSecs); err != nil {
+			return fmt.Errorf("evm_setIntervalMining %d: %w", blockTimeSecs, err)
 		}
 		return nil
 	})

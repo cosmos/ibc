@@ -375,7 +375,7 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
 		wsURL:      adapter.WSURL(),
-		timing:     blockTiming(time.Second),
+		timing:     blockTiming(anvil.BlockInterval),
 		impl:       adapter,
 		mining:     &Mining{controller: adapter},
 		node:       &NodeLifecycle{controller: adapter},
@@ -389,14 +389,16 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 }
 
 func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcquisition, error) {
+	timing := blockTiming(besuBlockPeriod)
 	adapter, err := besu.Start(ctx, besu.Spec{
 		ID:          string(spec.ID),
 		ChainID:     spec.EVMChainID,
 		Consensus:   spec.Consensus,
 		WorkDir:     filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
 		RunID:       ws.runID,
-		BlockPeriod: besuBlockPeriod,
+		BlockPeriod: timing.BlockInterval,
 		Followers:   spec.Followers,
+		Wait:        timing.transactionWait(),
 	})
 	if err != nil {
 		return chainAcquisition{}, err
@@ -407,7 +409,7 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 			evmChainID: spec.EVMChainID,
 			rpcURL:     adapter.RPCURL(),
 			wsURL:      adapter.WSURL(),
-			timing:     blockTiming(besuBlockPeriod),
+			timing:     timing,
 			impl:       adapter,
 			funding:    &Funding{controller: adapter},
 			validators: &Validators{controller: adapter},
