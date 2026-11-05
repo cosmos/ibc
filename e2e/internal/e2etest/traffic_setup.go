@@ -389,52 +389,28 @@ func buildConfig(
 ) (ibccli.RelayerConfig, ibccli.RelayerOptions) {
 	t.Helper()
 
-	config := ibccli.RelayerConfig{
-		DBPath:         dbPath,
-		SignerAlias:    relayerSignerAlias,
-		SignerKeyFile:  signerKeyPath,
-		FinalityOffset: ibccli.HarnessFinalityOffset,
-		ClearOnStart:   false,
-		ClearInterval:  5 * time.Second,
-		Observability:  env.ObservabilityEnabled(),
-	}
+	config, chainIDs := baseRelayerConfig(t, env, signerKeyPath, dbPath,
+		func(id environment.ChainID, chain *environment.Chain, relayerChain *ibccli.RelayerChain) {
+			rpc, err := driver.ChainRPC(string(id))
+			require.NoError(t, err, "e2etest: resolve Chain %q process binding", id)
+			apps, ok := deployment.Chain(id)
+			require.True(t, ok, "e2etest: deployment has no Chain %q", id)
+			relayerChain.RPC = rpc
+			relayerChain.IBCMulticall = apps.IBCMulticall.Hex()
+			if chain.WSURL() != "" {
+				ws, wsErr := driver.ChainWS(string(id))
+				require.NoError(t, wsErr, "e2etest: resolve Chain %q websocket binding", id)
+				relayerChain.WS = ws
+			}
+		})
+	config.ClearOnStart = false
+	config.ClearInterval = 5 * time.Second
+	config.Observability = env.ObservabilityEnabled()
 
-	chains := env.Chains()
 	options := ibccli.RelayerOptions{
-		ChainIDs:      make(map[string]string, len(chains)),
+		ChainIDs:      chainIDs,
 		WaitPolicies:  make(map[string]ibccli.WaitPolicy, len(routes)),
 		Observability: env.ObservabilityEnabled(),
-	}
-
-	for _, id := range chains {
-		chain, err := env.Chain(id)
-		require.NoError(t, err, "e2etest: resolve Chain %q", id)
-		rpc, err := driver.ChainRPC(string(id))
-		require.NoError(t, err, "e2etest: resolve Chain %q process binding", id)
-		apps, ok := deployment.Chain(id)
-		require.True(t, ok, "e2etest: deployment has no Chain %q", id)
-		options.ChainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
-		relayerChain := ibccli.RelayerChain{
-			ChainID:      options.ChainIDs[string(id)],
-			RPC:          rpc,
-			ICS26Router:  apps.ICS26Router.Hex(),
-			IBCMulticall: apps.IBCMulticall.Hex(),
-		}
-		if chain.WSURL() != "" {
-			ws, wsErr := driver.ChainWS(string(id))
-			require.NoError(t, wsErr, "e2etest: resolve Chain %q websocket binding", id)
-			relayerChain.WS = ws
-		}
-		config.Chains = append(config.Chains, relayerChain)
-	}
-	for _, id := range env.Attestors() {
-		attestor, err := env.Attestor(id)
-		if err != nil {
-			t.Fatalf("e2etest: resolve Attestor %q: %v", id, err)
-		}
-		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
-		})
 	}
 
 	connections := map[[2]string]int{}
@@ -469,6 +445,53 @@ func buildConfig(
 		mergeRelayerConnection(&config, connections, connection)
 	}
 	return config, options
+}
+
+// baseRelayerConfig holds what every IBC CLI process configured from the
+// relayer file shares: the signer, finality, one entry per Chain, and every
+// Attestor as a remote. configureChain fills in how the process reaches each
+// Chain, because a process started before Deploy has no driver bindings and
+// dials the Chains' RPC URLs directly. The returned map holds each Chain's
+// EVM chain id (decimal) keyed by harness Chain id.
+func baseRelayerConfig(
+	t testing.TB,
+	env *environment.Environment,
+	signerKeyPath string,
+	dbPath string,
+	configureChain func(environment.ChainID, *environment.Chain, *ibccli.RelayerChain),
+) (ibccli.RelayerConfig, map[string]string) {
+	t.Helper()
+
+	config := ibccli.RelayerConfig{
+		DBPath:         dbPath,
+		SignerAlias:    relayerSignerAlias,
+		SignerKeyFile:  signerKeyPath,
+		FinalityOffset: ibccli.HarnessFinalityOffset,
+	}
+
+	chains := env.Chains()
+	chainIDs := make(map[string]string, len(chains))
+	for _, id := range chains {
+		chain, err := env.Chain(id)
+		require.NoError(t, err, "e2etest: resolve Chain %q", id)
+		instance, err := env.IBCInstanceForChain(id)
+		require.NoError(t, err, "e2etest: resolve IBC Instance on Chain %q", id)
+		chainIDs[string(id)] = strconv.FormatUint(chain.EVMChainID(), 10)
+		relayerChain := ibccli.RelayerChain{
+			ChainID:     chainIDs[string(id)],
+			ICS26Router: common.HexToAddress(string(instance.Locator())).Hex(),
+		}
+		configureChain(id, chain, &relayerChain)
+		config.Chains = append(config.Chains, relayerChain)
+	}
+	for _, id := range env.Attestors() {
+		attestor, err := env.Attestor(id)
+		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
+		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
+			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
+		})
+	}
+	return config, chainIDs
 }
 
 // mergeRelayerConnection combines directional routes into one reciprocal pair.

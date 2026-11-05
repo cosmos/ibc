@@ -3,9 +3,10 @@
 package e2etest
 
 import (
+	"context"
 	"path/filepath"
-	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,10 @@ import (
 	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
 )
 
+const proverStopTimeout = 15 * time.Second
+
+// buildProverConfig covers every Connection in env, since the prover starts
+// before Deploy and serves whichever routes the relayer is later given.
 func buildProverConfig(
 	t testing.TB,
 	env *environment.Environment,
@@ -21,51 +26,25 @@ func buildProverConfig(
 ) ibccli.RelayerConfig {
 	t.Helper()
 
-	config := ibccli.RelayerConfig{
-		DBPath:         filepath.Join(t.TempDir(), "prover.db"),
-		SignerAlias:    relayerSignerAlias,
-		SignerKeyFile:  signerKeyPath,
-		FinalityOffset: ibccli.HarnessFinalityOffset,
-	}
-
-	for _, id := range env.Chains() {
-		chain, err := env.Chain(id)
-		require.NoError(t, err, "e2etest: resolve Chain %q", id)
-
-		instance, err := env.IBCInstanceForChain(id)
-		require.NoError(t, err, "e2etest: resolve IBC instance for Chain %q", id)
-
-		config.Chains = append(config.Chains, ibccli.RelayerChain{
-			ChainID:     chainEVMID(t, env, id),
-			RPC:         chain.RPCURL(),
-			ICS26Router: string(instance.Locator()),
+	config, chainIDs := baseRelayerConfig(t, env, signerKeyPath, filepath.Join(t.TempDir(), "prover.db"),
+		func(_ environment.ChainID, chain *environment.Chain, relayerChain *ibccli.RelayerChain) {
+			relayerChain.RPC = chain.RPCURL()
 		})
+
+	clientEnd := func(client *environment.IBCClient) ibccli.RelayerClientEnd {
+		return ibccli.RelayerClientEnd{
+			ChainID:    chainIDs[string(client.IBCInstance().Chain().ID())],
+			ClientID:   client.ID(),
+			ClientType: client.Kind(),
+		}
 	}
-
-	for _, id := range env.Attestors() {
-		attestor, err := env.Attestor(id)
-		require.NoError(t, err, "e2etest: resolve Attestor %q", id)
-
-		config.Attestors = append(config.Attestors, ibccli.RelayerAttestor{
-			Name: string(attestor.ID()), Type: ibccli.RelayerAttestorRemote, GRPC: attestor.Endpoint(),
-		})
-	}
-
 	for _, id := range env.Connections() {
 		connection, err := env.Connection(id)
 		require.NoError(t, err, "e2etest: resolve Connection %q", id)
 
 		config.Connections = append(config.Connections, ibccli.RelayerConnection{
-			A: ibccli.RelayerClientEnd{
-				ChainID:    chainEVMID(t, env, connection.A().IBCInstance().Chain().ID()),
-				ClientID:   connection.A().ID(),
-				ClientType: connection.A().Kind(),
-			},
-			B: ibccli.RelayerClientEnd{
-				ChainID:    chainEVMID(t, env, connection.B().IBCInstance().Chain().ID()),
-				ClientID:   connection.B().ID(),
-				ClientType: connection.B().Kind(),
-			},
+			A: clientEnd(connection.A()),
+			B: clientEnd(connection.B()),
 		})
 	}
 
@@ -84,19 +63,14 @@ func StartProver(t testing.TB, env *environment.Environment, signer Signer) *ibc
 	configPath := filepath.Join(dir, "prover.config.yaml")
 	require.NoError(t, ibccli.WriteRelayerConfig(configPath, config), "e2etest: write prover config")
 
-	prover, err := ibccli.StartProver(configPath)
+	prover, err := ibccli.StartProver(t.Context(), configPath)
 	require.NoError(t, err, "e2etest: start prover service")
 
-	t.Cleanup(func() { assert.NoError(t, prover.Stop(), "e2etest: stop prover service") })
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), proverStopTimeout)
+		defer cancel()
+		assert.NoError(t, prover.Stop(ctx), "e2etest: stop prover service")
+	})
 
 	return prover
-}
-
-func chainEVMID(t testing.TB, env *environment.Environment, id environment.ChainID) string {
-	t.Helper()
-
-	chain, err := env.Chain(id)
-	require.NoError(t, err, "e2etest: resolve Chain %q", id)
-
-	return strconv.FormatUint(chain.EVMChainID(), 10)
 }
