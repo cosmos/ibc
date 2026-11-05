@@ -342,49 +342,50 @@ func (_c *MockRepository_ListDispatchablePackets_Call) RunAndReturn(run func(ctx
 	return _c
 }
 
-// ListPacketSequencesFrom provides a mock function for the type MockRepository
-func (_mock *MockRepository) ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error) {
-	ret := _mock.Called(ctx, chainID, clientID, fromSequence)
+// ListPacketSequences provides a mock function for the type MockRepository
+func (_mock *MockRepository) ListPacketSequences(ctx context.Context, chainID string, clientID string, fromSequence uint64, toSequence uint64) ([]uint64, error) {
+	ret := _mock.Called(ctx, chainID, clientID, fromSequence, toSequence)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListPacketSequencesFrom")
+		panic("no return value specified for ListPacketSequences")
 	}
 
 	var r0 []uint64
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) ([]uint64, error)); ok {
-		return returnFunc(ctx, chainID, clientID, fromSequence)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64, uint64) ([]uint64, error)); ok {
+		return returnFunc(ctx, chainID, clientID, fromSequence, toSequence)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64) []uint64); ok {
-		r0 = returnFunc(ctx, chainID, clientID, fromSequence)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, uint64, uint64) []uint64); ok {
+		r0 = returnFunc(ctx, chainID, clientID, fromSequence, toSequence)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]uint64)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64) error); ok {
-		r1 = returnFunc(ctx, chainID, clientID, fromSequence)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, uint64, uint64) error); ok {
+		r1 = returnFunc(ctx, chainID, clientID, fromSequence, toSequence)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockRepository_ListPacketSequencesFrom_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPacketSequencesFrom'
-type MockRepository_ListPacketSequencesFrom_Call struct {
+// MockRepository_ListPacketSequences_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPacketSequences'
+type MockRepository_ListPacketSequences_Call struct {
 	*mock.Call
 }
 
-// ListPacketSequencesFrom is a helper method to define mock.On call
+// ListPacketSequences is a helper method to define mock.On call
 //   - ctx context.Context
 //   - chainID string
 //   - clientID string
 //   - fromSequence uint64
-func (_e *MockRepository_Expecter) ListPacketSequencesFrom(ctx any, chainID any, clientID any, fromSequence any) *MockRepository_ListPacketSequencesFrom_Call {
-	return &MockRepository_ListPacketSequencesFrom_Call{Call: _e.mock.On("ListPacketSequencesFrom", ctx, chainID, clientID, fromSequence)}
+//   - toSequence uint64
+func (_e *MockRepository_Expecter) ListPacketSequences(ctx any, chainID any, clientID any, fromSequence any, toSequence any) *MockRepository_ListPacketSequences_Call {
+	return &MockRepository_ListPacketSequences_Call{Call: _e.mock.On("ListPacketSequences", ctx, chainID, clientID, fromSequence, toSequence)}
 }
 
-func (_c *MockRepository_ListPacketSequencesFrom_Call) Run(run func(ctx context.Context, chainID string, clientID string, fromSequence uint64)) *MockRepository_ListPacketSequencesFrom_Call {
+func (_c *MockRepository_ListPacketSequences_Call) Run(run func(ctx context.Context, chainID string, clientID string, fromSequence uint64, toSequence uint64)) *MockRepository_ListPacketSequences_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -402,22 +403,27 @@ func (_c *MockRepository_ListPacketSequencesFrom_Call) Run(run func(ctx context.
 		if args[3] != nil {
 			arg3 = args[3].(uint64)
 		}
+		var arg4 uint64
+		if args[4] != nil {
+			arg4 = args[4].(uint64)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
+			arg4,
 		)
 	})
 	return _c
 }
 
-func (_c *MockRepository_ListPacketSequencesFrom_Call) Return(uint64s []uint64, err error) *MockRepository_ListPacketSequencesFrom_Call {
+func (_c *MockRepository_ListPacketSequences_Call) Return(uint64s []uint64, err error) *MockRepository_ListPacketSequences_Call {
 	_c.Call.Return(uint64s, err)
 	return _c
 }
 
-func (_c *MockRepository_ListPacketSequencesFrom_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)) *MockRepository_ListPacketSequencesFrom_Call {
+func (_c *MockRepository_ListPacketSequences_Call) RunAndReturn(run func(ctx context.Context, chainID string, clientID string, fromSequence uint64, toSequence uint64) ([]uint64, error)) *MockRepository_ListPacketSequences_Call {
 	_c.Call.Return(run)
 	return _c
 }

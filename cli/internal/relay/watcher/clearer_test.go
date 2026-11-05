@@ -5,6 +5,7 @@ package watcher
 import (
 	"context"
 	"log/slog"
+	"math"
 	"testing"
 	"time"
 
@@ -51,14 +52,14 @@ type boundedStore struct {
 	from uint64
 }
 
-func (s *boundedStore) ListPacketSequencesFrom(
+func (s *boundedStore) ListPacketSequences(
 	ctx context.Context,
 	chainID, clientID string,
-	fromSequence uint64,
+	fromSequence, toSequence uint64,
 ) ([]uint64, error) {
 	s.from = fromSequence
 
-	return s.ClearStore.ListPacketSequencesFrom(ctx, chainID, clientID, fromSequence)
+	return s.ClearStore.ListPacketSequences(ctx, chainID, clientID, fromSequence, toSequence)
 }
 
 // clearingState is how far the pass recorded probing, which is the bound the
@@ -91,7 +92,7 @@ func watcherStore(t *testing.T) *store.SqliteDB {
 func recorded(t *testing.T, db *store.SqliteDB) []uint64 {
 	t.Helper()
 
-	sequences, err := db.ListPacketSequencesFrom(context.Background(), sourceChainID, sourceClientID, 1)
+	sequences, err := db.ListPacketSequences(context.Background(), sourceChainID, sourceClientID, 1, math.MaxInt64)
 	require.NoError(t, err)
 
 	return sequences
@@ -117,6 +118,97 @@ func hold(t *testing.T, db *store.SqliteDB, sequence uint64, status store.RelayS
 
 func TestClearerClear(t *testing.T) {
 	ctx := context.Background()
+
+	t.Run("inclusiveWindowBounds", func(t *testing.T) {
+		for _, tt := range []struct {
+			name      string
+			sent      []uint64
+			settled   []uint64
+			wantRows  []uint64
+			wantState store.ClearingState
+			want      Result
+		}{
+			{
+				name:      "seqFromEqualsSeqTo",
+				sent:      []uint64{8},
+				wantRows:  []uint64{8},
+				wantState: store.ClearingState{LastProbed: 8},
+				want:      Result{CommitmentsQueried: 1, CommitmentsLive: 1, PacketsRecovered: 1},
+			},
+			{
+				name:      "seqFromPlusOneEqualsSeqTo",
+				sent:      []uint64{8, 9},
+				settled:   []uint64{8},
+				wantRows:  []uint64{9},
+				wantState: store.ClearingState{LastProbed: 9},
+				want:      Result{CommitmentsQueried: 2, CommitmentsLive: 1, PacketsRecovered: 1},
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				chain := newFakeChain(t)
+				chain.sendSequences(tt.sent...)
+				chain.settleSequences(tt.settled...)
+				db := watcherStore(t)
+				require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 7, store.UnresolvedDelta{}))
+				clearer := newClearer(chain, db, Config{})
+
+				result, err := clearer.Clear(ctx, sourceClientID)
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, result)
+				assert.Equal(t, tt.wantRows, recorded(t, db))
+				assert.Equal(t, tt.wantState, clearingState(t, db))
+
+				result, err = clearer.Clear(ctx, sourceClientID)
+				require.NoError(t, err)
+				assert.Equal(t, Result{}, result)
+				assert.Equal(t, tt.wantState, clearingState(t, db))
+			})
+		}
+	})
+
+	t.Run("clearsAtMost1000NewSequencesAndResumes", func(t *testing.T) {
+		chain := newFakeChain(t)
+		chain.sendSequences(1006, 1007, 1008, 1009, 1010)
+		db := watcherStore(t)
+		require.NoError(t, db.SetClearingState(ctx, sourceChainID, sourceClientID, 7, store.UnresolvedDelta{}))
+		hold(t, db, 1007, store.RelayStatusNotSelected)
+		hold(t, db, 1008, store.RelayStatusNotSelected)
+		clearer := newClearer(chain, db, Config{})
+
+		result, err := clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+		assert.Equal(
+			t,
+			Result{CommitmentsQueried: 999, CommitmentsLive: 1, PacketsAlreadyStored: 1, PacketsRecovered: 1},
+			result,
+		)
+		assert.Equal(t, uint64(1007), clearingState(t, db).LastProbed)
+		assert.Equal(t, []uint64{1006, 1007, 1008}, recorded(t, db))
+		probes := chain.probeCalls()
+		require.Len(t, probes, 1)
+		require.Len(t, probes[0], 999)
+		assert.Equal(t, uint64(8), probes[0][0])
+		assert.Equal(t, uint64(1006), probes[0][998])
+
+		result, err = clearer.Clear(ctx, sourceClientID)
+		require.NoError(t, err)
+		assert.Equal(
+			t,
+			Result{CommitmentsQueried: 2, CommitmentsLive: 2, PacketsAlreadyStored: 1, PacketsRecovered: 2},
+			result,
+		)
+		assert.Equal(t, uint64(1010), clearingState(t, db).LastProbed)
+		assert.Equal(t, []uint64{1006, 1007, 1008, 1009, 1010}, recorded(t, db))
+		assert.Equal(t, []uint64{1009, 1010}, chain.probeCalls()[1])
+
+		packets, err := db.ListPacketsBySourceTx(ctx, sourceChainID, sendTxHash)
+		require.NoError(t, err)
+		for _, packet := range packets {
+			if packet.PacketSequenceNumber == 1007 || packet.PacketSequenceNumber == 1008 {
+				assert.Equal(t, store.RelayStatusNotSelected, packet.Status)
+			}
+		}
+	})
 
 	t.Run("outstandingCommitmentsGetRows", func(t *testing.T) {
 		chain := newFakeChain(t)

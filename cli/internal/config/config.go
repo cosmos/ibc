@@ -279,7 +279,7 @@ func (c Config) ValidateIdentities() error {
 	if err := c.Attestors.validateIdentities(); err != nil {
 		return errPath("attestors", err)
 	}
-	return nil
+	return c.validateSignersAssignment()
 }
 
 // RelayerSufficiency validates the relayer server is runnable
@@ -660,8 +660,6 @@ func (c Chains) validateIdentities() error {
 
 func (a Attestors) validateIdentities() error {
 	localNames := make(map[string]struct{})
-	// Keyed by chainId+signer to reject redundant local attestors on the same chain.
-	localChainSigners := make(map[[2]string]struct{})
 	for i, attestor := range a {
 		if attestor.Type != AttestorTypeLocal {
 			continue
@@ -671,16 +669,6 @@ func (a Attestors) validateIdentities() error {
 			return errPathIndexf(i, "duplicate local attestor name: %q", attestor.Name)
 		}
 		localNames[attestor.Name] = struct{}{}
-
-		if attestor.Signer == "" {
-			// Generated drafts may not have resolved this signer yet.
-			continue
-		}
-		chainSigner := [2]string{attestor.ChainID, attestor.Signer}
-		if _, exists := localChainSigners[chainSigner]; exists {
-			return errPathIndexf(i, "duplicate local attestor signer %q on chain %q", attestor.Signer, attestor.ChainID)
-		}
-		localChainSigners[chainSigner] = struct{}{}
 	}
 
 	return nil
@@ -725,11 +713,17 @@ func (c Config) validateAutoRelay() error {
 	return nil
 }
 
-func (c Config) crossValidate() error {
-	signerSet := make(map[string]struct{}, len(c.Signers))
+// signerSet returns the declared signer aliases.
+func (c Config) signerSet() map[string]struct{} {
+	set := make(map[string]struct{}, len(c.Signers))
 	for _, signer := range c.Signers {
-		signerSet[signer.Alias] = struct{}{}
+		set[signer.Alias] = struct{}{}
 	}
+	return set
+}
+
+func (c Config) crossValidate() error {
+	signerSet := c.signerSet()
 
 	for i, a := range c.Attestors {
 		if a.Type != AttestorTypeLocal {
@@ -756,11 +750,63 @@ func (c Config) crossValidate() error {
 		}
 	}
 
+	for i, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if _, exists := signerSet[end.cfg.Signer]; !exists {
+				seg := fmt.Sprintf("relayer.connections[%d].%s.signer", i, end.label)
+				return errPathf(seg, "references unknown signer %q", end.cfg.Signer)
+			}
+		}
+	}
+
 	if err := c.validateChainReferences(); err != nil {
 		return err
 	}
 
-	return c.validateConnectionSigners(signerSet)
+	return c.validateSignersAssignment()
+}
+
+// validateSignersAssignment ensures a local attestor's signer backs nothing
+// else: attestation signatures are not chain-bound, so a shared key replays
+// across chains. Empty aliases are unresolved draft fields.
+func (c Config) validateSignersAssignment() error {
+	// alias ==> the config path that holds it
+	assigned := make(map[string]string)
+
+	// Relayer ends and deployers register without a conflict check: they may
+	// share a key with each other, e.g. the relayer key also deploys. Only an
+	// attestor claims a key for itself.
+	for i, conn := range c.Relayer.Connections {
+		for _, end := range connectionEnds(conn) {
+			if end.cfg.Signer == "" {
+				continue
+			}
+			assigned[end.cfg.Signer] = fmt.Sprintf("relayer.connections[%d].%s", i, end.label)
+		}
+	}
+	for i, chain := range c.Chains {
+		if chain.Deployer != "" {
+			assigned[chain.Deployer] = fmt.Sprintf("chains[%d].deployer", i)
+		}
+	}
+
+	for i, attestor := range c.Attestors {
+		if attestor.Type != AttestorTypeLocal || attestor.Signer == "" {
+			continue
+		}
+		if holder, exists := assigned[attestor.Signer]; exists {
+			seg := fmt.Sprintf("attestors[%d].signer", i)
+			return errPathf(
+				seg,
+				"signer %q is already assigned to %s; an attestor key cannot be shared",
+				attestor.Signer,
+				holder,
+			)
+		}
+		assigned[attestor.Signer] = fmt.Sprintf("attestors[%d] (%s)", i, attestor.Name)
+	}
+
+	return nil
 }
 
 // validateChainReferences ensures chains referenced by the relayer config are
@@ -778,21 +824,6 @@ func (c Config) validateChainReferences() error {
 			if _, ok := c.Chain(end.cfg.ChainID); end.cfg.ChainID != "" && !ok {
 				seg := fmt.Sprintf("relayer.connections[%d].%s.chainId", i, end.label)
 				return errPathf(seg, "%q not declared in top-level chains", end.cfg.ChainID)
-			}
-		}
-	}
-
-	return nil
-}
-
-// validateConnectionSigners ensures every client end's signer resolves to a
-// configured signer.
-func (c Config) validateConnectionSigners(signerSet map[string]struct{}) error {
-	for i, conn := range c.Relayer.Connections {
-		for _, end := range connectionEnds(conn) {
-			if _, exists := signerSet[end.cfg.Signer]; !exists {
-				seg := fmt.Sprintf("relayer.connections[%d].%s.signer", i, end.label)
-				return errPathf(seg, "references unknown signer %q", end.cfg.Signer)
 			}
 		}
 	}

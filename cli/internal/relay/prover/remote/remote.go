@@ -20,7 +20,11 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-const requestTimeout = time.Minute
+// todo: make it configurable in ibc.yaml
+const (
+	maxResponseBytes = 1 << 20 // 1MB
+	requestTimeout   = 30 * time.Second
+)
 
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.
@@ -33,7 +37,12 @@ type Prover struct {
 
 func New(httpClient connect.HTTPClient, url, chainID, clientID string, logger *slog.Logger) *Prover {
 	return &Prover{
-		client:   proverv2.NewProverServiceClient(httpClient, url, connect.WithGRPC()),
+		client: proverv2.NewProverServiceClient(
+			httpClient,
+			url,
+			connect.WithGRPC(),
+			connect.WithReadMaxBytes(maxResponseBytes),
+		),
 		chainID:  chainID,
 		clientID: clientID,
 		logger:   logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
@@ -51,7 +60,13 @@ func newHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig}}
+	return &http.Client{
+		Transport: &http.Transport{
+			Protocols:             protocols,
+			TLSClientConfig:       tlsConfig,
+			ResponseHeaderTimeout: requestTimeout,
+		},
+	}
 }
 
 func (p *Prover) target() *proverv2.Client {

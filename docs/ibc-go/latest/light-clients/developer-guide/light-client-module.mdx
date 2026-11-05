@@ -1,0 +1,71 @@
+---
+title: Light Client Module interface
+description: Status must return the status of the client.
+---
+
+## `Status` method
+
+`Status` must return the status of the client.
+
+* An `Active` status indicates that clients are allowed to process packets.
+* A `Frozen` status indicates that misbehaviour was detected in the counterparty chain and the client is not allowed to be used.
+* An `Expired` status indicates that a client is not allowed to be used because it was not updated for longer than the trusting period.
+* An `Unknown` status indicates that there was an error in determining the status of a client.
+
+All possible `Status` types can be found [here](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L22-L32).
+
+This field is returned in the response of the gRPC [`ibc.core.client.v1.Query/ClientStatus`](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/02-client/types/query.pb.go#L665) endpoint.
+
+## `TimestampAtHeight` method
+
+`TimestampAtHeight` must return the timestamp for the consensus state associated with the provided height.
+This value is used to facilitate timeouts by checking the packet timeout timestamp against the returned value.
+
+## `LatestHeight` method
+
+`LatestHeight` should return the latest block height that the client state represents.
+
+## `Initialize` method
+
+Clients must validate the initial consensus state, and set the initial client state and consensus state in the provided client store.
+Clients may also store any necessary client-specific metadata.
+
+`Initialize` is called when a [client is created](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/02-client/keeper/client.go#L30).
+
+## `UpdateState` method
+
+`UpdateState` updates and stores as necessary any associated information for an IBC client, such as the `ClientState` and corresponding `ConsensusState`. See section [`UpdateState`](/ibc-go/latest/light-clients/developer-guide/updates-and-misbehaviour#updatestate) for more information.
+
+## `UpdateStateOnMisbehaviour` method
+
+`UpdateStateOnMisbehaviour` should perform appropriate state changes on a client state given that misbehaviour has been detected and verified. See section [`UpdateStateOnMisbehaviour`](/ibc-go/latest/light-clients/developer-guide/updates-and-misbehaviour#updatestateonmisbehaviour) for more information.
+
+## `VerifyMembership` method
+
+`VerifyMembership` must verify the existence of a value at a given commitment path at the specified height. For more information about membership proofs
+see the [Existence and non-existence proofs section](/ibc-go/latest/light-clients/developer-guide/proofs).
+
+## `VerifyNonMembership` method
+
+`VerifyNonMembership` must verify the absence of a value at a given commitment path at a specified height. For more information about non-membership proofs
+see the [Existence and non-existence proofs section](/ibc-go/latest/light-clients/developer-guide/proofs).
+
+## `VerifyClientMessage` method
+
+`VerifyClientMessage` must verify a `ClientMessage`. A `ClientMessage` could be a `Header`, `Misbehaviour`, or batch update.
+It must handle each type of `ClientMessage` appropriately. Calls to `CheckForMisbehaviour`, `UpdateState`, and `UpdateStateOnMisbehaviour`
+will assume that the content of the `ClientMessage` has been verified and can be trusted. An error should be returned
+if the ClientMessage fails to verify. See section [`VerifyClientMessage`](/ibc-go/latest/light-clients/developer-guide/updates-and-misbehaviour#verifyclientmessage) for more information.
+
+## `CheckForMisbehaviour` method
+
+Checks for evidence of a misbehaviour in `Header` or `Misbehaviour` type. It assumes the `ClientMessage`
+has already been verified. See section [`CheckForMisbehaviour`](/ibc-go/latest/light-clients/developer-guide/updates-and-misbehaviour#checkformisbehaviour) for more information.
+
+## `RecoverClient` method
+
+`RecoverClient` is used to recover an expired or frozen client by updating the client with the state of a substitute client. The method must verify that the provided substitute may be used to update the subject client. See section [Implementing `RecoverClient`](/ibc-go/latest/light-clients/proposals#implementing-recoverclient) for more information.
+
+## `VerifyUpgradeAndUpdateState` method
+
+`VerifyUpgradeAndUpdateState` provides a path to upgrading clients given an upgraded `ClientState`, upgraded `ConsensusState` and proofs for each. See section [Implementing `VerifyUpgradeAndUpdateState`](/ibc-go/latest/light-clients/developer-guide/upgrades#implementing-verifyupgradeandupdatestate) for more information.

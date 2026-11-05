@@ -1,0 +1,42 @@
+---
+noindex: true
+canonical: '/ibc-go/latest/ibc/apps/routing'
+title: Routing
+---
+
+<Note>
+
+## Pre-requisite readings
+
+- [IBC Overview](/ibc-go/v10.1.x/ibc/overview)
+- [IBC default integration](/ibc-go/v10.1.x/ibc/integration)
+
+</Note>
+
+## Synopsis
+
+Learn how to hook a route to the IBC router for the custom IBC module.
+
+As mentioned above, modules must implement the `IBCModule` interface (which contains both channel
+handshake callbacks for IBC classic only, and packet handling callbacks for IBC classic and v2). The concrete implementation of this interface
+must be registered with the module name as a route on the IBC `Router`.
+
+```go expandable
+// app.go
+func NewApp(...args) *App {
+  // ...
+
+  // Create static IBC router, add module routes, then set and seal it
+    ibcRouter := port.NewRouter()
+
+ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferModule)
+  // Note: moduleCallbacks must implement IBCModule interface
+  ibcRouter.AddRoute(moduleName, moduleCallbacks)
+
+  // Setting Router will finalize all routes by sealing router
+  // No more routes can be added
+  app.IBCKeeper.SetRouter(ibcRouter)
+
+  // ...
+}
+```

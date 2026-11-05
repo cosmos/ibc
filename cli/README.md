@@ -5,8 +5,8 @@
 IBC CLI deploys IBC onto a chain and runs the relayer and attestor
 processes that carry packets across it.
 
-See [`docs/6-ibc-cli/`](../docs/6-ibc-cli) for guides on operating IBC CLI.
-Start with [Deploy IBC and send a token](../docs/6-ibc-cli/2-tutorial-deploy-ibc-and-send-a-token.md),
+See [`docs/ibc/ibc-cli/`](../docs/ibc/05-ibc-cli) for guides on operating IBC CLI.
+Start with [Deploy IBC and send a token](../docs/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token.mdx),
 which brings up two chains, deploys the stack on both, and moves a token
 between them.
 
@@ -25,7 +25,7 @@ between them.
 
 The `ibc` binary covers the whole lifecycle: creating a configuration and keys,
 deploying IBC and its applications onto chains, running the relayer and attestor, and sending transactions and queries against what you
-deployed. See [CLI commands](../docs/6-ibc-cli/6-cli-commands.md) for the full
+deployed. See [CLI commands](../docs/ibc/05-ibc-cli/04-reference/02-cli-commands.mdx) for the full
 reference.
 
 ```bash
@@ -69,7 +69,7 @@ make build
 
 ## Configuration
 
-See [Configuration](../docs/6-ibc-cli/5-configuration.md) for the full 
+See [Configuration](../docs/ibc/05-ibc-cli/04-reference/01-configuration.mdx) for the full 
 configuration reference, or [`internal/config/ibc.yml`](internal/config/ibc.yml) 
 for a worked example.
 

@@ -1,0 +1,64 @@
+---
+title: "What is IBC?"
+description: "IBC is a protocol for sending packets between independent chains, where each chain verifies the other chain's writes with an on-chain light client."
+---
+
+The Inter-Blockchain Communication (IBC) Protocol is the open standard for secure interoperability between independent systems. It is a battle-tested, extensible, trust-minimized interoperability protocol that connects 115+ public blockchain networks, plus private networks and consortia. In over five years of production, it has processed $50B+ in transaction volume without an exploit of the supported version. IBC is an open standard that lets digital ledgers exchange assets and data directly with other ledgers, including Ethereum and EVM-based frameworks such as Hyperledger Besu, non-Ethereum ledgers, and other systems that meet a small set of requirements.
+
+Like TCP/IP standardized communication across the internet, IBC standardizes communication across blockchains and other distributed ledgers. It enables two systems to exchange data, assets, and arbitrary messages directly, without relying on a centralized or third-party intermediary.
+
+At its core, IBC is a collection of open specifications that define how systems establish connections, verify messages, and transfer information securely. Because IBC is an open standard, it can be implemented on virtually any system capable of generating verifiable proofs, including blockchains, permissioned ledgers, and other distributed systems.
+
+Today, IBC has implementations across major ecosystems, including Cosmos, EVM chains, and Solana, providing out-of-the-box connectivity to hundreds of networks.
+
+IBC provides a complete interoperability stack:
+
+- Protocol standards for secure cross-system interoperability
+- Infrastructure such as relayers that transport messages between connected systems
+- Reusable applications for common interoperability use cases, including token transfers and General Message Passing (GMP) for cross-chain contract calls
+- Flexible verification mechanisms, ranging from trust-minimized light clients to permissioned attestation-based models
+
+IBC is modular and extensible by design, allowing developers to adopt existing applications and verification systems or build custom modules tailored to their needs.
+
+## IBC layers
+
+IBC is organized into three layers:
+
+![The three IBC layers: application, core, and verification](/mintlify/images/ibc/ibc-layers.png)
+
+**The [Application Layer](/ibc/02-how-ibc-works/02-packets-and-applications)**: the layer that defines how packet data is packaged and interpreted by sending and receiving chains. IBC applications can be thought of as the business logic layer and as a composable set of interoperability building blocks for cross-chain applications. Standard application modules include fungible token transfers ([ICS-20](/ibc/spec/app/ics-020-fungible-token-transfer/README)), general message passing ([IBC GMP](/ibc/03-applications/01-gmp)), and interchain fungible token ([IFT](/ibc/03-applications/02-ift)) transfers. These modules allow developers to build reusable cross-chain functionality without needing to reimplement interoperability primitives from scratch.
+
+**The [IBC Core Layer](/ibc/02-how-ibc-works/03-core-router-and-store)**: the routing and authentication layer. A single [router](/ibc/06-ibc-solidity-contracts/02-ics26-router) verifies and dispatches [packets](/ibc/02-how-ibc-works/02-packets-and-applications) to the correct application, and the [client](/ibc/02-how-ibc-works/04-clients-and-counterparties) authenticates the data each chain receives. This layer provides the common interoperability infrastructure used to coordinate communication across independent blockchain networks with potentially distinct smart contract languages and security models.
+
+**The [Verification Layer](/ibc/02-how-ibc-works/04-clients-and-counterparties)**: this layer handles how cross-chain state is proven. The verification layer consists of clients that verify messages across blockchains. Different client architectures are used in this layer, including [consensus light clients](/ibc/04-light-clients/03-besu-light-client), [attestation-based](/ibc/04-light-clients/01-attestation-light-client), and zk-proof light clients. This verification model allows IBC to operate across heterogeneous execution environments, including Cosmos, EVM-based, and Solana-based networks.
+
+Together, these layers define both the protocol standard and the production interoperability infrastructure required for secure cross-chain communication. The separation of concerns between layers allows application developers to build cross-chain applications without needing to manage low-level details such as client verification, connection setup, or proof construction.
+
+## Why IBC?
+
+Blockchain networks have multiplied, and the ledgers behind them now need to transact with each other securely. IBC is the open standard for that, with no third party between the two networks.
+
+### Direct communication and verification
+
+IBC enables systems to communicate directly with one another through self-hosted infrastructure. Connections are peer-to-peer and rely on no third-party intermediary or external validator network; each side verifies cross-system messages against the [counterparty's state](/ibc/02-how-ibc-works/04-clients-and-counterparties). A ledger using IBC keeps its own security model, which simplifies the risk surface and reduces external dependencies.
+
+### Proven in production
+
+IBC has run in production for more than five years, connecting 115+ public networks alongside private networks and consortia, and has processed $50B+ in volume with no exploit of the supported version. Every layer has been [independently audited](/ibc/07-security/01-audits).
+
+### Customizable at every layer
+
+IBC makes no assumptions about what it connects. The standards can be implemented in any language, on any network able to produce the verification a counterparty requires, and each layer can be adapted independently. [Applications](/ibc/02-how-ibc-works/02-packets-and-applications) can be anything: adopt the standard modules, [ICS-20](/ibc/spec/app/ics-020-fungible-token-transfer/README), [GMP](/ibc/03-applications/01-gmp), and [IFT](/ibc/03-applications/02-ift), or write your own, which needs only to implement a minimal interface and register with the [router](/ibc/02-how-ibc-works/03-core-router-and-store) under a port identifier. Today IBC spans EVM networks including Ethereum and [Hyperledger Besu](/ibc/04-light-clients/03-besu-light-client), Cosmos chains, and Solana.
+
+### Flexible verification
+
+IBC supports multiple trust models to meet different business and regulatory needs.
+
+- Consensus light client verification provides trust-minimized security by verifying messages directly against signed consensus data, as the [Hyperledger Besu QBFT and IBFT 2.0 light clients](/ibc/04-light-clients/03-besu-light-client) do for enterprise EVM networks.
+- [Attestation-based verification](/ibc/04-light-clients/01-attestation-light-client) enables organizations to leverage existing governance processes, compliance frameworks, and first-party key infrastructure.
+
+### No vendor lock-in
+
+Because IBC is an open standard rather than a proprietary network, organizations retain control over their infrastructure, contracts, and security mechanisms while remaining interoperable with other IBC-enabled systems. Unlike other interoperability solutions, IBC requires no token, imposes no protocol-level fees, and does not tie participants to a specific service provider.
+
+To see IBC in action, [follow the tutorial to deploy IBC on two local chains and move a token](/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token).

@@ -56,17 +56,15 @@ type AttestationParams struct {
 	InitialTimestamp uint64   `json:"initialTimestamp"`
 }
 
-// BesuParams are the constructor params of a Besu client. Periods are in
-// seconds.
+// BesuParams are the constructor params of a Besu client. The trusting
+// period is in seconds.
 type BesuParams struct {
-	Consensus         string     `json:"consensus"`
 	IBCRouter         string     `json:"ibcRouter"`
 	InitialHeight     uint64     `json:"initialHeight"`
 	InitialTimestamp  uint64     `json:"initialTimestamp"`
 	InitialStateRoot  string     `json:"initialStateRoot"`
 	InitialValidators []string   `json:"initialValidators"`
 	TrustingPeriod    uint64     `json:"trustingPeriod"`
-	MaxClockDrift     uint64     `json:"maxClockDrift"`
 	TrustLevel        TrustLevel `json:"trustLevel"`
 }
 

@@ -22,6 +22,7 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 
 	encoded, err := besu.EncodeUpdateClient(besumsgs.IBesuLightClientMsgsMsgUpdateClient{
 		HeaderRlp:              update.HeaderRLP,
+		CommitSeals:            besutest.Seals(update.CommitSeals),
 		TrustedHeight:          besumsgs.IICS02ClientMsgsHeight{RevisionHeight: update.TrustedHeight},
 		ConsensusStatePreimage: preimage,
 	})
@@ -30,6 +31,7 @@ func TestUpdateClientRoundTrip(t *testing.T) {
 	decoded, err := besumsgs.NewBindings().UnpackUpdateClient(encoded)
 	require.NoError(t, err)
 	assert.Equal(t, []byte(update.HeaderRLP), decoded.HeaderRlp)
+	assert.Equal(t, besutest.Seals(update.CommitSeals), decoded.CommitSeals)
 	assert.Equal(t, besumsgs.IICS02ClientMsgsHeight{RevisionHeight: update.TrustedHeight}, decoded.TrustedHeight)
 	assert.Equal(t, preimage, decoded.ConsensusStatePreimage)
 }

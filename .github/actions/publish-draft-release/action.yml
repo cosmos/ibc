@@ -1,0 +1,248 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Publish draft release
+description: >-
+  Collects the `release-assets-*` artifacts uploaded by the attest-release-assets action,
+  verifies every asset against its attestation bundles, signs a `checksums.txt` over the assets,
+  SBOMs and combined attestation bundle with cosign, and attaches everything to a draft release for
+  the pushed tag. Must run in a job triggered by a tag push. The calling job needs `contents: write`
+  and `id-token: write`, or only `contents: read` with `verify-only: true`.
+
+inputs:
+  name:
+    description: >-
+      File name stem of the combined attestation bundle, e.g. `ibc-cli-v1.2.3`. It is published as
+      `<name>.intoto.jsonl`, the suffix OpenSSF Scorecard's Signed-Releases check looks for.
+    required: true
+  title:
+    description: Title of the release, used when the draft is created. Required unless `verify-only` is `true`.
+    required: false
+    default: ""
+  prerelease:
+    description: >-
+      Whether the release is a pre-release (`true` or `false`). Set when the draft is created and
+      again each time an existing draft is updated.
+    required: false
+    default: "false"
+  verify-only:
+    description: >-
+      Only collect and verify the assets, without signing anything or touching the release (`true`
+      or `false`). Use it in a job that other publishing steps, such as a container image, wait for,
+      so nothing is published for assets that do not verify.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Check inputs
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        TITLE: ${{ inputs.title }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        VERIFY_ONLY: ${{ inputs.verify-only }}
+      run: |
+        # The verification checks the tag through GITHUB_REF and the signing workflow through
+        # GITHUB_WORKFLOW_REF, so the release must be for the tag this run was triggered by.
+        if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+          echo "::error::publish-draft-release must run for a tag push, not ${GITHUB_REF}"
+          exit 1
+        fi
+        if [[ ! "$NAME" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+          echo "::error::name may only contain letters, digits, '.', '_' and '-' (got '${NAME}')"
+          exit 1
+        fi
+        for value in "$PRERELEASE" "$VERIFY_ONLY"; do
+          if [[ "$value" != "true" && "$value" != "false" ]]; then
+            echo "::error::prerelease and verify-only must be 'true' or 'false' (got '${value}')"
+            exit 1
+          fi
+        done
+        if [[ "$VERIFY_ONLY" == "false" && -z "$TITLE" ]]; then
+          echo "::error::title is required unless verify-only is 'true'"
+          exit 1
+        fi
+        # Cleared so the action can run more than once in a job, e.g. verify-only and then publish.
+        rm -rf "${RUNNER_TEMP}/release-in" "${RUNNER_TEMP}/release-dist"
+
+    # Downloaded per artifact rather than merged, so two build jobs that produce an asset with the
+    # same name fail the release instead of one silently overwriting the other.
+    - name: Download assets
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        pattern: release-assets-*
+        path: ${{ runner.temp }}/release-in
+
+    - name: Assemble assets
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+      run: |
+        in="${RUNNER_TEMP}/release-in"
+        dist="${RUNNER_TEMP}/release-dist"
+        mkdir "$dist"
+        : > "${RUNNER_TEMP}/release-assets.txt"
+        shopt -s nullglob
+        artifacts=("$in"/release-assets-*/)
+        # download-artifact puts a single matching artifact straight into the path rather than in a
+        # subdirectory named after it, as for a release with one build job.
+        if (( ${#artifacts[@]} == 0 )) && [[ -d "${in}/assets" ]]; then
+          artifacts=("${in}/")
+        fi
+        bundles=()
+        for artifact in "${artifacts[@]}"; do
+          # actions/attest names the SBOM predicate after the SBOM's spdxVersion, so verify against
+          # that rather than a fixed SPDX version.
+          sboms=("${artifact}sbom"/*)
+          if (( ${#sboms[@]} != 1 )); then
+            echo "::error::Expected one SBOM in ${artifact}sbom, found ${#sboms[@]}"
+            exit 1
+          fi
+          spdx_version=$(jq -r '.spdxVersion // empty' "${sboms[0]}")
+          if [[ ! "$spdx_version" =~ ^SPDX-([0-9.]+)$ ]]; then
+            echo "::error::${sboms[0]} has no valid spdxVersion (got '${spdx_version}')"
+            exit 1
+          fi
+          sbom_predicate="https://spdx.dev/Document/v${BASH_REMATCH[1]}"
+          bundles+=("${artifact}attestations"/*.json)
+          for kind in assets sbom; do
+            for path in "${artifact}${kind}"/*; do
+              file="${path##*/}"
+              if [[ -e "${dist}/${file}" ]]; then
+                echo "::error::More than one build job produced ${file}"
+                exit 1
+              fi
+              mv "$path" "${dist}/${file}"
+              if [[ "$kind" == "assets" ]]; then
+                printf '%s\t%s\n' "$file" "$sbom_predicate" >> "${RUNNER_TEMP}/release-assets.txt"
+              fi
+            done
+          done
+        done
+        if [[ ! -s "${RUNNER_TEMP}/release-assets.txt" || ${#bundles[@]} -eq 0 ]]; then
+          echo "::error::No release assets or attestation bundles were downloaded"
+          exit 1
+        fi
+        for reserved in checksums.txt checksums.txt.sigstore.json "${NAME}.intoto.jsonl"; do
+          if [[ -e "${dist}/${reserved}" ]]; then
+            echo "::error::A build job produced ${reserved}, which this action generates"
+            exit 1
+          fi
+        done
+        # The bundle is written first, so the signed checksums cover it as well.
+        jq -c . "${bundles[@]}" > "${dist}/${NAME}.intoto.jsonl"
+        (cd "$dist" && sha256sum -- * > checksums.txt && cat checksums.txt)
+
+    - name: Verify assets against the attestation bundles
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        NAME: ${{ inputs.name }}
+      run: |
+        # Check the assets against the bundles before signing, so a release never ships an asset
+        # that differs from what its build attested or a bundle that does not verify.
+        dist="${RUNNER_TEMP}/release-dist"
+        while IFS=$'\t' read -r file sbom_predicate; do
+          for predicate in https://slsa.dev/provenance/v1 "$sbom_predicate"; do
+            gh attestation verify "${dist}/${file}" \
+              --bundle "${dist}/${NAME}.intoto.jsonl" \
+              --predicate-type "$predicate" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "${GITHUB_WORKFLOW_REF%@*}" \
+              --source-ref "$GITHUB_REF"
+          done
+        done < "${RUNNER_TEMP}/release-assets.txt"
+
+    - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      if: inputs.verify-only != 'true'
+
+    - name: Sign checksums
+      if: inputs.verify-only != 'true'
+      shell: bash
+      run: |
+        cd "${RUNNER_TEMP}/release-dist" || exit 1
+        cosign sign-blob --yes --bundle checksums.txt.sigstore.json checksums.txt
+
+    - name: Create or update draft release
+      if: inputs.verify-only != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        TAG: ${{ github.ref_name }}
+        TITLE: ${{ inputs.title }}
+        PRERELEASE: ${{ inputs.prerelease }}
+      run: |
+        dist="${RUNNER_TEMP}/release-dist"
+
+        # Listed rather than fetched by tag, because the by-tag endpoint does not return drafts. A
+        # failed request (network, rate limit, auth) fails the step here, so it never falls through
+        # to creating a second release.
+        is_draft=$(gh api --paginate "repos/${GH_REPO}/releases?per_page=100" \
+          | jq -r --arg tag "$TAG" '.[] | select(.tag_name == $tag) | .draft')
+        if [[ "$is_draft" == *$'\n'* ]]; then
+          echo "::error::More than one release exists for ${TAG}"
+          exit 1
+        fi
+
+        if [[ -z "$is_draft" ]]; then
+          prerelease=()
+          if [[ "$PRERELEASE" == "true" ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$TAG" "$dist"/* \
+            --draft \
+            "${prerelease[@]}" \
+            --verify-tag \
+            --title "$TITLE"
+          exit 0
+        fi
+
+        # The release already exists, as a draft from a previous run or the UI, or published from
+        # the UI. Any file on it that this run does not produce would ship unsigned and outside
+        # checksums.txt, so fail rather than publish it alongside the signed set.
+        attached=$(gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)\t\(.state)\t\(.digest)"')
+        extra=$(cut -f1 <<< "$attached" | grep -vxF -f <(cd "$dist" && printf '%s\n' *) || true)
+        if [[ -n "$extra" ]]; then
+          echo "::error::Release ${TAG} has assets this run does not produce; delete them and re-run: ${extra//$'\n'/, }"
+          exit 1
+        fi
+
+        if [[ "$is_draft" == "true" ]]; then
+          gh release upload "$TAG" "$dist"/* --clobber
+          # The tag decides, also for a draft created in the UI with the box ticked differently.
+          gh release edit "$TAG" --prerelease="$PRERELEASE"
+        else
+          # The release was published before this workflow finished, as when the tag is created in
+          # the UI on publish. Files already attached are kept if they match, so re-running this job
+          # finishes a partial upload. A file that differs fails the step instead of being swapped
+          # under a published release that people may already have downloaded from.
+          echo "::warning::Release ${TAG} was published before its signed assets were attached"
+          upload=()
+          for path in "$dist"/*; do
+            file="${path##*/}"
+            entry=$(awk -F'\t' -v file="$file" '$1 == file { print $2 "\t" $3 }' <<< "$attached")
+            state="${entry%%$'\t'*}"
+            digest="${entry#*$'\t'}"
+            if [[ -z "$entry" ]]; then
+              upload+=("$path")
+            elif [[ "$state" != uploaded ]]; then
+              # An upload that stopped partway can leave the file unfinished. Nobody can download
+              # it, so it is replaced.
+              gh release delete-asset "$TAG" "$file" --yes
+              upload+=("$path")
+            elif [[ "$file" == checksums.txt.sigstore.json ]]; then
+              # Signing again gives new bytes for the same checksums.txt. validate-tag stops a full
+              # re-run once assets are attached, so a re-run reuses the build artifacts and the
+              # attached signature still covers this checksums.txt.
+              continue
+            elif [[ "$digest" != "sha256:$(sha256sum "$path" | cut -d' ' -f1)" ]]; then
+              echo "::error::Release ${TAG} already has a different ${file}; delete it and re-run"
+              exit 1
+            fi
+          done
+          if (( ${#upload[@]} > 0 )); then
+            gh release upload "$TAG" "${upload[@]}"
+          fi
+        fi

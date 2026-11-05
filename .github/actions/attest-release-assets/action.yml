@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: Attest release assets
+description: >-
+  Generates an SPDX SBOM for the release assets in `out/assets`, attests their build
+  provenance and SBOM, and uploads the assets, the SBOM and the attestation bundles as the
+  `release-assets-<platform>` artifact that the publish-draft-release action collects.
+  The calling job needs `contents: read`, `id-token: write`, `attestations: write` and
+  `artifact-metadata: write`.
+
+inputs:
+  name:
+    description: >-
+      File name stem of the SBOM, e.g. `ibc-cli-v1.2.3-linux-amd64`. The SBOM is written to
+      `out/sbom/<name>.spdx.json` and becomes a release asset.
+    required: true
+  platform:
+    description: >-
+      Identifies this job among the build jobs of one release, e.g. `linux-amd64`. Used in the
+      artifact name and the attestation bundle names, so it must be unique per job.
+    required: false
+    default: all
+  sbom-file:
+    description: A single file, such as a binary, to generate the SBOM from. Set exactly one of `sbom-file` and `sbom-dir`.
+    required: false
+    default: ""
+  sbom-dir:
+    description: A directory, such as a source tree with lockfiles, to generate the SBOM from. Set exactly one of `sbom-file` and `sbom-dir`.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Check inputs
+      id: check
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        PLATFORM: ${{ inputs.platform }}
+        SBOM_FILE: ${{ inputs.sbom-file }}
+        SBOM_DIR: ${{ inputs.sbom-dir }}
+      run: |
+        for value in "$NAME" "$PLATFORM"; do
+          if [[ ! "$value" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::name and platform may only contain letters, digits, '.', '_' and '-' (got '${value}')"
+            exit 1
+          fi
+        done
+        if [[ -n "$SBOM_FILE" && -n "$SBOM_DIR" ]] || [[ -z "$SBOM_FILE" && -z "$SBOM_DIR" ]]; then
+          echo "::error::Set exactly one of sbom-file and sbom-dir"
+          exit 1
+        fi
+        if [[ -n "$SBOM_FILE" && ! -f "$SBOM_FILE" ]]; then
+          echo "::error::sbom-file '${SBOM_FILE}' is not a file"
+          exit 1
+        fi
+        if [[ -n "$SBOM_DIR" && ! -d "$SBOM_DIR" ]]; then
+          echo "::error::sbom-dir '${SBOM_DIR}' is not a directory"
+          exit 1
+        fi
+        if ! compgen -G "out/assets/*" > /dev/null; then
+          echo "::error::No release assets in out/assets"
+          exit 1
+        fi
+        mkdir -p out/sbom out/attestations
+        echo "sbom-path=out/sbom/${NAME}.spdx.json" >> "$GITHUB_OUTPUT"
+
+    - name: Generate SBOM from file
+      if: inputs.sbom-file != ''
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      with:
+        file: ${{ inputs.sbom-file }}
+        format: spdx-json
+        output-file: ${{ steps.check.outputs.sbom-path }}
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: Generate SBOM from directory
+      if: inputs.sbom-dir != ''
+      uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      with:
+        path: ${{ inputs.sbom-dir }}
+        format: spdx-json
+        output-file: ${{ steps.check.outputs.sbom-path }}
+        upload-artifact: false
+        upload-release-assets: false
+
+    - name: Check SBOM
+      shell: bash
+      env:
+        SBOM: ${{ steps.check.outputs.sbom-path }}
+      run: |
+        # The scanned file or directory itself is listed as an SPDXRef-DocumentRoot package, so an
+        # SBOM with nothing else was generated from the wrong source. Same filter as in
+        # attest-image; change both together.
+        count=$(jq '[.packages[]? | select(.SPDXID | startswith("SPDXRef-DocumentRoot") | not)] | length' "$SBOM")
+        echo "SBOM lists ${count} packages"
+        if (( count == 0 )); then
+          echo "::error::SBOM ${SBOM} lists no packages besides the scanned file or directory"
+          exit 1
+        fi
+
+    - name: Attest build provenance
+      id: provenance
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-path: out/assets/*
+
+    - name: Attest SBOM
+      id: sbom
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-path: out/assets/*
+        sbom-path: ${{ steps.check.outputs.sbom-path }}
+
+    - name: Collect attestation bundles
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+      run: |
+        cp "$PROVENANCE_BUNDLE" "out/attestations/${PLATFORM}.provenance.json"
+        cp "$SBOM_BUNDLE" "out/attestations/${PLATFORM}.sbom.json"
+
+    # Only the three subdirectories are uploaded, so other build outputs in out stay out of the
+    # release. Their common parent is out, so the artifact keeps the assets/, sbom/ and
+    # attestations/ layout. Without overwrite, two jobs with the same platform fail here instead of
+    # one replacing the other's artifact; a re-run job still replaces its own earlier upload.
+    # Kept 7 days, so "re-run failed jobs" works days later.
+    - name: Upload artifact
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: release-assets-${{ inputs.platform }}
+        path: |
+          out/assets/
+          out/sbom/
+          out/attestations/
+        if-no-files-found: error
+        retention-days: 7

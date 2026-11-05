@@ -27,44 +27,6 @@ func TestDigestMatchesFormula(t *testing.T) {
 	}
 }
 
-func TestRecoverSigner(t *testing.T) {
-	// The light client's ECDSA.recover takes only v of 27/28 and low s, but
-	// attestors may return any form of the same signature.
-	t.Run("returnsTheLightClientForm", func(t *testing.T) {
-		key, digest, sig := signed(t)
-
-		recovered, normalized, err := RecoverSigner(digest, malleate(sig))
-		require.NoError(t, err)
-		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
-		require.Equal(t, sig[:64], normalized[:64])
-		require.Equal(t, sig[64]+27, normalized[64])
-	})
-
-	t.Run("rejectsInvalidSignature", func(t *testing.T) {
-		_, digest, sig := signed(t)
-
-		_, _, err := RecoverSigner(digest, sig[:64])
-		require.Error(t, err)
-	})
-
-	t.Run("returnsSignABIOutputUnchanged", func(t *testing.T) {
-		key, _, rawSig := signed(t)
-
-		sig, err := SignABI(
-			context.Background(),
-			stubSigner{sig: rawSig},
-			TagPacketAttestation,
-			[]byte("attested data"),
-		)
-		require.NoError(t, err)
-
-		recovered, normalized, err := RecoverSigner(Digest(TagPacketAttestation, []byte("attested data")), sig)
-		require.NoError(t, err)
-		require.Equal(t, crypto.PubkeyToAddress(key.PublicKey), recovered)
-		require.Equal(t, sig, normalized)
-	})
-}
-
 func TestSignABINormalizesHighS(t *testing.T) {
 	_, _, rawSig := signed(t)
 

@@ -1,0 +1,22 @@
+---
+title: Events
+description: 'The 08-wasm module emits the following events:'
+---
+
+The `08-wasm` module emits the following events:
+
+## `MsgStoreCode`
+
+| Type              | Attribute Key  | Attribute Value        |
+| ----------------- | -------------- | ---------------------- |
+| store\_wasm\_code | wasm\_checksum | `{hex.Encode(checksum)}` |
+| message           | module         | 08-wasm                |
+
+## `MsgMigrateContract`
+
+| Type              | Attribute Key  | Attribute Value           |
+| ----------------- | -------------- | ------------------------- |
+| migrate\_contract | client\_id     | `{clientId}`                |
+| migrate\_contract | wasm\_checksum | `{hex.Encode(checksum)}`    |
+| migrate\_contract | new\_checksum  | `{hex.Encode(newChecksum)}` |
+| message           | module         | 08-wasm                   |

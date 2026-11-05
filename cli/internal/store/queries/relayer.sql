@@ -123,6 +123,7 @@ AND packet_source_client_id = sqlc.arg(packet_source_client_id)
 AND packet_sequence_number = sqlc.arg(packet_sequence_number);
 
 -- name: ListDispatchablePackets :many
+-- todo(swift1337): ensure the query uses limits
 SELECT * FROM packets
 WHERE status NOT IN (
     'NOT_SELECTED',
@@ -148,11 +149,12 @@ LIMIT sqlc.arg(row_limit);
 
 -- clearing skips a sequence we hold a row for in ANY state, including NOT_SELECTED,
 -- so this filters on no status
--- name: ListPacketSequencesFrom :many
+-- name: ListPacketSequences :many
 SELECT packet_sequence_number FROM packets
 WHERE source_chain_id = sqlc.arg(chain_id)
   AND packet_source_client_id = sqlc.arg(client_id)
   AND packet_sequence_number >= sqlc.arg(from_sequence)
+  AND packet_sequence_number <= sqlc.arg(to_sequence)
 ORDER BY packet_sequence_number;
 
 -- name: GetClearingState :one
@@ -177,6 +179,7 @@ ON CONFLICT (source_chain_id, packet_source_client_id) DO UPDATE SET
 WHERE excluded.last_probed_sequence > packet_clearing_state.last_probed_sequence;
 
 -- name: ListUnresolvedSequences :many
+-- todo(swift1337): bound unresolved retries without dropping unprobed sequences
 SELECT packet_sequence_number FROM packet_clearing_unresolved
 WHERE source_chain_id = sqlc.arg(chain_id) AND packet_source_client_id = sqlc.arg(client_id)
 ORDER BY packet_sequence_number;

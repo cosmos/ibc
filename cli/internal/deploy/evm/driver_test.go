@@ -5,6 +5,7 @@ package evm
 import (
 	"context"
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 
@@ -77,24 +78,33 @@ func TestReadOnlyDriverGuards(t *testing.T) {
 
 func TestBesuHead(t *testing.T) {
 	ctx := context.Background()
-	var sealed types.Header
-	require.NoError(t, rlp.DecodeBytes(besutest.MustFixture(t, besu.QBFT).AdjacentUpdate.HeaderRLP, &sealed))
+	qbft := besutest.MustFixture(t, besu.QBFT).AdjacentUpdate
+	sealed := *besutest.SealedHeader(t, qbft.HeaderRLP, qbft.CommitSeals)
 
 	for _, consensus := range besu.Consensuses {
 		t.Run("sealed head "+string(consensus), func(t *testing.T) {
 			update := besutest.MustFixture(t, consensus).AdjacentUpdate
-			var head types.Header
-			require.NoError(t, rlp.DecodeBytes(update.HeaderRLP, &head))
+			head := besutest.SealedHeader(t, update.HeaderRLP, update.CommitSeals)
 			eth := mocks.NewMockETHClient(t)
-			eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&head, nil).Once()
+			eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(head, nil).Once()
 
-			parsed, err := (&Driver{backend: eth}).BesuHead(ctx)
+			parsed, err := (&Driver{backend: eth}).BesuHead(ctx, math.MaxUint64)
 			require.NoError(t, err)
 			require.Equal(t, update.Height, parsed.Height)
 			require.Equal(t, update.ExpectedConsensusState(), parsed.ConsensusState())
 			require.Equal(t, consensus, parsed.Consensus)
 		})
 	}
+
+	t.Run("head after notAfter", func(t *testing.T) {
+		// Blocks are at least a second apart, so 3s back is at most 3 blocks back.
+		eth := mocks.NewMockETHClient(t)
+		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&sealed, nil).Once()
+		eth.EXPECT().HeaderByNumber(ctx, new(big.Int).SetUint64(qbft.Height-3)).Return(&sealed, nil).Once()
+
+		_, err := (&Driver{backend: eth}).BesuHead(ctx, sealed.Time-3)
+		require.NoError(t, err)
+	})
 
 	t.Run("genesis head", func(t *testing.T) {
 		// Genesis carries no commit seals.
@@ -109,8 +119,8 @@ func TestBesuHead(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(&genesis, nil).Once()
 
-		_, err = (&Driver{backend: eth}).BesuHead(ctx)
-		require.ErrorContains(t, err, "no block past genesis")
+		_, err = (&Driver{backend: eth}).BesuHead(ctx, math.MaxUint64)
+		require.ErrorContains(t, err, "no commit seals")
 	})
 
 	t.Run("not a besu header", func(t *testing.T) {
@@ -118,7 +128,7 @@ func TestBesuHead(t *testing.T) {
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).
 			Return(&types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}, nil).Once()
 
-		_, err := (&Driver{backend: eth}).BesuHead(ctx)
+		_, err := (&Driver{backend: eth}).BesuHead(ctx, math.MaxUint64)
 		require.ErrorContains(t, err, "parse header latest: extra data list")
 	})
 
@@ -126,7 +136,7 @@ func TestBesuHead(t *testing.T) {
 		eth := mocks.NewMockETHClient(t)
 		eth.EXPECT().HeaderByNumber(ctx, (*big.Int)(nil)).Return(nil, errors.New("boom")).Once()
 
-		_, err := (&Driver{backend: eth}).BesuHead(ctx)
+		_, err := (&Driver{backend: eth}).BesuHead(ctx, math.MaxUint64)
 		require.ErrorContains(t, err, "getting header latest")
 	})
 }

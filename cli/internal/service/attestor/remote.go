@@ -28,14 +28,22 @@ type RemoteAttestor struct {
 
 var _ Attestor = &RemoteAttestor{}
 
-const remoteRequestTimeout = 5 * time.Second
+const (
+	remoteRequestTimeout   = 5 * time.Second
+	remoteMaxResponseBytes = 128 << 10 // 128KB
+)
 
 // NewRemoteFromEndpoint connects to the attestor at endpoint and queries its
 // Info RPC to resolve its chain and address.
 func NewRemoteFromEndpoint(ctx context.Context, name string, endpoint network.Endpoint) (*RemoteAttestor, error) {
 	var (
 		httpClient  = newConnectHTTPClient(endpoint.TLS)
-		protoClient = proto.NewAttestationServiceClient(httpClient, endpoint.URL, connect.WithGRPC())
+		protoClient = proto.NewAttestationServiceClient(
+			httpClient,
+			endpoint.URL,
+			connect.WithGRPC(),
+			connect.WithReadMaxBytes(remoteMaxResponseBytes),
+		)
 	)
 
 	info, err := queryAttestorInfo(ctx, protoClient, name)
@@ -177,7 +185,6 @@ func CommitmentTypeFromProto(ct proto.CommitmentType) (CommitmentType, error) {
 }
 
 // https://connectrpc.com/docs/go/getting-started/#make-requests
-// todo: revisit these params
 func newConnectHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -185,6 +192,10 @@ func newConnectHTTPClient(tlsConfig *tls.Config) *http.Client {
 	protocols.SetUnencryptedHTTP2(true)
 
 	return &http.Client{
-		Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig},
+		Transport: &http.Transport{
+			Protocols:             protocols,
+			TLSClientConfig:       tlsConfig,
+			ResponseHeaderTimeout: remoteRequestTimeout,
+		},
 	}
 }

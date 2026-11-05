@@ -120,6 +120,9 @@ type OperationResult struct {
 	Type          OperationType
 	Success       bool
 	FailureReason string
+	// Misbehavior is set when a successful client update reports
+	// misbehavior, which freezes the client.
+	Misbehavior bool
 }
 
 // RelaySimulation contains outcomes in transaction execution order.

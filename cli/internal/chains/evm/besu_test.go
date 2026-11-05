@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 )
 
@@ -37,7 +37,7 @@ func TestBesuClientState(t *testing.T) {
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
 
-	clientABI, err := besuqbft.ContractMetaData.GetAbi()
+	clientABI, err := besulightclient.ContractMetaData.GetAbi()
 	require.NoError(t, err)
 
 	getClientCallData, err := routerABI.Pack("getClient", "besu-0")

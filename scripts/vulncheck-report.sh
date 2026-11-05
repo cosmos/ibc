@@ -8,8 +8,12 @@
 #   make vulncheck-json VULNCHECK_JSON=vuln.json
 #   ./scripts/vulncheck-report.sh vuln.json                    # markdown to stdout
 #   ./scripts/vulncheck-report.sh vuln.json --counts counts.env # also write counts
+#   ./scripts/vulncheck-report.sh --allow-ghsas                 # accepted list as GHSAs
 #
-# Accepted advisories are read from .govulncheck-ignore (override with --ignore-file).
+# Accepted advisories are read from cli/osv-scanner.toml, the one list of them. osv-scanner
+# and Scorecard read it only from the directory of each manifest, so every go.mod has an
+# identical copy next to it; a copy that is missing or differs is an error, so the copies
+# cannot drift apart.
 #
 # Only advisories reachable from our code are reported: a finding qualifies when its call
 # trace reaches a specific function, which is the same set `make vulncheck` details. CVE and
@@ -17,6 +21,15 @@
 #
 # With --counts, writes `key=value` lines (unexpected, accepted, total, libraries) suitable
 # for sourcing or for appending to $GITHUB_OUTPUT.
+#
+# With --allow-ghsas, prints the accepted advisories as GitHub Advisory (GHSA) identifiers,
+# comma-separated, the format actions/dependency-review-action's allow-ghsas input wants,
+# and exits. GHSA entries are passed through. Go advisories are keyed differently -- GO-ID
+# in the Go database, GHSA in GitHub's -- so they are mapped through the Go database's alias
+# list. An entry with no GHSA alias exists only in the Go database, which means the action
+# cannot report it and there is nothing to allow; that is reported on stderr and skipped. A
+# lookup that fails is an error rather than a skip: silently dropping an entry would fail
+# the dependency review on an advisory this repository has already accepted.
 
 set -euo pipefail
 
@@ -24,7 +37,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 REPORT=""
 COUNTS=""
-IGNORE_FILE="${REPO_ROOT}/.govulncheck-ignore"
+ALLOW_GHSAS=""
+OSV_CONFIG="${REPO_ROOT}/cli/osv-scanner.toml"
+GO_VULN_DB="https://vuln.go.dev"
 # Our own module paths are shown relative to this, so "Affects" reads "cli, e2e".
 OUR_PREFIX="github.com/cosmos/ibc/"
 
@@ -49,22 +64,71 @@ need_value() {
 while (($# > 0)); do
   case "$1" in
     --counts) need_value "$@"; COUNTS="$2"; shift 2 ;;
-    --ignore-file) need_value "$@"; IGNORE_FILE="$2"; shift 2 ;;
+    --allow-ghsas) ALLOW_GHSAS=1; shift ;;
     -h | --help) usage; exit 0 ;;
     -*) die "unknown argument '$1'" ;;
     *) REPORT="$1"; shift ;;
   esac
 done
 
-[[ -n "${REPORT}" ]] || die "usage: vulncheck-report.sh <govulncheck-json> [--counts <file>]"
-[[ -f "${REPORT}" ]] || die "report '${REPORT}' does not exist"
-command -v jq >/dev/null || die "jq is required to read govulncheck JSON"
+command -v jq >/dev/null || die "jq is required"
+[[ -f "${OSV_CONFIG}" ]] || die "'${OSV_CONFIG}' does not exist"
 
-ignored=""
-if [[ -f "${IGNORE_FILE}" ]]; then
-  # Everything after a '#' is a comment, so entries can carry their reason.
-  ignored="$(sed 's/#.*//' "${IGNORE_FILE}" | tr -s '[:space:]' ' ')"
+for mod in $(git -C "${REPO_ROOT}" ls-files '*go.mod'); do
+  copy="${REPO_ROOT}/$(dirname "${mod}")/osv-scanner.toml"
+  cmp -s "${OSV_CONFIG}" "${copy}" \
+    || die "'${copy}' is missing or differs from cli/osv-scanner.toml; copy it over"
+done
+
+# Parsed with Python's standard TOML parser (3.11+); an entry without an id is an error.
+ignored="$(python3 -I -c '
+import sys, tomllib
+with open(sys.argv[1], "rb") as f:
+    print(" ".join(sorted({v["id"] for v in tomllib.load(f).get("IgnoredVulns", [])})))
+' "${OSV_CONFIG}")" || die "could not read the ids in ${OSV_CONFIG}"
+
+if [[ -n "${ALLOW_GHSAS}" ]]; then
+  ghsas=""
+
+  # Two Go advisories can share a GHSA alias, so each GHSA is added once.
+  add() {
+    case ", ${ghsas}, " in
+      *", $1, "*) ;;
+      *) ghsas="${ghsas:+${ghsas}, }$1" ;;
+    esac
+  }
+
+  for id in ${ignored}; do
+    if [[ "${id}" =~ ^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$ ]]; then
+      add "${id}"
+      continue
+    fi
+
+    # Checked before it reaches a URL: a typo should be a clear error, not an odd request.
+    [[ "${id}" =~ ^GO-[0-9]{4}-[0-9]+$ ]] \
+      || die "'${id}' in ${OSV_CONFIG} is neither a GHSA nor a Go advisory ID"
+
+    json="$(curl -fsS --retry 3 --retry-delay 2 "${GO_VULN_DB}/ID/${id}.json")" \
+      || die "could not read ${id} from ${GO_VULN_DB}"
+
+    mapped="$(printf '%s' "${json}" | jq -r '(.aliases // [])[] | select(startswith("GHSA-"))')"
+
+    if [[ -z "${mapped}" ]]; then
+      echo "${id}: no GHSA alias, so GitHub's advisory database cannot report it" >&2
+      continue
+    fi
+
+    for ghsa in ${mapped}; do
+      add "${ghsa}"
+    done
+  done
+
+  printf '%s\n' "${ghsas}"
+  exit 0
 fi
+
+[[ -n "${REPORT}" ]] || die "usage: vulncheck-report.sh <govulncheck-json> [--counts <file>] | --allow-ghsas"
+[[ -f "${REPORT}" ]] || die "report '${REPORT}' does not exist"
 
 # One row per advisory: library, version in use, advisory, CVEs, fixed version, summary and
 # the modules of ours it reaches. Grouping happens in awk below, where the ordering and the
@@ -175,7 +239,7 @@ END {
   # a fix, and under a later heading it would read as applying to the accepted ones.
   if (n_tier["unexpected"] > 0) {
     print "Run `make vulncheck` for the call paths. Either upgrade the library, or add the"
-    print "advisory to `.govulncheck-ignore` with a reason if no fix exists yet."
+    print "advisory to `cli/osv-scanner.toml` with a reason if no fix exists yet."
   }
   emit("accepted", "### Accepted")
 
@@ -192,7 +256,7 @@ function emit(tier, heading,    i, j, key, parts, lib, r, cells) {
   if (n_tier[tier] + 0 == 0) return
   print ""
   print heading "\n"
-  if (tier == "accepted") print "Listed in `.govulncheck-ignore` with a reason.\n"
+  if (tier == "accepted") print "Listed in `cli/osv-scanner.toml` with a reason.\n"
   # keys were appended in first-seen order, but the sort key puts stdlib last.
   for (pass = 0; pass <= 1; pass++) {
     for (i = 1; i <= n_keys; i++) {

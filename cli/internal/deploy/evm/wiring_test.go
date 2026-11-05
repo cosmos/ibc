@@ -4,7 +4,6 @@ package evm
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"math/big"
 	"testing"
@@ -20,9 +19,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuibft2"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc/cli/besu"
@@ -347,14 +345,11 @@ func TestVerifyGMPAndIFT(t *testing.T) {
 	require.NotEmpty(t, report.Failed())
 }
 
-// A Besu client deploys the contract for its consensus from recorded params
-// alone, registers like any other client, and exposes its state through the
-// reads the prover relies on.
+// A Besu client deploys from recorded params alone, for either consensus,
+// registers like any other client, and exposes its state through the reads
+// the prover relies on.
 func TestProvisionRegisterVerifyBesu(t *testing.T) {
-	for consensus, metadata := range map[besu.Consensus]*bind.MetaData{
-		besu.QBFT:  besuqbft.ContractMetaData,
-		besu.IBFT2: besuibft2.ContractMetaData,
-	} {
+	for _, consensus := range besu.Consensuses {
 		t.Run(string(consensus), func(t *testing.T) {
 			d, sim, _ := newSimDriver(t)
 			ctx := context.Background()
@@ -373,12 +368,10 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			consensusState.Timestamp = head.Time
 
 			params := deploy.BesuParams{
-				Consensus:             consensus,
 				IBCRouter:             fixture.RouterAddress,
 				InitialHeight:         fixture.InitialTrustedHeight,
 				InitialConsensusState: consensusState,
 				TrustingPeriod:        fixture.TrustingPeriod,
-				MaxClockDrift:         fixture.MaxClockDrift,
 				TrustLevel:            besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
 			}
 			spec := deploy.ClientSpec{
@@ -387,14 +380,22 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				CounterpartyClientID: "besu-1",
 				Params:               params,
 			}
+
+			// a rejected deploy names the constructor's error
+			tooLong := params
+			tooLong.TrustingPeriod = 31 * 24 * 60 * 60
+			_, err = d.ProvisionClient(ctx, core.Router, deploy.ClientSpec{Params: tooLong})
+			require.ErrorContains(t, err, "InvalidTrustingPeriod(2678400)")
+
 			ref, err := d.ProvisionClient(ctx, core.Router, spec)
 			require.NoError(t, err)
 
-			// the deployed runtime code is embedded in the consensus's creation code
-			code, err := sim.Client().CodeAt(ctx, common.HexToAddress(ref.Address), nil)
+			// the client starts unpaused; Verify checks its router
+			lightClient, err := besulightclient.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
 			require.NoError(t, err)
-			require.NotEmpty(t, code)
-			require.Contains(t, metadata.Bin, hex.EncodeToString(code))
+			paused, err := lightClient.Paused(&bind.CallOpts{Context: ctx})
+			require.NoError(t, err)
+			require.False(t, paused)
 
 			id, err := d.RegisterClient(ctx, core.Router, spec, ref)
 			require.NoError(t, err)
@@ -404,12 +405,22 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			m.Core.Router = core.Router
 			m.Core.Multicall = multicall.Address
 			m.TargetData = core.TargetData
-			m.UpsertClient(manifest.Client{
+			client := manifest.Client{
 				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
-			})
+				Besu: &manifest.BesuParams{IBCRouter: fixture.RouterAddress.Hex()},
+			}
+			m.UpsertClient(client)
 			report, err := d.Verify(ctx, m)
 			require.NoError(t, err)
 			require.Empty(t, report.Failed())
+
+			// the client is registered with the prefix naming its counterparty router
+			client.Besu = &manifest.BesuParams{IBCRouter: common.HexToAddress("0x01").Hex()}
+			m.UpsertClient(client)
+			report, err = d.Verify(ctx, m)
+			require.NoError(t, err)
+			require.Len(t, report.Failed(), 1)
+			require.Equal(t, "client besu-2 merkle prefix matches", report.Failed()[0].Name)
 
 			state, err := besu.ReadClientState(ctx, sim.Client(), common.HexToAddress(ref.Address))
 			require.NoError(t, err)
@@ -417,12 +428,10 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 				IbcRouter:      fixture.RouterAddress,
 				LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: fixture.InitialTrustedHeight},
 				TrustingPeriod: fixture.TrustingPeriod,
-				MaxClockDrift:  fixture.MaxClockDrift,
+				MaxClockDrift:  besu.MaxClockDrift,
 				TrustLevel:     params.TrustLevel,
 			}, state)
 
-			lightClient, err := besuqbft.NewContractCaller(common.HexToAddress(ref.Address), sim.Client())
-			require.NoError(t, err)
 			hash, err := lightClient.GetConsensusStateHash(&bind.CallOpts{Context: ctx}, fixture.InitialTrustedHeight)
 			require.NoError(t, err)
 

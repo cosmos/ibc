@@ -16,6 +16,7 @@ import (
 
 	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
 	"github.com/cosmos/ibc/cli/internal/chains"
+	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
 	"github.com/cosmos/ibc/cli/internal/service/attestor"
 )
 
@@ -127,11 +128,31 @@ func (g *Generator) queryOne(
 		}
 	}
 
-	// The proof must carry RecoverSigner's form: the light client rejects any other.
-	signer, sig, err := attestorevm.RecoverSigner(attestorevm.Digest(typeTag, data), attestation.Signature)
+	// The proof must carry Recover's form: the light client rejects any other.
+	digest := attestorevm.Digest(typeTag, data)
+	signer, sig, err := ecrecover.Recover(digest[:], attestation.Signature)
 	if err != nil {
 		g.logger.Warn("Attestor returned an unrecoverable signature", "attestor", a.Name(), "err", err)
 		return quorumResponse{name: a.Name(), err: errors.Wrapf(err, "attestor %q", a.Name())}
+	}
+
+	// AttestationLightClient reverts the whole proof on any non-member signer, so a
+	// signature only counts if it recovers to the address the attestor was admitted
+	// under (MatchAttestors verified that address against the on-chain set).
+	if expected := common.HexToAddress(a.Address()); signer != expected {
+		g.logger.Warn(
+			"Unexpected attestor address",
+			"attestor", a.Name(),
+			"expected", expected.Hex(),
+			"actual", signer.Hex(),
+		)
+
+		return quorumResponse{
+			name: a.Name(),
+			err: errors.Errorf(
+				"attestor %q: unexpected address: got %s, wanted %s", a.Name(), signer.Hex(), expected.Hex(),
+			),
+		}
 	}
 
 	return quorumResponse{name: a.Name(), signer: signer, sig: sig}

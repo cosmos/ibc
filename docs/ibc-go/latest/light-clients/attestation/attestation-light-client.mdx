@@ -1,0 +1,188 @@
+---
+title: The attestation light client
+description: >-
+  How the ibc-go attestation light client verifies state a quorum of attestors
+  has signed.
+---
+
+## Overview
+
+The attestation light client replaces header verification with a signature check. Instead of following a counterparty chain's consensus, it trusts a fixed set of ECDSA attestors and accepts a height, a timestamp or a set of packet commitments once a quorum of that set has signed it.
+
+The Go implementation is the package `attestations` in [`modules/light-clients/attestations`](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/attestations), imported as:
+
+```go
+import ibcattestations "github.com/cosmos/ibc-go/v11/modules/light-clients/attestations"
+```
+
+For the protocol-level description — what attestors are, how proofs reach a chain — see [the attestation light client](/ibc/04-light-clients/01-attestation-light-client). For the EVM implementation, see [attestation light client contracts](/ibc/06-ibc-solidity-contracts/05-attestation-light-client).
+
+<Warning>
+  This package is EXPERIMENTAL and is not yet stable. It may change in backwards-incompatible ways without notice.
+</Warning>
+
+## Trust model
+
+The attestor set and the quorum threshold are fixed at client creation. `ClientState.Validate` ([`client_state.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/client_state.go)) rejects a client state whose attestor list is empty, whose `MinRequiredSigs` is zero or exceeds the number of attestors, or whose attestor list contains an empty address, an address that is not a hex address, or a duplicate after normalization.
+
+There is no mechanism to add, remove or rotate attestors afterwards. The only state transition available to the client beyond adding consensus states is being frozen.
+
+## State
+
+### `ClientState`
+
+| Field | Go type | Description |
+| --- | --- | --- |
+| `AttestorAddresses` | `[]string` | Fixed set of attestor addresses, hex, compared after `common.HexToAddress` normalization |
+| `MinRequiredSigs` | `uint32` | Quorum: the minimum number of signatures a proof must carry |
+| `LatestHeight` | `uint64` | Highest attested height; the revision number is always 0 |
+| `IsFrozen` | `bool` | When true, updates and proof verification are refused with `ErrClientFrozen` |
+
+`NewClientState(attestorAddresses, minRequiredSigs, latestHeight)` constructs one with `IsFrozen` false. `ClientType()` returns `exported.Attestations`.
+
+### `ConsensusState`
+
+One field, `Timestamp uint64`, in nanoseconds. `ValidateBasic` rejects a zero timestamp. `GetTimestamp()` is deprecated and panics; read the timestamp through `LightClientModule.TimestampAtHeight`, which returns the stored nanosecond value ([`consensus_state.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/consensus_state.go)).
+
+Consensus states are stored per height under the standard `host.ConsensusStateKey` in the client's prefixed store ([`store.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/store.go)).
+
+## The client message
+
+Both client updates and proofs use the same envelope, `AttestationProof`, which implements `exported.ClientMessage`:
+
+| Field | Go type | Description |
+| --- | --- | --- |
+| `AttestationData` | `[]byte` | ABI-encoded `StateAttestation` or `PacketAttestation` |
+| `Signatures` | `[][]byte` | Each exactly `SignatureLength` (65) bytes, `r \|\| s \|\| v` |
+
+`ValidateBasic` ([`attestation_proof.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/attestation_proof.go)) requires non-empty attestation data, requires the data to decode as either a `PacketAttestation` with at least one packet or a `StateAttestation`, requires at least one signature, and requires each signature to be 65 bytes.
+
+The two attestation payloads are Go structs in [`abi.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/abi.go):
+
+```go
+type StateAttestation struct {
+    Height    uint64
+    Timestamp uint64 // nanoseconds in Go; seconds on the wire
+}
+
+type PacketAttestation struct {
+    Height  uint64
+    Packets []PacketCompact
+}
+
+type PacketCompact struct {
+    Path       []byte // keccak256 of the commitment path, 32 bytes
+    Commitment []byte // raw 32-byte commitment; 32 zero bytes means absent
+}
+```
+
+`StateAttestation` is ABI-encoded as two `uint64` arguments, `(height, timestamp)`. `PacketAttestation` is encoded as a single tuple argument holding a `uint64` height and a dynamic array of `(bytes32 path, bytes32 commitment)` tuples. The encoding is what makes the same attestor output usable by the EVM implementation; see [attestation light client contracts](/ibc/06-ibc-solidity-contracts/05-attestation-light-client) for that side. On the Go side it is `go-ethereum`'s `accounts/abi` package and nothing more.
+
+<Note>
+  `StateAttestation.ABIEncode` divides the timestamp by 10<sup>9</sup> and `ABIDecodeStateAttestation` multiplies it back. The wire value is seconds; the value stored in the consensus state is nanoseconds. Sub-second precision does not survive a round trip.
+</Note>
+
+## Signature verification
+
+Signatures do not cover the attestation data directly. `TaggedSigningInput` ([`signature.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/signature.go)) computes:
+
+```text
+digest = sha256( typeTag || sha256(attestationData) )
+```
+
+where `typeTag` is one byte: `AttestationTypeState` (`0x01`) for client updates, `AttestationTypePacket` (`0x02`) for membership and non-membership proofs. The tag is what stops a packet attestation being replayed as a state attestation.
+
+`ClientState.verifySignatures` then, for the proof's signatures:
+
+1. refuses an empty signature list, and refuses a list shorter than `MinRequiredSigs`;
+2. refuses any signature that is not 65 bytes;
+3. normalizes the recovery byte — 27 becomes 0, 28 becomes 1, anything else is left alone — and recovers the signer with `crypto.SigToPub`;
+4. refuses a repeated signer (`ErrDuplicateSigner`);
+5. refuses a signer outside the attestor set (`ErrUnknownSigner`).
+
+Quorum is counted as the number of signatures supplied, not the number that verified — every signature in the list must recover to a distinct attestor, so the two coincide, but a proof carrying extra junk signatures is rejected outright rather than ignored.
+
+## Client updates
+
+`VerifyClientMessage` refuses a frozen client, refuses a client message that is not an `*AttestationProof`, and verifies the signatures against the `0x01` tag. It does not inspect the height or the timestamp.
+
+`UpdateState` ([`update.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/update.go)) then decodes the `StateAttestation`, writes a `ConsensusState` at `clienttypes.NewHeight(0, stateAttestation.Height)`, raises `LatestHeight` if the attested height is greater, and stores the client state. An update may therefore write a consensus state at a height at or below `LatestHeight`.
+
+`UpdateState` panics rather than returning an error on a wrong client message type or undecodable data, on the assumption that `VerifyClientMessage` ran first.
+
+### Misbehaviour
+
+`CheckForMisbehaviour` decodes the state attestation, looks up the consensus state already stored at that height, and returns true when one exists with a different timestamp. `UpdateStateOnMisbehaviour` sets `IsFrozen` and writes the client state back; nothing unfreezes it.
+
+Note that a consensus state is written at a height only once a timestamp has been attested for it. Resubmitting the same height with the same timestamp is not misbehaviour.
+
+## Proof verification
+
+`verifyMembership` and `verifyNonMembership` ([`client_state.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/client_state.go)) share their preconditions. Both refuse a frozen client and an empty path, both require a consensus state to already exist at the proof height, both unmarshal the `proof` bytes as a protobuf `AttestationProof`, both verify signatures against the `0x02` tag, both require `packetAttestation.Height` to equal the proof height's revision height, and both require a non-empty packet list.
+
+The path must be a `commitmenttypesv2.MerklePath` with exactly one key element, and the comparison key is `crypto.Keccak256(merklePath.KeyPath[0])`.
+
+### Membership
+
+The `value` must be exactly 32 bytes. Verification scans the attested packets for an entry whose `Path` and `Commitment` are both 32 bytes and equal to the hashed path and the value respectively. No match is `ErrNotMember`.
+
+### Non-membership
+
+Verification scans for entries whose `Path` matches the hashed path. If none match, the result is `ErrNotMember` — absence from the attested list does not prove absence on the counterparty. If entries match but any of them has a commitment that is not 32 zero bytes, the result is `ErrNonMembershipFailed`. The attestors have to assert the empty path explicitly.
+
+`delayTimePeriod` and `delayBlockPeriod` are accepted by the `LightClientModule` methods and not used.
+
+## Client status
+
+`Status` ([`light_client_module.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/light_client_module.go)):
+
+| Status | Condition |
+| --- | --- |
+| `exported.Unknown` | no client state found for the client ID |
+| `exported.Frozen` | `IsFrozen` is true |
+| `exported.Active` | otherwise |
+
+`LatestHeight` returns `clienttypes.NewHeight(0, clientState.LatestHeight)`, or a zero height when the client state is missing.
+
+## What the module does not support
+
+- `RecoverClient` returns `ibcerrors.ErrInvalidRequest`.
+- `VerifyUpgradeAndUpdateState` returns `clienttypes.ErrInvalidUpgradeClient`.
+- No attestor rotation: the set is fixed at creation.
+- Revision numbers are always 0; only the revision height is meaningful.
+- Genesis is a no-op: `DefaultGenesis` returns nil and `ValidateGenesis` always succeeds ([`module.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/module.go)).
+- No module-level CLI: `GetTxCmd` and `GetQueryCmd` both return nil. Use the 02-client commands.
+
+## Integration
+
+`NewLightClientModule(cdc, storeProvider)` returns a `LightClientModule` implementing `exported.LightClientModule`. Register it with the client keeper under `ibcattestations.ModuleName` (`attestations`), which becomes the client type prefix:
+
+```go
+import ibcattestations "github.com/cosmos/ibc-go/v11/modules/light-clients/attestations"
+
+storeProvider := app.IBCKeeper.ClientKeeper.GetStoreProvider()
+attestationsLightClientModule := ibcattestations.NewLightClientModule(appCodec, storeProvider)
+app.IBCKeeper.ClientKeeper.AddRoute(ibcattestations.ModuleName, &attestationsLightClientModule)
+```
+
+Register the module's concrete types so core IBC can unmarshal them from `Any`:
+
+```go
+ibcattestations.RegisterInterfaces(registry)
+```
+
+`AppModuleBasic.RegisterInterfaces` does this for you if you add `ibcattestations.NewAppModule(attestationsLightClientModule)` to the module manager.
+
+### Creating a client
+
+`Initialize` unmarshals the client state and the consensus state, runs `Validate` and `ValidateBasic` on them, and writes the consensus state at `clienttypes.NewHeight(0, clientState.LatestHeight)` — so the `LatestHeight` in the initial client state and the timestamp in the initial consensus state must describe the same height, and that height is the only one a proof can be verified against until an update lands.
+
+## Errors
+
+[`errors.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/errors.go) registers, under codespace `attestations`: `ErrInvalidAttestationProof`, `ErrInvalidSignature`, `ErrInvalidQuorum`, `ErrDuplicateSigner`, `ErrUnknownSigner`, `ErrInvalidAttestationData`, `ErrInvalidHeight`, `ErrInvalidTimestamp`, `ErrClientFrozen`, `ErrNotMember`, `ErrInvalidPath`, `ErrInvalidValue`, `ErrProcessedTimeNotFound`, `ErrProcessedHeightNotFound`, `ErrDelayPeriodNotPassed`, `ErrNonMembershipFailed`.
+
+## See also
+
+- [The attestation light client](/ibc/04-light-clients/01-attestation-light-client) — the protocol-level description
+- [Attestation light client contracts](/ibc/06-ibc-solidity-contracts/05-attestation-light-client) — the EVM implementation
+- [Light client developer guide](/ibc-go/latest/light-clients/developer-guide/overview)

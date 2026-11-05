@@ -53,11 +53,6 @@ type deployManifest struct {
 		Address string `json:"address"`
 	} `json:"tokens"`
 	TargetData map[string]string `json:"targetData"`
-	Clients    []struct {
-		Besu struct {
-			Consensus string `json:"consensus"`
-		} `json:"besu"`
-	} `json:"clients"`
 }
 
 // token looks up a deployed IFT token's address by symbol.
@@ -382,15 +377,6 @@ func (d *deployCLI) sendIFT(t *testing.T, route e2etest.Route, ift, to, amount s
 	}
 }
 
-// requireClientConsensus asserts that chainID's one Besu client records
-// consensus, the one the chain it tracks runs.
-func (d *deployCLI) requireClientConsensus(t *testing.T, chainID string, consensus besu.Consensus) {
-	t.Helper()
-	clients := d.manifest(t, chainID).Clients
-	require.Len(t, clients, 1)
-	require.Equal(t, string(consensus), clients[0].Besu.Consensus)
-}
-
 // besuClient is the `ibc deploy client besu` command for a client on chainID
 // tracking counterparty.
 func besuClient(chainID, counterparty string) []string {
@@ -399,7 +385,6 @@ func besuClient(chainID, counterparty string) []string {
 		"--chain", chainID,
 		"--counterparty-chain", counterparty,
 		"--trusting-period", "336h",
-		"--max-clock-drift", "1m",
 		"--yes",
 	}
 }
@@ -432,9 +417,13 @@ func TestDeployConnection(t *testing.T) {
 	// the config declares no routers: no command here may read a router from
 	// config
 	d.deployCore(t)
+	// Each local attestor needs its own key, separate from the deployer and
+	// relay signer. The keys only sign attestations, so they need no funds.
+	attestorA := d.importKey(t, "attestor-a", "--populate-config")
+	attestorB := d.importKey(t, "attestor-b", "--populate-config")
 	d.deployIFTConnection(t,
-		attestationClient(d.chainAID, d.chainBID, d.deployer.Hex()),
-		attestationClient(d.chainBID, d.chainAID, d.deployer.Hex()))
+		attestationClient(d.chainAID, d.chainBID, attestorB.Hex()),
+		attestationClient(d.chainBID, d.chainAID, attestorA.Hex()))
 
 	// core provisioning binds the relaying selectors to PUBLIC_ROLE;
 	// prove an unrelated address can call recvPacket on each router. The
@@ -452,22 +441,21 @@ func TestDeployConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	// render-config pairs the two manifests into one relayer.connections[]
-	// entry, and each attestation end gets the deployer as a local attestor
-	// watching the chain it tracks
+	// entry, and each attestation end gets a dedicated local attestor
+	// watching the chain it tracks. The deployer may still relay on both ends.
 	cfg := d.renderConfig(t, deployerAlias)
 	require.Equal(t, d.wantConnection(deployerAlias, clientkind.Attestation, clientkind.Attestation), cfg.Connections)
 	require.ElementsMatch(t, []ibccli.AttestorFileConfig{
-		wantAttestor(d.chainAID, deployerAlias, d.deployer),
-		wantAttestor(d.chainBID, deployerAlias, d.deployer),
+		wantAttestor(d.chainAID, "attestor-a", attestorA),
+		wantAttestor(d.chainBID, "attestor-b", attestorB),
 	}, cfg.Attestors)
 }
 
 // TestDeployBesuQBFTIBFT2Connection relays an IFT transfer between a QBFT
 // chain A and an IBFT 2.0 chain B set up through the CLI alone: deploy a besu
 // connection and an IFT bridge, render the relayer config from the
-// manifests, then run the relayer. Each client detects the other chain's
-// consensus from its head and needs its router, so the config carries the
-// routers core deployed (configureRouters).
+// manifests, then run the relayer. Each client needs the other chain's
+// router, so the config carries the routers core deployed (configureRouters).
 func TestDeployBesuQBFTIBFT2Connection(t *testing.T) {
 	t.Parallel()
 	d := startDeployCLI(t, e2etest.BesuChains(t, besu.QBFT, besu.IBFT2))
@@ -475,13 +463,18 @@ func TestDeployBesuQBFTIBFT2Connection(t *testing.T) {
 
 	d.deployCore(t)
 	d.configureRouters(t)
+
+	// the contract bounds the trusting period, and the CLI names its revert
+	tooLong := besuClient(d.chainAID, d.chainBID)
+	tooLong[slices.Index(tooLong, "--trusting-period")+1] = "721h"
+	_, err := d.driver.Deploy(ctx, tooLong...)
+	require.ErrorContains(t, err, "InvalidTrustingPeriod")
+
 	iftA, iftB := d.deployIFTConnection(t,
 		besuClient(d.chainAID, d.chainBID), besuClient(d.chainBID, d.chainAID))
 	d.requireRerunSkipped(t)
-	d.requireClientConsensus(t, d.chainAID, besu.IBFT2)
-	d.requireClientConsensus(t, d.chainBID, besu.QBFT)
 
-	_, err := d.driver.Deploy(ctx, "status")
+	_, err = d.driver.Deploy(ctx, "status")
 	require.NoError(t, err)
 
 	cfg := d.populateRelayConfig(t)
@@ -524,7 +517,6 @@ func TestDeployMixedBesuQBFTAttestationConnection(t *testing.T) {
 	iftA, iftB := d.deployIFTConnection(t,
 		besuClient(d.chainAID, d.chainBID), attestationClient(d.chainBID, d.chainAID, attestorAlias))
 	d.requireRerunSkipped(t)
-	d.requireClientConsensus(t, d.chainAID, besu.QBFT)
 
 	_, err := d.driver.Deploy(ctx, "status")
 	require.NoError(t, err)
