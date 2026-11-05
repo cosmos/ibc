@@ -5,6 +5,7 @@ package store
 import (
 	"os"
 	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,4 +32,19 @@ func TestAllRelayStatusesIsComplete(t *testing.T) {
 	}
 
 	require.Len(t, all, len(declared), "AllRelayStatuses lists a status that is not declared")
+}
+
+func TestRelayStatusIsTerminal(t *testing.T) {
+	t.Parallel()
+
+	terminal := []RelayStatus{
+		RelayStatusCompleteWithAck,
+		RelayStatusCompleteWithWriteAckError,
+		RelayStatusCompleteWithTimeout,
+		RelayStatusFailed,
+	}
+
+	for _, status := range AllRelayStatuses() {
+		require.Equalf(t, slices.Contains(terminal, status), status.IsTerminal(), "%s", status)
+	}
 }
