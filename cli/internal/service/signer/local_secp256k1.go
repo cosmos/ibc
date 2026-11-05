@@ -41,7 +41,6 @@ func GenerateLocalSecp256k1Signer() (*LocalSecp256k1Signer, error) {
 }
 
 func (s *LocalSecp256k1Signer) Type() keyfile.Type { return ECDSA }
-func (s *LocalSecp256k1Signer) IsLocal() bool      { return true }
 
 func (s *LocalSecp256k1Signer) PublicKey() []byte {
 	return s.signer.PubKey()

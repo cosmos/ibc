@@ -4,19 +4,20 @@ package signer
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/cosmos/ibc/cli/keyfile"
 )
 
-const (
-	typeRemote     = "remote"
-	typeLocalECDSA = "local_ecdsa"
-	typeLocalEDDSA = "local_eddsa"
-)
+// typeRemote labels a remote signer; a local one is labeled by localType.
+const typeRemote = "remote"
+
+func localType(keyType keyfile.Type) string {
+	return "local_" + string(keyType)
+}
 
 type instrumentation struct {
 	Operation metric.Float64Histogram
@@ -54,16 +55,9 @@ type instrumentedSigner struct {
 	keyType string
 }
 
-func metricsWrapper(signer Signer, alias string) Signer {
+func metricsWrapper(signer Signer, alias, keyType string) Signer {
 	if _, ok := signer.(*instrumentedSigner); ok {
 		return signer
-	}
-
-	var keyType string
-	if signer.IsLocal() {
-		keyType = fmt.Sprintf("local_%s", signer.Type())
-	} else {
-		keyType = "remote"
 	}
 
 	return &instrumentedSigner{

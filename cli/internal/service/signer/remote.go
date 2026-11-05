@@ -68,7 +68,6 @@ func NewRemoteFromEndpoint(ctx context.Context, keyID string, endpoint network.E
 	return s, nil
 }
 
-func (r *RemoteSigner) IsLocal() bool      { return false }
 func (r *RemoteSigner) Type() keyfile.Type { return r.keyType }
 
 func (r *RemoteSigner) PublicKey() []byte {

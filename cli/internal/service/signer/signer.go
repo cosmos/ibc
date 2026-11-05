@@ -17,7 +17,6 @@ import (
 // Signer represents signer that can either sign digests or messages.
 type Signer interface {
 	Type() keyfile.Type
-	IsLocal() bool
 
 	Sign(ctx context.Context, message []byte) ([]byte, error)
 	PublicKey() []byte
@@ -77,7 +76,7 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", err
 		}
 
-		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
+		return metricsWrapper(s, cfg.Alias, localType(s.Type())), cfg.Alias, nil
 	case config.SignerRemote:
 		// Not logging cfg.GRPC: a target can carry userinfo.
 		endpoint, err := config.ResolveEndpoint(cfg.GRPC, cfg.TLS, nil, "signer", cfg.Alias)
@@ -90,7 +89,7 @@ func NewSignerFromConfig(ctx context.Context, cfg config.SignerConfig) (signer S
 			return nil, "", errors.Wrap(err, "create remote signer")
 		}
 
-		return metricsWrapper(s, cfg.Alias), cfg.Alias, nil
+		return metricsWrapper(s, cfg.Alias, typeRemote), cfg.Alias, nil
 	default:
 		return nil, "", errors.Errorf("invalid signer type: %s", cfg.Type)
 	}

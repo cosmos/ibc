@@ -118,7 +118,6 @@ func TestLocal(t *testing.T) {
 				require.NotNil(t, attestor)
 				assert.Equal(t, tt.attestorName, attestor.Name())
 				assert.Equal(t, tt.chainID, attestor.ChainID())
-				assert.True(t, attestor.IsLocal())
 			})
 		}
 	})

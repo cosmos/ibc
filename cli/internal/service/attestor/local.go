@@ -263,7 +263,6 @@ func (a *LocalAttestor) packetCompact(
 
 func (a *LocalAttestor) Name() string    { return a.name }
 func (a *LocalAttestor) ChainID() string { return a.chainID }
-func (a *LocalAttestor) IsLocal() bool   { return true }
 func (a *LocalAttestor) Address() string { return a.address }
 
 func attestorFQN(connection, chainID, name string) string {
