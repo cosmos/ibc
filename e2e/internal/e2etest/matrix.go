@@ -189,18 +189,10 @@ func summarizeSpec(spec environment.Spec) MatrixSpec {
 	}
 	for _, connection := range spec.Connections {
 		for _, declaration := range []environment.ClientSpec{connection.A, connection.B} {
-			switch client := declaration.(type) {
-			case environment.NewClient:
-				attestors += len(client.Attestors)
-			case environment.ExistingClient:
-				if client.Kind == clientkind.Besu {
-					besuClients++
-				} else {
-					attestors += len(client.Attestors)
-				}
-			case environment.NewBesuClient:
+			if declaration.ClientKind() == clientkind.Besu {
 				besuClients++
 			}
+			attestors += len(declaration.ClientAttestors())
 		}
 	}
 	return MatrixSpec{

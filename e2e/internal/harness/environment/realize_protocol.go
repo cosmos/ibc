@@ -111,7 +111,7 @@ func validatePreparedAttestorUse(spec Spec, dependencies connectionDependencies,
 			client := dependencies.existingClients[label]
 			if client == nil {
 				client = &IBCClient{label: label}
-				for _, attestor := range end.declaration.clientAttestors() {
+				for _, attestor := range end.declaration.ClientAttestors() {
 					account, _ := runtime.evmAccount(attestor.Authority)
 					client.attestors = append(client.attestors, EVMAddress(account.Address().Hex()))
 				}
@@ -160,7 +160,7 @@ func acquireAttestors(
 	var jobs []attestorJob
 	for _, declaration := range spec.Connections {
 		connection := connections[declaration.ID]
-		for _, attestor := range declaration.A.clientAttestors() {
+		for _, attestor := range declaration.A.ClientAttestors() {
 			jobs = append(jobs, attestorJob{
 				declaration: attestor,
 				dependencies: attestorDependencies{
@@ -168,7 +168,7 @@ func acquireAttestors(
 				},
 			})
 		}
-		for _, attestor := range declaration.B.clientAttestors() {
+		for _, attestor := range declaration.B.ClientAttestors() {
 			jobs = append(jobs, attestorJob{
 				declaration: attestor,
 				dependencies: attestorDependencies{
@@ -328,7 +328,7 @@ func prepareConnections(
 						err,
 					)
 				}
-				attestorSpecs := end.declaration.clientAttestors()
+				attestorSpecs := end.declaration.ClientAttestors()
 				attestors := make([]common.Address, 0, len(attestorSpecs))
 				for _, declaration := range attestorSpecs {
 					account, _ := runtime.evmAccount(declaration.Authority)
@@ -444,7 +444,7 @@ func acquireIBCClient(
 		resolved solidityibc.Client
 		err      error
 	)
-	kind := declaration.clientKind()
+	kind := declaration.ClientKind()
 	switch client := declaration.(type) {
 	case ExistingClient:
 		setup, setupErr := solidityIBCSetup(ctx, instance.chain)
@@ -464,7 +464,7 @@ func acquireIBCClient(
 		if attestorErr := requireDeclaredAttestors(
 			label,
 			resolved.Attestors,
-			declaration.clientAttestors(),
+			declaration.ClientAttestors(),
 			runtime,
 		); attestorErr != nil {
 			return nil, attestorErr
