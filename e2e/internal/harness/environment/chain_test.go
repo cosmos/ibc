@@ -101,6 +101,12 @@ func (m *recordingMining) ResumeMining(ctx context.Context) error {
 
 func (*recordingMining) MineBlocks(context.Context, int) error            { return nil }
 func (*recordingMining) AdvanceTime(context.Context, time.Duration) error { return nil }
+func (*recordingMining) DropPendingTransactions(context.Context) error    { return nil }
+func (*recordingMining) SetNextBlockBaseFee(context.Context, *big.Int) error {
+	return nil
+}
+func (*recordingMining) Snapshot(context.Context) (string, error) { return "", nil }
+func (*recordingMining) Revert(context.Context, string) error     { return nil }
 
 func TestMiningWithPausedJoinsCallbackAndResumeFailures(t *testing.T) {
 	callbackErr := errors.New("callback")
@@ -120,6 +126,12 @@ func (*failingResumeMining) PauseMining(context.Context) error                { 
 func (m *failingResumeMining) ResumeMining(context.Context) error             { return m.resumeErr }
 func (*failingResumeMining) MineBlocks(context.Context, int) error            { return nil }
 func (*failingResumeMining) AdvanceTime(context.Context, time.Duration) error { return nil }
+func (*failingResumeMining) DropPendingTransactions(context.Context) error    { return nil }
+func (*failingResumeMining) SetNextBlockBaseFee(context.Context, *big.Int) error {
+	return nil
+}
+func (*failingResumeMining) Snapshot(context.Context) (string, error) { return "", nil }
+func (*failingResumeMining) Revert(context.Context, string) error     { return nil }
 
 func bindTestMining(controller chainimpl.BlockController) *Mining {
 	mining := &Mining{controller: controller}

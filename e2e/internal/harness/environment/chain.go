@@ -347,6 +347,31 @@ func (m *Mining) AdvanceTime(ctx context.Context, d time.Duration) error {
 	return m.chain.use(func() error { return m.controller.AdvanceTime(ctx, d) })
 }
 
+// DropPending discards every transaction waiting to be mined.
+func (m *Mining) DropPending(ctx context.Context) error {
+	return m.chain.use(func() error { return m.controller.DropPendingTransactions(ctx) })
+}
+
+// SetNextBaseFee sets the base fee of the next mined block.
+func (m *Mining) SetNextBaseFee(ctx context.Context, fee *big.Int) error {
+	return m.chain.use(func() error { return m.controller.SetNextBlockBaseFee(ctx, fee) })
+}
+
+// Snapshot records the chain state for a later Revert.
+func (m *Mining) Snapshot(ctx context.Context) (string, error) {
+	var id string
+	err := m.chain.use(func() (err error) {
+		id, err = m.controller.Snapshot(ctx)
+		return err
+	})
+	return id, err
+}
+
+// Revert restores the state Snapshot recorded under id.
+func (m *Mining) Revert(ctx context.Context, id string) error {
+	return m.chain.use(func() error { return m.controller.Revert(ctx, id) })
+}
+
 func (m *Mining) WithPaused(ctx context.Context, fn func() error) error {
 	return m.chain.use(func() (err error) {
 		if pauseErr := m.controller.PauseMining(ctx); pauseErr != nil {

@@ -16,6 +16,14 @@ type BlockController interface {
 	PauseMining(ctx context.Context) error
 	ResumeMining(ctx context.Context) error
 	AdvanceTime(ctx context.Context, d time.Duration) error
+	// DropPendingTransactions discards every transaction waiting to be mined.
+	DropPendingTransactions(ctx context.Context) error
+	// SetNextBlockBaseFee sets the base fee of the next mined block.
+	SetNextBlockBaseFee(ctx context.Context, fee *big.Int) error
+	// Snapshot records the chain state for a later Revert.
+	Snapshot(ctx context.Context) (string, error)
+	// Revert restores the state Snapshot recorded under id.
+	Revert(ctx context.Context, id string) error
 }
 
 type FaultInjector interface {
