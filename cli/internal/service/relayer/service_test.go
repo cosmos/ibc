@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -392,7 +391,7 @@ func TestRelay(t *testing.T) {
 		service := New(relayerConfig(), NewMockStore(t), clients, nil, nil)
 
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
-		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, ethereum.NotFound).Once()
+		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(nil, v2.ErrTxNotFound).Once()
 
 		// ACT
 		_, err := service.Relay(ctx, relayAll(chainIDEth, txHashLower))

@@ -13,7 +13,8 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// Client provides chain state queries.
+// Client provides chain state queries. Methods that look up a transaction by
+// hash return v2.ErrTxNotFound for one the chain does not know.
 type Client interface {
 	ChainID() string
 

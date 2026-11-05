@@ -705,21 +705,44 @@ func TestPacketRelayExecuted(t *testing.T) {
 	}
 }
 
-func TestPacketRelayExecutedReceiptError(t *testing.T) {
-	for _, receiptErr := range []error{ethereum.NotFound, assert.AnError} {
-		t.Run(receiptErr.Error(), func(t *testing.T) {
-			ctx := t.Context()
-			client, eth := newTestClient(t)
-			eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, receiptErr).Once()
-			packet := testPacket()
-			executed, err := client.PacketRelayExecuted(ctx, txHash.Hex(), v2.RelayKindAck,
+// TestReceiptErrors covers every method that reads a receipt: a tx the chain
+// does not know is v2.ErrTxNotFound, and any other failure passes through.
+func TestReceiptErrors(t *testing.T) {
+	packet := testPacket()
+
+	reads := map[string]func(ctx context.Context, client *Client) error{
+		"TxPacketEvents": func(ctx context.Context, client *Client) error {
+			_, err := client.TxPacketEvents(ctx, txHash.Bytes())
+			return err
+		},
+		"TxHeight": func(ctx context.Context, client *Client) error {
+			_, err := client.TxHeight(ctx, txHash.Bytes())
+			return err
+		},
+		"PacketRelayExecuted": func(ctx context.Context, client *Client) error {
+			_, err := client.PacketRelayExecuted(ctx, txHash.Hex(), v2.RelayKindAck,
 				packet.Sequence, packet.SourceClient, packet.DestClient)
-			if errors.Is(receiptErr, ethereum.NotFound) {
-				require.ErrorIs(t, err, v2.ErrTxNotFound)
-			} else {
-				require.ErrorIs(t, err, receiptErr)
+			return err
+		},
+		"PacketWriteAckStatus": func(ctx context.Context, client *Client) error {
+			_, err := client.PacketWriteAckStatus(ctx, txHash.Hex(),
+				packet.Sequence, packet.SourceClient, packet.DestClient)
+			return err
+		},
+	}
+
+	for name, read := range reads {
+		t.Run(name, func(t *testing.T) {
+			for receiptErr, want := range map[error]error{
+				ethereum.NotFound: v2.ErrTxNotFound,
+				assert.AnError:    assert.AnError,
+			} {
+				ctx := t.Context()
+				client, eth := newTestClient(t)
+				eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, receiptErr).Once()
+
+				require.ErrorIs(t, read(ctx, client), want)
 			}
-			assert.False(t, executed)
 		})
 	}
 }
@@ -799,21 +822,6 @@ func TestPacketWriteAckStatus(t *testing.T) {
 		)
 
 		require.ErrorIs(t, err, v2.ErrWriteAckNotFoundForPacket)
-	})
-
-	t.Run("txNotFound", func(t *testing.T) {
-		client, eth := newTestClient(t)
-		eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, ethereum.NotFound).Once()
-
-		_, err := client.PacketWriteAckStatus(
-			ctx,
-			txHash.String(),
-			packet.Sequence,
-			packet.SourceClient,
-			packet.DestClient,
-		)
-
-		require.ErrorIs(t, err, v2.ErrTxNotFound)
 	})
 }
 
