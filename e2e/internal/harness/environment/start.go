@@ -186,7 +186,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 			if authority, ok := declaration.clientAuthority(); ok {
 				requiredAuthorities[authority] = struct{}{}
 			}
-			for _, attestor := range declaration.clientAttestors() {
+			for _, attestor := range declaration.ClientAttestors() {
 				requiredAuthorities[attestor.Authority] = struct{}{}
 				authority, ok := runtime.authority(attestor.Authority)
 				if ok && (authority.SignerGRPC == "") != (authority.SignerRemoteKeyID == "") {
@@ -244,7 +244,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	for _, connection := range spec.Connections {
 		for _, end := range connection.ends() {
 			label := clientLabel(connection.ID, end.label)
-			for _, attestor := range end.declaration.clientAttestors() {
+			for _, attestor := range end.declaration.ClientAttestors() {
 				account, _ := runtime.evmAccount(attestor.Authority)
 				address := account.Address().Hex()
 				if previous, exists := attestorAddresses[address]; exists {
@@ -319,7 +319,7 @@ func productionDrivers() drivers {
 func validateProductionPrerequisites(spec Spec, _ Runtime) error {
 	hasAttestors := false
 	for _, connection := range spec.Connections {
-		if len(connection.A.clientAttestors()) != 0 || len(connection.B.clientAttestors()) != 0 {
+		if len(connection.A.ClientAttestors()) != 0 || len(connection.B.ClientAttestors()) != 0 {
 			hasAttestors = true
 			break
 		}
