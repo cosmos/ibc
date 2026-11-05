@@ -10,9 +10,7 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
@@ -28,8 +26,8 @@ func TestTransactionRecovery_ReceiveAfterMempoolDrop(t *testing.T) {
 	ctx, fixture := setupTransactionRecovery(t, 123456)
 
 	// Act.
-	require.NoError(t, fixture.client.Client().CallContext(ctx, nil, "anvil_dropAllTransactions"))
-	_, _, err := fixture.client.TransactionByHash(ctx, fixture.original.Hash())
+	require.NoError(t, fixture.mining.DropPending(ctx))
+	_, _, err := fixture.evm.TransactionByHash(ctx, fixture.original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 	require.NoError(t, fixture.transfer.VerifyReceiptAbsent(ctx))
 	require.NoError(t, fixture.transfer.VerifyNotMinted(ctx))
@@ -43,7 +41,7 @@ func TestTransactionRecovery_ReceiveAfterMempoolDrop(t *testing.T) {
 		relayerv2.PacketState_PACKET_STATE_SUCCEEDED,
 	)
 	require.NoError(t, err)
-	retry, _, err := fixture.client.TransactionByHash(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
+	retry, _, err := fixture.evm.TransactionByHash(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
 	require.NoError(t, err)
 	require.Equal(t, fixture.original.Nonce(), retry.Nonce())
 	require.NoError(t, fixture.transfer.VerifyDelivered(ctx))
@@ -61,12 +59,11 @@ func TestTransactionRecovery_RepricesAfterBaseFeeIncrease(t *testing.T) {
 
 	baseFee := new(big.Int).Mul(fixture.original.GasFeeCap(), big.NewInt(2))
 	mine := func() {
-		require.NoError(t, fixture.client.Client().CallContext(ctx, nil,
-			"anvil_setNextBlockBaseFeePerGas", hexutil.EncodeBig(baseFee)))
+		require.NoError(t, fixture.mining.SetNextBaseFee(ctx, baseFee))
 		require.NoError(t, fixture.mining.Mine(ctx, 1))
 	}
 	mine()
-	_, err := fixture.client.TransactionReceipt(ctx, fixture.original.Hash())
+	_, err := fixture.evm.TransactionReceipt(ctx, fixture.original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 	require.NoError(t, fixture.transfer.VerifyNotMinted(ctx))
 	fixture.relayer = e2etest.StartRelayer(t, fixture.driver, fixture.env)
@@ -98,22 +95,22 @@ func TestTransactionRecovery_RepricesAfterBaseFeeIncrease(t *testing.T) {
 	require.NoError(t, fixture.mining.Resume(ctx))
 
 	// Verify the replacement reuses the nonce and raises the fee cap.
-	replacement, _, err := fixture.client.TransactionByHash(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
+	replacement, _, err := fixture.evm.TransactionByHash(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
 	require.NoError(t, err)
 	require.NotEqual(t, fixture.original.Hash(), replacement.Hash())
 	require.Equal(t, fixture.original.Nonce(), replacement.Nonce())
 	require.Positive(t, replacement.GasFeeCap().Cmp(fixture.original.GasFeeCap()))
 
 	// Confirm it was mined successfully at the higher base fee.
-	receipt, err := fixture.client.TransactionReceipt(ctx, replacement.Hash())
+	receipt, err := fixture.evm.TransactionReceipt(ctx, replacement.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
-	header, err := fixture.client.HeaderByNumber(ctx, receipt.BlockNumber)
+	header, err := fixture.evm.HeaderByNumber(ctx, receipt.BlockNumber)
 	require.NoError(t, err)
 	require.Equal(t, baseFee, header.BaseFee)
 
 	// Confirm the original stayed unmined and the transfer completed.
-	_, err = fixture.client.TransactionReceipt(ctx, fixture.original.Hash())
+	_, err = fixture.evm.TransactionReceipt(ctx, fixture.original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 	require.NoError(t, fixture.transfer.VerifyDelivered(ctx))
 	require.NoError(t, fixture.transfer.VerifyCommitmentCleared(ctx))
@@ -128,10 +125,10 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 
 	// Act.
 	require.NoError(t, fixture.relayer.Kill())
-	_, pending, err := fixture.client.TransactionByHash(ctx, fixture.original.Hash())
+	_, pending, err := fixture.evm.TransactionByHash(ctx, fixture.original.Hash())
 	require.NoError(t, err)
 	require.True(t, pending, "original transaction must remain in the mempool")
-	_, err = fixture.client.TransactionReceipt(ctx, fixture.original.Hash())
+	_, err = fixture.evm.TransactionReceipt(ctx, fixture.original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 	fixture.relayer = e2etest.StartRelayer(t, fixture.driver, fixture.env)
 
@@ -151,7 +148,7 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 		if hash == (common.Hash{}) || hash == fixture.original.Hash() {
 			return false
 		}
-		tx, isPending, txErr := fixture.client.TransactionByHash(ctx, hash)
+		tx, isPending, txErr := fixture.evm.TransactionByHash(ctx, hash)
 		if txErr != nil || !isPending || tx.Nonce() != fixture.original.Nonce() {
 			return false
 		}
@@ -169,7 +166,7 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 
 	// Mine the replacement and confirm the packet completes.
 	require.NoError(t, fixture.mining.Mine(ctx, 1))
-	receipt, err := fixture.client.TransactionReceipt(ctx, replacement.Hash())
+	receipt, err := fixture.evm.TransactionReceipt(ctx, replacement.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
 	require.NoError(t, fixture.mining.Resume(ctx))
@@ -183,7 +180,7 @@ func TestTransactionRecovery_RepricesPendingReceiveAfterRestart(t *testing.T) {
 	require.Equal(t, replacement.Hash().Hex(), status.GetRecvTx().GetTxHash())
 	require.NoError(t, fixture.transfer.VerifyDelivered(ctx))
 	require.NoError(t, fixture.transfer.VerifyCommitmentCleared(ctx))
-	_, err = fixture.client.TransactionReceipt(ctx, fixture.original.Hash())
+	_, err = fixture.evm.TransactionReceipt(ctx, fixture.original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 }
 
@@ -194,20 +191,18 @@ func TestTransactionRecovery_ReorgBeforeFinality(t *testing.T) {
 	ctx, fixture := setupTransactionRecovery(t, 345678)
 	// Mine the receive without a following block, leaving it below the finality requirement.
 	require.NoError(t, fixture.mining.Mine(ctx, 1))
-	receipt, err := fixture.client.TransactionReceipt(ctx, fixture.original.Hash())
+	receipt, err := fixture.evm.TransactionReceipt(ctx, fixture.original.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, receipt.Status)
 	require.NoError(t, fixture.transfer.VerifyCommitmentPresent(ctx))
 	require.NoError(t, fixture.relayer.Kill())
 
 	// Act.
-	var reverted bool
-	require.NoError(t, fixture.client.Client().CallContext(ctx, &reverted, "evm_revert", fixture.snapshot))
-	require.True(t, reverted)
-	require.NoError(t, fixture.client.Client().CallContext(ctx, nil, "anvil_dropAllTransactions"))
+	require.NoError(t, fixture.mining.Revert(ctx, fixture.snapshot))
+	require.NoError(t, fixture.mining.DropPending(ctx))
 	// Restore the old height on a different fork without mining the original transaction.
 	require.NoError(t, fixture.mining.AdvanceTime(ctx, time.Second))
-	_, err = fixture.client.TransactionReceipt(ctx, fixture.original.Hash())
+	_, err = fixture.evm.TransactionReceipt(ctx, fixture.original.Hash())
 	require.ErrorIs(t, err, ethereum.NotFound)
 	require.NoError(t, fixture.transfer.VerifyReceiptAbsent(ctx))
 	require.NoError(t, fixture.mining.Resume(ctx))
@@ -225,10 +220,10 @@ func TestTransactionRecovery_ReorgBeforeFinality(t *testing.T) {
 	require.NoError(t, fixture.transfer.VerifyCommitmentCleared(ctx))
 
 	// Confirm the receive was mined again at the same nonce in a different block.
-	rebroadcast, _, err := fixture.client.TransactionByHash(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
+	rebroadcast, _, err := fixture.evm.TransactionByHash(ctx, common.HexToHash(status.GetRecvTx().GetTxHash()))
 	require.NoError(t, err)
 	require.Equal(t, fixture.original.Nonce(), rebroadcast.Nonce())
-	canonical, err := fixture.client.TransactionReceipt(ctx, rebroadcast.Hash())
+	canonical, err := fixture.evm.TransactionReceipt(ctx, rebroadcast.Hash())
 	require.NoError(t, err)
 	require.Equal(t, types.ReceiptStatusSuccessful, canonical.Status)
 	require.NotEqual(t, receipt.BlockHash, canonical.BlockHash)
@@ -238,7 +233,7 @@ type transactionRecovery struct {
 	env      *environment.Environment
 	driver   *ibccli.Driver
 	mining   *environment.Mining
-	client   *ethclient.Client
+	evm      *environment.EVM
 	timing   environment.Timing
 	relayer  *ibccli.Relayer
 	transfer *e2etest.TransferSend
@@ -255,7 +250,7 @@ func setupTransactionRecovery(t *testing.T, amount int64) (context.Context, *tra
 	t.Helper()
 	spec, runtime := e2etest.AttestedMesh(
 		e2etest.EVMChains(t, e2etest.EVMRequirements{
-			Provider: e2etest.EVMProviderAnvil, ControlledMining: true,
+			ControlledMining: true,
 		}, e2etest.ChainA, e2etest.ChainB),
 	)
 	env := e2etest.Start(t, spec, runtime)
@@ -272,17 +267,16 @@ func setupTransactionRecovery(t *testing.T, amount int64) (context.Context, *tra
 	require.NoError(t, err)
 	mining, err := destination.Mining()
 	require.NoError(t, err)
-	client, err := ethclient.Dial(destination.RPCURL())
+	client, err := destination.EVM()
 	require.NoError(t, err)
-	t.Cleanup(client.Close)
 	timing := destination.Timing()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*timing.CompletionBudget)
 	t.Cleanup(cancel)
 	require.NoError(t, mining.Pause(ctx))
 	// Allow submission through the chain freshness check while mining is paused.
 	require.NoError(t, mining.AdvanceTime(ctx, 2*timing.CompletionBudget))
-	var snapshot string
-	require.NoError(t, client.Client().CallContext(ctx, &snapshot, "evm_snapshot"))
+	snapshot, err := mining.Snapshot(ctx)
+	require.NoError(t, err)
 	relayer := e2etest.StartRelayer(t, driver, env)
 	transfer, err := app.Send(ctx, e2etest.TransferRequest{Amount: big.NewInt(amount)})
 	require.NoError(t, err)
@@ -301,7 +295,7 @@ func setupTransactionRecovery(t *testing.T, amount int64) (context.Context, *tra
 	require.NoError(t, err)
 	require.True(t, pending, "receive transaction must be pending")
 	return ctx, &transactionRecovery{
-		env: env, driver: driver, mining: mining, client: client, timing: timing,
+		env: env, driver: driver, mining: mining, evm: client, timing: timing,
 		relayer: relayer, transfer: transfer, packet: packet, original: tx, snapshot: snapshot,
 	}
 }
