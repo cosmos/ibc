@@ -22,7 +22,7 @@ func TestMetrics(t *testing.T) {
 		reader := setupTestMetrics(t)
 		base, err := GenerateLocalEd25519Signer()
 		require.NoError(t, err)
-		signer := metricsWrapper(base, "alice")
+		signer := metricsWrapper(base, "alice", localType(base.Type()))
 
 		// ACT
 		signature, err := signer.Sign(t.Context(), []byte("message"))
@@ -44,7 +44,7 @@ func TestMetrics(t *testing.T) {
 		assert.ElementsMatch(t, []attribute.KeyValue{
 			attribute.String("operation", "sign"),
 			attribute.String("signer", "alice"),
-			attribute.String("type", typeLocalEDDSA),
+			attribute.String("type", "local_eddsa"),
 			attribute.String("result", "ok"),
 		}, histogram.DataPoints[0].Attributes.ToSlice())
 	})
@@ -72,7 +72,7 @@ func TestMetrics(t *testing.T) {
 		instrumented, ok := loadedSigner.(*instrumentedSigner)
 		require.True(t, ok)
 		assert.Equal(t, "local", instrumented.alias)
-		assert.Equal(t, typeLocalEDDSA, instrumented.keyType)
+		assert.Equal(t, "local_eddsa", instrumented.keyType)
 	})
 }
 

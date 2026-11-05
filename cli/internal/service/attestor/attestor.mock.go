@@ -124,50 +124,6 @@ func (_c *MockAttestor_ChainID_Call) RunAndReturn(run func() string) *MockAttest
 	return _c
 }
 
-// IsLocal provides a mock function for the type MockAttestor
-func (_mock *MockAttestor) IsLocal() bool {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for IsLocal")
-	}
-
-	var r0 bool
-	if returnFunc, ok := ret.Get(0).(func() bool); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	return r0
-}
-
-// MockAttestor_IsLocal_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsLocal'
-type MockAttestor_IsLocal_Call struct {
-	*mock.Call
-}
-
-// IsLocal is a helper method to define mock.On call
-func (_e *MockAttestor_Expecter) IsLocal() *MockAttestor_IsLocal_Call {
-	return &MockAttestor_IsLocal_Call{Call: _e.mock.On("IsLocal")}
-}
-
-func (_c *MockAttestor_IsLocal_Call) Run(run func()) *MockAttestor_IsLocal_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockAttestor_IsLocal_Call) Return(b bool) *MockAttestor_IsLocal_Call {
-	_c.Call.Return(b)
-	return _c
-}
-
-func (_c *MockAttestor_IsLocal_Call) RunAndReturn(run func() bool) *MockAttestor_IsLocal_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // LatestHeight provides a mock function for the type MockAttestor
 func (_mock *MockAttestor) LatestHeight(ctx context.Context) (uint64, error) {
 	ret := _mock.Called(ctx)
