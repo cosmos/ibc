@@ -17,6 +17,7 @@ import (
 	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
 	"github.com/cosmos/ibc/cli/besu"
 	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
 	"github.com/cosmos/ibc/e2e/internal/harness/environment"
 )
 
@@ -163,17 +164,10 @@ func advanceDestinationPastTimeout(ctx context.Context, destination *environment
 
 // awaitDestinationPastTimeout waits for a destination head past timeout.
 func awaitDestinationPastTimeout(ctx context.Context, destination *environment.Chain, timeout uint64) error {
-	for {
+	return poll.Until(ctx, destination.Timing().PollInterval, func(ctx context.Context) (bool, error) {
 		now, err := destinationTime(ctx, destination)
-		if err != nil || now > timeout {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(destination.Timing().PollInterval):
-		}
-	}
+		return now > timeout, err
+	})
 }
 
 // destinationTime is the destination head's timestamp.
