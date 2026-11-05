@@ -50,10 +50,10 @@ func (p WaitForWriteAck) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 	)
 	switch {
 	case errors.Is(err, v2.ErrWriteAckNotFoundForPacket):
-		// the recv tx exists but does not contain this packet's write ack.
-		// this happens when a packet times out while its batch accumulates:
-		// clear the recv tx and error so the packet is retried and then timed
-		// out on the next run.
+		// the recv tx exists but did not receive this packet: it timed out
+		// while its batch accumulated, or another relayer's recv landed
+		// first. Clear the recv tx and error, so the next run times the
+		// packet out or records the recv that landed.
 		if errClear := p.storage.ClearPacketRecvTx(ctx, tr.Key()); errClear != nil {
 			return nil, errors.Wrapf(errClear, "clearing recv tx %s", recvTxHash)
 		}
