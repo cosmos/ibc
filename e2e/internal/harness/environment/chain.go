@@ -161,10 +161,7 @@ func (e *EVM) AwaitTransactionReceipt(ctx context.Context, hash common.Hash) (*t
 }
 
 func (e *EVM) transactionWait() chainevm.TransactionWait {
-	return chainevm.TransactionWait{
-		Timeout:      e.chain.timing.CompletionBudget,
-		PollInterval: e.chain.timing.PollInterval,
-	}
+	return e.chain.timing.transactionWait()
 }
 
 func (e *EVM) Logs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
@@ -375,6 +372,11 @@ func (n *NodeLifecycle) Stop(ctx context.Context) error {
 
 func (n *NodeLifecycle) Start(ctx context.Context) error {
 	return n.chain.use(func() error { return n.controller.StartNode(ctx) })
+}
+
+// transactionWait bounds one transaction on a Chain with this timing.
+func (t Timing) transactionWait() chainevm.TransactionWait {
+	return chainevm.TransactionWait{Timeout: t.CompletionBudget, PollInterval: t.PollInterval}
 }
 
 func blockTiming(block time.Duration) Timing {
