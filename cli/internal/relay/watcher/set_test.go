@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -68,8 +69,8 @@ func TestNewSetFromConfig(t *testing.T) {
 }
 
 // TestSetStartKeepsSiblings covers a chain whose first subscribe fails: the
-// set still starts, the chain that did subscribe stays up, and Stop tears
-// both the live subscription and the clearer-only watcher down.
+// chain that did subscribe stays up while the other retries, and Stop tears
+// both down.
 func TestSetStartKeepsSiblings(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		running, failing := newFakeChain(t), newFakeChain(t)
@@ -80,14 +81,19 @@ func TestSetStartKeepsSiblings(t *testing.T) {
 			newTestWatcher(failing, watcherStore(t)),
 		}
 
-		require.NoError(t, set.Start())
+		set.Start()
 		synctest.Wait()
 
 		assert.False(t, running.latestSub().unsubscribed)
 		assert.Zero(t, failing.openedSubs())
 
+		time.Sleep(DefaultMinBackoff)
+		synctest.Wait()
+		assert.Equal(t, 1, failing.openedSubs())
+
 		require.NoError(t, set.Stop())
 		assert.True(t, running.latestSub().unsubscribed)
+		assert.True(t, failing.latestSub().unsubscribed)
 	})
 }
 
@@ -96,7 +102,7 @@ func TestSetStartStop(t *testing.T) {
 		chain := newFakeChain(t)
 		set := Set{newTestWatcher(chain, watcherStore(t))}
 
-		require.NoError(t, set.Start())
+		set.Start()
 		synctest.Wait()
 
 		require.NoError(t, set.Stop())
