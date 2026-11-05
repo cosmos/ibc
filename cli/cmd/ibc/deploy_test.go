@@ -113,10 +113,11 @@ func TestDeployCorePopulateConfig(t *testing.T) {
 			t.Cleanup(rpc.Close)
 
 			key, _ := newLocalSignerConfig(t, "deployer")
+			watcherKey, _ := newLocalSignerConfig(t, "watcher-key")
 			cfg := config.DefaultConfig()
 			cfg.Server.ListenAddress = "127.0.0.1:4567"
 			cfg.DB.URL = "operator.db"
-			cfg.Signers = config.Signers{key}
+			cfg.Signers = config.Signers{key, watcherKey}
 			cfg.Chains = config.Chains{
 				{
 					ChainID:  "1",
@@ -142,9 +143,15 @@ func TestDeployCorePopulateConfig(t *testing.T) {
 					},
 				},
 			}
-			cfg.Attestors = config.Attestors{{
-				Name: "watcher", Type: config.AttestorTypeLocal, ChainID: "2", Signer: key.Alias, FinalityOffset: 7,
-			}}
+			cfg.Attestors = config.Attestors{
+				{
+					Name:           "watcher",
+					Type:           config.AttestorTypeLocal,
+					ChainID:        "2",
+					Signer:         watcherKey.Alias,
+					FinalityOffset: 7,
+				},
+			}
 			path := filepath.Join(home, globalFlags.Config)
 			require.NoError(t, cfg.StoreToFile(path))
 			cfg, err := config.LoadFromFile(path, true)
@@ -408,14 +415,14 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 	a.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Address: "0xca",
 		CounterpartyChainID: "2", CounterpartyClientID: "cli-1-2",
-		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200, MaxClockDrift: 60},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterB", TrustingPeriod: 7200},
 	})
 	b := manifest.New("2", "evm")
 	b.Core.Router = "0xrouterB"
 	b.UpsertClient(manifest.Client{
 		ClientID: "cli-1-2", Address: "0xcb",
 		CounterpartyChainID: "1", CounterpartyClientID: "cli-1-2",
-		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200, MaxClockDrift: 60},
+		Besu: &manifest.BesuParams{IBCRouter: "0xrouterA", TrustingPeriod: 7200},
 	})
 
 	out, err := renderRelayConfig(config.Config{}, a, b, "signer-a", "signer-b")
@@ -427,28 +434,26 @@ func TestRenderRelayConfigBesu(t *testing.T) {
 }
 
 func TestBesuParamsFlags(t *testing.T) {
-	previousPeriod, previousDrift, previousLevel := flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel
+	previousPeriod, previousLevel := flagDeployTrustingPeriod, flagDeployTrustLevel
 	t.Cleanup(func() {
-		flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = previousPeriod, previousDrift, previousLevel
+		flagDeployTrustingPeriod, flagDeployTrustLevel = previousPeriod, previousLevel
 	})
 	const router = "0x00000000000000000000000000000000000000bb"
 	for _, tc := range []struct {
 		name      string
 		period    time.Duration
-		drift     time.Duration
 		level     string
 		router    string
 		wantLevel besumsgs.IBesuLightClientMsgsTrustThreshold
 		wantErr   string
 	}{
-		{name: "zero", router: router, wantErr: "--trusting-period must be positive"},
-		{name: "negative drift", period: time.Hour, drift: -time.Second, router: router, wantErr: "--max-clock-drift: must not be negative"},
+		{name: "negative period", period: -time.Second, router: router, wantErr: "--trusting-period: must not be negative"},
 		{name: "finite", period: 2 * time.Hour, router: router},
 		{
 			name: "trust level", period: 2 * time.Hour, level: "1/2", router: router,
 			wantLevel: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2},
 		},
-		{name: "bad trust level", period: 2 * time.Hour, level: "1/4", router: router, wantErr: "--trust-level: must be from 1/3 to 1"},
+		{name: "bad trust level", period: 2 * time.Hour, level: "1/4", router: router, wantErr: "--trust-level: must be from 1/3 to 2/3"},
 		{name: "missing router", period: 2 * time.Hour, router: "", wantErr: "evm.ics26Router: required"},
 		{name: "malformed router", period: 2 * time.Hour, router: "bad", wantErr: "evm.ics26Router: invalid EVM address"},
 		{
@@ -457,35 +462,27 @@ func TestBesuParamsFlags(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			flagDeployTrustingPeriod, flagDeployMaxClockDrift, flagDeployTrustLevel = tc.period, time.Minute, cmp.Or(
-				tc.level,
-				"2/3",
-			)
-			if tc.drift != 0 {
-				flagDeployMaxClockDrift = tc.drift
-			}
+			flagDeployTrustingPeriod, flagDeployTrustLevel = tc.period, cmp.Or(tc.level, "2/3")
 			source := &besuHeadTarget{}
-			params, err := besuParams(t.Context(), tc.router, source)
+			params, err := besuParams(t.Context(), tc.router, hostTarget{}, source)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
-				require.False(t, source.called)
+				require.Zero(t, source.notAfter)
 				return
 			}
 			require.NoError(t, err)
-			require.True(t, source.called)
+			require.Equal(t, uint64(hostTime)+besu.MaxClockDrift, source.notAfter)
 			require.Equal(t, deploy.BesuParams{
-				Consensus:             besu.IBFT2,
 				IBCRouter:             common.HexToAddress(tc.router),
 				InitialHeight:         besuHeadHeight,
 				InitialConsensusState: besumsgs.IBesuLightClientMsgsConsensusState{Timestamp: besuHeadTimestamp},
 				TrustingPeriod:        uint64(tc.period / time.Second),
-				MaxClockDrift:         60,
 				TrustLevel:            cmp.Or(tc.wantLevel, besu.DefaultTrustLevel),
 			}, params)
 		})
 	}
 
-	_, err := besuParams(t.Context(), router, &hostOnlyTarget{})
+	_, err := besuParams(t.Context(), router, hostTarget{}, &hostOnlyTarget{})
 	require.ErrorContains(t, err, "cannot serve a besu consensus state")
 }
 
@@ -545,6 +542,34 @@ func TestIFTRateLimit(t *testing.T) {
 	}
 }
 
+func TestNormalizeIFTAddress(t *testing.T) {
+	cfg := config.Config{Chains: config.Chains{
+		{ChainID: "1", EVM: &config.EVMChainConfig{}},
+		{ChainID: "2"},
+	}}
+	for _, expected := range []string{
+		"0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+		"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+	} {
+		for _, input := range []string{strings.ToLower(expected), expected} {
+			actual, err := normalizeIFTAddress(cfg, "1", input)
+			require.NoError(t, err)
+			require.Equal(t, expected, actual)
+		}
+	}
+
+	for _, input := range []string{"counterparty-token", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"} {
+		actual, err := normalizeIFTAddress(cfg, "2", input)
+		require.NoError(t, err)
+		require.Equal(t, input, actual)
+	}
+
+	_, err := normalizeIFTAddress(cfg, "1", "invalid")
+	require.ErrorContains(t, err, "invalid IFT address")
+	_, err = normalizeIFTAddress(cfg, "unknown", "counterparty-token")
+	require.ErrorContains(t, err, "not declared in config")
+}
+
 func TestWholeSeconds(t *testing.T) {
 	for _, tc := range []struct {
 		d       time.Duration
@@ -575,11 +600,13 @@ func TestTrustLevel(t *testing.T) {
 		{s: "2/3", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 2, Denominator: 3}},
 		{s: "1/3", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 3}},
 		{s: "1/2", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 2}},
-		{s: "1/1", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 1, Denominator: 1}},
+		{s: "170/255", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 170, Denominator: 255}},
+		{s: "1/1", wantErr: "must be from 1/3 to 2/3"},
+		{s: "171/255", wantErr: "must be from 1/3 to 2/3"},
 		{s: "85/255", want: besumsgs.IBesuLightClientMsgsTrustThreshold{Numerator: 85, Denominator: 255}},
-		{s: "1/4", wantErr: "must be from 1/3 to 1"},
-		{s: "0/1", wantErr: "must be from 1/3 to 1"},
-		{s: "3/2", wantErr: "must be from 1/3 to 1"},
+		{s: "1/4", wantErr: "must be from 1/3 to 2/3"},
+		{s: "0/1", wantErr: "must be from 1/3 to 2/3"},
+		{s: "3/2", wantErr: "must be from 1/3 to 2/3"},
 		{s: "1/0", wantErr: "denominator must not be zero"},
 		{s: "0/0", wantErr: "denominator must not be zero"},
 		{s: "", wantErr: "want n/d"},
@@ -610,17 +637,28 @@ func TestTrustLevelFlagDefault(t *testing.T) {
 const (
 	besuHeadHeight    = 112
 	besuHeadTimestamp = 1788200000
+	hostTime          = 1788200005
 )
 
-// besuHeadTarget is an IBFT2 Besu chain whose head is besuHeadHeight.
-type besuHeadTarget struct {
+// hostTarget is a chain whose head time is hostTime.
+type hostTarget struct {
 	deploy.Target
-	called bool
 }
 
-func (t *besuHeadTarget) BesuHead(context.Context) (*besu.ParsedHeader, error) {
-	t.called = true
-	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp, Consensus: besu.IBFT2}, nil
+func (hostTarget) Head(context.Context) (uint64, uint64, error) {
+	return 1, hostTime, nil
+}
+
+// besuHeadTarget is a Besu chain whose header is at besuHeadHeight, and
+// records the notAfter it was asked for.
+type besuHeadTarget struct {
+	deploy.Target
+	notAfter uint64
+}
+
+func (t *besuHeadTarget) BesuHead(_ context.Context, notAfter uint64) (*besu.ParsedHeader, error) {
+	t.notAfter = notAfter
+	return &besu.ParsedHeader{Height: besuHeadHeight, Timestamp: besuHeadTimestamp}, nil
 }
 
 // hostOnlyTarget is a chain that cannot serve Besu consensus states.
@@ -725,10 +763,14 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		return deployRenderConfig(nil, []string{"1", "2"})
 	}
 	relayerKey, _ := newLocalSignerConfig(t, "relayer")
-	attestorKey, attestorAddress := newLocalSignerConfig(t, "watcher-key")
+	// One attestor key per watched chain: a key shared across chains is
+	// rejected by validation.
+	attestorKeys := map[string]config.SignerConfig{}
+	attestorAddresses := map[string]string{}
 	cfg := config.DefaultConfig()
 	cfg.Signers = config.Signers{relayerKey}
 	for _, id := range []string{"1", "2"} {
+		attestorKeys[id], attestorAddresses[id] = newLocalSignerConfig(t, "watcher-"+id+"-key")
 		cfg.Chains = append(cfg.Chains, config.ChainConfig{
 			ChainID: id,
 			EVM: &config.EVMChainConfig{
@@ -745,7 +787,8 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddress}},
+			// The client on pair[0] is attested by the key watching pair[2].
+			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddresses[pair[2]]}},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
@@ -762,8 +805,8 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		require.Empty(t, a.Signer)
 	}
 
-	// A key becomes available after the draft was written; preserve user settings.
-	draft.Signers = append(draft.Signers, attestorKey)
+	// Keys become available after the draft was written; preserve user settings.
+	draft.Signers = append(draft.Signers, attestorKeys["1"], attestorKeys["2"])
 	draft.Relayer.Connections[0].Alias = "custom-route"
 	draft.Attestors[0].FinalityOffset = 42
 	require.NoError(t, draft.StoreToFile(path))
@@ -776,7 +819,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 	require.Equal(t, relayerKey.Alias, repaired.Relayer.Connections[0].ClientB.Signer)
 	require.Len(t, repaired.Attestors, 2)
 	for i, a := range repaired.Attestors {
-		require.Equal(t, attestorKey.Alias, a.Signer)
+		require.Equal(t, attestorKeys[a.ChainID].Alias, a.Signer)
 		require.Equal(t, draft.Attestors[i].Name, a.Name)
 		require.Equal(t, draft.Attestors[i].FinalityOffset, a.FinalityOffset)
 	}
@@ -792,7 +835,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 	require.NoError(t, repaired.StoreToFile(path))
 	invalid, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.ErrorContains(t, run("", ""), "duplicate local attestor signer")
+	require.ErrorContains(t, run("", ""), "is already assigned to")
 	unchanged, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, invalid, unchanged)

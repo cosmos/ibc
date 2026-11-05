@@ -1,0 +1,12 @@
+{
+  "name": "ibc-documentation",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx mint@4 dev",
+    "broken-links": "npx mint@4 broken-links"
+  },
+  "dependencies": {
+    "mint": "^4.2.7"
+  }
+}

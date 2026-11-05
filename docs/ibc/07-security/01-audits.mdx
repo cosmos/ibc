@@ -1,0 +1,75 @@
+---
+title: Security audits
+description: Every independent audit of IBC, across the protocol and its Go, Solidity, and Solana implementations.
+---
+
+IBC has been audited by multiple independent security firms and engineers. 
+
+Reports are published in the following repositories:
+
+- [cosmos/ibc-contracts/docs/audits](https://github.com/cosmos/ibc-contracts/tree/main/docs/audits) covers the Solidity and Solana implementations.
+- [cosmos/ibc-go/docs/audits](https://github.com/cosmos/ibc-go/tree/main/docs/audits) covers the protocol and the Go implementation.
+
+
+## Protocol
+
+| Report | Auditor | Date |
+| --- | --- | --- |
+| [IBC v2 collaborative audit](https://github.com/cosmos/ibc-go/blob/main/docs/audits/IBC-v2/IBC-v2-April-2025-Collaborative-Audit-Report.pdf) | Sherlock | April 2025 |
+
+Covers the IBC v2 protocol, which removes the channel and connection handshakes, narrows the application interface, and opens IBC to domains such as Ethereum while staying compatible with existing channels. Audited at `79218a53`, final commit `d316a8b6`.
+
+The same report is published in both repositories, so you may also see it as `2025-04-03-sherlock.pdf` in `ibc-contracts`.
+
+## Go implementation
+
+Audits of [ibc-go](https://github.com/cosmos/ibc-go), the Go implementation used by Cosmos SDK chains.
+
+| Report | Auditor | Date |
+| --- | --- | --- |
+| [GMP and attestation light client](https://github.com/cosmos/ibc-go/blob/main/docs/audits/27-gmp-and-attestation/IBC-Go%20GMP%20Module%20and%20Attestations%20Light%20Client%20-%20Zellic%20Audit%20Report.pdf) | Zellic | February 2026 |
+| [ICS-20 token transfer v2](https://github.com/cosmos/ibc-go/blob/main/docs/audits/20-token-transfer/Atredis%20Partners%20-%20Interchain%20ICS20%20v2%20New%20Features%20Assessment%20-%20Report%20v1.0.pdf) | Atredis Partners | September 2024 |
+| [Channel upgrades](https://github.com/cosmos/ibc-go/blob/main/docs/audits/04-channel-upgrades/Atredis%20Partners%20-%20Interchain%20Foundation%20IBC-Go%20Channel%20Upgrade%20Feature%20Assessment%20-%20Report%20v1.1.pdf) | Atredis Partners | March 2024 |
+| [08-wasm light client](https://github.com/cosmos/ibc-go/blob/main/docs/audits/08-wasm/Halborn%20audit%20report.pdf) | Halborn | February 2023 |
+| [08-wasm light client review](https://github.com/cosmos/ibc-go/blob/main/docs/audits/08-wasm/Ethan%20Frey%20-%20Wasm%20Client%20Review.pdf) | Ethan Frey | — |
+| [Interchain accounts (ICS-27)](https://github.com/cosmos/ibc-go/blob/main/docs/audits/27-interchain-accounts/Trail%20of%20Bits%20audit%20-%20Final%20Report.pdf) | Trail of Bits | December 2021 |
+
+The GMP review covers the ICS-27 GMP module — keeper, message and query servers, packet relay, derived accounts — together with the attestation light client, at commit `9ffc7482`. The ICS-20 v2 review covers multi-denomination support, the memo field, forwarding middleware, and path unwinding. The channel upgrades review covers upgrade handshakes, timeouts, state machine verification, and cancellation.
+
+The second 08-wasm entry is a technical review of the client's architecture rather than a firm's audit report.
+
+## Solidity and Ethereum light client
+
+Audits of the Solidity contracts and the Ethereum light client in [ibc-contracts](https://github.com/cosmos/ibc-contracts).
+
+| Report | Auditor | Date |
+| --- | --- | --- |
+| [Solidity GMP, IFT, and attestation light client](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2026-03-zellic.pdf) | Zellic | March 2026 |
+| [Solidity contracts and Ethereum light client](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2025-03-25-zellic.pdf) | Zellic | March 2025 |
+
+The 2026 review covers `ICS27GMP.sol`, `ICS26Router.sol`, `ICS20Transfer.sol`, the Interchain Fungible Token base and ownership contracts, the ICS-27 account and callback libraries, and the attestation light client, at commit `9798e644`.
+
+The 2025 review covers the Solidity contracts, the Ethereum light client and trie database, the SP1 ICS-07 Tendermint prover, the `cw-ics08-wasm-eth` CosmWasm client, and the SP1 programs, at commit `6bb8fcf6`. It also reviewed the `EurekaHandler` contract in `skip-mev/skip-go-evm-contracts`.
+
+## Solana implementation
+
+Audits of the Solana programs in [ibc-contracts](https://github.com/cosmos/ibc-contracts).
+
+| Report | Auditor | Date |
+| --- | --- | --- |
+| [Solana programs](https://github.com/cosmos/ibc-contracts/blob/main/docs/audits/2026-02-20-zenith.pdf) | Zenith | April 2026 |
+
+Covers the ICS-26 router, the ICS-27 GMP application, the Interchain Fungible Token program, the attestation light client, the access manager, and the Solana Tendermint light client, at commit `5560586d`. The engagement included a mitigation review of the fixes, at commit `3b594aab`.
+
+## Reporting a vulnerability
+
+Report privately through the security policy for the affected repository, not as a public issue:
+
+- [ibc-go security policy](https://github.com/cosmos/ibc-go/security/policy)
+- [ibc-contracts security policy](https://github.com/cosmos/ibc-contracts/security/policy)
+
+Paid disclosures go through the [Bug bounty on Immunefi](https://immunefi.com/bug-bounty/cosmos/information/).
+
+## Related
+
+- [Permissions and upgrades](/ibc/06-ibc-solidity-contracts/06-permissions-and-upgrades) for the Solidity contracts' access control

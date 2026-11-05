@@ -124,30 +124,30 @@ func New(
 
 func (w *Watcher) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
+	w.cancel = cancel
+
+	// note these routines have no panic recovery on purpose.
+	// panic in clearing/subscription routine explicitly crashes the program.
+	w.wg.Go(func() {
+		w.runClearer(ctx)
+	})
 
 	eventsChan := make(chan v2.PacketEvent, eventBuffer)
+	metrics.subscription(ctx, w.chainID, false)
 
+	// run clearer only if:
+	// - client has NO websocket endpoint
+	// - client has websocket endpoint, but subscription fails
 	eventStream, err := w.subscribe(ctx, eventsChan)
 	if err != nil {
-		cancel()
+		w.logger.Error("Unable to subscribe to received packets, falling back to periodic clearing", "err", err)
 
-		return err
+		return nil
 	}
 
-	w.cancel = cancel
-	w.wg.Add(2)
-
-	// note that these routines have no panic recovery on purpose.
-	// panic in clearing/subscription routine explicitly crashes the program.
-	go func() {
-		defer w.wg.Done()
-		w.runClearer(ctx)
-	}()
-
-	go func() {
-		defer w.wg.Done()
+	w.wg.Go(func() {
 		w.runSubscription(ctx, eventStream)
-	}()
+	})
 
 	return nil
 }
@@ -238,12 +238,15 @@ func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (st
 		return stream{}, errors.Wrap(err, "subscribing to send packets")
 	}
 
+	metrics.subscription(ctx, w.chainID, true)
+
 	return stream{sub, events, cancel}, nil
 }
 
 // connects to live events and recovers broken subscriptions.
 func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 	defer func() {
+		metrics.subscription(ctx, w.chainID, false)
 		eventStream.close(true)
 	}()
 
@@ -270,6 +273,7 @@ func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 		case <-ctx.Done():
 			return
 		case err := <-eventStream.errs():
+			metrics.subscription(ctx, w.chainID, false)
 			eventStream.close(false)
 			eventStream = stream{}
 			triggerReconnect("Send packet subscription ended, reconnecting", err)

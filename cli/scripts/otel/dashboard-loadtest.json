@@ -173,7 +173,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "histogram_quantile(0.90, sum by (le, rpc_method) (rate(rpc_server_duration_milliseconds_bucket{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval])))",
+                        "expr": "histogram_quantile(0.90, sum by (le, rpc_method) (rate(rpc_server_call_duration_seconds_bucket{service_runtime=\"relayer\", rpc_method=~\"ibc.v2.relayer.RelayerApiService/.*\", rpc_response_status_code=\"OK\"}[$__rate_interval])))",
                         "instant": false,
                         "key": "Q-panel-10-relayer",
                         "legendFormat": "{{ rpc_method }}",
@@ -209,7 +209,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "ms",
+                  "unit": "s",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
@@ -272,7 +272,7 @@
         "spec": {
           "id": 11,
           "title": "Relayer GRPC Failures / 5s",
-          "description": "Estimated failed relayer API calls in the preceding five seconds per method. Nonzero GRPC status means failure; increase extrapolates between scrapes. Only recorded error series are shown; absent series are not zero-filled.",
+          "description": "Estimated failed relayer API calls in the preceding five seconds per method. A status other than OK means failure; increase extrapolates between scrapes. Only recorded error series are shown; absent series are not zero-filled.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -291,7 +291,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (rpc_method) (increase(rpc_server_duration_milliseconds_count{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code!=\"0\"}[5s]))",
+                        "expr": "sum by (rpc_method) (increase(rpc_server_call_duration_seconds_count{service_runtime=\"relayer\", rpc_method=~\"ibc.v2.relayer.RelayerApiService/.*\", rpc_response_status_code!=\"OK\"}[5s]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -3380,7 +3380,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum(rate(rpc_server_duration_milliseconds_count{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\"}[$__rate_interval]))",
+                        "expr": "sum(rate(rpc_server_call_duration_seconds_count{service_runtime=\"relayer\", rpc_method=~\"ibc.v2.relayer.RelayerApiService/.*\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -3481,7 +3481,7 @@
         "spec": {
           "id": 9,
           "title": "Relayer GRPC Latency Avg",
-          "description": "Arithmetic mean latency in milliseconds of successful requests over the rate interval. Calculated as summed duration rates divided by summed request-count rates; no value when no requests are observed.",
+          "description": "Arithmetic mean latency in seconds of successful requests over the rate interval. Calculated as summed duration rates divided by summed request-count rates; no value when no requests are observed.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -3500,7 +3500,7 @@
                       "spec": {
                         "editorMode": "code",
                         "exemplar": false,
-                        "expr": "sum by (rpc_method) (rate(rpc_server_duration_milliseconds_sum{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval])) / sum by (rpc_method) (rate(rpc_server_duration_milliseconds_count{service_runtime=\"relayer\", rpc_service=\"ibc.v2.relayer.RelayerApiService\", rpc_grpc_status_code=\"0\"}[$__rate_interval]))",
+                        "expr": "sum by (rpc_method) (rate(rpc_server_call_duration_seconds_sum{service_runtime=\"relayer\", rpc_method=~\"ibc.v2.relayer.RelayerApiService/.*\", rpc_response_status_code=\"OK\"}[$__rate_interval])) / sum by (rpc_method) (rate(rpc_server_call_duration_seconds_count{service_runtime=\"relayer\", rpc_method=~\"ibc.v2.relayer.RelayerApiService/.*\", rpc_response_status_code=\"OK\"}[$__rate_interval]))",
                         "format": "time_series",
                         "instant": false,
                         "interval": "",
@@ -3538,7 +3538,7 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "ms",
+                  "unit": "s",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [

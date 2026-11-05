@@ -20,6 +20,8 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
+const maxResponseBytes = 1 << 20 // 1MB
+
 // Prover proves one light client remotely. Every request names the client, so
 // one service can serve many.
 type Prover struct {
@@ -38,10 +40,15 @@ func New(
 ) *Prover {
 	return &Prover{
 		requestTimeout: requestTimeout,
-		client:         proverv2.NewProverServiceClient(httpClient, url, connect.WithGRPC()),
-		chainID:        chainID,
-		clientID:       clientID,
-		logger:         logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
+		client: proverv2.NewProverServiceClient(
+			httpClient,
+			url,
+			connect.WithGRPC(),
+			connect.WithReadMaxBytes(maxResponseBytes),
+		),
+		chainID:  chainID,
+		clientID: clientID,
+		logger:   logger.With("module", "remoteProver", "chainID", chainID, "clientID", clientID, "url", url),
 	}
 }
 
@@ -53,15 +60,21 @@ func NewFromEndpoint(
 	requestTimeout time.Duration,
 	logger *slog.Logger,
 ) *Prover {
-	return New(newHTTPClient(endpoint.TLS), endpoint.URL, chainID, clientID, requestTimeout, logger)
+	return New(newHTTPClient(endpoint.TLS, requestTimeout), endpoint.URL, chainID, clientID, requestTimeout, logger)
 }
 
-func newHTTPClient(tlsConfig *tls.Config) *http.Client {
+func newHTTPClient(tlsConfig *tls.Config, requestTimeout time.Duration) *http.Client {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP2(true)
 	protocols.SetUnencryptedHTTP2(true)
 
-	return &http.Client{Transport: &http.Transport{Protocols: protocols, TLSClientConfig: tlsConfig}}
+	return &http.Client{
+		Transport: &http.Transport{
+			Protocols:             protocols,
+			TLSClientConfig:       tlsConfig,
+			ResponseHeaderTimeout: requestTimeout,
+		},
+	}
 }
 
 func (p *Prover) target() *proverv2.Client {

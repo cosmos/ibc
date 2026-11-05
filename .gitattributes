@@ -6,3 +6,7 @@
 
 # Plain blob, not LFS: GitHub previews blobs, never LFS pointers.
 docs/MapOfZones_IBC_Report.pdf !filter !diff !merge -text
+
+# allow images to be displayed in the docs site
+docs/**/*.png !filter !diff !merge -text
+docs/**/*.jpg !filter !diff !merge -text

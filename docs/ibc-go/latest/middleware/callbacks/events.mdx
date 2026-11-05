@@ -1,0 +1,37 @@
+---
+title: Events
+description: >-
+  An overview of all events related to the callbacks middleware. There are two
+  types of events, "ibcsrccallback" and "ibcdestcallback".
+---
+
+An overview of all events related to the callbacks middleware. There are two types of events, `"ibc_src_callback"` and `"ibc_dest_callback"`.
+
+## Shared Attributes
+
+Both of these event types share the following attributes:
+
+|       **Attribute Key**      |                                     **Attribute Values**                                    |    **Optional**    |
+| :--------------------------: | :-----------------------------------------------------------------------------------------: | :----------------: |
+|            module            |                                        "ibccallbacks"                                       |                    |
+|        callback\_type        | **One of**: "send\_packet", "acknowledgement\_packet", "timeout\_packet", "receive\_packet" |                    |
+|       callback\_address      |                                            string                                           |                    |
+|  callback\_exec\_gas\_limit  |                                 string (parsed from uint64)                                 |                    |
+| callback\_commit\_gas\_limit |                                 string (parsed from uint64)                                 |                    |
+|       packet\_sequence       |                                 string (parsed from uint64)                                 |                    |
+|       callback\_result       |                               **One of**: "success", "failure"                              |                    |
+|        callback\_error       |                              string (parsed from callback err)                              | Yes, if err != nil |
+
+## `ibc_src_callback` Attributes
+
+|   **Attribute Key**  |   **Attribute Values**   |
+| :------------------: | :----------------------: |
+|   packet\_src\_port  |   string (sourcePortID)  |
+| packet\_src\_channel | string (sourceChannelID) |
+
+## `ibc_dest_callback` Attributes
+
+|   **Attribute Key**   |  **Attribute Values**  |
+| :-------------------: | :--------------------: |
+|   packet\_dest\_port  |   string (destPortID)  |
+| packet\_dest\_channel | string (destChannelID) |

@@ -256,7 +256,7 @@ func TestReconcileDeploymentRejectsResolutionToExistingAttestorIdentity(t *testi
 			cfg.Attestors[0], cfg.Attestors[1] = cfg.Attestors[1], cfg.Attestors[0]
 		}
 		_, _, err := cfg.ReconcileDeployment(DeploymentConfig{Attestors: Attestors{localAttestor("draft", "key")}})
-		require.ErrorContains(t, err, "duplicate local attestor signer")
+		require.ErrorContains(t, err, `signer "key" is already assigned to`)
 	}
 }
 

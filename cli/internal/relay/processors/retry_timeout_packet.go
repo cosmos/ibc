@@ -67,6 +67,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 	}
 
 	metrics.txRetry(ctx, tr, relayTypeSendToTimeout, *tr.TimeoutTxHash)
+	metrics.packetExecution(ctx, tr, "timeout", executionFailed)
 
 	return nil, ErrRetryingTimeoutPacket
 }
@@ -74,7 +75,7 @@ func (p RetryTimeoutPacket) Process(ctx context.Context, tr *Transfer) (*Transfe
 func (p RetryTimeoutPacket) Cancel(tr *Transfer, err error) {
 	switch {
 	case errors.Is(err, ErrRetryingTimeoutPacket):
-		tr.GetLogger().Warn("Retrying relay tx", "kind", "timeout")
+		tr.GetLogger().Warn("Retrying relay tx", "kind", "timeout", "txHash", *tr.TimeoutTxHash)
 	case errors.Is(err, v2.ErrTxNotFound):
 		tr.GetLogger().Debug("Relay tx not yet found on chain", "kind", "timeout")
 	default:

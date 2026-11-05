@@ -1,0 +1,81 @@
+---
+title: IBC-Go v10 to v11
+description: This guide provides instructions for migrating to a new version of ibc-go.
+---
+
+This guide provides instructions for migrating to a new version of ibc-go.
+
+**Note:** ibc-go supports golang semantic versioning and therefore all imports must be updated on major version releases.
+
+Diff examples are shown after the list of overall changes:
+
+- Chains will need to remove the `ParamSubspace` arg from all calls to `Keeper` constructors
+
+```diff
+  app.IBCKeeper = ibckeeper.NewKeeper(
+    appCodec,
+    runtime.NewKVStoreService(keys[ibcexported.StoreKey]),
+-   app.GetSubspace(ibcexported.ModuleName),
+    app.UpgradeKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+  )
+```
+
+The transfer module, the packet forward middleware, and the rate limiting middleware support custom address codecs. This feature is primarily added to support Cosmos EVM for IBC transfers. In a standard Cosmos SDK app, they are wired as follows:
+
+```diff
+  app.TransferKeeper = ibctransferkeeper.NewKeeper(
+    appCodec,
++    app.AccountKeeper.AddressCodec(),
+    runtime.NewKVStoreService(keys[ibctransfertypes.StoreKey]),
+    app.IBCKeeper.ChannelKeeper,
+    app.MsgServiceRouter(),
+    app.AccountKeeper, app.BankKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+  )
+```
+
+```diff
+  app.RateLimitKeeper = ratelimitkeeper.NewKeeper(
+    appCodec,
++    app.AccountKeeper.AddressCodec(),
+    runtime.NewKVStoreService(keys[ratelimittypes.StoreKey]),
+    app.IBCKeeper.ChannelKeeper,
+    app.IBCKeeper.ClientKeeper,
+    app.BankKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String()
+  )
+```
+
+```diff
+  app.PFMKeeper = packetforwardkeeper.NewKeeper(
+    appCodec,
++    app.AccountKeeper.AddressCodec(),
+    runtime.NewKVStoreService(keys[packetforwardtypes.StoreKey]),
+    app.TransferKeeper,
+    app.IBCKeeper.ChannelKeeper,
+    app.BankKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String()
+  )
+```
+
+## ICS27-GMP
+
+ICS27 General Message Passing (GMP) has been added as a supported IBC application of ibc-go. It has no parameters.
+
+### Add `StoreUpgrades` for ICS27-GMP module
+
+For ICS27-GMP it is also necessary to [manually add store upgrades](https://docs.cosmos.network/sdk/v0.53/learn/advanced/upgrade#add-storeupgrades-for-new-modules) for the new GMP module and then configure the store loader to apply those upgrades in `app.go`:
+
+```go
+if upgradeInfo.Name == "v11" && !app.UpgradeKeeper.IsSkipHeight(upgradeInfo.Height) {
+  storeUpgrades := store.StoreUpgrades{
+    Added: []string{gmptypes.StoreKey},
+  }
+
+  app.SetStoreLoader(upgradetypes.UpgradeStoreLoader(upgradeInfo.Height, &storeUpgrades))
+}
+```
+
+This ensures that the new module's stores are added to the multistore before the migrations begin.
+If a chain chooses not to integrate the GMP module, it does not need to add the GMP key to the `Added` field.

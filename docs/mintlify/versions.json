@@ -1,0 +1,11 @@
+{
+  "products": {
+    "ibc-go": {
+      "versions": ["latest", "v10.1.x"],
+      "defaultVersion": "latest",
+      "repository": "cosmos/ibc-go",
+      "changelogPath": "CHANGELOG.md",
+      "latestDisplayVersion": "v11.0.x"
+    }
+  }
+}

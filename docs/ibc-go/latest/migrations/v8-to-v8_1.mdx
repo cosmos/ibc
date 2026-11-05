@@ -1,0 +1,38 @@
+---
+title: IBC-Go v8 to v8.1
+description: This guide provides instructions for migrating to version v8.1.0 of ibc-go.
+---
+
+This guide provides instructions for migrating to version `v8.1.0` of ibc-go.
+
+There are four sections based on the four potential user groups of this document:
+
+* [Migrating from v8 to v8.1](#migrating-from-v8-to-v81)
+  * [Chains](#chains)
+  * [IBC apps](#ibc-apps)
+  * [Relayers](#relayers)
+  * [IBC light clients](#ibc-light-clients)
+
+**Note:** ibc-go supports golang semantic versioning and therefore all imports must be updated on major version releases.
+
+## Chains
+
+### `04-channel` params migration
+
+Self-managed [params](https://github.com/cosmos/ibc-go/blob/v8.1.0/proto/ibc/core/channel/v1/channel.proto#L183-L187) have been added for `04-channel` module. The params include the `upgrade_timeout` that is used in channel upgradability to specify the interval of time during which the counterparty chain must flush all in-flight packets on its end and move to `FLUSH_COMPLETE` state). An [automatic migration handler](https://github.com/cosmos/ibc-go/blob/v8.1.0/modules/core/module.go#L162-L166) is configured in the `04-channel` module that sets the default params (with a default upgrade timeout of 10 minutes). The module has a corresponding [`MsgUpdateParams` message](https://github.com/cosmos/ibc-go/blob/v8.1.0/proto/ibc/core/channel/v1/tx.proto#L435-L447) with a `Params` field which can be specified in full to update the module's `Params`.
+
+### Fee migration
+
+In ibc-go v8.1.0 an improved, more efficient escrow calculation of fees for packet incentivisation has been introduced (see [this issue](https://github.com/cosmos/ibc-go/issues/5509) for more information). Before v8.1.0 the amount escrowed was `(ReckFee + AckFee + TimeoutFee)`; from ibc-go v8.1.0, the calculation is changed to `Max(RecvFee + AckFee, TimeoutFee)`. In order to guarantee that the correct amount of fees are refunded for packets that are in-flight during the upgrade to ibc-go v8.1.0, an [automatic migration handler](https://github.com/cosmos/ibc-go/blob/v8.1.0/modules/apps/29-fee/module.go#L113-L115) is configured in the `29-fee` module to refund the leftover fees (i.e `(ReckFee + AckFee + TimeoutFee) - Max(RecvFee + AckFee, TimeoutFee)`) that otherwise would not be refunded when the packet lifecycle completes and the new calculation is used.
+
+## IBC apps
+
+* No relevant changes were made in this release.
+
+## Relayers
+
+* No relevant changes were made in this release.
+
+## IBC light clients
+
+* No relevant changes were made in this release.

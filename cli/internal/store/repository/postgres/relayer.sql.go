@@ -168,6 +168,7 @@ WHERE status NOT IN (
 ORDER BY id
 `
 
+// todo(swift1337): ensure the query uses limits
 func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
 	rows, err := q.db.Query(ctx, listDispatchablePackets)
 	if err != nil {
@@ -213,24 +214,31 @@ func (q *Queries) ListDispatchablePackets(ctx context.Context) ([]Packet, error)
 	return items, nil
 }
 
-const listPacketSequencesFrom = `-- name: ListPacketSequencesFrom :many
+const listPacketSequences = `-- name: ListPacketSequences :many
 SELECT packet_sequence_number FROM packets
 WHERE source_chain_id = $1
   AND packet_source_client_id = $2
   AND packet_sequence_number >= $3
+  AND packet_sequence_number <= $4
 ORDER BY packet_sequence_number
 `
 
-type ListPacketSequencesFromParams struct {
+type ListPacketSequencesParams struct {
 	ChainID      string
 	ClientID     string
 	FromSequence int64
+	ToSequence   int64
 }
 
 // clearing skips a sequence we hold a row for in ANY state, including NOT_SELECTED,
 // so this filters on no status
-func (q *Queries) ListPacketSequencesFrom(ctx context.Context, arg ListPacketSequencesFromParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listPacketSequencesFrom, arg.ChainID, arg.ClientID, arg.FromSequence)
+func (q *Queries) ListPacketSequences(ctx context.Context, arg ListPacketSequencesParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPacketSequences,
+		arg.ChainID,
+		arg.ClientID,
+		arg.FromSequence,
+		arg.ToSequence,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -388,6 +396,7 @@ WHERE source_chain_id = $1 AND packet_source_client_id = $2
 ORDER BY packet_sequence_number
 `
 
+// todo(swift1337): bound unresolved retries without dropping unprobed sequences
 func (q *Queries) ListUnresolvedSequences(ctx context.Context, chainID string, clientID string) ([]int64, error) {
 	rows, err := q.db.Query(ctx, listUnresolvedSequences, chainID, clientID)
 	if err != nil {

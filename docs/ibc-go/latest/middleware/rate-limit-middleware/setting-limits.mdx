@@ -1,0 +1,100 @@
+---
+title: Setting Rate Limits
+description: Configure rate limits through governance, and set whitelists and blacklists in genesis.
+---
+
+This guide covers configuring limits on a chain that already has the middleware wired. Every change to a limit is a governance message, submitted inside [a Cosmos SDK governance proposal](https://docs.cosmos.network/sdk/latest/modules/gov/README), and it takes effect only if the proposal passes. This guide assumes familiarity with submitting and voting on proposals.
+
+## The four governance messages
+
+The module accepts [four governance messages](https://github.com/cosmos/ibc-go/blob/2619d6ec8543b2e0cbc1a234dad38b4ae2299a27/proto/ibc/03-applications/rate_limiting/v1/tx.proto), each requiring the governance authority as the signer. Together they cover the full life of a limit:
+
+- `MsgAddRateLimit` creates a limit.
+- `MsgUpdateRateLimit` replaces a limit's quota and resets its flow.
+- `MsgRemoveRateLimit` deletes a limit.
+- `MsgResetRateLimit` keeps a limit but zeroes its flow and clears its in-flight packet records.
+
+Each field means:
+
+| Field | Description |
+| --- | --- |
+| `denom` | The token the limit applies to, as it appears on this chain. Use the `ibc/...` denom for a non-native token. |
+| `channel_or_client_id` | The channel ID under IBC v1, or the client ID under IBC v2, that the limit applies to. |
+| `max_percent_send` | The outbound cap, as a percent of channel value. For example, 10 means 10%. |
+| `max_percent_recv` | The inbound cap, as a percent of channel value. For example, 10 means 10%. |
+| `duration_hours` | The window length in hours before the flow resets. For example, 24 means daily. |
+
+`MsgAddRateLimit` and `MsgUpdateRateLimit` take all five fields. `MsgRemoveRateLimit` and `MsgResetRateLimit` take only `denom` and `channel_or_client_id`. Every message also carries `signer`, the governance authority.
+
+Fields are validated before a message is accepted:
+
+- `channel_or_client_id` is a channel in the form `channel-<n>` or a valid client ID.
+- Each percentage is between 0 and 100.
+- At least one of send or receive is greater than zero.
+- `duration_hours` is greater than zero.
+
+## Choose quota values
+
+The caps are percentages of the denom's total supply on the chain.
+
+A `max_percent_send` of 10 caps net outflow at 10 percent of supply per window. To limit only one direction, set the unused side to 0 and keep the other above zero. To set a daily limit, set `duration_hours` to 24.
+
+## Whitelist and blacklist entries
+
+The module supports two overrides beyond quotas:
+
+- A whitelist exempts a specific sender and receiver address pair from rate limiting.
+- A blacklist blocks a denom outright.
+
+Neither has a governance message. Set both in the module's genesis state, under `app_state.ratelimit`, in the `whitelisted_address_pairs` and `blacklisted_denoms` fields. Change them only at chain launch or through a coordinated upgrade.
+
+```json
+{
+  "app_state": {
+    "ratelimit": {
+      "whitelisted_address_pairs": [
+        { "sender": "cosmos1sender...", "receiver": "cosmos1receiver..." }
+      ],
+      "blacklisted_denoms": ["uatom"]
+    }
+  }
+}
+```
+
+## Verify a limit
+
+The module exposes query commands under the `ratelimiting` subcommand. Use them to confirm a proposal took effect.
+
+List every limit on the chain:
+
+```bash
+simd query ratelimiting list-rate-limits
+```
+
+Query one limit by path and denom:
+
+```bash
+simd query ratelimiting rate-limit [channel-or-client-id] --denom [denom]
+```
+
+Query the limits that target a given chain:
+
+```bash
+simd query ratelimiting rate-limits-by-chain [chain-id]
+```
+
+Read the current whitelist:
+
+```bash
+simd query ratelimiting list-whitelisted-addresses
+```
+
+Read the current blacklist:
+
+```bash
+simd query ratelimiting list-blacklisted-denoms
+```
+
+## Next steps
+
+- Review how limits are evaluated in the [rate limiting overview](/ibc-go/latest/middleware/rate-limit-middleware/overview).

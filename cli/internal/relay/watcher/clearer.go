@@ -16,11 +16,19 @@ import (
 
 const chunkSizeSendEvents = 200
 
+// max limit on Clear() since last sequence processed
+const clearingSequenceLimit = 1000
+
 // ClearStore the persistence a clearing pass reads and writes.
 type ClearStore interface {
 	PacketStore
 
-	ListPacketSequencesFrom(ctx context.Context, chainID string, clientID string, fromSequence uint64) ([]uint64, error)
+	ListPacketSequences(
+		ctx context.Context,
+		chainID, clientID string,
+		fromSequence, toSequence uint64,
+	) ([]uint64, error)
+
 	GetClearingState(ctx context.Context, chainID string, clientID string) (store.ClearingState, error)
 
 	// Transact carries the pass's rows and its watermark, so a watermark is never
@@ -141,20 +149,39 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 	seqFrom := state.LastProbed + 1
 
 	// latest sequence on the chain
-	seqLatest, err := c.chain.LatestPacketSequence(ctx, c.clientID, c.latestBlockHeight)
+	seqTo, err := c.chain.LatestPacketSequence(ctx, c.clientID, c.latestBlockHeight)
 	if err != nil {
 		return Result{}, errors.Wrapf(err, "reading the latest sequence")
 	}
 
+	if seqTo > state.LastProbed {
+		seqRange := seqTo - state.LastProbed
+
+		// limit one Clear() run to fixed packets size
+		if seqRange > clearingSequenceLimit {
+			c.logger.Info(
+				"Limiting number of sequences to clear. Lower .clearInterval for faster clearing.",
+				"clientID", c.clientID,
+				"seqFrom", seqFrom,
+				"rangeWanted", seqRange,
+				"rangeCapped", clearingSequenceLimit,
+			)
+
+			seqRange = clearingSequenceLimit
+		}
+
+		seqTo = state.LastProbed + seqRange
+	}
+
 	// fetch seqs that were recorded by wss subscription between clear() ticks
-	// todo pagination FOU-1679
-	seqsExisting, err := c.storage.ListPacketSequencesFrom(ctx, c.chainID, c.clientID, seqFrom)
+	seqsExisting, err := c.storage.ListPacketSequences(ctx, c.chainID, c.clientID, seqFrom, seqTo)
 	if err != nil {
 		return Result{}, errors.Wrapf(err, "listing recorded sequences")
 	}
 
 	// query unresolved packages one more time. This might succeed ONLY
 	// if an operator changes RPC to an archival one
+	// todo(swift1337): implement a cursor + cap for unresolved sequences
 	seqsPreviouslyUnresolved := state.Unresolved
 	if c.abandon {
 		seqsPreviouslyUnresolved = nil
@@ -163,7 +190,7 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 	// builds an array of what seqs to query, then searches for their commitments on-chain
 	seqsLive, seqsQueried, err := c.queryLiveSequences(ctx, liveRequest{
 		seqFrom:        seqFrom,
-		seqTo:          seqLatest,
+		seqTo:          seqTo,
 		seqsExisting:   seqsExisting,
 		seqsUnresolved: seqsPreviouslyUnresolved,
 	})
@@ -199,7 +226,7 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 		result.SeqsUnresolved = len(unresolved)
 	}
 
-	if err := c.persist(ctx, toBeInserted, seqLatest, delta); err != nil {
+	if err := c.persist(ctx, toBeInserted, seqTo, delta); err != nil {
 		return Result{}, err
 	}
 

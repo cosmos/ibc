@@ -317,22 +317,25 @@ func (db *SqliteDB) ListDispatchablePackets(ctx context.Context) ([]Packet, erro
 	return packets, nil
 }
 
-func (db *SqliteDB) ListPacketSequencesFrom(
+func (db *SqliteDB) ListPacketSequences(
 	ctx context.Context,
-	chainID string,
-	clientID string,
-	fromSequence uint64,
+	chainID, clientID string,
+	fromSequence, toSequence uint64,
 ) ([]uint64, error) {
-	db.logger.Debug("ListPacketSequencesFrom", "chainID", chainID, "clientID", clientID, "from", fromSequence)
+	db.logger.Debug("ListPacketSequences", "chainID", chainID, "clientID", clientID, "from", fromSequence)
 
 	if chainID == "" || clientID == "" {
 		return nil, errors.New("chainID and clientID are required")
 	}
+	if fromSequence > toSequence {
+		return []uint64{}, nil
+	}
 
-	rows, err := db.repo.ListPacketSequencesFrom(ctx, reposqlite.ListPacketSequencesFromParams{
+	rows, err := db.repo.ListPacketSequences(ctx, reposqlite.ListPacketSequencesParams{
 		ChainID:      chainID,
 		ClientID:     clientID,
 		FromSequence: int64(fromSequence), //nolint:gosec // sequences fit in int64
+		ToSequence:   int64(toSequence),   //nolint:gosec // sequences fit in int64
 	})
 	if err != nil {
 		return nil, errNormalize(err)

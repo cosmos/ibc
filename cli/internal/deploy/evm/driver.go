@@ -29,6 +29,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
 	"github.com/cosmos/ibc/cli/besu"
+	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
 	"github.com/cosmos/ibc/cli/internal/deploy"
 	"github.com/cosmos/ibc/cli/routeraccess"
 	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
@@ -251,8 +252,8 @@ func (d *Driver) provisionAttestation(
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// provisionBesu deploys a Besu light client with this chain's router as its
-// role manager, so only router calls may update or query it.
+// provisionBesu deploys a Besu light client bound to this chain's router, so
+// only the router may update it or verify proofs against it.
 func (d *Driver) provisionBesu(
 	ctx context.Context, router string, params deploy.BesuParams,
 ) (deploy.ClientRef, error) {
@@ -263,36 +264,36 @@ func (d *Driver) provisionBesu(
 	addr, tx, err := besu.DeployLightClient(
 		opts,
 		d.backend,
-		params.Consensus,
 		besumsgs.IBesuLightClientMsgsClientState{
 			IbcRouter:      params.IBCRouter,
 			LatestHeight:   besumsgs.IICS02ClientMsgsHeight{RevisionHeight: params.InitialHeight},
 			TrustingPeriod: params.TrustingPeriod,
-			MaxClockDrift:  params.MaxClockDrift,
+			MaxClockDrift:  besu.MaxClockDrift,
 			TrustLevel:     params.TrustLevel,
 		},
 		params.InitialConsensusState,
 		common.HexToAddress(router),
 	)
 	if err != nil {
-		return deploy.ClientRef{}, fmt.Errorf("deploy besu %s client: %w", params.Consensus, err)
+		return deploy.ClientRef{}, fmt.Errorf("deploy besu client: %w", chainsevm.ExplainRevert(err))
 	}
-	if err := d.awaitMined(ctx, "deploy besu "+string(params.Consensus)+" client", tx); err != nil {
+	if err := d.awaitMined(ctx, "deploy besu client", tx); err != nil {
 		return deploy.ClientRef{}, err
 	}
 	return deploy.ClientRef{Address: addr.Hex()}, nil
 }
 
-// BesuHead is this driver's sealed chain head.
-func (d *Driver) BesuHead(ctx context.Context) (*besu.ParsedHeader, error) {
+// BesuHead is this driver's sealed head, or the header besu.HeightNotAfter
+// picks when the head is later than notAfter.
+func (d *Driver) BesuHead(ctx context.Context, notAfter uint64) (*besu.ParsedHeader, error) {
 	header, err := besu.ReadSealedHeader(ctx, d.backend, nil)
 	if err != nil {
 		return nil, err
 	}
-	if header.Height == 0 {
-		return nil, fmt.Errorf("no block past genesis to trust yet")
+	if header.Timestamp <= notAfter {
+		return header, nil
 	}
-	return header, nil
+	return besu.ReadSealedHeader(ctx, d.backend, new(big.Int).SetUint64(besu.HeightNotAfter(header, notAfter)))
 }
 
 // attestationArgs validates attestation params and converts the attestor

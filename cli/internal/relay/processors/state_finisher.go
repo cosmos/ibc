@@ -41,11 +41,14 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 	}
 
 	var terminalStatus store.RelayStatus
+	var processor string
 	switch {
 	case tr.TimeoutTxHash != nil:
 		terminalStatus = store.RelayStatusCompleteWithTimeout
+		processor = "timeout"
 	case tr.AckTxHash != nil:
 		terminalStatus = store.RelayStatusCompleteWithAck
+		processor = "ack"
 		if tr.WriteAckStatus != nil && *tr.WriteAckStatus == store.WriteAckStatusError {
 			terminalStatus = store.RelayStatusCompleteWithWriteAckError
 		}
@@ -65,6 +68,7 @@ func (p StateFinisher) Process(ctx context.Context, tr *Transfer) (*Transfer, er
 
 	tr.Status = terminalStatus
 	metrics.relayCompleted(ctx, tr)
+	metrics.packetExecution(ctx, tr, processor, executionSucceeded)
 
 	tr.GetLogger().Info("Transfer complete", "status", tr.Status)
 

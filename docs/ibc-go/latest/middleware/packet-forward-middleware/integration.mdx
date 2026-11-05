@@ -1,0 +1,147 @@
+---
+title: Integration
+description: >-
+  This document provides instructions on integrating and configuring the Packet
+  Forward Middleware (PFM) within your existing chain implementation.
+---
+
+This document provides instructions on integrating and configuring the Packet Forward Middleware (PFM) within your
+existing chain implementation.
+The integration steps include the following:
+
+1. [Import the PFM, initialize the PFM Module & Keeper, initialize the store keys, and initialize the Begin/End Block logic and InitGenesis order](#example-integration-of-the-packet-forward-middleware)
+2. [Configure the IBC application stack including the transfer module](#configuring-the-transfer-application-stack-with-packet-forward-middleware)
+3. [Configuration of additional options such as timeout period and number of retries on timeout](#configurable-options-in-the-packet-forward-middleware)
+
+Integration of the PFM should take approximately 20 minutes.
+
+## Example integration of the Packet Forward Middleware
+
+```go
+// app.go
+
+// Import the packet forward middleware
+import (
+    packetforward "github.com/cosmos/ibc-go/v11/modules/apps/packet-forward-middleware"
+    packetforwardkeeper "github.com/cosmos/ibc-go/v11/modules/apps/packet-forward-middleware/keeper"
+    packetforwardtypes "github.com/cosmos/ibc-go/v11/modules/apps/packet-forward-middleware/types"
+)
+
+...
+
+// Register the AppModule for the packet forward middleware module
+ModuleBasics = module.NewBasicManager(
+    ...
+    packetforward.AppModuleBasic{},
+    ...
+)
+
+...
+
+// Add packet forward middleware Keeper
+type App struct {
+    ...
+    PFMKeeper *packetforwardkeeper.Keeper
+    ...
+}
+
+...
+
+// Create store keys
+keys := storetypes.NewKVStoreKeys(
+    ...
+    packetforwardtypes.StoreKey,
+    ...
+)
+
+...
+
+// Initialize the transfer module Keeper first (PFM Keeper requires it)
+app.TransferKeeper = ibctransferkeeper.NewKeeper(...)
+
+// Initialize the packet forward middleware Keeper
+app.PFMKeeper = packetforwardkeeper.NewKeeper(
+    appCodec,
+    app.AccountKeeper.AddressCodec(),
+    runtime.NewKVStoreService(keys[packetforwardtypes.StoreKey]),
+    app.TransferKeeper,
+    app.IBCKeeper.ChannelKeeper,
+    app.BankKeeper,
+    authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+)
+
+// See the section below for configuring an application stack with the packet forward middleware
+
+...
+
+// Register packet forward middleware AppModule
+app.moduleManager = module.NewManager(
+    ...
+    packetforward.NewAppModule(app.PFMKeeper),
+)
+
+...
+
+// Add packet forward middleware to begin blocker logic
+app.moduleManager.SetOrderBeginBlockers(
+    ...
+    packetforwardtypes.ModuleName,
+    ...
+)
+
+// Add packet forward middleware to end blocker logic
+app.moduleManager.SetOrderEndBlockers(
+    ...
+    packetforwardtypes.ModuleName,
+    ...
+)
+
+// Add packet forward middleware to init genesis logic
+app.moduleManager.SetOrderInitGenesis(
+    ...
+    packetforwardtypes.ModuleName,
+    ...
+)
+```
+
+## Configuring the transfer application stack with Packet Forward Middleware
+
+Here is an example of how to create an application stack using `transfer` and `packet-forward-middleware`.
+The following `transferStack` is configured in `app/app.go` and added to the IBC `Router`.
+The in-line comments describe the execution flow of packets between the application stack and IBC core.
+
+For more information on configuring an IBC application stack see the [middleware development guide](/ibc-go/latest/ibc/middleware/develop).
+
+```go
+// Create Transfer Stack
+// SendPacket, since it is originating from the application to core IBC:
+// transferKeeper.SendPacket -> packetforward.SendPacket -> channel.SendPacket
+
+// RecvPacket, message that originates from core IBC and goes down to app, the flow is the other way
+// channel.RecvPacket -> packetforward.OnRecvPacket -> transfer.OnRecvPacket
+
+// transfer stack contains (from top to bottom):
+// - Packet Forward Middleware
+// - Transfer
+
+// create IBC module from bottom to top of stack
+transferStack := porttypes.NewIBCStackBuilder(app.IBCKeeper.ChannelKeeper)
+transferStack.Base(transfer.NewIBCModule(app.TransferKeeper)).
+    Next(packetforward.NewIBCMiddleware(
+        app.PFMKeeper,
+        0, // retries on timeout
+        packetforwardkeeper.DefaultForwardTransferPacketTimeoutTimestamp, // forward timeout
+    ))
+
+// Add transfer stack to IBC Router
+ibcRouter.AddRoute(ibctransfertypes.ModuleName, transferStack.Build())
+```
+
+## Configurable options in the Packet Forward Middleware
+
+The Packet Forward Middleware has several configurable options available when initializing the IBC application stack.
+You can see these passed in as arguments to `packetforward.NewIBCMiddleware` and they include the number of retries that
+will be performed on a forward timeout, and the timeout period that will be used for a forward.
+
+* Retries On Timeout - how many times will a forward be re-attempted in the case of a timeout.
+* Timeout Period - how long can a forward be in progress before giving up.

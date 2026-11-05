@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  listenAddr: 0.0.0.0:3000
+signers:
+  - alias: "local-key"
+    type: local
+    file: "probe-key.json"
+  - alias: "relayer-key"
+    type: remote
+    grpc: https://cosmos-kms.example.com
+    remoteKeyId: "relayer-key-id"
+    tls: {}
+  - alias: "attestor-dan-key-base"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-key-base-id"
+  - alias: "attestor-dan-key-eth"
+    type: remote
+    grpc: cosmos-kms.example.com:9090
+    remoteKeyId: "attestor-dan-key-eth-id"
+logging:
+  level: info
+  json: true
+observability:
+  metrics: true
+  type: otel
+  otelFile: otel.yaml
+db:
+  type: sqlite
+  url: ibc.db
+chains:
+  - chainId: "1"
+    deployer: "relayer-key"
+    evm:
+      rpc: https://ethereum-rpc.example.com
+      ws: wss://ethereum-rpc.example.com
+      ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
+  - chainId: "8453"
+    evm:
+      rpc: https://base-rpc.example.com
+      ics26Router: "0x0000000000000000000000000000000000000001"
+      ibcMulticall: "0x0000000000000000000000000000000000000002"
+relayer:
+  dispatchPollInterval: 3s
+  chainOverrides:
+    - chainId: "1"
+      evm:
+        pendingTxTimeout: 2m
+      packetBatchSize: 20
+      packetBatchTimeout: 10s
+    - chainId: "8453"
+  connections:
+    - alias: "eth-base"
+      clientA:
+        chainId: "1"
+        signer: "relayer-key"
+        clientId: "base-0"
+        type: "attestation"
+        autoRelay:
+          enabled: false
+      clientB:
+        type: "attestation"
+        remoteProver:
+          url: "https://prover.example.com"
+          tls: {}
+        chainId: "8453"
+        signer: "relayer-key"
+        clientId: "ethereum-0"
+        autoRelay:
+          enabled: false
+attestors:
+  - name: "attestor-alice-base"
+    type: remote
+    grpc: https://attestor-alice.example.com
+    tls: {}
+  - name: "attestor-bob-base"
+    type: remote
+    grpc: attestor-bob.example.com:3000
+  - name: "attestor-dan-base"
+    chainId: "8453"
+    type: local
+    signer: "attestor-dan-key-base"
+    finalityOffset: 1
+  - name: "attestor-dan-ethereum"
+    chainId: "1"
+    type: local
+    signer: "attestor-dan-key-eth"

@@ -1,0 +1,46 @@
+---
+title: IBC-Go v7.2 to v7.3
+description: This guide provides instructions for migrating to version v7.3.0 of ibc-go.
+---
+
+This guide provides instructions for migrating to version `v7.3.0` of ibc-go.
+
+There are four sections based on the four potential user groups of this document:
+
+* [Migrating from v7.2 to v7.3](#migrating-from-v72-to-v73)
+  * [Chains](#chains)
+  * [IBC Apps](#ibc-apps)
+  * [Relayers](#relayers)
+  * [IBC Light Clients](#ibc-light-clients)
+
+**Note:** ibc-go supports golang semantic versioning and therefore all imports must be updated on major version releases.
+
+## Chains
+
+* No relevant changes were made in this release.
+
+## IBC Apps
+
+A set of interfaces have been added that IBC applications may optionally implement. Developers interested in integrating their applications with the [callbacks middleware](/ibc-go/latest/middleware/callbacks/overview) should implement these interfaces so that the callbacks middleware can retrieve the desired callback addresses on the source and destination chains and execute actions on packet lifecycle events. The interfaces are [`PacketDataUnmarshaler`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/core/05-port/types/module.go#L142-L147), [`PacketDataProvider`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/core/exported/packet.go#L43-L52) and [`PacketData`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/core/exported/packet.go#L36-L41).
+
+Sample implementations are available for reference. For `transfer`:
+
+* [`PacketDataUnmarshaler`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/apps/transfer/ibc_module.go#L303-L313),
+* [`PacketDataProvider`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/apps/transfer/types/packet.go#L85-L105)
+* and [`PacketData`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/apps/transfer/types/packet.go#L74-L83).
+
+For `27-interchain-accounts`:
+
+* [`PacketDataUnmarshaler`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/apps/27-interchain-accounts/controller/ibc_middleware.go#L258-L268),
+* [`PacketDataProvider`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/apps/27-interchain-accounts/types/packet.go#L94-L114)
+* and [`PacketData`](https://github.com/cosmos/ibc-go/blob/v7.3.0-rc1/modules/apps/27-interchain-accounts/types/packet.go#L78-L92).
+
+## Relayers
+
+* No relevant changes were made in this release.
+
+## IBC Light Clients
+
+### 06-solomachine
+
+Solo machines are now expected to sign data on a path that 1) does not include a connection prefix (e.g `ibc`) and 2) does not escape any characters. See PR [#4429](https://github.com/cosmos/ibc-go/pull/4429) for more details. We recommend **NOT** using the solo machine light client of versions lower than v7.3.0.

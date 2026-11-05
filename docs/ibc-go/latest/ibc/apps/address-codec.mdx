@@ -1,0 +1,88 @@
+---
+title: Custom Address Codec
+---
+
+
+## Overview
+
+Starting in ibc-go `v10.4.0`, the IBC transfer module uses the application's configured address codec to parse sender and receiver addresses. This enables chains to accept multiple address formats in IBC packets—for example, both standard Cosmos bech32 addresses (`cosmos1...`) and Ethereum hex addresses (`0x...`).
+
+## Interface
+
+The Cosmos SDK defines a simple interface for converting between address representations:
+
+```go
+type Codec interface {
+  StringToBytes(text string) ([]byte, error)
+  BytesToString(bz []byte) (string, error)
+}
+```
+
+Applications configure a codec implementation on the `AccountKeeper`. The IBC transfer module retrieves this codec via `accountKeeper.AddressCodec()` and uses it throughout packet processing—validating sender addresses when creating packets and parsing receiver addresses when delivering funds.
+
+**Chain independence:** Each chain applies its own codec independently. The sending chain validates senders with its codec, the receiving chain validates receivers with its codec. This works seamlessly across chains with different codec configurations without any protocol changes.
+
+## Implementation
+
+A typical implementation composes the SDK's standard bech32 codec and extends it to parse hex addresses:
+
+```go
+type EvmCodec struct {
+	bech32Codec address.Codec
+}
+
+func (c *EvmCodec) StringToBytes(text string) ([]byte, error) {
+	if strings.HasPrefix(text, "0x") {
+		// Validate and parse hex address using go-ethereum/common
+		if !common.IsHexAddress(text) {
+			return nil, errors.New("invalid hex address")
+		}
+		addr := common.HexToAddress(text)
+		return addr.Bytes(), nil
+	}
+	// Default to bech32 parsing
+	return c.bech32Codec.StringToBytes(text)
+}
+
+func (c *EvmCodec) BytesToString(bz []byte) (string, error) {
+	// Always return bech32 format
+	return c.bech32Codec.BytesToString(bz)
+}
+```
+
+This pattern accepts both address formats as input while consistently outputting bech32. This makes the codec a drop-in replacement for the standard codec—existing tooling continues to work unchanged while users gain the ability to specify hex addresses where convenient.
+
+**Note:** A recommended address codec implementation is available in the [cosmos/evm repository](https://github.com/cosmos/evm/blob/main/encoding/address/address_codec.go).
+
+### Application Wiring
+
+After initializing your transfer keeper, configure the codec using the `SetAddressCodec` method:
+
+```go
+app.TransferKeeper.SetAddressCodec(evmaddress.NewEvmCodec(sdk.GetConfig().GetBech32AccountAddrPrefix()))
+```
+
+For a complete example showing the transfer keeper initialization and address codec configuration, see [evmd app.go](https://github.com/cosmos/evm/blob/720ba9cf908a20a29b7401b19a136caeb8c4092f/evmd/app.go#L483-L494).
+
+## Usage
+
+Once configured, the chain accepts IBC transfers with receiver addresses in either format:
+
+```bash
+# Standard bech32 address
+gaiad tx ibc-transfer transfer transfer channel-0 \
+cosmos1p9p6h9m8jcn8f7l6h3k2wq9g6yx0l8a9u2n4lr 1000uatom --from sender
+
+# Ethereum hex address
+gaiad tx ibc-transfer transfer transfer channel-0 \
+0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb 1000uatom --from sender
+```
+
+Both formats resolve to the same on-chain account when derived from the same private key. The codec handles conversion to the internal byte representation transparently.
+
+## Reference Implementation
+
+The cosmos/evm repository provides a complete implementation in `utils/address_codec.go` with integration examples in the `evmd` reference chain:
+
+- [**Implementation PR**](https://github.com/cosmos/evm/pull/665)
+- [**Reference Chain "evmd"**](https://github.com/cosmos/evm/tree/main/evmd)

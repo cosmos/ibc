@@ -19,6 +19,9 @@ import (
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
+// updateResultMisbehavior is ILightClientMsgs.UpdateResult.Misbehavior.
+const updateResultMisbehavior uint8 = 1
+
 // SimulateRelayTx decodes multicall outcomes in execution order.
 func (c *TxSubmitter) SimulateRelayTx(ctx context.Context, tx v2.RelayTx) (v2.RelaySimulation, error) {
 	contractABI, err := ibcmulticall.ContractMetaData.GetAbi()
@@ -68,6 +71,13 @@ func (c *TxSubmitter) SimulateRelayTx(ctx context.Context, tx v2.RelayTx) (v2.Re
 		switch method.Name {
 		case "updateClient":
 			outcome.Type = v2.OperationTypeUpdate
+			if result.Success {
+				values, unpackErr := method.Outputs.Unpack(result.ReturnData)
+				if unpackErr != nil {
+					return v2.RelaySimulation{}, errors.Wrapf(unpackErr, "decoding multicall call[%d] result", i)
+				}
+				outcome.Misbehavior = values[0].(uint8) == updateResultMisbehavior
+			}
 		case "recvPacket", "ackPacket", "timeoutPacket":
 			outcome.Type = v2.OperationTypePacket
 		default:

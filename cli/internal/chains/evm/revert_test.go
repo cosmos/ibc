@@ -4,6 +4,7 @@ package evm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
-	"github.com/cosmos/ibc-contracts/packages/go-abigen/besuqbft"
+	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
@@ -52,9 +53,14 @@ var namedReverts = []struct {
 	{ift.ContractMetaData, "RateLimitExceeded", nil, "RateLimitExceeded()"},
 	{ibcmulticall.ContractMetaData, "IBCMulticallCallOutOfGas", []any{big.NewInt(2)}, "IBCMulticallCallOutOfGas(2)"},
 	{
-		besuqbft.ContractMetaData, "ConsensusStateExpired",
+		besulightclient.ContractMetaData, "ConsensusStateExpired",
 		[]any{uint64(100), big.NewInt(121), uint64(20)},
 		"ConsensusStateExpired(100, 121, 20)",
+	},
+	{
+		besulightclient.ContractMetaData, "InvalidStorageRoot",
+		[]any{[32]byte{31: 1}},
+		fmt.Sprintf("InvalidStorageRoot(%v)", [32]byte{31: 1}),
 	},
 }
 

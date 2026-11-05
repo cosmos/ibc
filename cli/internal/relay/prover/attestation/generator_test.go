@@ -40,6 +40,7 @@ func signedStateAttestor(t *testing.T, name string, height uint64) *attestor.Moc
 
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
+	a.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 	a.EXPECT().StateAttestation(mock.Anything, mock.Anything).Return(
 		attestor.Attestation{Height: height, AttestedData: data, Signature: sig}, nil,
 	)
@@ -70,6 +71,7 @@ func signedPacketAttestor(
 
 	a := attestor.NewMockAttestor(t)
 	a.EXPECT().Name().Return(name).Maybe()
+	a.EXPECT().Address().Return(crypto.PubkeyToAddress(key.PublicKey).Hex()).Maybe()
 	a.EXPECT().PacketAttestation(mock.Anything, mock.Anything).Return(
 		attestor.Attestation{Height: height, AttestedData: dataArgs, Signature: sig}, nil,
 	)

@@ -13,11 +13,15 @@ import (
 
 // Deduper rejects transfers already in flight in the wrapped pipeline.
 // It consumes the pipeline's output itself to learn when transfers leave.
+// A transfer that left stays rejected until Release: a packet read before
+// it left may predate its last writes.
 type Deduper struct {
 	pipeline pipeline.TransferPipeline
 
 	mu         sync.Mutex
 	inPipeline map[store.PacketKey]struct{}
+	// left holds the keys in inPipeline whose transfers have left
+	left []store.PacketKey
 
 	done chan struct{}
 }
@@ -52,6 +56,19 @@ func (d *Deduper) Push(ctx context.Context, tr *processors.Transfer) bool {
 	return d.pipeline.Push(ctx, tr)
 }
 
+// Release lets the transfers that have left the pipeline be pushed again.
+// Call it before reading the packets to push.
+func (d *Deduper) Release() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for _, key := range d.left {
+		delete(d.inPipeline, key)
+	}
+
+	d.left = nil
+}
+
 // Poll is a noop: the deduper drains the wrapped pipeline itself.
 func (d *Deduper) Poll() (*processors.Transfer, error) {
 	return nil, nil
@@ -76,7 +93,7 @@ func (d *Deduper) drain() {
 		}
 
 		d.mu.Lock()
-		delete(d.inPipeline, tr.Key())
+		d.left = append(d.left, tr.Key())
 		d.mu.Unlock()
 	}
 }

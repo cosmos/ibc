@@ -147,12 +147,11 @@ func BesuMesh(chains []environment.ChainSpec) (environment.Spec, environment.Run
 	return spec, RuntimeWithProtocolDeployer(environment.Runtime{})
 }
 
-// besuMeshClient trusts states for 14 days and tolerates a minute of clock drift.
+// besuMeshClient trusts states for 14 days.
 func besuMeshClient(chain environment.ChainID) environment.NewBesuClient {
 	return environment.NewBesuClient{
 		IBCInstance:    meshInstanceID(chain),
 		Authority:      ProtocolAuthorityID,
 		TrustingPeriod: environment.BesuTrustingPeriod,
-		MaxClockDrift:  60,
 	}
 }

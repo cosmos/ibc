@@ -28,9 +28,15 @@ type instrumentation struct {
 	TransactionRetries    metric.Int64Counter
 	TransactionsSubmitted metric.Int64Counter
 	TransactionsConfirmed metric.Int64Counter
+	PacketExecution       metric.Int64Counter
 
 	submittedTransactions sync.Map
 }
+
+const (
+	executionSucceeded = "executed"
+	executionFailed    = "failed"
+)
 
 type completedRelayLeg struct {
 	kind       relayType
@@ -66,7 +72,12 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 		return nil, err
 	}
 
+	packetExecution, err := m.Int64Counter("relay_packet_execution_total")
+	if err != nil {
+		return nil, err
+	}
 	return &instrumentation{
+		PacketExecution:       packetExecution,
 		RelaysCompleted:       relaysCompleted,
 		RelayDuration:         relayDuration,
 		TransactionRetries:    transactionRetries,
@@ -118,6 +129,11 @@ func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayT
 	}
 
 	m.TransactionRetries.Add(ctx, 1, txAttributes(tr, otel.AttrType.String(string(kind))))
+}
+
+func (m *instrumentation) packetExecution(ctx context.Context, tr *Transfer, processor, result string) {
+	m.PacketExecution.Add(ctx, 1, txAttributes(tr,
+		otel.AttrProcessor.String(processor), otel.AttrResult.String(result)))
 }
 
 func txKey(chainID, txHash string) string {

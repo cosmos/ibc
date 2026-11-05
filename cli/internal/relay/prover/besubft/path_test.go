@@ -69,7 +69,7 @@ func syntheticEnv(
 		}
 	}
 
-	host := &fakeChain{id: "host", clientState: besumsgs.IBesuLightClientMsgsClientState{
+	host := &fakeChain{id: "host", blockTime: farFuture, clientState: besumsgs.IBesuLightClientMsgsClientState{
 		LatestHeight: besumsgs.IICS02ClientMsgsHeight{RevisionHeight: trusted},
 		TrustLevel:   level,
 	}}
@@ -153,10 +153,10 @@ func TestClientUpdatePayloadsBridgesOverride(t *testing.T) {
 // enough trusted validators sealed, though not every header after it is.
 func TestClientUpdatePayloadsOverlappingOverride(t *testing.T) {
 	gen, chain, _ := syntheticEnv(t, twoThirds, 10, 100,
-		era{from: 10, validators: []int64{1, 2, 3, 4}, signers: []int64{1, 2, 3}},
-		era{from: 50, validators: []int64{1, 2, 3, 9}, signers: []int64{1, 2, 9}},
+		era{from: 10, validators: []int64{1, 2, 3, 4, 5, 6}, signers: []int64{1, 2, 3, 4}},
+		era{from: 50, validators: []int64{1, 2, 3, 4, 9, 10}, signers: []int64{1, 2, 9, 10}},
 	)
-	chain.sealed[52].Signers = addrs(1, 2, 3)
+	chain.sealed[52].Signers = addrs(1, 2, 3, 4)
 
 	payloads, err := gen.ClientUpdatePayloads(t.Context(), 100)
 	require.NoError(t, err)
@@ -194,12 +194,29 @@ func TestClientStuckAtSetChange(t *testing.T) {
 		"header 60 is sealed by 0 of the 4 validators trusted at height 59, it needs 2")
 }
 
-// Above one half, a single removal can stop the client: its quorum need not
-// carry enough of the validators trusted before.
-func TestClientStuckAtRemovalAboveOneHalf(t *testing.T) {
-	gen, _, _ := syntheticEnv(t, twoThirds, 10, 100,
+// Even at two thirds a single removal does not stop the client: the
+// requirement is capped at floor(2n/3), which any quorum of the new set holds.
+func TestClientFollowsRemovalAtTwoThirds(t *testing.T) {
+	gen, chain, _ := syntheticEnv(t, twoThirds, 10, 100,
 		era{from: 10, validators: []int64{1, 2, 3, 4}, signers: []int64{1, 2, 3}},
 		era{from: 50, validators: []int64{1, 2, 3}, signers: []int64{1, 2}},
+	)
+
+	height, _, err := gen.LatestProvableHeight(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, uint64(100), height)
+
+	payloads, err := gen.ClientUpdatePayloads(t.Context(), 100)
+	require.NoError(t, err)
+	requireUpdates(t, chain, payloads, 10, 100)
+}
+
+// Above one half, two removals at once can stop the client: the new set's
+// quorum need not carry enough of the validators trusted before.
+func TestClientStuckAtTwoRemovalsAboveOneHalf(t *testing.T) {
+	gen, _, _ := syntheticEnv(t, twoThirds, 10, 100,
+		era{from: 10, validators: []int64{1, 2, 3, 4, 5, 6}, signers: []int64{1, 2, 3, 4}},
+		era{from: 50, validators: []int64{1, 2, 3, 4}, signers: []int64{1, 2, 3}},
 	)
 
 	height, _, err := gen.LatestProvableHeight(t.Context())
@@ -208,17 +225,17 @@ func TestClientStuckAtRemovalAboveOneHalf(t *testing.T) {
 
 	_, err = gen.ClientUpdatePayloads(t.Context(), 100)
 	assert.EqualError(t, err, "client at height 10 cannot follow the validator set past height 49: "+
-		"header 50 is sealed by 2 of the 4 validators trusted at height 49, it needs 3")
+		"header 50 is sealed by 3 of the 6 validators trusted at height 49, it needs 4")
 }
 
 // Whether a target verifies depends on the target alone, not on an earlier
 // one the client could not reach.
 func TestClientUpdatePayloadsAfterStuck(t *testing.T) {
 	gen, chain, _ := syntheticEnv(t, twoThirds, 10, 120,
-		era{from: 10, validators: []int64{1, 2, 3, 4}, signers: []int64{1, 2, 3}},
-		era{from: 50, validators: []int64{1, 2, 3, 9}, signers: []int64{1, 2, 9}},
+		era{from: 10, validators: []int64{1, 2, 3, 4, 5, 6}, signers: []int64{1, 2, 3, 4}},
+		era{from: 50, validators: []int64{1, 2, 3, 4, 9, 10}, signers: []int64{1, 2, 9, 10}},
 	)
-	chain.sealed[120].Signers = addrs(1, 2, 3)
+	chain.sealed[120].Signers = addrs(1, 2, 3, 4)
 
 	_, err := gen.ClientUpdatePayloads(t.Context(), 100)
 	var stuck *stuckError
@@ -306,7 +323,8 @@ func randomEras(rng *rand.Rand, head uint64, overrideEvery int) []era {
 
 // requireVerifiedUpdates checks payloads take the client from trusted to
 // target, each passing the contract's overlap and quorum rules against the
-// header before.
+// header before: the overlap meets level or floor(2n/3), whichever is lower,
+// and is always more than a third of n.
 func requireVerifiedUpdates(
 	t *testing.T,
 	chain *fakeChain,
@@ -332,20 +350,21 @@ func requireVerifiedUpdates(
 				overlap++
 			}
 		}
-		require.GreaterOrEqual(t, overlap*int(level.Denominator), len(from.Validators)*int(level.Numerator),
-			"update to %d trusting %d", height, from.Height)
+		n := len(from.Validators)
+		meetsLevel := overlap*int(level.Denominator) >= n*int(level.Numerator) || overlap >= 2*n/3
+		require.True(t, meetsLevel && 3*overlap > n, "update to %d trusting %d", height, from.Height)
 		require.GreaterOrEqual(t, 3*len(header.Signers), 2*len(header.Validators), "quorum at %d", height)
 		from = header
 	}
 	require.Equal(t, target, from.Height)
 }
 
-// Header voting changes at most one validator a block, so at a trust level of
-// at most one half the client follows any such chain, however far behind it is.
+// Header voting changes at most one validator a block, so at any trust level
+// the client follows any such chain, however far behind it is.
 func TestPathFollowsHeaderVoting(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2)) //nolint:gosec // deterministic test chains
 	const head = 300
-	for _, level := range []besumsgs.IBesuLightClientMsgsTrustThreshold{oneThird, oneHalf} {
+	for _, level := range []besumsgs.IBesuLightClientMsgsTrustThreshold{oneThird, oneHalf, twoThirds} {
 		for range 100 {
 			gen, chain, _ := syntheticEnv(t, level, 1, head, randomEras(rng, head, 0)...)
 
@@ -381,5 +400,36 @@ func TestLatestProvableHeightIsReachable(t *testing.T) {
 			requireVerifiedUpdates(t, chain, payloads, level, 1, height)
 		}
 		require.Positive(t, stopped)
+	}
+}
+
+// required matches the contract: ceil(n * level), capped at floor(2n/3), and
+// always more than a third of n, which takes precedence over the cap.
+func TestRequiredTrustedSigners(t *testing.T) {
+	for _, tc := range []struct {
+		level      besumsgs.IBesuLightClientMsgsTrustThreshold
+		validators int
+		want       int
+	}{
+		{oneThird, 4, 2},
+		{oneThird, 6, 3},
+		{oneThird, 7, 3},
+		{oneHalf, 6, 3},
+		{twoThirds, 4, 2}, // capped
+		{twoThirds, 6, 4},
+		{twoThirds, 7, 4}, // capped
+		{twoThirds, 1, 1}, // the floor wins over a cap of 0
+		{oneThird, 3, 2},
+	} {
+		from := &besu.ParsedHeader{Validators: make([]common.Address, tc.validators)}
+		assert.Equal(
+			t,
+			tc.want,
+			required(from, tc.level),
+			"%d/%d of %d",
+			tc.level.Numerator,
+			tc.level.Denominator,
+			tc.validators,
+		)
 	}
 }

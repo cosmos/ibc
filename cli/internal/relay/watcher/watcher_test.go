@@ -310,7 +310,7 @@ func TestWatcherStart(t *testing.T) {
 		})
 	})
 
-	t.Run("subscribeErrorFailsStart", func(t *testing.T) {
+	t.Run("subscribeErrorFallsBackToClearing", func(t *testing.T) {
 		db := watcherStore(t)
 
 		synctest.Test(t, func(t *testing.T) {
@@ -318,10 +318,10 @@ func TestWatcherStart(t *testing.T) {
 			chain.failNextSub(errors.New("dial failed"))
 			w := newTestWatcher(chain, db)
 
-			require.ErrorContains(t, w.Start(), "subscribing to send packets")
+			require.NoError(t, w.Start())
+			assert.Zero(t, chain.openedSubs())
 
-			// a watcher that never started has nothing to stop, and Stop must
-			// not block waiting for a loop that was never running
+			// the clearer is running, so Stop has to wait for it
 			require.NoError(t, w.Stop())
 		})
 	})
