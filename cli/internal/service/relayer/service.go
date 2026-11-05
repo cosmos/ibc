@@ -7,12 +7,10 @@ import (
 	"cmp"
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"log/slog"
 	"maps"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -224,7 +222,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) ([]ObservedPa
 		return nil, errors.Wrap(ErrInvalidInput, "invalid packet selection")
 	}
 
-	txHash, err := s.validateRelayArgs(request.ChainID, request.TxHash)
+	txHash, hashBytes, err := s.validateRelayArgs(request.ChainID, request.TxHash)
 	if err != nil {
 		return nil, err
 	}
@@ -233,11 +231,6 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) ([]ObservedPa
 	client, ok := s.chains.Get(chainID)
 	if !ok {
 		return nil, errors.Wrapf(ErrNotFound, "client for chain %q", chainID)
-	}
-
-	hashBytes, err := hex.DecodeString(strings.TrimPrefix(txHash, "0x"))
-	if err != nil {
-		return nil, errors.Wrapf(ErrInvalidInput, "decoding txHash %q", txHash)
 	}
 
 	events, err := client.TxPacketEvents(ctx, hashBytes)
@@ -501,7 +494,7 @@ func (s *Service) toStoreFilter(filter PacketFilter) (store.PacketFilter, error)
 	}
 
 	if filter.SourceTxHash != "" {
-		normalized, err := s.normalizeTxHash(filter.SourceChainID, filter.SourceTxHash)
+		normalized, _, err := s.normalizeTxHash(filter.SourceChainID, filter.SourceTxHash)
 		if err != nil {
 			return store.PacketFilter{}, err
 		}
@@ -543,44 +536,44 @@ func toPacketStatus(packet store.Packet) PacketStatus {
 	}
 }
 
-// validateRelayArgs validates the tx hash for the chain's type and applies
-// consistent casing so lookups are case-insensitive.
-func (s *Service) validateRelayArgs(chainID, txHash string) (string, error) {
+// validateRelayArgs validates the tx hash for the chain's type, returning it in
+// consistent casing, so lookups are case-insensitive, and as raw bytes.
+func (s *Service) validateRelayArgs(chainID, txHash string) (string, []byte, error) {
 	switch {
 	case chainID == "":
-		return "", errors.Wrap(ErrInvalidInput, "chainID is required")
+		return "", nil, errors.Wrap(ErrInvalidInput, "chainID is required")
 	case txHash == "":
-		return "", errors.Wrap(ErrInvalidInput, "txHash is required")
+		return "", nil, errors.Wrap(ErrInvalidInput, "txHash is required")
 	}
 
 	return s.normalizeTxHash(chainID, txHash)
 }
 
-func (s *Service) normalizeTxHash(chainID, txHash string) (string, error) {
+func (s *Service) normalizeTxHash(chainID, txHash string) (string, []byte, error) {
 	if chainID == "" {
 		return normalizeEVMTxHash(txHash)
 	}
 
 	chain, ok := s.cfg.Chain(chainID)
 	if !ok {
-		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
+		return "", nil, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
 	}
 
 	switch chain.Type() {
 	case config.ChainTypeEVM:
 		return normalizeEVMTxHash(txHash)
 	default:
-		return "", errors.Wrapf(ErrInvalidInput, "unsupported chain type for chain %q", chainID)
+		return "", nil, errors.Wrapf(ErrInvalidInput, "unsupported chain type for chain %q", chainID)
 	}
 }
 
-func normalizeEVMTxHash(txHash string) (string, error) {
+func normalizeEVMTxHash(txHash string) (string, []byte, error) {
 	var hash common.Hash
 	if err := hash.UnmarshalText([]byte(txHash)); err != nil {
-		return "", errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
+		return "", nil, errors.Wrapf(ErrInvalidInput, "txHash %q is not a valid evm transaction hash", txHash)
 	}
 
-	return hash.Hex(), nil
+	return hash.Hex(), hash.Bytes(), nil
 }
 
 func mapPacketState(status store.RelayStatus) PacketState {
