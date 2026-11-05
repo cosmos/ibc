@@ -195,7 +195,9 @@ func (s *Service) Start() error {
 		}
 	}
 
-	return s.watchers.Start()
+	s.watchers.Start()
+
+	return nil
 }
 
 // Stop cancels the background loops and blocks until they have exited. Watchers

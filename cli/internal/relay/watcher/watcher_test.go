@@ -192,7 +192,7 @@ func TestWatcherHandleEvent(t *testing.T) {
 func start(t *testing.T, w *Watcher) *Watcher {
 	t.Helper()
 
-	require.NoError(t, w.Start())
+	w.Start()
 	synctest.Wait()
 
 	return w
@@ -310,18 +310,23 @@ func TestWatcherStart(t *testing.T) {
 		})
 	})
 
-	t.Run("subscribeErrorFallsBackToClearing", func(t *testing.T) {
+	t.Run("firstSubscribeErrorRetriesWithBackoff", func(t *testing.T) {
 		db := watcherStore(t)
 
 		synctest.Test(t, func(t *testing.T) {
 			chain := newFakeChain(t)
 			chain.failNextSub(errors.New("dial failed"))
-			w := newTestWatcher(chain, db)
+			w := start(t, newTestWatcher(chain, db))
+			require.Zero(t, chain.openedSubs())
 
-			require.NoError(t, w.Start())
-			assert.Zero(t, chain.openedSubs())
+			time.Sleep(DefaultMinBackoff)
+			synctest.Wait()
+			require.Equal(t, 1, chain.openedSubs())
 
-			// the clearer is running, so Stop has to wait for it
+			chain.latestSub().out <- sendPacketEvent(1)
+			synctest.Wait()
+
+			assert.Equal(t, []uint64{1}, recorded(t, db))
 			require.NoError(t, w.Stop())
 		})
 	})
