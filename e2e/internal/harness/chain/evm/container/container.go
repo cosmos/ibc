@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/netip"
 	"regexp"
 	"strings"
@@ -66,6 +67,24 @@ func Terminate(c testcontainers.Container) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return c.Terminate(ctx, testcontainers.StopTimeout(time.Second))
+}
+
+// Logs returns everything c has written, or "" when it is gone or the logs
+// can't be read. It feeds diagnostics, so a failure is not worth reporting.
+func Logs(ctx context.Context, c testcontainers.Container) string {
+	if c == nil {
+		return ""
+	}
+	reader, err := c.Logs(ctx)
+	if err != nil {
+		return ""
+	}
+	defer reader.Close() //nolint:errcheck
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 func Labels(runID string) map[string]string {

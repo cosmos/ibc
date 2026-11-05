@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"os"
 	"strconv"
@@ -277,10 +276,10 @@ func waitReady(ctx context.Context, probe func(context.Context) error, timeout t
 	return nil
 }
 
-func anvilStartupError(container testcontainers.Container, err error) error {
+func anvilStartupError(c testcontainers.Container, err error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), anvilLogTimeout)
 	defer cancel()
-	logs := dockerLogs(ctx, container)
+	logs := container.Logs(ctx, c)
 	if logs == "" {
 		return err
 	}
@@ -338,27 +337,11 @@ func (ac *Chain) snapshotLogs(ctx context.Context) string {
 	logCtx, cancel := context.WithTimeout(ctx, anvilLogTimeout)
 	defer cancel()
 
-	log := dockerLogs(logCtx, ac.container)
+	log := container.Logs(logCtx, ac.container)
 	if log != "" && ac.logPath != "" {
 		_ = os.WriteFile(ac.logPath, []byte(log), 0o644)
 	}
 	return log
-}
-
-func dockerLogs(ctx context.Context, container testcontainers.Container) string {
-	if container == nil {
-		return ""
-	}
-	reader, err := container.Logs(ctx)
-	if err != nil {
-		return ""
-	}
-	defer reader.Close() //nolint:errcheck
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return ""
-	}
-	return string(data)
 }
 
 func stopContainer(ctx context.Context, container testcontainers.Container) error {
