@@ -113,10 +113,11 @@ func TestDeployCorePopulateConfig(t *testing.T) {
 			t.Cleanup(rpc.Close)
 
 			key, _ := newLocalSignerConfig(t, "deployer")
+			watcherKey, _ := newLocalSignerConfig(t, "watcher-key")
 			cfg := config.DefaultConfig()
 			cfg.Server.ListenAddress = "127.0.0.1:4567"
 			cfg.DB.URL = "operator.db"
-			cfg.Signers = config.Signers{key}
+			cfg.Signers = config.Signers{key, watcherKey}
 			cfg.Chains = config.Chains{
 				{
 					ChainID:  "1",
@@ -142,9 +143,15 @@ func TestDeployCorePopulateConfig(t *testing.T) {
 					},
 				},
 			}
-			cfg.Attestors = config.Attestors{{
-				Name: "watcher", Type: config.AttestorTypeLocal, ChainID: "2", Signer: key.Alias, FinalityOffset: 7,
-			}}
+			cfg.Attestors = config.Attestors{
+				{
+					Name:           "watcher",
+					Type:           config.AttestorTypeLocal,
+					ChainID:        "2",
+					Signer:         watcherKey.Alias,
+					FinalityOffset: 7,
+				},
+			}
 			path := filepath.Join(home, globalFlags.Config)
 			require.NoError(t, cfg.StoreToFile(path))
 			cfg, err := config.LoadFromFile(path, true)
@@ -756,10 +763,14 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		return deployRenderConfig(nil, []string{"1", "2"})
 	}
 	relayerKey, _ := newLocalSignerConfig(t, "relayer")
-	attestorKey, attestorAddress := newLocalSignerConfig(t, "watcher-key")
+	// One attestor key per watched chain: a key shared across chains is
+	// rejected by validation.
+	attestorKeys := map[string]config.SignerConfig{}
+	attestorAddresses := map[string]string{}
 	cfg := config.DefaultConfig()
 	cfg.Signers = config.Signers{relayerKey}
 	for _, id := range []string{"1", "2"} {
+		attestorKeys[id], attestorAddresses[id] = newLocalSignerConfig(t, "watcher-"+id+"-key")
 		cfg.Chains = append(cfg.Chains, config.ChainConfig{
 			ChainID: id,
 			EVM: &config.EVMChainConfig{
@@ -776,7 +787,8 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		m.Core.Router = cfg.Chains[0].EVM.ICS26Router
 		m.UpsertClient(manifest.Client{
 			ClientID: pair[1], CounterpartyChainID: pair[2], CounterpartyClientID: pair[3],
-			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddress}},
+			// The client on pair[0] is attested by the key watching pair[2].
+			Attestation: &manifest.AttestationParams{Attestors: []string{attestorAddresses[pair[2]]}},
 		})
 		require.NoError(t, m.Save(flagDeployManifestDir))
 	}
@@ -793,8 +805,8 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 		require.Empty(t, a.Signer)
 	}
 
-	// A key becomes available after the draft was written; preserve user settings.
-	draft.Signers = append(draft.Signers, attestorKey)
+	// Keys become available after the draft was written; preserve user settings.
+	draft.Signers = append(draft.Signers, attestorKeys["1"], attestorKeys["2"])
 	draft.Relayer.Connections[0].Alias = "custom-route"
 	draft.Attestors[0].FinalityOffset = 42
 	require.NoError(t, draft.StoreToFile(path))
@@ -807,7 +819,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 	require.Equal(t, relayerKey.Alias, repaired.Relayer.Connections[0].ClientB.Signer)
 	require.Len(t, repaired.Attestors, 2)
 	for i, a := range repaired.Attestors {
-		require.Equal(t, attestorKey.Alias, a.Signer)
+		require.Equal(t, attestorKeys[a.ChainID].Alias, a.Signer)
 		require.Equal(t, draft.Attestors[i].Name, a.Name)
 		require.Equal(t, draft.Attestors[i].FinalityOffset, a.FinalityOffset)
 	}
@@ -823,7 +835,7 @@ func TestRenderConfigCommandRepairsPopulatedDraft(t *testing.T) {
 	require.NoError(t, repaired.StoreToFile(path))
 	invalid, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.ErrorContains(t, run("", ""), "duplicate local attestor signer")
+	require.ErrorContains(t, run("", ""), "is already assigned to")
 	unchanged, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, invalid, unchanged)

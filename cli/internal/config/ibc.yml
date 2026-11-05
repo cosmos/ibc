@@ -102,7 +102,9 @@ attestors:
 
 # signers define signing backends referenced by attestors and the relayer
 #
-# NOTE: each signer should have a unique alias
+# NOTE: each signer should have a unique alias. A signer that backs a local
+# attestor is reserved for that attestor: it cannot back another attestor,
+# deploy, or relay, because attestation signatures are not bound to a chain.
 signers:
   - alias: "eth-relayer-key"
     type: remote
