@@ -40,6 +40,26 @@ type Handler interface {
 
 var errInternal = connect.NewError(connect.CodeInternal, errors.New("internal server error"))
 
+// errorCode pairs a domain error with the connect code a client sees for it.
+type errorCode struct {
+	err  error
+	code connect.Code
+}
+
+// connectError maps err by the first domain error in codes that it wraps.
+// Anything else is logged and answered with an opaque internal error.
+func connectError(logger *slog.Logger, method string, err error, codes []errorCode) error {
+	for _, c := range codes {
+		if errors.Is(err, c.err) {
+			return connect.NewError(c.code, err)
+		}
+	}
+
+	logger.Error(method, "err", err)
+
+	return errInternal
+}
+
 const (
 	maxHeaderBytes    = 128 << 10
 	maxRequestBytes   = 1 << 20 // 1MB

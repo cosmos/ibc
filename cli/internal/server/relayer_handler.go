@@ -31,6 +31,13 @@ type RelayerService interface {
 	) (relayer.PacketPage, error)
 }
 
+// relayerCodes maps the relayer service's domain errors.
+var relayerCodes = []errorCode{
+	{relayer.ErrInvalidInput, connect.CodeInvalidArgument},
+	{relayer.ErrFailedPrecondition, connect.CodeFailedPrecondition},
+	{relayer.ErrNotFound, connect.CodeNotFound},
+}
+
 var (
 	_ proto.RelayerApiServiceHandler = (*RelayerHandler)(nil)
 	_ Handler                        = (*RelayerHandler)(nil)
@@ -76,17 +83,8 @@ func (h *RelayerHandler) Relay(
 	}
 
 	packets, err := h.srv.Relay(ctx, request)
-	switch {
-	case errors.Is(err, relayer.ErrInvalidInput):
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, relayer.ErrFailedPrecondition):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
-	case errors.Is(err, relayer.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, err)
-	case err != nil:
-		// todo: move to interceptor
-		h.logger.Error("Relay", "err", err)
-		return nil, errInternal
+	if err != nil {
+		return nil, connectError(h.logger, "Relay", err, relayerCodes)
 	}
 
 	return connect.NewResponse(&proto.RelayResponse{
@@ -135,14 +133,8 @@ func (h *RelayerHandler) Packets(
 		Limit:  int64(req.Msg.GetLimit()),
 		Cursor: req.Msg.GetCursor(),
 	})
-
-	switch {
-	case errors.Is(err, relayer.ErrInvalidInput):
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case err != nil:
-		// todo: move to interceptor
-		h.logger.Error("Packets", "err", err)
-		return nil, errInternal
+	if err != nil {
+		return nil, connectError(h.logger, "Packets", err, relayerCodes)
 	}
 
 	return connect.NewResponse(&proto.PacketsResponse{
