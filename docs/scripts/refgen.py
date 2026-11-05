@@ -1545,11 +1545,6 @@ def _element_type(go_type, model):
     return t if t in model["structs"] else None
 
 
-def _is_list(go_type, model):
-    t = go_type.lstrip("*")
-    return t.startswith("[]") or model["aliases"].get(t, "").startswith("") and t in model["aliases"]
-
-
 def _discriminator(struct, model):
     """The field whose value decides which other keys apply, and its values.
 
