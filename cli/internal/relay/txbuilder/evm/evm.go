@@ -15,7 +15,7 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	"github.com/lfdt-ibc/ibc/cli/attestor/evm/ibc"
 	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
@@ -118,7 +118,7 @@ func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
 		)
 	}
 
-	packet := toRouterPacket(item.Packet)
+	packet := ibc.ToRouterPacket(item.Packet)
 
 	switch item.Kind {
 	case v2.RelayKindRecv:
@@ -208,25 +208,4 @@ func packTimeoutPacket(packet ics26router.IICS26RouterMsgsPacket, proof []byte, 
 	}
 
 	return packed, nil
-}
-
-func toRouterPacket(packet channeltypesv2.Packet) ics26router.IICS26RouterMsgsPacket {
-	payloads := make([]ics26router.IICS26RouterMsgsPayload, len(packet.Payloads))
-	for i, p := range packet.Payloads {
-		payloads[i] = ics26router.IICS26RouterMsgsPayload{
-			SourcePort: p.SourcePort,
-			DestPort:   p.DestinationPort,
-			Version:    p.Version,
-			Encoding:   p.Encoding,
-			Value:      p.Value,
-		}
-	}
-
-	return ics26router.IICS26RouterMsgsPacket{
-		Sequence:         packet.Sequence,
-		SourceClient:     packet.SourceClient,
-		DestClient:       packet.DestinationClient,
-		TimeoutTimestamp: packet.TimeoutTimestamp,
-		Payloads:         payloads,
-	}
 }

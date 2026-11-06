@@ -28,8 +28,8 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
+	"github.com/lfdt-ibc/ibc/cli/attestor/evm/ibc"
 	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
@@ -227,7 +227,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 
 			events = append(events, v2.PacketEvent{
 				Kind:   v2.KindSendPacket,
-				Packet: toPacket(sendPacket.Packet),
+				Packet: ibc.FromRouterPacket(sendPacket.Packet),
 				TxHash: txHash.String(),
 			})
 		case writeAckID:
@@ -238,7 +238,7 @@ func (c *Client) TxPacketEvents(ctx context.Context, rawTxHash []byte) ([]v2.Pac
 
 			events = append(events, v2.PacketEvent{
 				Kind:   v2.KindWriteAck,
-				Packet: toPacket(writeAck.Packet),
+				Packet: ibc.FromRouterPacket(writeAck.Packet),
 				Acks:   writeAck.Acknowledgements,
 				TxHash: txHash.String(),
 			})
@@ -341,27 +341,6 @@ func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]stri
 	}
 
 	return addresses, set.MinRequiredSigs, nil
-}
-
-func toPacket(packet ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
-	payloads := make([]channeltypesv2.Payload, len(packet.Payloads))
-	for i, payload := range packet.Payloads {
-		payloads[i] = channeltypesv2.Payload{
-			SourcePort:      payload.SourcePort,
-			DestinationPort: payload.DestPort,
-			Version:         payload.Version,
-			Encoding:        payload.Encoding,
-			Value:           payload.Value,
-		}
-	}
-
-	return channeltypesv2.Packet{
-		Sequence:          packet.Sequence,
-		SourceClient:      packet.SourceClient,
-		DestinationClient: packet.DestClient,
-		TimeoutTimestamp:  packet.TimeoutTimestamp,
-		Payloads:          payloads,
-	}
 }
 
 func blockTime(header *types.Header) time.Time {
@@ -732,7 +711,7 @@ func (c *Client) sendPacketEvent(
 		Height:    log.BlockNumber,
 		BlockTime: timestamp,
 		Kind:      v2.KindSendPacket,
-		Packet:    toPacket(sendPacket.Packet),
+		Packet:    ibc.FromRouterPacket(sendPacket.Packet),
 		TxHash:    log.TxHash.String(),
 		Removed:   log.Removed,
 	}, nil
