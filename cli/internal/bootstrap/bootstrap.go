@@ -8,6 +8,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/relay/clientupdater"
 	"github.com/cosmos/ibc/cli/internal/relay/dispatch"
 	"github.com/cosmos/ibc/cli/internal/relay/pipeline"
 	"github.com/cosmos/ibc/cli/internal/relay/prover"
@@ -123,8 +124,14 @@ func BuildRelayer(cfg config.Config) (*Services, error) {
 		return nil, err
 	}
 
+	// Client updates on a fixed interval, so clients do not expire while no packets flow.
+	updaters, err := clientupdater.NewSetFromConfig(cfg, provers, txBuilders, txSubmitters, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	// Services
-	relayerService := relayer.New(cfg, db, clientSet, dispatcher, watchers)
+	relayerService := relayer.New(cfg, db, clientSet, dispatcher, watchers, updaters)
 
 	// Handlers
 	relayerHandler := server.NewRelayerHandler(relayerService)

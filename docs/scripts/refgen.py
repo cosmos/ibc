@@ -742,6 +742,12 @@ NO_NAMED_DEFAULT = {
     # nil and false are the same input: a connection end without it is not
     # auto-relayed (relayer.go:L127)
     ("AutoRelayConfig", "enabled"),
+    # nil and false are the same input: the client is not auto-updated
+    # (relayer.go, AutoUpdateConfig.IsEnabled)
+    ("AutoUpdateConfig", "enabled"),
+    # no default: required once enabled, unused otherwise
+    # (relayer.go, AutoUpdateConfig.Validate)
+    ("AutoUpdateConfig", "interval"),
     # unset inherits relayer.clearInterval rather than any one value
     # (relayer.go, ClearIntervalFor)
     ("RelayerChainOverride", "clearInterval"),

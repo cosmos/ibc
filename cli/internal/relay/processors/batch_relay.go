@@ -147,10 +147,8 @@ func relayPackets(
 	// latest block, and each update verifies from the state the one before
 	// leaves.
 	last := max(len(clientUpdatePayloads)-1, 0)
-	for i, payload := range clientUpdatePayloads[:last] {
-		if err = relay.sendUpdate(ctx, payload, i+1, len(clientUpdatePayloads)); err != nil {
-			return nil, errors.Wrapf(err, "client update %d of %d", i+1, len(clientUpdatePayloads))
-		}
+	if err = relay.sendUpdates(ctx, clientUpdatePayloads[:last], len(clientUpdatePayloads)); err != nil {
+		return nil, err
 	}
 
 	submission, err := relay.send(ctx, clientUpdatePayloads[last:], items)
@@ -163,6 +161,43 @@ func relayPackets(
 	metrics.txSubmitted(ctx, chainID, clientID, submission.TxHash)
 
 	return submission, nil
+}
+
+// UpdateClient brings clientID up to the latest height prover can prove, in
+// update-only transactions each mined before the next is submitted. It
+// returns that height, and false when the client already trusts it.
+func UpdateClient(
+	ctx context.Context,
+	logger *slog.Logger,
+	prover prover.Prover,
+	txBuilder txbuilder.TxBuilder,
+	txSubmitter txsubmitter.TxSubmitter,
+	clientID string,
+) (uint64, bool, error) {
+	height, _, err := prover.LatestProvableHeight(ctx)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "resolving latest provable height")
+	}
+
+	payloads, err := prover.ClientUpdatePayloads(ctx, height)
+	if err != nil {
+		return 0, false, errors.Wrap(err, "generating client update payloads")
+	}
+	if len(payloads) == 0 {
+		return height, false, nil
+	}
+
+	relay := clientRelay{
+		logger:      logger.With("height", height),
+		txBuilder:   txBuilder,
+		txSubmitter: txSubmitter,
+		clientID:    clientID,
+	}
+	if err = relay.sendUpdates(ctx, payloads, len(payloads)); err != nil {
+		return 0, false, err
+	}
+
+	return height, true, nil
 }
 
 const (
@@ -213,18 +248,25 @@ func (r clientRelay) send(ctx context.Context, payloads [][]byte, items []v2.Pac
 	return submission, nil
 }
 
-// sendUpdate submits payload, update n of total, in a transaction of its own
-// and waits for it to be mined. An update the client already holds is sent
-// all the same: it may be a stalled transaction still pending, which only a
-// resend replaces with one that carries the update.
-func (r clientRelay) sendUpdate(ctx context.Context, payload []byte, n, total int) error {
-	submission, err := r.send(ctx, [][]byte{payload}, nil)
-	if err != nil {
-		return err
-	}
-	r.logger.Info("Submitted client update tx", "update", n, "of", total, "txHash", submission.TxHash)
+// sendUpdates submits payloads, the first of total updates, each in a
+// transaction of its own, waiting for each to be mined before the next. An
+// update the client already holds is sent all the same: it may be a stalled
+// transaction still pending, which only a resend replaces with one that
+// carries the update.
+func (r clientRelay) sendUpdates(ctx context.Context, payloads [][]byte, total int) error {
+	for i, payload := range payloads {
+		submission, err := r.send(ctx, [][]byte{payload}, nil)
+		if err != nil {
+			return errors.Wrapf(err, "client update %d of %d", i+1, total)
+		}
+		r.logger.Info("Submitted client update tx", "update", i+1, "of", total, "txHash", submission.TxHash)
 
-	return r.waitForInclusion(ctx, submission)
+		if err = r.waitForInclusion(ctx, submission); err != nil {
+			return errors.Wrapf(err, "client update %d of %d", i+1, total)
+		}
+	}
+
+	return nil
 }
 
 // waitForInclusion polls until submission is mined successfully, failing if

@@ -275,6 +275,8 @@ The deployer must be a local signer, because deployment requires direct access t
 | `connections[].clientA.remoteProver.tls.serverName, connections[].clientB.remoteProver.tls.serverName` | `string` | optional | Overrides the name verified against the server certificate. Needed when dialing an address that differs from the certificate's name. |
 | `connections[].clientA.remoteProver.tls.insecureSkipVerify, connections[].clientB.remoteProver.tls.insecureSkipVerify` | `bool` | optional | Disables server certificate verification and logs a warning. Development only. Must not be combined with caFile. |
 | `connections[].clientA.autoRelay.enabled, connections[].clientB.autoRelay.enabled` | `bool` | optional | Whether the relayer carries packets leaving this end without being asked. |
+| `connections[].clientA.autoUpdate.enabled, connections[].clientB.autoUpdate.enabled` | `bool` | optional | Turns on automatic updates for this client. Unset is off. |
+| `connections[].clientA.autoUpdate.interval, connections[].clientB.autoUpdate.interval` | `duration` | optional | How often the client is updated to the latest height its prover can prove. Required when enabled; keep it well below the client's trusting period. |
 
 {/* [relayer.go:L61](cli/internal/config/relayer.go#L61) */}
 
@@ -285,6 +287,8 @@ Client identifiers are scoped to a chain, so both ends can use the same `clientI
 The two client ends must belong to different chains. A client can appear in only one configured connection on a given chain. {/* [cli/internal/config/relayer.go: RelayerConfig.validateConnectionIdentities] */}
 
 With `autoRelay.enabled` on an end, the relayer carries that end's outgoing packets without being asked. {/* [cli/internal/relay/watcher/set.go: NewSetFromConfig] */} That end's chain needs `evm.ws`, and validation fails without it. {/* [cli/internal/config/config.go: Config.validateAutoRelay] */} Unset and `false` are the same input. {/* [cli/internal/config/relayer.go: RelayerConfig.AutoRelayConnections] */}
+
+With `autoUpdate.enabled` on an end, the relayer updates that end's light client every `autoUpdate.interval`, whether or not packets flow, so a client with a trusting period, such as `besu`, does not expire while idle. Each update brings the client to the latest height its prover can prove and is submitted by the end's `signer`; when the client already trusts that height, nothing is submitted. {/* [cli/internal/relay/clientupdater/updater.go: NewSetFromConfig] */} {/* [cli/internal/relay/processors/batch_relay.go: UpdateClient] */} The first update runs when the relayer starts, and a failed update is retried at the next interval. {/* [cli/internal/relay/clientupdater/updater.go: Updater.Start] */} Setting `enabled` without `interval` fails validation. {/* [cli/internal/config/relayer.go: AutoUpdateConfig.Validate] */}
 
 `remoteProver` is optional. Without it, the relayer proves an end with the built-in prover for its `type`; with it, the ProverService at `remoteProver.url` proves that end instead, and `type` may name a light client the IBC CLI does not implement. {/* [cli/internal/relay/prover/prover.go: newProver] */} `ibc deploy render-config` never writes a `remoteProver` block, and keeps one you added. {/* [cli/internal/config/patch.go: mergeConnections] */}
 

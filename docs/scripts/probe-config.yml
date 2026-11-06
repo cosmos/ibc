@@ -70,6 +70,9 @@ relayer:
         clientId: "ethereum-0"
         autoRelay:
           enabled: false
+        autoUpdate:
+          enabled: false
+          interval: 1h
 attestors:
   - name: "attestor-alice-base"
     type: remote
