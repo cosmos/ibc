@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -314,6 +315,50 @@ server:
 			// ASSERT
 			require.NoError(t, err)
 			assert.Equal(t, "127.0.0.1:9091", config.Server.ListenAddress)
+			require.NotNil(t, config.originalYAML)
+			require.Contains(t, config.originalYAML.String(), "127.0.0.1:${SERVER_PORT}")
+			require.NotContains(t, config.originalYAML.String(), "127.0.0.1:9091")
+		})
+
+		t.Run("envScalarTypes", func(t *testing.T) {
+			// ARRANGE
+			t.Setenv("CONFIG_JSON", "true")
+			t.Setenv("CONFIG_CLEAR", "false")
+			t.Setenv("CONFIG_OFFSET", "17")
+			t.Setenv("CONFIG_BATCH", "23")
+			t.Setenv("CONFIG_INTERVAL", "7s")
+			t.Setenv("CONFIG_ATTESTOR_TYPE", "remote")
+			path := writeTestConfig(t, `
+logging:
+  json: ${CONFIG_JSON}
+relayer:
+  clearOnStart: ${CONFIG_CLEAR}
+  clearInterval: ${CONFIG_INTERVAL}
+  chainOverrides:
+    - chainId: chain-a
+      packetBatchSize: ${CONFIG_BATCH}
+attestors:
+  - name: watcher
+    type: ${CONFIG_ATTESTOR_TYPE}
+    finalityOffset: ${CONFIG_OFFSET}
+`)
+
+			// ACT
+			cfg, err := LoadFromFile(path, false)
+
+			// ASSERT
+			require.NoError(t, err)
+			require.True(t, cfg.Logging.JSON)
+			require.NotNil(t, cfg.Relayer.ClearOnStart)
+			require.False(t, *cfg.Relayer.ClearOnStart)
+			require.NotNil(t, cfg.Relayer.ClearInterval)
+			require.Equal(t, 7*time.Second, *cfg.Relayer.ClearInterval)
+			require.Len(t, cfg.Relayer.ChainOverrides, 1)
+			require.NotNil(t, cfg.Relayer.ChainOverrides[0].PacketBatchSize)
+			require.Equal(t, 23, *cfg.Relayer.ChainOverrides[0].PacketBatchSize)
+			require.Len(t, cfg.Attestors, 1)
+			require.Equal(t, AttestorTypeRemote, cfg.Attestors[0].Type)
+			require.Equal(t, uint(17), cfg.Attestors[0].FinalityOffset)
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
@@ -648,6 +693,110 @@ func unsetEnv(t *testing.T, key string) {
 		}
 		require.NoError(t, os.Unsetenv(key))
 	})
+}
+
+func TestStoreToFilePreservesEnv(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		store     func(Config, string) error
+		futureEnv bool
+	}{
+		{name: "plain", store: Config.StoreToFile},
+		{name: "withComments", store: Config.StoreToFileWithComments},
+		{name: "plainFutureEnv", store: Config.StoreToFile, futureEnv: true},
+		{name: "withCommentsFutureEnv", store: Config.StoreToFileWithComments, futureEnv: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ARRANGE
+			t.Setenv("CONFIG_PASSWORD", "original-password")
+			if tt.futureEnv {
+				unsetEnv(t, "CONFIG_RPC_KEY")
+			} else {
+				t.Setenv("CONFIG_RPC_KEY", "original-key")
+			}
+			t.Setenv("CONFIG_WS", "")
+			t.Setenv("CONFIG_JSON", "false")
+			path := writeTestConfig(t, `
+db:
+  type: postgres
+  url: &database postgres://user:${CONFIG_PASSWORD}@localhost/ibc # operator comment
+server:
+  listenAddr: *database
+logging:
+  json: ${CONFIG_JSON}
+chains:
+  - chainId: a
+    evm:
+      rpc: https://a.example/${CONFIG_RPC_KEY} # rpc key
+      ws: ${CONFIG_WS}
+  - chainId: b
+    evm:
+      rpc: https://b.example/$CONFIG_RPC_KEY
+`)
+			require.NoError(t, os.Chmod(path, 0o600))
+			cfg, err := LoadFromFile(path, false)
+			require.NoError(t, err)
+			if tt.futureEnv {
+				require.Equal(t, "https://a.example/", cfg.Chains[0].EVM.RPC)
+				require.Equal(t, "https://b.example/", cfg.Chains[1].EVM.RPC)
+			}
+			cfg.DB.URL = "postgres://override:literal@localhost/other"
+			cfg.Logging.JSON = true
+			cfg.Chains = append(cfg.Chains, ChainConfig{
+				ChainID: "new",
+				EVM:     &EVMChainConfig{RPC: "https://new.example"},
+			})
+			cfg.Chains[1].EVM.ICS26Router = "0x0000000000000000000000000000000000000123"
+			// Saving must not depend on the environment remaining unchanged.
+			t.Setenv("CONFIG_PASSWORD", "rotated-password")
+			if !tt.futureEnv {
+				t.Setenv("CONFIG_RPC_KEY", "rotated-key")
+			}
+
+			// ACT
+			require.NoError(t, tt.store(cfg, path))
+
+			// ASSERT
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Contains(t, string(data), "postgres://user:${CONFIG_PASSWORD}@localhost/ibc")
+			require.Contains(t, string(data), "https://a.example/${CONFIG_RPC_KEY}")
+			require.Contains(t, string(data), "https://b.example/$CONFIG_RPC_KEY")
+			require.Contains(t, string(data), "${CONFIG_WS}")
+			require.Contains(t, string(data), "${CONFIG_JSON}")
+			require.NotContains(t, string(data), "original-password")
+			require.NotContains(t, string(data), "original-key")
+			require.NotContains(t, string(data), "rotated-")
+			require.NotContains(t, string(data), "override:literal")
+			if tt.name == "withComments" {
+				require.Contains(t, string(data), "TODO: fill in")
+			}
+			if tt.futureEnv {
+				_, set := os.LookupEnv("CONFIG_RPC_KEY")
+				require.False(t, set, "RPC key must remain unset through the write")
+				t.Setenv("CONFIG_RPC_KEY", "rotated-key")
+			}
+			loaded, err := LoadFromFile(path, false)
+			require.NoError(t, err)
+			require.Equal(t, "postgres://user:rotated-password@localhost/ibc", loaded.DB.URL)
+			require.Equal(t, loaded.DB.URL, loaded.Server.ListenAddress)
+			require.False(t, loaded.Logging.JSON)
+			require.Len(t, loaded.Chains, 3)
+			require.Equal(t, "a", loaded.Chains[0].ChainID)
+			require.Equal(t, cfg.Chains[1].EVM.ICS26Router, loaded.Chains[1].EVM.ICS26Router)
+			require.Equal(t, "https://a.example/rotated-key", loaded.Chains[0].EVM.RPC)
+			require.Equal(t, "https://b.example/rotated-key", loaded.Chains[1].EVM.RPC)
+			require.Equal(t, "new", loaded.Chains[2].ChainID)
+			require.Equal(t, "https://new.example", loaded.Chains[2].EVM.RPC)
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+			require.NoError(t, tt.store(cfg, path))
+			repeated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, string(data), string(repeated))
+		})
+	}
 }
 
 func TestStoreToFilePreservesSymlink(t *testing.T) {

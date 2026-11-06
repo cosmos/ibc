@@ -7,10 +7,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
+	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 )
+
+type yamlScalar interface {
+	~string | ~bool | ~int | ~uint | ~int64
+}
 
 func LoadFromFile(path string, validate bool) (Config, error) {
 	config := DefaultConfig()
@@ -20,14 +27,24 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 		return Config{}, err
 	}
 
-	// substitute ENV variables
-	expanded := os.ExpandEnv(string(bz))
+	// ast tree
+	originalYAML, err := parser.ParseBytes(bz, parser.ParseComments)
+	if err != nil {
+		return Config{}, err
+	}
 
 	opts := []yaml.DecodeOption{
 		yaml.DisallowUnknownField(),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[string]),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[ChainType]),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[AttestorType]),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[bool]),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[int]),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[uint]),
+		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[time.Duration]),
 	}
 
-	if err := yaml.UnmarshalWithOptions([]byte(expanded), &config, opts...); err != nil {
+	if err := unmarshalConfigAST(originalYAML, &config, opts); err != nil {
 		return Config{}, err
 	}
 
@@ -38,6 +55,7 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 	}
 
 	config.originalFilePath = path
+	config.originalYAML = originalYAML
 
 	return config, nil
 }
@@ -91,12 +109,46 @@ func fileExists(path string) error {
 	return nil
 }
 
+func unmarshalConfigAST(file *ast.File, config *Config, opts []yaml.DecodeOption) error {
+	if len(file.Docs) != 1 || file.Docs[0].Body == nil {
+		return errors.New("expected a single config YAML document")
+	}
+
+	return yaml.NodeToValue(file.Docs[0].Body, config, opts...)
+}
+
+// decodes yaml's fields w/ or w/o env vars like `hello: ${HELLO}`
+func unmarshalScalarWithEnv[S yamlScalar](value *S, data []byte) error {
+	// peek to detect if the value is an env var w/o writing to *S
+	var tmp string
+	if err := yaml.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	if expanded := os.ExpandEnv(tmp); expanded != tmp {
+		data = []byte(expanded)
+	}
+
+	return yaml.Unmarshal(data, value)
+}
+
 func storeConfig(c Config, path string, comments map[string]string) error {
 	if err := EnsureDirectory(path); err != nil {
 		return err
 	}
 
-	bz, err := yaml.MarshalWithOptions(c, yaml.WithComment(toCommentMap(comments)))
+	latest, err := yaml.ValueToNode(c)
+	if err != nil {
+		return err
+	}
+
+	if c.originalYAML != nil {
+		if err = preserveConfigEnv(latest, c.originalYAML); err != nil {
+			return err
+		}
+	}
+
+	bz, err := yaml.MarshalWithOptions(latest, yaml.WithComment(toCommentMap(comments)))
 	if err != nil {
 		return err
 	}
@@ -131,4 +183,58 @@ func storeConfig(c Config, path string, comments map[string]string) error {
 	}
 
 	return os.Rename(tmp.Name(), path)
+}
+
+// preserveConfigEnv restores env-backed values at their original YAML paths.
+// Callers must preserve existing list order; appending entries is supported.
+func preserveConfigEnv(latest ast.Node, original *ast.File) error {
+	var value any
+
+	decoder := yaml.NewDecoder(strings.NewReader(""))
+
+	// Initialize the decoder with the whole document so aliases resolve too.
+	if err := decoder.DecodeFromNode(original.Docs[0].Body, &value); err != nil {
+		return err
+	}
+
+	for _, node := range ast.FilterFile(ast.MappingValueType, original) {
+		entry := node.(*ast.MappingValueNode)
+		if err := decoder.DecodeFromNode(entry.Value, &value); err != nil {
+			return err
+		}
+
+		raw, ok := value.(string)
+		if !ok {
+			continue
+		}
+
+		hasEnv := false
+		os.Expand(raw, func(string) string { hasEnv = true; return "" })
+		if !hasEnv {
+			continue
+		}
+
+		parent, err := yaml.PathString(entry.GetPath()[:strings.LastIndex(entry.GetPath(), ".")])
+		if err != nil {
+			return err
+		}
+
+		patch, err := yaml.ValueToNode(map[string]string{entry.Key.GetToken().Value: raw})
+		if err != nil {
+			return err
+		}
+
+		file := &ast.File{
+			Docs: []*ast.DocumentNode{
+				{Body: latest},
+			},
+		}
+
+		// Merging one field also restores placeholders omitted by omitempty.
+		if err := parent.MergeFromNode(file, patch); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

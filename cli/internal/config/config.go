@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 	"github.com/cosmos/ibc/cli/internal/pkg/logging"
@@ -75,7 +76,9 @@ type Config struct {
 	Attestors     Attestors     `yaml:"attestors"`
 	Signers       Signers       `yaml:"signers"`
 
+	// keep track of the original file and its contents
 	originalFilePath string
+	originalYAML     *ast.File
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
