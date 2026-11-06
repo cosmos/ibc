@@ -69,7 +69,9 @@ func (u *Updater) Start() {
 		defer ticker.Stop()
 
 		for {
-			u.update(ctx)
+			attemptCtx, cancelAttempt := context.WithTimeout(ctx, u.interval)
+			u.update(attemptCtx)
+			cancelAttempt()
 
 			select {
 			case <-ctx.Done():
@@ -99,7 +101,9 @@ func (u *Updater) update(ctx context.Context) {
 	)
 
 	switch {
-	case ctx.Err() != nil:
+	case errors.Is(ctx.Err(), context.Canceled):
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		u.logger.Error("Client update timed out", "err", err)
 	case errors.Is(err, txsubmitter.ErrBusy):
 		u.logger.Warn("Client update postponed, tx submitter busy", "err", err)
 	case err != nil:
