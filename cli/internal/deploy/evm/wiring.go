@@ -27,6 +27,16 @@ import (
 // counterparties under.
 var evmMerklePrefix = [][]byte{{}}
 
+// merklePrefix is the prefix client c verifies its counterparty's state under:
+// a Besu client proves the counterparty router's storage, an attestation
+// client the attested commitment itself.
+func merklePrefix(c manifest.Client) [][]byte {
+	if c.Besu != nil {
+		return besu.MerklePrefix(common.HexToAddress(c.Besu.IBCRouter))
+	}
+	return evmMerklePrefix
+}
+
 // Custom-error selectors for the getters that revert when absent, so their
 // reverts can be classified as not-found.
 var (
@@ -50,13 +60,9 @@ func (d *Driver) RegisterClient(
 	if err != nil {
 		return "", err
 	}
-	prefix := evmMerklePrefix
-	if p, ok := spec.Params.(deploy.BesuParams); ok {
-		prefix = besu.MerklePrefix(p.IBCRouter)
-	}
 	tx, err := contract.AddClient(opts, spec.ClientID, ics26router.IICS02ClientMsgsCounterpartyInfo{
 		ClientId:     spec.CounterpartyClientID,
-		MerklePrefix: prefix,
+		MerklePrefix: merklePrefix(deploy.SpecToClient(spec, ref.Address)),
 	}, common.HexToAddress(ref.Address))
 	if err != nil {
 		return "", fmt.Errorf("addClient %q: %w", spec.ClientID, err)
@@ -219,10 +225,7 @@ func (d *Driver) Verify(ctx context.Context, m *manifest.Manifest) (deploy.Repor
 			cp.ClientId == c.CounterpartyClientID,
 			fmt.Sprintf("router has %q, manifest has %q", cp.ClientId, c.CounterpartyClientID),
 		)
-		want := evmMerklePrefix
-		if c.Besu != nil {
-			want = besu.MerklePrefix(common.HexToAddress(c.Besu.IBCRouter))
-		}
+		want := merklePrefix(c)
 		check(
 			"client "+c.ClientID+" merkle prefix matches",
 			slices.EqualFunc(cp.MerklePrefix, want, bytes.Equal),
