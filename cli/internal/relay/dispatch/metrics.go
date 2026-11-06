@@ -28,13 +28,6 @@ const (
 	timeoutExcessiveDelay = 5 * time.Minute
 )
 
-// Packet relay legs; values match the processors relay types.
-const (
-	legSendToRecv    = "send_to_recv"
-	legSendToTimeout = "send_to_timeout"
-	legRecvToAck     = "recv_to_ack"
-)
-
 type instrumentation struct {
 	PacketsPending        metric.Int64Gauge
 	ExcessiveRelayLatency metric.Int64Counter
@@ -137,12 +130,12 @@ func (m *instrumentation) excessiveRelayLatency(ctx context.Context, packets []s
 			otel.AttrDestChainID.String(packet.DestinationChainID),
 			otel.AttrClientID.String(packet.PacketSourceClientID),
 			otel.AttrDestClientID.String(packet.PacketDestinationClientID),
-			otel.AttrType.String(leg),
+			otel.AttrType.String(string(leg)),
 		))
 	}
 }
 
-func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
+func excessiveLatencyLeg(p store.Packet, now time.Time) (processors.Leg, bool) {
 	if p.Status.IsTerminal() {
 		return "", false
 	}
@@ -155,7 +148,7 @@ func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
 			start = p.RecvTxTime
 		}
 		if start != nil && now.Sub(*start) > excessiveRelayLatency {
-			return legRecvToAck, true
+			return processors.LegRecvToAck, true
 		}
 
 		return "", false
@@ -171,11 +164,11 @@ func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
 			return "", false
 		}
 
-		return legSendToTimeout, true
+		return processors.LegSendToTimeout, true
 	}
 
 	if now.Sub(p.SourceTxTime) > excessiveRelayLatency {
-		return legSendToRecv, true
+		return processors.LegSendToRecv, true
 	}
 
 	return "", false

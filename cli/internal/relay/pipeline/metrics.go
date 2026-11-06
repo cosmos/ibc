@@ -10,6 +10,7 @@ import (
 	"github.com/cosmos/ibc/cli/internal/otel"
 	"github.com/cosmos/ibc/cli/internal/relay/processors"
 	"github.com/cosmos/ibc/cli/internal/store"
+	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 type instrumentation struct {
@@ -60,36 +61,29 @@ func (m *instrumentation) batch(
 	batch []*processors.Transfer,
 	err error,
 ) {
-	processor := batchProcessorName(status)
-	chainID := batchChainID(batch[0], processor)
+	kind := batchKind(status)
+	chainID := batch[0].SourceChainID
+	if kind == v2.RelayKindRecv {
+		chainID = batch[0].DestinationChainID
+	}
 
 	m.BatchSize.Record(ctx, int64(len(batch)), metric.WithAttributes(
 		otel.AttrChainID.String(chainID),
-		otel.AttrProcessor.String(processor),
+		otel.AttrProcessor.String(kind.String()),
 		otel.AttrResultError(err),
 	))
 }
 
-// processors/batch_ack.go
-// processors/batch_recv.go
-// processors/batch_relay.go
-func batchProcessorName(status store.RelayStatus) string {
+// batchKind is the packet operation the batch processor for status relays.
+func batchKind(status store.RelayStatus) v2.RelayKind {
 	switch status {
 	case store.RelayStatusDeliverRecvPacket:
-		return "recv"
+		return v2.RelayKindRecv
 	case store.RelayStatusDeliverAckPacket:
-		return "ack"
+		return v2.RelayKindAck
 	case store.RelayStatusDeliverTimeoutPacket:
-		return "timeout"
+		return v2.RelayKindTimeout
 	default:
-		return "unknown"
+		return v2.RelayKindUnknown
 	}
-}
-
-func batchChainID(tr *processors.Transfer, processor string) string {
-	if processor == "recv" {
-		return tr.DestinationChainID
-	}
-
-	return tr.SourceChainID
 }

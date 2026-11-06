@@ -48,7 +48,7 @@ func (p RetryRecvPacket) Process(ctx context.Context, tr *Transfer) (*Transfer, 
 		return nil, errors.Wrapf(err, "clearing recv tx %s", *tr.RecvTxHash)
 	}
 
-	metrics.txRetry(ctx, tr, relayTypeSendToRecv, *tr.RecvTxHash)
+	metrics.txRetry(ctx, tr, LegSendToRecv, *tr.RecvTxHash)
 	metrics.packetExecution(ctx, tr, "recv", executionFailed)
 
 	// error so the transfer stops processing this run; it is picked up
