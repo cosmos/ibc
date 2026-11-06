@@ -57,9 +57,7 @@ func (p CheckTimeoutFinality) Cancel(tr *Transfer, err error) {
 }
 
 func (p CheckTimeoutFinality) ShouldProcess(tr *Transfer) bool {
-	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
-
-	return shouldBeTimedOut && tr.TimeoutTxHash == nil
+	return tr.ShouldTimeOut()
 }
 
 func (p CheckTimeoutFinality) Status() store.RelayStatus {
