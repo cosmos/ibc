@@ -76,11 +76,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 	}
 
 	path = absPath
-
-	connectionString, err := sqliteURL(path, connectionOpts)
-	if err != nil {
-		return nil, err
-	}
+	connectionString := sqliteURL(path, connectionOpts)
 
 	// sqlite can auto-create db files, but not nested directories.
 	if err = config.EnsureDirectory(path); err != nil {
@@ -267,14 +263,8 @@ func writeAckStatusPtr(status *string) *WriteAckStatus {
 	return &s
 }
 
-func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", errors.Wrapf(err, "absolute path for %s", path)
-	}
-
-	path = absPath
-
+// sqliteURL is the connection URL for the database file at the absolute path.
+func sqliteURL(path string, connectionOpts map[string]string) string {
 	u := url.URL{
 		Scheme: "file",
 		Path:   path,
@@ -298,7 +288,7 @@ func sqliteURL(path string, connectionOpts map[string]string) (string, error) {
 
 	u.RawQuery = query.Encode()
 
-	return u.String(), nil
+	return u.String()
 }
 
 func (db *SqliteDB) ListDispatchablePackets(ctx context.Context) ([]Packet, error) {
