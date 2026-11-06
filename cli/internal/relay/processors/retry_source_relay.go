@@ -27,7 +27,7 @@ type ClearTimeoutTxStorage interface {
 // chain, that failed, stalled, or did not act on this packet so it is retried.
 type RetrySourceRelay struct {
 	kind        v2.RelayKind
-	leg         relayType
+	leg         Leg
 	status      store.RelayStatus
 	retrying    error
 	tx          func(tr *Transfer) (*string, *time.Time)
@@ -45,7 +45,7 @@ func NewRetryAckPacket(
 ) RetrySourceRelay {
 	return RetrySourceRelay{
 		kind:        v2.RelayKindAck,
-		leg:         relayTypeRecvToAck,
+		leg:         LegRecvToAck,
 		status:      store.RelayStatusDeliverAckPacket,
 		retrying:    ErrRetryingAckPacket,
 		tx:          func(tr *Transfer) (*string, *time.Time) { return tr.AckTxHash, tr.AckTxTime },
@@ -64,7 +64,7 @@ func NewRetryTimeoutPacket(
 ) RetrySourceRelay {
 	return RetrySourceRelay{
 		kind:        v2.RelayKindTimeout,
-		leg:         relayTypeSendToTimeout,
+		leg:         LegSendToTimeout,
 		status:      store.RelayStatusDeliverTimeoutPacket,
 		retrying:    ErrRetryingTimeoutPacket,
 		tx:          func(tr *Transfer) (*string, *time.Time) { return tr.TimeoutTxHash, tr.TimeoutTxTime },

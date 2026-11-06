@@ -169,7 +169,7 @@ func TestExcessiveRelayLatency(t *testing.T) {
 			require.Len(t, points, 1)
 			point := points[0]
 			assert.Equal(t, int64(1), point.value)
-			assert.Equal(t, legSendToRecv, attributeValue(t, point.attributes, otel.AttrType))
+			assert.Equal(t, "send_to_recv", attributeValue(t, point.attributes, otel.AttrType))
 			assert.Equal(t, "source", attributeValue(t, point.attributes, otel.AttrChainID))
 			assert.Equal(t, "dest", attributeValue(t, point.attributes, otel.AttrDestChainID))
 			assert.Equal(t, "client", attributeValue(t, point.attributes, otel.AttrClientID))
@@ -207,7 +207,7 @@ func TestExcessiveRelayLatency(t *testing.T) {
 
 			points := collectRelayLatency(ctx, t, reader)
 			require.Len(t, points, 1)
-			assert.Equal(t, legRecvToAck, attributeValue(t, points[0].attributes, otel.AttrType))
+			assert.Equal(t, "recv_to_ack", attributeValue(t, points[0].attributes, otel.AttrType))
 		})
 
 		t.Run("writeAckLookupFailedPastTimeout", func(t *testing.T) {
@@ -241,7 +241,7 @@ func TestExcessiveRelayLatency(t *testing.T) {
 
 			points := collectRelayLatency(ctx, t, reader)
 			require.Len(t, points, 1)
-			assert.Equal(t, legRecvToAck, attributeValue(t, points[0].attributes, otel.AttrType))
+			assert.Equal(t, "recv_to_ack", attributeValue(t, points[0].attributes, otel.AttrType))
 		})
 	})
 
@@ -258,7 +258,7 @@ func TestExcessiveRelayLatency(t *testing.T) {
 
 			points := collectRelayLatency(ctx, t, reader)
 			require.Len(t, points, 1)
-			assert.Equal(t, legSendToTimeout, attributeValue(t, points[0].attributes, otel.AttrType))
+			assert.Equal(t, "send_to_timeout", attributeValue(t, points[0].attributes, otel.AttrType))
 		})
 
 		t.Run("withinTimeoutDelay", func(t *testing.T) {
