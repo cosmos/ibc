@@ -867,6 +867,8 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if flagDeployChain == "" {
 		return errors.New("--chain is required")
 	}
+	// an unset --owner is the deployer, so the capacity is known to be required
+	// before the deployer key is loaded
 	if flagDeployIFTCapacity == "" && flagDeployIFTOwner == "" {
 		return errIFTCapacityRequired
 	}
@@ -885,7 +887,8 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if !common.IsHexAddress(owner) {
 		return errors.Errorf("invalid --owner %q", owner)
 	}
-	rateLimit, err := iftRateLimit(owner, deployer, cmd.Flags().Changed("rate-limit-window"))
+	rateLimit, err := iftRateLimit(
+		owner, deployer, flagDeployIFTCapacity, flagDeployIFTWindow, cmd.Flags().Changed("rate-limit-window"))
 	if err != nil {
 		return err
 	}
@@ -905,9 +908,13 @@ var errIFTCapacityRequired = errors.New("--rate-limit-capacity is required")
 // iftRateLimit resolves the rate limit `deploy ift` sets from its flags. Only
 // the owner can set it, so a token owned by someone other than the deployer
 // gets none.
-func iftRateLimit(owner, deployer string, windowSet bool) (*deploy.IFTRateLimit, error) {
+func iftRateLimit(
+	owner, deployer, capacityFlag string,
+	windowFlag time.Duration,
+	windowSet bool,
+) (*deploy.IFTRateLimit, error) {
 	if common.HexToAddress(owner) != common.HexToAddress(deployer) {
-		if flagDeployIFTCapacity != "" || windowSet {
+		if capacityFlag != "" || windowSet {
 			return nil, errors.Errorf(
 				"--owner %s is not the deployer %s: only the owner can set the rate limit", owner, deployer)
 		}
@@ -915,17 +922,17 @@ func iftRateLimit(owner, deployer string, windowSet bool) (*deploy.IFTRateLimit,
 			"owner", owner)
 		return nil, nil
 	}
-	if flagDeployIFTCapacity == "" {
+	if capacityFlag == "" {
 		return nil, errIFTCapacityRequired
 	}
 
-	window, err := wholeSeconds(flagDeployIFTWindow)
+	window, err := wholeSeconds(windowFlag)
 	if err != nil || window == 0 {
-		return nil, errors.Errorf("invalid --rate-limit-window %s: must be at least 1s", flagDeployIFTWindow)
+		return nil, errors.Errorf("invalid --rate-limit-window %s: must be at least 1s", windowFlag)
 	}
-	capacity := parseIFTAmount(flagDeployIFTCapacity)
+	capacity := parseIFTAmount(capacityFlag)
 	if capacity == nil || capacity.Sign() == 0 || capacity.Cmp(maxIFTCapacity) > 0 {
-		return nil, errors.Errorf("invalid --rate-limit-capacity %q: must be a positive uint208", flagDeployIFTCapacity)
+		return nil, errors.Errorf("invalid --rate-limit-capacity %q: must be a positive uint208", capacityFlag)
 	}
 	return &deploy.IFTRateLimit{Capacity: capacity, Window: window}, nil
 }
@@ -975,12 +982,8 @@ func deployIFTBridge(cmd *cobra.Command, _ []string) error {
 }
 
 func normalizeIFTAddress(cfg config.Config, chainID, address string) (string, error) {
-	chain, ok := cfg.Chain(chainID)
-	if !ok {
+	if _, ok := cfg.Chain(chainID); !ok {
 		return "", errors.Errorf("chain %q not declared in config", chainID)
-	}
-	if chain.Type() != config.ChainTypeEVM {
-		return address, nil
 	}
 	if !common.IsHexAddress(address) {
 		return "", errors.Errorf("invalid IFT address %q", address)
