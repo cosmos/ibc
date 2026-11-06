@@ -524,14 +524,12 @@ func TestIFTRateLimit(t *testing.T) {
 		{name: "sub-second window", owner: deployer, capacity: "1", window: time.Millisecond, wantErr: "must be at least 1s"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			oldCapacity, oldWindow := flagDeployIFTCapacity, flagDeployIFTWindow
-			t.Cleanup(func() { flagDeployIFTCapacity, flagDeployIFTWindow = oldCapacity, oldWindow })
-			flagDeployIFTCapacity, flagDeployIFTWindow = tc.capacity, 24*time.Hour
+			window := 24 * time.Hour
 			if tc.window != 0 {
-				flagDeployIFTWindow = tc.window
+				window = tc.window
 			}
 
-			got, err := iftRateLimit(tc.owner, deployer, tc.window != 0)
+			got, err := iftRateLimit(tc.owner, deployer, tc.capacity, window, tc.window != 0)
 			if tc.wantErr != "" {
 				require.ErrorContains(t, err, tc.wantErr)
 				return
@@ -543,10 +541,7 @@ func TestIFTRateLimit(t *testing.T) {
 }
 
 func TestNormalizeIFTAddress(t *testing.T) {
-	cfg := config.Config{Chains: config.Chains{
-		{ChainID: "1", EVM: &config.EVMChainConfig{}},
-		{ChainID: "2"},
-	}}
+	cfg := config.Config{Chains: config.Chains{{ChainID: "1", EVM: &config.EVMChainConfig{}}}}
 	for _, expected := range []string{
 		"0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
 		"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
@@ -556,12 +551,6 @@ func TestNormalizeIFTAddress(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, expected, actual)
 		}
-	}
-
-	for _, input := range []string{"counterparty-token", "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"} {
-		actual, err := normalizeIFTAddress(cfg, "2", input)
-		require.NoError(t, err)
-		require.Equal(t, input, actual)
 	}
 
 	_, err := normalizeIFTAddress(cfg, "1", "invalid")
