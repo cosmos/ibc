@@ -175,9 +175,7 @@ func (p BatchTimeoutPacket) Cancel(transfers []*Transfer, err error) {
 }
 
 func (p BatchTimeoutPacket) ShouldProcess(tr *Transfer) bool {
-	shouldBeTimedOut := tr.IsTimedOut() && tr.RecvTxHash == nil && tr.AckTxHash == nil
-
-	return shouldBeTimedOut && tr.TimeoutTxHash == nil
+	return tr.ShouldTimeOut()
 }
 
 func (p BatchTimeoutPacket) Status() store.RelayStatus {

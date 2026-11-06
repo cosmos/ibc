@@ -67,6 +67,12 @@ func (t *Transfer) IsTimedOut() bool {
 	return time.Now().After(t.PacketTimeoutTimestamp)
 }
 
+// ShouldTimeOut reports whether the packet is past its timeout, was never
+// received, and has no timeout tx yet.
+func (t *Transfer) ShouldTimeOut() bool {
+	return t.IsTimedOut() && t.RecvTxHash == nil && t.AckTxHash == nil && t.TimeoutTxHash == nil
+}
+
 // IsComplete reports whether the transfer has finished its lifecycle: timed
 // out, or received with its ack relayed back to the source chain.
 func (t *Transfer) IsComplete() bool {

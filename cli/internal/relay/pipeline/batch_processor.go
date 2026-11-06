@@ -34,15 +34,9 @@ func BatchProcess(
 				continue
 			}
 
-			if i.Error() != "" {
-				// errored transfers skip batching and flow through immediately
-				out <- i
-
-				continue
-			}
-
-			if !processor.ShouldProcess(i) {
-				// transfers this processor does not apply to flow through
+			if !applies(i, processor) {
+				// transfers this processor does not apply to skip batching and
+				// flow through immediately
 				out <- i
 
 				continue
