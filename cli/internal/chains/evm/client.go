@@ -320,9 +320,9 @@ func (c *Client) GetCounterparty(ctx context.Context, clientID string) (string, 
 // GetAttestationSet returns clientID's on-chain attestor addresses and
 // minimum required signature count.
 func (c *Client) GetAttestationSet(ctx context.Context, clientID string) ([]string, uint8, error) {
-	lightClientAddr, err := c.router.GetClient(&bind.CallOpts{Context: ctx}, clientID)
+	lightClientAddr, err := c.lightClientAddress(ctx, clientID)
 	if err != nil {
-		return nil, 0, errors.Wrapf(err, "resolving light client address for %q on chain %s", clientID, c.chainID)
+		return nil, 0, err
 	}
 
 	lightClient, err := attestation.NewContract(lightClientAddr, c.eth)
