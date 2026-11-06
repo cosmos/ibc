@@ -4,7 +4,6 @@ package evm
 
 import (
 	"context"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,17 +12,12 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc/cli/besu"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
-// SealedHeader returns the sealed Besu header at height, or the head at
-// v2.LatestBlock.
+// SealedHeader returns the sealed Besu header at height, which may be
+// v2.LatestBlock or v2.FinalizedBlock.
 func (c *Client) SealedHeader(ctx context.Context, height uint64) (*besu.ParsedHeader, error) {
-	var number *big.Int
-	if height != v2.LatestBlock {
-		number = new(big.Int).SetUint64(height)
-	}
-	header, err := besu.ReadSealedHeader(ctx, c.eth, number)
+	header, err := besu.ReadSealedHeader(ctx, c.eth, heightToBigInt(height))
 	if err != nil {
 		return nil, errors.Wrapf(err, "chain %s", c.chainID)
 	}
