@@ -266,7 +266,9 @@ func (s healthTestStore) Ping(ctx context.Context) error { return s.ping(ctx) }
 
 func registerHealthTestServices(t *testing.T, srv *Server, ping func(context.Context) error) {
 	t.Helper()
-	srv.Register(NewRelayerHandler(relayerservice.New(config.Config{}, healthTestStore{ping: ping}, nil, nil, nil)))
+	srv.Register(
+		NewRelayerHandler(relayerservice.New(config.Config{}, healthTestStore{ping: ping}, nil, nil, nil, nil)),
+	)
 	attestors, err := attestorservice.New(nil)
 	require.NoError(t, err)
 	srv.Register(NewAttestorHandler(attestors))

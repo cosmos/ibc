@@ -83,6 +83,10 @@ type ClientEnd struct {
 	// AutoRelay configures auto-relay for packets flowing FROM this end's
 	// chain TOWARD the counterparty end.
 	AutoRelay AutoRelayConfig `yaml:"autoRelay,omitempty"`
+
+	// AutoUpdate updates this end's light client on a fixed interval,
+	// whether or not packets flow, so it does not expire.
+	AutoUpdate AutoUpdateConfig `yaml:"autoUpdate,omitempty"`
 }
 
 // clientEndIdentity identifies a light client independent of aliases and
@@ -96,6 +100,33 @@ func (c ClientEnd) identity() clientEndIdentity {
 // AutoRelayConfig automatic relaying settings.
 type AutoRelayConfig struct {
 	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+// AutoUpdateConfig automatic client update settings.
+type AutoUpdateConfig struct {
+	// Enabled turns on automatic updates for this client. Unset is off.
+	Enabled *bool `yaml:"enabled,omitempty"`
+
+	// Interval is how often the client is updated to the latest height its
+	// prover can prove. Required when enabled; keep it well below the
+	// client's trusting period.
+	Interval *time.Duration `yaml:"interval,omitempty"`
+}
+
+// IsEnabled reports whether automatic updates are on.
+func (c AutoUpdateConfig) IsEnabled() bool {
+	return c.Enabled != nil && *c.Enabled
+}
+
+func (c AutoUpdateConfig) Validate() error {
+	switch {
+	case c.Interval != nil && *c.Interval <= 0:
+		return errPathf("interval", "must be positive")
+	case c.IsEnabled() && c.Interval == nil:
+		return errPathf("interval", "required when enabled")
+	}
+
+	return nil
 }
 
 // RemoteProverConfig is a ProverService endpoint.
@@ -248,6 +279,10 @@ func (c ClientEnd) Validate() error {
 			"unknown client type: %q; set remoteProver for a light client the IBC CLI does not implement",
 			c.Type,
 		)
+	}
+
+	if err := errPath("autoUpdate", c.AutoUpdate.Validate()); err != nil {
+		return err
 	}
 
 	if c.RemoteProver == nil {

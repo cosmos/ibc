@@ -21,6 +21,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/cosmos/ibc/cli/internal/relay/clientupdater"
 	"github.com/cosmos/ibc/cli/internal/relay/dispatch"
 	"github.com/cosmos/ibc/cli/internal/relay/watcher"
 	"github.com/cosmos/ibc/cli/internal/store"
@@ -36,6 +37,7 @@ type Service struct {
 
 	dispatcher *dispatch.RelayDispatcher
 	watchers   watcher.Set
+	updaters   clientupdater.Set
 }
 
 // ChainClients resolves chain clients by chain id.
@@ -162,14 +164,15 @@ type RelayRequest struct {
 	Packets   []PacketSelector
 }
 
-// New Service constructor. dispatcher may be nil, and watchers empty, for a
-// service that only serves the gRPC API, with no background loops.
+// New Service constructor. dispatcher may be nil, and watchers and updaters
+// empty, for a service that only serves the gRPC API, with no background loops.
 func New(
 	cfg config.Config,
 	st Store,
 	clients ChainClients,
 	dispatcher *dispatch.RelayDispatcher,
 	watchers watcher.Set,
+	updaters clientupdater.Set,
 ) *Service {
 	return &Service{
 		logger:     slog.With("service", "relayer"),
@@ -178,6 +181,7 @@ func New(
 		chains:     clients,
 		dispatcher: dispatcher,
 		watchers:   watchers,
+		updaters:   updaters,
 	}
 }
 
@@ -186,8 +190,8 @@ func (s *Service) CheckReady(ctx context.Context) error {
 	return s.store.Ping(ctx)
 }
 
-// Start begins the background relay dispatch loop and the packet watchers.
-// Either is skipped when nil.
+// Start begins the background relay dispatch loop, the packet watchers and the
+// client updaters. Each is skipped when nil or empty.
 func (s *Service) Start() error {
 	if s.dispatcher != nil {
 		if err := s.dispatcher.Start(); err != nil {
@@ -195,12 +199,20 @@ func (s *Service) Start() error {
 		}
 	}
 
-	return s.watchers.Start()
+	if err := s.watchers.Start(); err != nil {
+		return err
+	}
+
+	s.updaters.Start()
+
+	return nil
 }
 
 // Stop cancels the background loops and blocks until they have exited. Watchers
 // stop first so nothing new is discovered while the dispatcher drains.
 func (s *Service) Stop() error {
+	s.updaters.Stop()
+
 	err := s.watchers.Stop()
 
 	if s.dispatcher != nil {
