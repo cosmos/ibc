@@ -503,3 +503,33 @@ func TestRelayerConfigAbandonUnrecoverablePacketsFor(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteProverRequestTimeout(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		field   string
+		want    time.Duration
+		wantErr string
+	}{
+		{name: "unset", want: time.Minute},
+		{name: "configured", field: "requestTimeout: 5m", want: 5 * time.Minute},
+		{name: "subsecond", field: "requestTimeout: 250ms", want: 250 * time.Millisecond},
+		{name: "zero", field: "requestTimeout: 0s", wantErr: "requestTimeout: must be positive"},
+		{name: "negative", field: "requestTimeout: -1s", wantErr: "requestTimeout: must be positive"},
+		{name: "invalid", field: "requestTimeout: invalid", wantErr: "invalid duration"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg RemoteProverConfig
+			err := yaml.Unmarshal([]byte("url: http://prover:9090\n"+tt.field+"\n"), &cfg)
+			if err == nil {
+				err = cfg.Validate()
+			}
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, cfg.RequestTimeoutOrDefault())
+		})
+	}
+}
