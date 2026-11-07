@@ -55,6 +55,10 @@ make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 
 
 Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
 
+CI splits the suite into shards, each running every Nth test in `go test -list` order. Reproduce a CI
+shard with `make -C e2e test E2E_MODE=complete E2E_SHARD=2/4`; a `-run` in `E2E_FLAGS`
+replaces the shard's selection.
+
 ## Writing a test
 
 The setup sequence is deliberately explicit:
