@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//nolint:dupl // the batch directions are structurally parallel by design
 package processors
 
 import (
@@ -32,49 +31,17 @@ type BatchRecvPacket struct {
 	logger                 *slog.Logger
 }
 
-func NewBatchRecvPacket(
-	chainClients ChainClients,
-	provers Provers,
-	txBuilders TxBuilders,
-	storage TxStorage,
-	txSubmitter txsubmitter.TxSubmitter,
-	route Route,
-	logger *slog.Logger,
-) (BatchRecvPacket, error) {
-	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
-	if !ok {
-		return BatchRecvPacket{}, errors.Errorf("no configured chain client for chain %s", route.SourceChainID)
-	}
-
-	destinationChainClient, ok := chainClients.Get(route.DestinationChainID)
-	if !ok {
-		return BatchRecvPacket{}, errors.Errorf("no configured chain client for chain %s", route.DestinationChainID)
-	}
-
-	prover, ok := provers.Get(route.DestinationChainID, route.DestinationClientID)
-	if !ok {
-		return BatchRecvPacket{}, errors.Errorf(
-			"no prover configured for client %q on chain %q",
-			route.DestinationClientID,
-			route.DestinationChainID,
-		)
-	}
-
-	txBuilder, ok := txBuilders.Get(route.DestinationChainID)
-	if !ok {
-		return BatchRecvPacket{}, errors.Errorf("no tx builder configured for chain %s", route.DestinationChainID)
-	}
-
+func NewBatchRecvPacket(route RouteDeps, storage TxStorage, logger *slog.Logger) BatchRecvPacket {
 	return BatchRecvPacket{
-		sourceChainClient:      sourceChainClient,
-		destinationChainClient: destinationChainClient,
-		route:                  route,
-		prover:                 prover,
-		txBuilder:              txBuilder,
-		txSubmitter:            txSubmitter,
+		sourceChainClient:      route.Source.Chain,
+		destinationChainClient: route.Destination.Chain,
+		route:                  route.Route,
+		prover:                 route.Destination.Prover,
+		txBuilder:              route.Destination.TxBuilder,
+		txSubmitter:            route.Destination.TxSubmitter,
 		storage:                storage,
 		logger:                 logger,
-	}, nil
+	}
 }
 
 func (p BatchRecvPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {

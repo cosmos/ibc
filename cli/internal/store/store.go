@@ -219,6 +219,19 @@ func AllRelayStatuses() []RelayStatus {
 	}
 }
 
+// IsTerminal reports whether status ends a packet's relay lifecycle.
+func IsTerminal(status RelayStatus) bool {
+	switch status {
+	case RelayStatusCompleteWithAck,
+		RelayStatusCompleteWithWriteAckError,
+		RelayStatusCompleteWithTimeout,
+		RelayStatusFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 // WriteAckStatus the execution result carried by a write ack.
 type WriteAckStatus string
 

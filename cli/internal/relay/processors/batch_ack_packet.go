@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//nolint:dupl // the batch directions are structurally parallel by design
 package processors
 
 import (
@@ -32,47 +31,17 @@ type BatchAckPacket struct {
 	logger                 *slog.Logger
 }
 
-func NewBatchAckPacket(
-	chainClients ChainClients,
-	provers Provers,
-	txBuilders TxBuilders,
-	storage TxStorage,
-	txSubmitter txsubmitter.TxSubmitter,
-	route Route,
-	logger *slog.Logger,
-) (BatchAckPacket, error) {
-	destinationChainClient, ok := chainClients.Get(route.DestinationChainID)
-	if !ok {
-		return BatchAckPacket{}, errors.Errorf("no configured chain client for chain %s", route.DestinationChainID)
-	}
-
-	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
-	if !ok {
-		return BatchAckPacket{}, errors.Errorf("no configured chain client for chain %s", route.SourceChainID)
-	}
-
-	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
-	if !ok {
-		return BatchAckPacket{}, errors.Errorf(
-			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
-		)
-	}
-
-	txBuilder, ok := txBuilders.Get(route.SourceChainID)
-	if !ok {
-		return BatchAckPacket{}, errors.Errorf("no tx builder configured for chain %s", route.SourceChainID)
-	}
-
+func NewBatchAckPacket(route RouteDeps, storage TxStorage, logger *slog.Logger) BatchAckPacket {
 	return BatchAckPacket{
-		destinationChainClient: destinationChainClient,
-		sourceChainClient:      sourceChainClient,
-		route:                  route,
-		prover:                 prover,
-		txBuilder:              txBuilder,
-		txSubmitter:            txSubmitter,
+		destinationChainClient: route.Destination.Chain,
+		sourceChainClient:      route.Source.Chain,
+		route:                  route.Route,
+		prover:                 route.Source.Prover,
+		txBuilder:              route.Source.TxBuilder,
+		txSubmitter:            route.Source.TxSubmitter,
 		storage:                storage,
 		logger:                 logger,
-	}, nil
+	}
 }
 
 func (p BatchAckPacket) Process(ctx context.Context, transfers []*Transfer) ([]*Transfer, error) {

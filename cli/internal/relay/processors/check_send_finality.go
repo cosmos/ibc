@@ -23,25 +23,8 @@ type CheckSendFinality struct {
 	prover            prover.Prover
 }
 
-func NewCheckSendFinality(
-	chainClients ChainClients,
-	provers Provers,
-	route Route,
-) (CheckSendFinality, error) {
-	sourceChainClient, ok := chainClients.Get(route.SourceChainID)
-	if !ok {
-		return CheckSendFinality{}, errors.Errorf("no configured chain client for source chain %s", route.SourceChainID)
-	}
-
-	prover, ok := provers.Get(route.DestinationChainID, route.DestinationClientID)
-	if !ok {
-		return CheckSendFinality{}, errors.Errorf(
-			"no prover configured for client %q on chain %q",
-			route.DestinationClientID, route.DestinationChainID,
-		)
-	}
-
-	return CheckSendFinality{sourceChainClient: sourceChainClient, prover: prover}, nil
+func NewCheckSendFinality(route RouteDeps) CheckSendFinality {
+	return CheckSendFinality{sourceChainClient: route.Source.Chain, prover: route.Destination.Prover}
 }
 
 func (p CheckSendFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {

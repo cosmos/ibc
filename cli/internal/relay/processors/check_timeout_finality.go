@@ -19,15 +19,8 @@ type CheckTimeoutFinality struct {
 	prover prover.Prover
 }
 
-func NewCheckTimeoutFinality(provers Provers, route Route) (CheckTimeoutFinality, error) {
-	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
-	if !ok {
-		return CheckTimeoutFinality{}, errors.Errorf(
-			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
-		)
-	}
-
-	return CheckTimeoutFinality{prover: prover}, nil
+func NewCheckTimeoutFinality(route RouteDeps) CheckTimeoutFinality {
+	return CheckTimeoutFinality{prover: route.Source.Prover}
 }
 
 func (p CheckTimeoutFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {

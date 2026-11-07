@@ -23,31 +23,13 @@ type CheckWriteAckFinality struct {
 	prover                 prover.Prover
 }
 
-func NewCheckWriteAckFinality(
-	chainClients ChainClients,
-	provers Provers,
-	route Route,
-) (CheckWriteAckFinality, error) {
-	destinationChainClient, ok := chainClients.Get(route.DestinationChainID)
-	if !ok {
-		return CheckWriteAckFinality{}, errors.Errorf(
-			"no configured chain client for destination chain %s", route.DestinationChainID,
-		)
-	}
-
-	prover, ok := provers.Get(route.SourceChainID, route.SourceClientID)
-	if !ok {
-		return CheckWriteAckFinality{}, errors.Errorf(
-			"no prover configured for client %q on chain %q", route.SourceClientID, route.SourceChainID,
-		)
-	}
-
-	return CheckWriteAckFinality{destinationChainClient: destinationChainClient, prover: prover}, nil
+func NewCheckWriteAckFinality(route RouteDeps) CheckWriteAckFinality {
+	return CheckWriteAckFinality{destinationChainClient: route.Destination.Chain, prover: route.Source.Prover}
 }
 
 func (p CheckWriteAckFinality) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
 	if tr.WriteAckTxHash == nil {
-		return nil, errors.New("transfer has no write ack tx hash, violates ShouldProcess")
+		return nil, errors.Wrap(ErrInvariant, "transfer has no write ack tx hash, violates ShouldProcess")
 	}
 
 	proofHeight, _, err := p.prover.LatestProvableHeight(ctx)
