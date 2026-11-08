@@ -40,9 +40,6 @@ const (
 	timeoutPacketEvent = "TimeoutPacket"
 )
 
-// DefaultWaitForChain enables the timestamp wait before relay simulation.
-const DefaultWaitForChain = true
-
 // errorAcknowledgement is the universal error acknowledgement commitment.
 var errorAcknowledgement = sha256.Sum256([]byte("UNIVERSAL_ERROR_ACKNOWLEDGEMENT"))
 
@@ -72,20 +69,11 @@ type ETHClient interface {
 type Client struct {
 	chainID       string
 	routerAddress common.Address
-	waitForChain  bool
 	eth           ETHClient
 	ws            ETHClient // nil unless a websocket endpoint is configured
 	router        *ics26router.Contract
 	routerABI     *abi.ABI
 	logger        *slog.Logger
-}
-
-// Option configures one chain client's behavior.
-type Option func(*Client)
-
-// WithWaitForChain controls the timestamp wait for this client only.
-func WithWaitForChain(enabled bool) Option {
-	return func(c *Client) { c.waitForChain = enabled }
 }
 
 // nodeTransport keeps connections to each node open for reuse. go-ethereum's
@@ -137,7 +125,7 @@ func dialRPC(chainID, rpcURL string) (*rpcClient, error) {
 }
 
 // New dials the chain and verifies each endpoint's chain ID.
-func New(chainID, rpcURL, wsURL, ics26RouterAddress string, opts ...Option) (*Client, error) {
+func New(chainID, rpcURL, wsURL, ics26RouterAddress string) (*Client, error) {
 	eth, err := Dial(chainID, rpcURL)
 	if err != nil {
 		return nil, err
@@ -155,14 +143,14 @@ func New(chainID, rpcURL, wsURL, ics26RouterAddress string, opts ...Option) (*Cl
 		ws = dialed
 	}
 
-	return NewWithClients(chainID, eth, ws, ics26RouterAddress, opts...)
+	return NewWithClients(chainID, eth, ws, ics26RouterAddress)
 }
 
-func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string, opts ...Option) (*Client, error) {
-	return NewWithClients(chainID, eth, nil, ics26RouterAddress, opts...)
+func NewWithClient(chainID string, eth ETHClient, ics26RouterAddress string) (*Client, error) {
+	return NewWithClients(chainID, eth, nil, ics26RouterAddress)
 }
 
-func NewWithClients(chainID string, eth, ws ETHClient, ics26RouterAddress string, opts ...Option) (*Client, error) {
+func NewWithClients(chainID string, eth, ws ETHClient, ics26RouterAddress string) (*Client, error) {
 	if !common.IsHexAddress(ics26RouterAddress) {
 		return nil, errors.Errorf("invalid ics26 router address %q for chain %s", ics26RouterAddress, chainID)
 	}
@@ -185,20 +173,15 @@ func NewWithClients(chainID string, eth, ws ETHClient, ics26RouterAddress string
 		}
 	}
 
-	client := &Client{
+	return &Client{
 		chainID:       chainID,
 		routerAddress: routerAddress,
-		waitForChain:  DefaultWaitForChain,
 		eth:           eth,
 		ws:            ws,
 		router:        router,
 		routerABI:     routerABI,
 		logger:        slog.With("module", "chains", "chainType", "evm", "chainID", chainID),
-	}
-	for _, opt := range opts {
-		opt(client)
-	}
-	return client, nil
+	}, nil
 }
 
 func (c *Client) ChainID() string {
@@ -1046,44 +1029,6 @@ func (c *Client) PacketWriteAckStatus(
 	}
 
 	return v2.WriteAckStatusUnknown, v2.ErrWriteAckNotFoundForPacket
-}
-
-func (c *Client) WaitForChain(ctx context.Context) error {
-	if !c.waitForChain {
-		return ctx.Err()
-	}
-
-	const initialTick = time.Millisecond
-	const tick = time.Second
-
-	ticker := time.NewTicker(initialTick)
-	defer ticker.Stop()
-
-	start := time.Now()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			latest, err := c.eth.HeaderByNumber(ctx, nil)
-			if err != nil {
-				return errors.Wrapf(err, "getting latest header on chain %s", c.chainID)
-			}
-
-			latestTime := time.Unix(int64(latest.Time), 0)
-			if latestTime.After(start) {
-				return nil
-			}
-
-			if time.Since(start) > 30*time.Second {
-				c.logger.Warn("Chain time is behind current time for more than 30s, waiting", "chainTime", latestTime)
-			} else {
-				c.logger.Debug("Chain time is behind current time, waiting", "chainTime", latestTime)
-			}
-
-			ticker.Reset(tick)
-		}
-	}
 }
 
 var (

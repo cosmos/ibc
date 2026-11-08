@@ -33,8 +33,7 @@ func TestRelayPacketsOnIdleChain(t *testing.T) {
 				eth.EXPECT().HeaderByNumber(mock.Anything, (*big.Int)(nil)).Return(&types.Header{
 					Number: big.NewInt(100), Time: 1,
 				}, nil).Maybe()
-				chain, err := evm.NewWithClient("324", eth, "0x0000000000000000000000000000000000000001",
-					evm.WithWaitForChain(false))
+				chain, err := evm.NewWithClient("324", eth, "0x0000000000000000000000000000000000000001")
 				require.NoError(t, err)
 
 				packet := channeltypesv2.Packet{Sequence: 42, SourceClient: "client-0"}

@@ -1287,24 +1287,3 @@ func TestFindSendPackets(t *testing.T) {
 		require.ErrorContains(t, err, "filtering SendPacket logs")
 	})
 }
-
-func TestWaitForChain(t *testing.T) {
-	ctx := context.Background()
-
-	client, eth := newTestClient(t)
-	future := uint64(time.Now().Add(time.Hour).Unix())
-	eth.EXPECT().
-		HeaderByNumber(ctx, (*big.Int)(nil)).
-		Return(&types.Header{Number: big.NewInt(1), Time: future}, nil).
-		Once()
-
-	require.NoError(t, client.WaitForChain(ctx))
-}
-
-func TestWaitForChainDisabledHonorsCancellation(t *testing.T) {
-	client, err := NewWithClient(chainIDEth, mocks.NewMockETHClient(t), routerAddress, WithWaitForChain(false))
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	require.ErrorIs(t, client.WaitForChain(ctx), context.Canceled)
-}

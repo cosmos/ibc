@@ -272,7 +272,6 @@ func TestPipelineLifecycle(t *testing.T) {
 			env.dstProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Now(), nil).Once()
 			env.srcClient.EXPECT().TxHeight(mock.Anything, mock.Anything).Return(uint64(100), nil).Once()
 			mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
-			env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 			env.dstTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
 				v2.RelayTx{To: common.HexToAddress("0xrouter").Bytes(), Data: []byte{0xca, 0x11}}).
 				Return(tc.result, tc.err).Once()
@@ -310,7 +309,6 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
-		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.dstTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
 			v2.RelayTx{
 				To:   common.HexToAddress("0xrouter").Bytes(),
@@ -343,7 +341,6 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
-		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
 			v2.RelayTx{
 				To:   common.HexToAddress("0xrouter").Bytes(),
@@ -397,7 +394,6 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		// recv delivery
 		mockRelay(env.srcClient, env.dstProver, env.dstTxBuilder, []v2.PacketEvent{sendPacketEvent(42)}, "0xrouter")
-		env.dstClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.dstTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
 			v2.RelayTx{
 				To:   common.HexToAddress("0xrouter").Bytes(),
@@ -428,7 +424,6 @@ func TestPipelineLifecycle(t *testing.T) {
 
 		// ack delivery on the source chain
 		mockRelay(env.dstClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{writeAckEvent(42)}, "0xrouter")
-		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
 			v2.RelayTx{
 				To:   common.HexToAddress("0xrouter").Bytes(),
@@ -484,7 +479,6 @@ func TestPipelineLifecycle(t *testing.T) {
 		timeoutEvent := sendPacketEvent(42)
 		timeoutEvent.Height = 150 // source height is unrelated to the destination proof height
 		mockRelay(env.srcClient, env.srcProver, env.srcTxBuilder, []v2.PacketEvent{timeoutEvent}, "0xrouter")
-		env.srcClient.EXPECT().WaitForChain(mock.Anything).Return(nil).Once()
 		env.srcTxSubmitter.EXPECT().SimulateRelayTx(mock.Anything,
 			v2.RelayTx{
 				To:   common.HexToAddress("0xrouter").Bytes(),
