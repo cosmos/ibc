@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package relayer re-exports github.com/lfdt-ibc/ibc/cli/api/v2/relayer under
-// its pre-rename import path. It covers the identifiers that
-// github.com/skip-mev/catalyst uses; add more if a dependency needs them.
+// Package relayer exposes github.com/lfdt-ibc/ibc/cli/api/v2/relayer under its
+// pre-rename import path, github.com/cosmos/ibc/cli/api/v2/relayer.
+//
+// It breaks the dependency loop e2e -> skip-mev/catalyst -> this repository's
+// CLI API: catalyst still imports the old path, and linking a second, released
+// copy of the generated code panics on duplicate proto registration. Every
+// identifier is an alias, so the renamed package's types are used and
+// registered once. See ../../../README.md.
+//
+// Only the identifiers catalyst uses are listed; add an alias if a catalyst
+// upgrade needs another.
 package relayer
 
 import "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"

@@ -8,7 +8,7 @@ import (
 	"errors"
 	"math/big"
 	"os"
-	"path"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -49,13 +49,11 @@ func (b *failSendBackend) SendTransaction(ctx context.Context, tx *gethtypes.Tra
 // TestIBCContractsPinsMatch checks that the ibc-contracts commit the shims compile against is the one
 // the go-abigen bindings in e2e/go.mod and cli/go.mod come from.
 func TestIBCContractsPinsMatch(t *testing.T) {
-	// The org is taken from this module's path, github.com/<org>/ibc/e2e, so an org change needs no
-	// edit here.
-	e2eMod, err := os.ReadFile("../../../../go.mod")
-	require.NoError(t, err)
-	org := path.Dir(path.Dir(modfile.ModulePath(e2eMod)))
-	contractsModule := org + "/ibc-contracts/packages/go-abigen"
-	bunSource := "github:" + path.Base(org) + "/ibc-contracts#"
+	// Both pins are matched by repository name, not by this module's org: they are dependencies at
+	// fixed commits, so the go-abigen module keeps the path ibc-contracts declares and the bun source
+	// keeps the org it was pinned from, either of which can differ from this repository's org.
+	const contractsSuffix = "/ibc-contracts/packages/go-abigen"
+	bunSource := regexp.MustCompile(`^github:[^/]+/ibc-contracts#(.+)$`)
 
 	data, err := os.ReadFile("contracts/package.json")
 	require.NoError(t, err)
@@ -65,12 +63,12 @@ func TestIBCContractsPinsMatch(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &pkg))
 	var bunCommit string
 	for _, source := range pkg.Dependencies {
-		if commit, ok := strings.CutPrefix(source, bunSource); ok {
-			bunCommit = commit
+		if m := bunSource.FindStringSubmatch(source); m != nil {
+			bunCommit = m[1]
 		}
 	}
 	const packageJSON = "e2e/internal/harness/environment/solidityibc/contracts/package.json"
-	require.NotEmpty(t, bunCommit, "%s has no dependency on %s<commit>", packageJSON, bunSource)
+	require.NotEmpty(t, bunCommit, "%s has no dependency on github:<org>/ibc-contracts#<commit>", packageJSON)
 
 	goMods := map[string]string{
 		"e2e/go.mod": "../../../../go.mod",
@@ -81,12 +79,13 @@ func TestIBCContractsPinsMatch(t *testing.T) {
 		require.NoError(t, err)
 		file, err := modfile.ParseLax(modPath, data, nil)
 		require.NoError(t, err)
-		var version string
+		var contractsModule, version string
 		for _, req := range file.Require {
-			if req.Mod.Path == contractsModule {
-				version = req.Mod.Version
+			if strings.HasSuffix(req.Mod.Path, contractsSuffix) {
+				contractsModule, version = req.Mod.Path, req.Mod.Version
 			}
 		}
+		require.NotEmpty(t, contractsModule, "%s requires no module ending in %s", name, contractsSuffix)
 		goCommit, err := module.PseudoVersionRev(version)
 		require.NoError(t, err, "%s: %s %q is not a pseudo-version", name, contractsModule, version)
 		require.True(t, strings.HasPrefix(bunCommit, goCommit),
