@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+
+host: 127.0.0.1:8080
+db: sqlite://db
+max_timeout: 1s
+rpc:
+  - chainId: a
+    url: https://rpc.com/abc/${token}
+    batchSize: ${batch_size}
+    maxPeers: $max_peers
+    archive: ${archive}
+  - chainId: b
+    url: https://plain.example
+    batchSize: 10
+    maxPeers: 1
+    archive: false
+  - chainId: c
+    url: $fallback_rpc
+    batchSize: 10
+    maxPeers: 1
+    archive: false

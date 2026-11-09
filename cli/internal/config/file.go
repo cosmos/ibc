@@ -13,6 +13,8 @@ import (
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
+
+	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
 )
 
 func LoadFromFile(path string, validate bool) (Config, error) {
@@ -99,18 +101,17 @@ func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string)
 }
 
 func (c Config) asFileBytes(comments map[string]string) ([]byte, error) {
-	astFile, err := c.ast()
+	astFile, err := ibcyaml.ValueToFile(c)
 	if err != nil {
 		return nil, err
 	}
 
-	// todo
 	// replace rendered config values with original ENV variables to preserve secrets
-	replaceIf := func(_, overlay *ast.Node) bool {
-		return hasEnvValue(overlay)
+	replaceIf := func(_, overlay ast.Node) bool {
+		return ibcyaml.NodeHasEnvValue(overlay)
 	}
 
-	astResultFile, err := astMerge(astFile, c.originalYAML, replaceIf)
+	astResultFile, err := ibcyaml.Merge(astFile, c.originalYAML, replaceIf)
 	switch {
 	case err != nil:
 		return nil, err
@@ -121,19 +122,6 @@ func (c Config) asFileBytes(comments map[string]string) ([]byte, error) {
 	body := astResultFile.Docs[0].Body
 
 	return yaml.MarshalWithOptions(body, yaml.WithComment(toCommentMap(comments)))
-}
-
-func (c Config) ast() (*ast.File, error) {
-	node, err := yaml.ValueToNode(c)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ast.File{
-		Docs: []*ast.DocumentNode{
-			{Body: node},
-		},
-	}, nil
 }
 
 func (c Config) store(path string, comments map[string]string) error {
@@ -198,23 +186,4 @@ func fileExists(path string) error {
 	}
 
 	return nil
-}
-
-func astMerge(
-	source, overlay *ast.File,
-	condition func(original, latest *ast.Node) bool,
-) (*ast.File, error) {
-	// todo walk for each node and if condition is true, replace source with overlay
-	return nil, nil
-}
-
-func hasEnvValue(node *ast.Node) bool {
-	if node == nil {
-		return false
-	}
-
-	// todo some magic to say: "ok this is node is [string, int, uint, float, time, ...] AND its value is ENV"
-	// env means value contains ${var} or $var
-
-	return false
 }

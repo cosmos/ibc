@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+
+host: "127.0.0.1:${port}"
+db: "${db_conn}"
+max_timeout: ${max_timeout}
+debug: true

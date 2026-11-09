@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+
+host: &addr 127.0.0.1:${port}
+db: sqlite://db
+max_timeout: 1s
+chains:
+- id: a
+  rpc: https://rpc.com/abc/${token}
+  auth:
+    secretKey: ${my_secret}
+  ws: ${ws}
+- id: b
+  rpc: *addr
+  router: router-b
+- id: c
+  rpc: https://c.example
