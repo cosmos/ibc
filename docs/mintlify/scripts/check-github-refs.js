@@ -98,7 +98,7 @@ export const isVersionSpecific = doc => VERSION_SPECIFIC.some(re => re.test(doc)
 // Per-product ref shape. The version-tracking ref is the only one ever bumped.
 const PRODUCTS = {
   'ibc-go': {
-    repo: 'cosmos/ibc-go',
+    repo: 'lfdt-ibc/ibc-go',
     // release/v11.0.x
     trackingRe: /^release\/v\d+\.\d+\.x$/,
     refFor: v => `release/v${v.replace(/^v/, '')}`,

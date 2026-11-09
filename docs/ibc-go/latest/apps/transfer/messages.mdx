@@ -29,8 +29,8 @@ type MsgTransfer struct {
 
 This message is expected to fail if:
 
-* `SourcePort` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators).
-* `SourceChannel` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
+* `SourcePort` is invalid (see [24-host naming requirements](https://github.com/lfdt-ibc/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators).
+* `SourceChannel` is invalid (see [24-host naming requirements](https://github.com/lfdt-ibc/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
 * `Token` is invalid:
   * `Amount` is not positive.
   * `Denom` is not a valid IBC denomination.
@@ -68,4 +68,4 @@ You can find more information about other applications that use the memo field i
 
 In IBC v2, the encoding method used by an application has more flexibility as it is specified within a `Payload`, rather than negotiated and fixed during an IBC classic channel handshake. Certain encoding types may be more suited to specific blockchains, e.g. ABI encoding is more gas efficient to decode in an EVM than JSON or Protobuf.
 
-Within ibc-go, JSON, protobuf and ABI encoding are supported and can be used, see the [transfer packet types](https://github.com/cosmos/ibc-go/blob/14bc17e26ad12cee6bdb99157a05296fcf58b762/modules/apps/transfer/types/packet.go#L36-L40).
+Within ibc-go, JSON, protobuf and ABI encoding are supported and can be used, see the [transfer packet types](https://github.com/lfdt-ibc/ibc-go/blob/14bc17e26ad12cee6bdb99157a05296fcf58b762/modules/apps/transfer/types/packet.go#L36-L40).

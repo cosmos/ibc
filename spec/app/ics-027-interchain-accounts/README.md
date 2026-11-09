@@ -587,7 +587,7 @@ function onChanUpgradeInit(
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
   // function of the ICS4Wrapper interface.
-  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  // See https://github.com/lfdt-ibc/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel !== null)
   currentMetadata = UnmarshalJSON(channel.version)
@@ -636,7 +636,7 @@ function onChanUpgradeTry(
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
   // function of the ICS4Wrapper interface.
-  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  // See https://github.com/lfdt-ibc/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel !== null)
   currentMetadata = UnmarshalJSON(channel.version)
@@ -677,7 +677,7 @@ function onChanUpgradeAck(
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
   // function of the ICS4Wrapper interface.
-  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  // See https://github.com/lfdt-ibc/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel !== null)
   currentMetadata = UnmarshalJSON(channel.version)

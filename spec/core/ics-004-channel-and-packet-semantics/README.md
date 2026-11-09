@@ -915,7 +915,7 @@ function recvPacket(
     // completed. In that case, implementations must also make sure that any packet with 
     // a sequence already used before the channel upgrade is rejected. This is needed to 
     // prevent replay attacks (see this PR in ibc-go for an example of how this is achieved:
-    // https://github.com/cosmos/ibc-go/pull/5651).
+    // https://github.com/lfdt-ibc/ibc-go/pull/5651).
     
     // all assertions passed (except sequence check), we can alter state
 

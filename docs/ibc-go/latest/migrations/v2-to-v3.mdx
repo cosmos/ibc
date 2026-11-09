@@ -167,9 +167,9 @@ The recommended approach is to create an `IBCModule` type and move the IBC modul
 The mock module go API has been broken in this release by applying the above format.
 The IBC module callbacks have been moved from the mock modules `AppModule` into a new type `IBCModule`.
 
-As apart of this release, the mock module now supports middleware testing. Please see the [README](https://github.com/cosmos/ibc-go/blob/v3.0.0/testing/README.md#middleware-testing) for more information.
+As apart of this release, the mock module now supports middleware testing. Please see the [README](https://github.com/lfdt-ibc/ibc-go/blob/v3.0.0/testing/README.md#middleware-testing) for more information.
 
-Please review the [mock](https://github.com/cosmos/ibc-go/blob/v3.0.0/testing/mock/ibc_module.go) and [transfer](https://github.com/cosmos/ibc-go/blob/v3.0.0/modules/apps/transfer/ibc_module.go) modules as examples. Additionally, [simapp](https://github.com/cosmos/ibc-go/blob/v3.0.0/testing/simapp/app.go) provides an example of how `IBCModule` types should now be added to the IBC router in favour of `AppModule`.
+Please review the [mock](https://github.com/lfdt-ibc/ibc-go/blob/v3.0.0/testing/mock/ibc_module.go) and [transfer](https://github.com/lfdt-ibc/ibc-go/blob/v3.0.0/modules/apps/transfer/ibc_module.go) modules as examples. Additionally, [simapp](https://github.com/lfdt-ibc/ibc-go/blob/v3.0.0/testing/simapp/app.go) provides an example of how `IBCModule` types should now be added to the IBC router in favour of `AppModule`.
 
 ### IBC testing package
 
