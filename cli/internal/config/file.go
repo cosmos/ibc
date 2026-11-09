@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 
@@ -81,7 +80,7 @@ func KeyFileFallbacks(keyPath string) []string {
 }
 
 func (c Config) WriteYAML(out io.Writer) error {
-	bz, err := c.asFileBytes(nil)
+	bz, err := c.asFileBytes(nil, nil)
 	if err != nil {
 		return err
 	}
@@ -90,8 +89,10 @@ func (c Config) WriteYAML(out io.Writer) error {
 	return err
 }
 
-func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string) error {
-	bz, err := c.asFileBytes(comments)
+// WriteYAMLWithComments writes c as YAML with comments attached.
+// See asFileBytes for forceUpdatePaths.
+func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string, forceUpdatePaths ...string) error {
+	bz, err := c.asFileBytes(comments, forceUpdatePaths)
 	if err != nil {
 		return err
 	}
@@ -100,18 +101,17 @@ func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string)
 	return err
 }
 
-func (c Config) asFileBytes(comments map[string]string) ([]byte, error) {
+// asFileBytes renders c as YAML, putting env var references from the loaded file back
+// in place of their expanded values so secrets are not written out.
+// Paths in forceUpdatePaths (e.g. `$.chains[*].evm.ics26Router`) keep their new non-empty value
+// instead; use them only for non-secret values the program sets.
+func (c Config) asFileBytes(comments map[string]string, forceUpdatePaths []string) ([]byte, error) {
 	astFile, err := ibcyaml.ValueToFile(c)
 	if err != nil {
 		return nil, err
 	}
 
-	// replace rendered config values with original ENV variables to preserve secrets
-	replaceIf := func(_, overlay ast.Node) bool {
-		return ibcyaml.NodeHasEnvValue(overlay)
-	}
-
-	astResultFile, err := ibcyaml.Merge(astFile, c.originalYAML, replaceIf)
+	astResultFile, err := ibcyaml.Merge(astFile, c.originalYAML, ibcyaml.PreserveEnv(forceUpdatePaths...))
 	switch {
 	case err != nil:
 		return nil, err
@@ -124,7 +124,7 @@ func (c Config) asFileBytes(comments map[string]string) ([]byte, error) {
 	return yaml.MarshalWithOptions(body, yaml.WithComment(toCommentMap(comments)))
 }
 
-func (c Config) store(path string, comments map[string]string) error {
+func (c Config) store(path string, comments map[string]string, forceUpdatePaths []string) error {
 	err := EnsureDirectory(path)
 	if err != nil {
 		return err
@@ -153,7 +153,7 @@ func (c Config) store(path string, comments map[string]string) error {
 		return err
 	}
 
-	if err := c.WriteYAMLWithComments(tmp, comments); err != nil {
+	if err := c.WriteYAMLWithComments(tmp, comments, forceUpdatePaths...); err != nil {
 		_ = tmp.Close()
 		return err
 	}

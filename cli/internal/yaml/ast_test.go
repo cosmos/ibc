@@ -46,10 +46,11 @@ type testAuth struct {
 
 func TestMerge(t *testing.T) {
 	for _, tt := range []struct {
-		name   string
-		file   string
-		env    map[string]string
-		change func(t *testing.T, cfg *testConfig)
+		name             string
+		file             string
+		env              map[string]string
+		forceUpdatePaths []string
+		change           func(t *testing.T, cfg *testConfig)
 	}{
 		{
 			name: "scalars",
@@ -107,6 +108,22 @@ func TestMerge(t *testing.T) {
 				cfg.Chains = append(cfg.Chains, testChain{ID: "c", RPC: "https://c.example"})
 			},
 		},
+		{
+			name:             "forceUpdatePaths",
+			file:             "04",
+			env:              map[string]string{"token": "secret-token", "router_a": "router-a-old", "router_b": "router-b-old"},
+			forceUpdatePaths: []string{"$.chains[*].router"},
+			change: func(t *testing.T, cfg *testConfig) {
+				require.Len(t, cfg.Chains, 3)
+				require.Empty(t, cfg.Chains[2].Router, "router_c must be unset")
+
+				// forced: new value wins
+				cfg.Chains[0].Router = "router-a-new"
+
+				// not forced: env reference wins
+				cfg.Chains[0].RPC = "https://rpc.com/abc/changed"
+			},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// ARRANGE
@@ -122,7 +139,7 @@ func TestMerge(t *testing.T) {
 
 			// ACT
 			out := filepath.Join(t.TempDir(), "out.yaml")
-			writeTestConfig(t, cfg, original, out)
+			writeTestConfig(t, cfg, original, out, PreserveEnv(tt.forceUpdatePaths...))
 
 			// ASSERT
 			actual, err := os.ReadFile(out)
@@ -148,15 +165,13 @@ func loadTestConfig(t *testing.T, path string) (testConfig, *ast.File) {
 	return cfg, original
 }
 
-func writeTestConfig(t *testing.T, cfg testConfig, original *ast.File, path string) {
+func writeTestConfig(t *testing.T, cfg testConfig, original *ast.File, path string, condition MergeCondition) {
 	t.Helper()
 
 	file, err := ValueToFile(cfg)
 	require.NoError(t, err)
 
-	merged, err := Merge(file, original, func(_, overlay ast.Node) bool {
-		return NodeHasEnvValue(overlay)
-	})
+	merged, err := Merge(file, original, condition)
 	require.NoError(t, err)
 
 	bz, err := yaml.Marshal(merged.Docs[0].Body)

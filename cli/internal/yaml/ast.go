@@ -5,12 +5,31 @@ package yaml
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"slices"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 )
+
+var pathIndex = regexp.MustCompile(`\[\d+\]`)
+
+// MergeCondition if true, overlay node replaces source node.
+type MergeCondition func(path string, source, overlay ast.Node) bool
+
+type merger struct {
+	condition MergeCondition
+
+	// anchor name -> anchored value, from the overlay
+	anchors map[string]ast.Node
+
+	// anchors written into the source; an alias can only be written after its anchor
+	emitted map[string]bool
+
+	err error
+}
 
 // ValueToFile encodes v into a single-document YAML AST.
 func ValueToFile(v any) (*ast.File, error) {
@@ -49,26 +68,54 @@ func NodeHasEnvValue(node ast.Node) bool {
 	return found
 }
 
-// Merge walks source and overlay side by side (mapping entries by key, sequence items by index)
-// and puts the overlay node in place of the source node wherever condition(source, overlay) holds.
-// An overlay mapping entry missing from source (e.g. dropped by omitempty) is appended when
-// condition(nil, overlay) holds. Overlay entries without a source counterpart otherwise are skipped,
-// so list items must keep their order; appended items are fine.
-// Aliases are passed to condition resolved to their anchored value.
-// Source is modified in place; overlay is left untouched.
-func Merge(source, overlay *ast.File, condition func(source, overlay ast.Node) bool) (*ast.File, error) {
+// PreserveEnv is a MergeCondition that puts env var references from the original file back
+// in place of their expanded values, so secrets are not written out. Supports forceUpdatePaths
+// meaning that these values are not overridden by the overlay; examples:
+// - `$.chains[0].evm.rpc` - concrete path
+// - `$.chains[*].evm.ics26Router` - wildcard match
+func PreserveEnv(forceUpdatePaths ...string) MergeCondition {
+	return func(path string, source, overlay ast.Node) bool {
+		if !NodeHasEnvValue(overlay) {
+			return false
+		}
+
+		if isEmptyScalar(source) {
+			return true
+		}
+
+		anyIndex := pathIndex.ReplaceAllString(path, "[*]")
+
+		return !slices.ContainsFunc(forceUpdatePaths, func(p string) bool {
+			return p == path || p == anyIndex
+		})
+	}
+}
+
+// Merge walks source and overlay side by side and puts the overlay node in place of the source node
+// wherever condition holds. Source is modified in place; overlay is left untouched.
+//
+//   - Mapping entries are matched by key. An overlay entry missing from source (e.g. dropped by
+//     omitempty, or rendered as `{}`) is added when condition(path, nil, overlay) holds.
+//   - Sequence items are matched by index, so callers must keep existing items in place:
+//     appending is fine, but removing or reordering items moves overlay values onto the wrong item.
+//     Today's config edits only append or update items in place.
+//   - Aliases are passed to condition resolved to their anchored value. An alias is written only
+//     after its anchor; otherwise the anchored value is inlined.
+//
+// Env values are expanded into the raw file text before it is parsed (see config.LoadFromFile),
+// so an unquoted value is parsed as YAML: `url: ${DB}` with DB='a #1' loads as "a".
+// Quote such references: `url: "${DB}"`.
+func Merge(source, overlay *ast.File, condition MergeCondition) (*ast.File, error) {
 	if overlay == nil {
 		return source, nil
 	}
 
-	// Overlay nodes are moved into source and re-indented (token columns drive the printer),
-	// and go-yaml has no node clone, so work on a private copy.
+	// clone() overlay for safety
 	overlay, err := parser.ParseBytes([]byte(overlay.String()), parser.ParseComments)
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, errors.Wrap(err, "unable to copy overlay")
-	}
-
-	if len(source.Docs) != 1 || len(overlay.Docs) != 1 {
+	case len(overlay.Docs) != 1 || overlay.Docs[0].Body == nil:
 		return nil, fmt.Errorf("expected 1 document, got %d and %d", len(source.Docs), len(overlay.Docs))
 	}
 
@@ -84,7 +131,7 @@ func Merge(source, overlay *ast.File, condition func(source, overlay ast.Node) b
 	}
 
 	doc := source.Docs[0]
-	doc.Body = m.merge(doc.Body, overlay.Docs[0].Body)
+	doc.Body = m.merge("$", doc.Body, overlay.Docs[0].Body)
 
 	if m.err != nil {
 		return nil, m.err
@@ -93,25 +140,13 @@ func Merge(source, overlay *ast.File, condition func(source, overlay ast.Node) b
 	return source, nil
 }
 
-type merger struct {
-	condition func(source, overlay ast.Node) bool
-
-	// anchor name -> anchored value, from the overlay
-	anchors map[string]ast.Node
-
-	// anchors written into the source; an alias can only be written after its anchor
-	emitted map[string]bool
-
-	err error
-}
-
 // merge returns the node that should take src's place.
-func (m *merger) merge(source, overlay ast.Node) ast.Node {
+func (m *merger) merge(path string, source, overlay ast.Node) ast.Node {
 	if overlay == nil {
 		return source
 	}
 
-	if m.condition(source, m.resolve(overlay)) {
+	if m.condition(path, source, m.resolve(overlay)) {
 		node := m.take(overlay)
 		node.AddColumn(source.GetToken().Position.Column - node.GetToken().Position.Column)
 
@@ -127,28 +162,30 @@ func (m *merger) merge(source, overlay ast.Node) ast.Node {
 
 		// walk in source order: it is the output order, so anchors are emitted before their aliases
 		for _, sv := range s.Values {
-			ov := findMappingValue(o, sv.Key.GetToken().Value)
+			key := sv.Key.GetToken().Value
+			ov := findMappingValue(o, key)
 			switch {
 			case ov == nil:
 				continue
 			case isEmptyMapping(sv.Value):
 				// e.g. `tls: {}` rendered from a block whose values expanded to empty
-				if node := m.prune(ov.Value); node != nil {
+				if node := m.prune(path+"."+key, ov.Value); node != nil {
 					node.AddColumn(sv.Key.GetToken().Position.Column - ov.Key.GetToken().Position.Column)
 					sv.Value = node
 				}
 			default:
-				sv.Value = m.merge(sv.Value, ov.Value)
+				sv.Value = m.merge(path+"."+key, sv.Value, ov.Value)
 			}
 		}
 
 		for _, ov := range o.Values {
-			if len(s.Values) == 0 || findMappingValue(s, ov.Key.GetToken().Value) != nil {
+			key := ov.Key.GetToken().Value
+			if len(s.Values) == 0 || findMappingValue(s, key) != nil {
 				continue
 			}
 
 			// e.g. dropped by omitempty
-			if node := m.prune(ov.Value); node != nil {
+			if node := m.prune(path+"."+key, ov.Value); node != nil {
 				entry := ast.MappingValue(ov.Start, ov.Key, node)
 				entry.AddColumn(s.Values[0].Key.GetToken().Position.Column - ov.Key.GetToken().Position.Column)
 				s.Values = append(s.Values, entry)
@@ -161,7 +198,7 @@ func (m *merger) merge(source, overlay ast.Node) ast.Node {
 		}
 
 		for i := range min(len(s.Values), len(o.Values)) {
-			s.Values[i] = m.merge(s.Values[i], o.Values[i])
+			s.Values[i] = m.merge(fmt.Sprintf("%s[%d]", path, i), s.Values[i], o.Values[i])
 		}
 	}
 
@@ -169,9 +206,9 @@ func (m *merger) merge(source, overlay ast.Node) ast.Node {
 }
 
 // prune returns the part of an overlay node that has no source counterpart but satisfies
-// condition(nil, overlay): the node itself, or a mapping reduced to such entries. Nil if nothing is left.
-func (m *merger) prune(overlay ast.Node) ast.Node {
-	if m.condition(nil, m.resolve(overlay)) {
+// condition(path, nil, overlay): the node itself, or a mapping reduced to such entries. Nil if nothing is left.
+func (m *merger) prune(path string, overlay ast.Node) ast.Node {
+	if m.condition(path, nil, m.resolve(overlay)) {
 		return m.take(overlay)
 	}
 
@@ -183,7 +220,7 @@ func (m *merger) prune(overlay ast.Node) ast.Node {
 
 	kept := o.Values[:0]
 	for _, ov := range o.Values {
-		node := m.prune(ov.Value)
+		node := m.prune(path+"."+ov.Key.GetToken().Value, ov.Value)
 		if node == nil {
 			continue
 		}
@@ -247,6 +284,17 @@ func unwrap(node ast.Node) ast.Node {
 		default:
 			return node
 		}
+	}
+}
+
+func isEmptyScalar(node ast.Node) bool {
+	switch n := unwrap(node).(type) {
+	case nil, *ast.NullNode:
+		return true
+	case *ast.StringNode:
+		return n.Value == ""
+	default:
+		return false
 	}
 }
 

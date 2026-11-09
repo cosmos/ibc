@@ -366,15 +366,15 @@ func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 	return attestors
 }
 
-func (c Config) StoreToFile(path string) error {
-	return c.store(path, nil)
+func (c Config) StoreToFile(path string, forceUpdatePaths ...string) error {
+	return c.store(path, nil, forceUpdatePaths)
 }
 
 // StoreToFileWithComments writes c to path as YAML, with a TODO comment
 // attached to every field CollectComments flags as left for the operator to
-// fill in.
-func (c Config) StoreToFileWithComments(path string) error {
-	return c.store(path, CollectComments(c))
+// fill in. See asFileBytes for forceUpdatePaths.
+func (c Config) StoreToFileWithComments(path string, forceUpdatePaths ...string) error {
+	return c.store(path, CollectComments(c), forceUpdatePaths)
 }
 
 func (c ServerConfig) Validate() error {

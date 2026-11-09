@@ -741,6 +741,15 @@ func renderRelayConfig(
 	return out, nil
 }
 
+// renderedPaths are the non-secret config fields render-config sets from deployment manifests
+// and flags. They take the rendered value even where the config used an env var reference.
+var renderedPaths = []string{
+	"$.chains[*].evm.ics26Router",
+	"$.chains[*].evm.ibcMulticall",
+	"$.relayer.connections[*].clientA.signer",
+	"$.relayer.connections[*].clientB.signer",
+}
+
 func deployRenderConfig(_ *cobra.Command, args []string) error {
 	// Load incomplete drafts for repair, but reject ambiguous identities before
 	// resolving signers or rendering deployment settings.
@@ -785,7 +794,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := merged.WriteYAMLWithComments(os.Stdout, config.CollectComments(merged)); err != nil {
+	if err := merged.WriteYAMLWithComments(os.Stdout, config.CollectComments(merged), renderedPaths...); err != nil {
 		return err
 	}
 
@@ -833,7 +842,7 @@ func populateRenderedConfig(merged config.Config) error {
 		_, _ = fmt.Fprintf(os.Stderr, "Config is not runnable yet: %v\n", err)
 	}
 
-	if storeErr := merged.StoreToFileWithComments(configPath); storeErr != nil {
+	if storeErr := merged.StoreToFileWithComments(configPath, renderedPaths...); storeErr != nil {
 		return storeErr
 	}
 

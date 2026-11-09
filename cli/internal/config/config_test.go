@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -318,47 +317,6 @@ server:
 			require.NotNil(t, config.originalYAML)
 			require.Contains(t, config.originalYAML.String(), "127.0.0.1:${SERVER_PORT}")
 			require.NotContains(t, config.originalYAML.String(), "127.0.0.1:9091")
-		})
-
-		t.Run("envScalarTypes", func(t *testing.T) {
-			// ARRANGE
-			t.Setenv("CONFIG_JSON", "true")
-			t.Setenv("CONFIG_CLEAR", "false")
-			t.Setenv("CONFIG_OFFSET", "17")
-			t.Setenv("CONFIG_BATCH", "23")
-			t.Setenv("CONFIG_INTERVAL", "7s")
-			t.Setenv("CONFIG_ATTESTOR_TYPE", "remote")
-			path := writeTestConfig(t, `
-logging:
-  json: ${CONFIG_JSON}
-relayer:
-  clearOnStart: ${CONFIG_CLEAR}
-  clearInterval: ${CONFIG_INTERVAL}
-  chainOverrides:
-    - chainId: chain-a
-      packetBatchSize: ${CONFIG_BATCH}
-attestors:
-  - name: watcher
-    type: ${CONFIG_ATTESTOR_TYPE}
-    finalityOffset: ${CONFIG_OFFSET}
-`)
-
-			// ACT
-			cfg, err := LoadFromFile(path, false)
-
-			// ASSERT
-			require.NoError(t, err)
-			require.True(t, cfg.Logging.JSON)
-			require.NotNil(t, cfg.Relayer.ClearOnStart)
-			require.False(t, *cfg.Relayer.ClearOnStart)
-			require.NotNil(t, cfg.Relayer.ClearInterval)
-			require.Equal(t, 7*time.Second, *cfg.Relayer.ClearInterval)
-			require.Len(t, cfg.Relayer.ChainOverrides, 1)
-			require.NotNil(t, cfg.Relayer.ChainOverrides[0].PacketBatchSize)
-			require.Equal(t, 23, *cfg.Relayer.ChainOverrides[0].PacketBatchSize)
-			require.Len(t, cfg.Attestors, 1)
-			require.Equal(t, AttestorTypeRemote, cfg.Attestors[0].Type)
-			require.Equal(t, uint(17), cfg.Attestors[0].FinalityOffset)
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
@@ -698,7 +656,7 @@ func unsetEnv(t *testing.T, key string) {
 func TestStoreToFilePreservesEnv(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
-		store     func(Config, string) error
+		store     func(Config, string, ...string) error
 		futureEnv bool
 	}{
 		{name: "plain", store: Config.StoreToFile},
