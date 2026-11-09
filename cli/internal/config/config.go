@@ -367,14 +367,14 @@ func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 }
 
 func (c Config) StoreToFile(path string) error {
-	return storeConfig(c, path, nil)
+	return c.store(path, nil)
 }
 
 // StoreToFileWithComments writes c to path as YAML, with a TODO comment
 // attached to every field CollectComments flags as left for the operator to
 // fill in.
 func (c Config) StoreToFileWithComments(path string) error {
-	return storeConfig(c, path, CollectComments(c))
+	return c.store(path, CollectComments(c))
 }
 
 func (c ServerConfig) Validate() error {

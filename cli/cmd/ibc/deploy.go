@@ -785,7 +785,7 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := config.PrintYAMLWithComments(merged, config.CollectComments(merged)); err != nil {
+	if err := merged.WriteYAMLWithComments(os.Stdout, config.CollectComments(merged)); err != nil {
 		return err
 	}
 

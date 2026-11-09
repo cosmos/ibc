@@ -4,20 +4,16 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 )
-
-type yamlScalar interface {
-	~string | ~bool | ~int | ~uint | ~int64
-}
 
 func LoadFromFile(path string, validate bool) (Config, error) {
 	config := DefaultConfig()
@@ -27,24 +23,20 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 		return Config{}, err
 	}
 
-	// ast tree
+	// ast tree, will be used to preserve ENV vars when updating/printing
 	originalYAML, err := parser.ParseBytes(bz, parser.ParseComments)
 	if err != nil {
 		return Config{}, err
 	}
 
+	// expand ENV vars
+	expandedBytes := []byte(os.ExpandEnv(string(bz)))
+
 	opts := []yaml.DecodeOption{
 		yaml.DisallowUnknownField(),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[string]),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[ChainType]),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[AttestorType]),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[bool]),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[int]),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[uint]),
-		yaml.CustomUnmarshaler(unmarshalScalarWithEnv[time.Duration]),
 	}
 
-	if err := unmarshalConfigAST(originalYAML, &config, opts); err != nil {
+	if err := yaml.UnmarshalWithOptions(expandedBytes, &config, opts...); err != nil {
 		return Config{}, err
 	}
 
@@ -86,6 +78,105 @@ func KeyFileFallbacks(keyPath string) []string {
 	return fallbacks
 }
 
+func (c Config) WriteYAML(out io.Writer) error {
+	bz, err := c.asFileBytes(nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(bz)
+	return err
+}
+
+func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string) error {
+	bz, err := c.asFileBytes(comments)
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(bz)
+	return err
+}
+
+func (c Config) asFileBytes(comments map[string]string) ([]byte, error) {
+	astFile, err := c.ast()
+	if err != nil {
+		return nil, err
+	}
+
+	// todo
+	// replace rendered config values with original ENV variables to preserve secrets
+	replaceIf := func(_, overlay *ast.Node) bool {
+		return hasEnvValue(overlay)
+	}
+
+	astResultFile, err := astMerge(astFile, c.originalYAML, replaceIf)
+	switch {
+	case err != nil:
+		return nil, err
+	case len(astResultFile.Docs) != 1 || astResultFile.Docs[0].Body == nil:
+		return nil, fmt.Errorf("expected 1 document, got %d", len(astResultFile.Docs))
+	}
+
+	body := astResultFile.Docs[0].Body
+
+	return yaml.MarshalWithOptions(body, yaml.WithComment(toCommentMap(comments)))
+}
+
+func (c Config) ast() (*ast.File, error) {
+	node, err := yaml.ValueToNode(c)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.File{
+		Docs: []*ast.DocumentNode{
+			{Body: node},
+		},
+	}, nil
+}
+
+func (c Config) store(path string, comments map[string]string) error {
+	err := EnsureDirectory(path)
+	if err != nil {
+		return err
+	}
+
+	mode := os.FileMode(0o644)
+	if info, statErr := os.Stat(path); statErr == nil {
+		mode = info.Mode().Perm()
+		path, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(statErr) {
+		return statErr
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+
+	if err := c.WriteYAMLWithComments(tmp, comments); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp.Name(), path)
+}
+
 func fileExistsInAny(path ...string) error {
 	for _, p := range path {
 		if err := fileExists(p); err == nil {
@@ -109,132 +200,21 @@ func fileExists(path string) error {
 	return nil
 }
 
-func unmarshalConfigAST(file *ast.File, config *Config, opts []yaml.DecodeOption) error {
-	if len(file.Docs) != 1 || file.Docs[0].Body == nil {
-		return errors.New("expected a single config YAML document")
-	}
-
-	return yaml.NodeToValue(file.Docs[0].Body, config, opts...)
+func astMerge(
+	source, overlay *ast.File,
+	condition func(original, latest *ast.Node) bool,
+) (*ast.File, error) {
+	// todo walk for each node and if condition is true, replace source with overlay
+	return nil, nil
 }
 
-// decodes yaml's fields w/ or w/o env vars like `hello: ${HELLO}`
-func unmarshalScalarWithEnv[S yamlScalar](value *S, data []byte) error {
-	// peek to detect if the value is an env var w/o writing to *S
-	var tmp string
-	if err := yaml.Unmarshal(data, &tmp); err != nil {
-		return err
+func hasEnvValue(node *ast.Node) bool {
+	if node == nil {
+		return false
 	}
 
-	if expanded := os.ExpandEnv(tmp); expanded != tmp {
-		data = []byte(expanded)
-	}
+	// todo some magic to say: "ok this is node is [string, int, uint, float, time, ...] AND its value is ENV"
+	// env means value contains ${var} or $var
 
-	return yaml.Unmarshal(data, value)
-}
-
-func storeConfig(c Config, path string, comments map[string]string) error {
-	if err := EnsureDirectory(path); err != nil {
-		return err
-	}
-
-	latest, err := yaml.ValueToNode(c)
-	if err != nil {
-		return err
-	}
-
-	if c.originalYAML != nil {
-		if err = preserveConfigEnv(latest, c.originalYAML); err != nil {
-			return err
-		}
-	}
-
-	bz, err := yaml.MarshalWithOptions(latest, yaml.WithComment(toCommentMap(comments)))
-	if err != nil {
-		return err
-	}
-
-	mode := os.FileMode(0o644)
-	if info, statErr := os.Stat(path); statErr == nil {
-		mode = info.Mode().Perm()
-		path, err = filepath.EvalSymlinks(path)
-		if err != nil {
-			return err
-		}
-	} else if !os.IsNotExist(statErr) {
-		return statErr
-	}
-
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(bz); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	return os.Rename(tmp.Name(), path)
-}
-
-// preserveConfigEnv restores env-backed values at their original YAML paths.
-// Callers must preserve existing list order; appending entries is supported.
-func preserveConfigEnv(latest ast.Node, original *ast.File) error {
-	var value any
-
-	decoder := yaml.NewDecoder(strings.NewReader(""))
-
-	// Initialize the decoder with the whole document so aliases resolve too.
-	if err := decoder.DecodeFromNode(original.Docs[0].Body, &value); err != nil {
-		return err
-	}
-
-	for _, node := range ast.FilterFile(ast.MappingValueType, original) {
-		entry := node.(*ast.MappingValueNode)
-		if err := decoder.DecodeFromNode(entry.Value, &value); err != nil {
-			return err
-		}
-
-		raw, ok := value.(string)
-		if !ok {
-			continue
-		}
-
-		hasEnv := false
-		os.Expand(raw, func(string) string { hasEnv = true; return "" })
-		if !hasEnv {
-			continue
-		}
-
-		parent, err := yaml.PathString(entry.GetPath()[:strings.LastIndex(entry.GetPath(), ".")])
-		if err != nil {
-			return err
-		}
-
-		patch, err := yaml.ValueToNode(map[string]string{entry.Key.GetToken().Value: raw})
-		if err != nil {
-			return err
-		}
-
-		file := &ast.File{
-			Docs: []*ast.DocumentNode{
-				{Body: latest},
-			},
-		}
-
-		// Merging one field also restores placeholders omitted by omitempty.
-		if err := parent.MergeFromNode(file, patch); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return false
 }

@@ -381,7 +381,7 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	require.NoError(t, err)
 
 	rendered := captureStdout(t, func() {
-		require.NoError(t, config.PrintYAMLWithComments(merged, config.CollectComments(merged)))
+		require.NoError(t, merged.WriteYAMLWithComments(os.Stdout, config.CollectComments(merged)))
 	})
 
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)
