@@ -9,7 +9,7 @@
 [![Version](https://img.shields.io/github/v/tag/cosmos/ibc?filter=cli/v*&label=version)](https://github.com/cosmos/ibc/releases)
 [![codecov](https://codecov.io/gh/cosmos/ibc/graph/badge.svg)](https://codecov.io/gh/cosmos/ibc)
 
-![banner](./.github/assets/cosmos-ibc-github.svg)
+![banner](./.github/assets/cosmos-ibc-github.jpg)
 
 ## Synopsis
 
