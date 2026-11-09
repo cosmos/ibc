@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package ibc.v2.attestor;
 
-option go_package = "github.com/cosmos/ibc/cli/api/v2/attestor";
+option go_package = "github.com/lfdt-ibc/ibc/cli/api/v2/attestor";
 
 // Service definition for retrieving attestations.
 service AttestationService {

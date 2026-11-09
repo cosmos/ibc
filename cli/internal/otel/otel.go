@@ -27,8 +27,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/graceful"
 )
 
 // Provider owns the metrics pipeline and Prometheus HTTP server.

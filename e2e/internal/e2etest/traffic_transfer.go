@@ -21,7 +21,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	transfertypes "github.com/cosmos/ibc-go/v11/modules/apps/transfer/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
 )
 
 const (

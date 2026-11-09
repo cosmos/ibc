@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
-	"github.com/cosmos/ibc/cli/internal/service/attestor"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	attestorevm "github.com/lfdt-ibc/ibc/cli/attestor/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/attestor"
+	"github.com/lfdt-ibc/ibc/cli/internal/tests/mocks"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // signedAttestor builds a attestor.MockAttestor whose StateAttestation call

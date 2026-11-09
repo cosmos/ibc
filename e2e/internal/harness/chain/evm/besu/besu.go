@@ -30,11 +30,11 @@ import (
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	clibesu "github.com/cosmos/ibc/cli/besu"
-	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
+	clibesu "github.com/lfdt-ibc/ibc/cli/besu"
+	chainpkg "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/container"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/poll"
 )
 
 const (

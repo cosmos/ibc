@@ -1100,7 +1100,7 @@ A chain may have to update its internal state to be consistent with the new upgr
 
 ## Example Implementations
 
-- Implementation of channel upgrade in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of channel upgrade in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 
 ## History
 

@@ -583,7 +583,7 @@ The consensus state can only be updated as allowed by the `updateConsensusState`
 
 ## Example Implementations
 
-- Implementation of ICS 03 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 03 in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 - Implementation of ICS 03 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History

@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
-	clibesu "github.com/cosmos/ibc/cli/besu"
+	clibesu "github.com/lfdt-ibc/ibc/cli/besu"
 )
 
 const expectedTreasuryBalanceHex = "0xc9f2c9cd04674edea40000000"

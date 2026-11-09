@@ -806,7 +806,7 @@ and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementations
 
-- Implementation of ICS 20 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 20 in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 - Implementation of ICS 20 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History

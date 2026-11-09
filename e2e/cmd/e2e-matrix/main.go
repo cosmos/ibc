@@ -17,7 +17,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
 )
 
 const (

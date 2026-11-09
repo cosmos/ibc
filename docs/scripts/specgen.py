@@ -71,7 +71,7 @@ _LINK = re.compile(r"\]\((?![a-z][a-z0-9+.-]*:|/)([^)]+?\.md)(#[^)]*)?\)", re.I)
 # catch it. The negative lookbehind keeps image syntax out.
 _DIRLINK = re.compile(
     r"(?<!!)\[([^\]]*)\]\((?![a-z][a-z0-9+.-]*:|/|#)([^)#]+?)(#[^)]*)?\)")
-GITHUB_BLOB = "https://github.com/cosmos/ibc/blob/main/"
+GITHUB_BLOB = "https://github.com/lfdt-ibc/ibc/blob/main/"
 _INLINE_CODE = re.compile(r"(`[^`\n]+`)")
 _COMMENT = re.compile(r"<!--(.*?)-->", re.S)
 _AUTOLINK = re.compile(r"<((?:https?://|mailto:)[^\s<>]+)>")

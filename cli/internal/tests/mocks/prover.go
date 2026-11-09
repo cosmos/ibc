@@ -7,7 +7,7 @@ package mocks
 import (
 	"context"
 	"github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	"github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
 	"time"
 )

@@ -6,7 +6,7 @@ package mocks
 
 import (
 	"context"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 	mock "github.com/stretchr/testify/mock"
 )
 

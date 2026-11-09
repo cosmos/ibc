@@ -114,8 +114,8 @@ A nav entry pointing off-site is an `.mdx` file with a `url`, registered in
 
 ```mdx
 ---
-title: "cosmos/ibc"
-url: "https://github.com/cosmos/ibc"
+title: "lfdt-ibc/ibc"
+url: "https://github.com/lfdt-ibc/ibc"
 icon: "github"
 ---
 ```

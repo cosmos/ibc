@@ -6,7 +6,7 @@ package mocks
 
 import (
 	"context"
-	"github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 	mock "github.com/stretchr/testify/mock"
 	"time"
 )

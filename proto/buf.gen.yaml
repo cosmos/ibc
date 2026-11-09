@@ -5,11 +5,11 @@ plugins:
   - remote: buf.build/protocolbuffers/go:v1.36.11
     revision: 1
     out: ../cli
-    opt: module=github.com/cosmos/ibc/cli
+    opt: module=github.com/lfdt-ibc/ibc/cli
   - remote: buf.build/connectrpc/go:v1.20.0
     revision: 1
     out: ../cli
-    opt: module=github.com/cosmos/ibc/cli,package_suffix
+    opt: module=github.com/lfdt-ibc/ibc/cli,package_suffix
 
 inputs:
   - directory: cli

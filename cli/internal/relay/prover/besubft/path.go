@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu"
 )
 
 // stuckError is where the search from the client's trusted height stops: the

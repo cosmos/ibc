@@ -9,9 +9,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // Validate exercises network-dependent config validation:

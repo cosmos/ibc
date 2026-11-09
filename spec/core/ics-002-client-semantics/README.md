@@ -639,7 +639,7 @@ New client types can be added by IBC implementations at-will as long as they con
 
 ## Example Implementations
 
-Please see the ibc-go implementations of light clients for examples of how to implement your own: <https://github.com/cosmos/ibc-go/blob/main/modules/light-clients>.
+Please see the ibc-go implementations of light clients for examples of how to implement your own: <https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients>.
 
 ## History
 

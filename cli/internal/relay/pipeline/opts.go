@@ -5,8 +5,8 @@ package pipeline
 import (
 	"time"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
 )
 
 // Batch defaults applied when a chain has no overrides.

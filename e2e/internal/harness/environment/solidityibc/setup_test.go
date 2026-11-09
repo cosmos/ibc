@@ -23,9 +23,9 @@ import (
 	"golang.org/x/mod/module"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 const testMiningTimeout = 30 * time.Second

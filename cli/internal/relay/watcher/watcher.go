@@ -9,9 +9,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/store"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // Backoff bounds for reconnecting a dropped subscription.

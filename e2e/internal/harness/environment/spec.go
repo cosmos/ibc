@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment/solidityibc"
 )
 
 // Graph identities are distinct types so references to different resource

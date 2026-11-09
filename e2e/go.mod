@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-module github.com/cosmos/ibc/e2e
+module github.com/lfdt-ibc/ibc/e2e
 
 go 1.26.10
 
@@ -77,6 +77,7 @@ require (
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/gogoproto v1.7.2 // indirect
 	github.com/cosmos/iavl v1.2.8 // indirect
+	github.com/cosmos/ibc/cli v0.0.0-20260925114553-e0d83d26ad12 // indirect
 	github.com/cosmos/ics23/go v0.11.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v1.0.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
@@ -309,8 +310,6 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.2.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
-	github.com/cosmos/ibc/cli v0.0.0
-	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -330,6 +329,8 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
+	github.com/lfdt-ibc/ibc/cli v0.0.0
+	github.com/lfdt-ibc/ibc/gen/go/solidity-abi v0.0.0
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/magiconair/properties v1.18.12 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -365,6 +366,7 @@ require (
 )
 
 replace (
-	github.com/cosmos/ibc/cli => ../cli
-	github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
+	github.com/cosmos/ibc/cli => ./compat/cosmos-ibc-cli
+	github.com/lfdt-ibc/ibc/cli => ../cli
+	github.com/lfdt-ibc/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )

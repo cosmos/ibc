@@ -8,10 +8,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	relayerv2 "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 type remoteProverEnv struct {

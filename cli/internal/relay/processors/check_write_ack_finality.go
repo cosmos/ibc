@@ -10,9 +10,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // CheckWriteAckFinality gates ack relaying on the write ack tx's height

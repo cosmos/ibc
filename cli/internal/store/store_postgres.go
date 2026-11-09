@@ -15,8 +15,8 @@ import (
 	"github.com/pkg/errors"
 	migrate "github.com/rubenv/sql-migrate"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/store/repository/postgres"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/store/repository/postgres"
 )
 
 // PostgresDB is a wrapper around the postgres database.

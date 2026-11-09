@@ -6,10 +6,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/txbuilder"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // waitForChainTimeout bounds how long batch delivery waits for the target
