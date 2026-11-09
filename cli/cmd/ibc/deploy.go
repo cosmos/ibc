@@ -28,6 +28,7 @@ import (
 	"github.com/cosmos/ibc/cli/internal/deploy/evm"
 	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
 	"github.com/cosmos/ibc/cli/internal/service/signer"
+	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
 	"github.com/cosmos/ibc/cli/keyfile"
 )
 
@@ -144,6 +145,15 @@ var (
 		RunE:  deployIFTBridge,
 	}
 )
+
+// renderedPaths are the non-secret config fields render-config sets from deployment manifests
+// and flags. They take the rendered value even where the config used an env var reference.
+var renderedPaths = []string{
+	"$.chains[*].evm.ics26Router",
+	"$.chains[*].evm.ibcMulticall",
+	"$.relayer.connections[*].clientA.signer",
+	"$.relayer.connections[*].clientB.signer",
+}
 
 // resolveDeployerAlias prefers the --deployer flag over the chain's config.
 func resolveDeployerAlias(chain config.ChainConfig, flagAlias string) string {
@@ -741,15 +751,6 @@ func renderRelayConfig(
 	return out, nil
 }
 
-// renderedPaths are the non-secret config fields render-config sets from deployment manifests
-// and flags. They take the rendered value even where the config used an env var reference.
-var renderedPaths = []string{
-	"$.chains[*].evm.ics26Router",
-	"$.chains[*].evm.ibcMulticall",
-	"$.relayer.connections[*].clientA.signer",
-	"$.relayer.connections[*].clientB.signer",
-}
-
 func deployRenderConfig(_ *cobra.Command, args []string) error {
 	// Load incomplete drafts for repair, but reject ambiguous identities before
 	// resolving signers or rendering deployment settings.
@@ -794,7 +795,11 @@ func deployRenderConfig(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := merged.WriteYAMLWithComments(os.Stdout, config.CollectComments(merged), renderedPaths...); err != nil {
+	// mask only "secret" env vars (rendered values win over their env templates) and print the config
+	err = merged.
+		FilterEnvPaths(keepRenderedValuesFilter).
+		WriteYAMLWithComments(os.Stdout, config.CollectComments(merged))
+	if err != nil {
 		return err
 	}
 
@@ -838,12 +843,15 @@ func populateRenderedConfig(merged config.Config) error {
 		return err
 	}
 
-	if err := merged.Validate(); err != nil {
+	if err = merged.Validate(); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Config is not runnable yet: %v\n", err)
 	}
 
-	if storeErr := merged.StoreToFileWithComments(configPath, renderedPaths...); storeErr != nil {
-		return storeErr
+	err = merged.
+		FilterEnvPaths(keepRenderedValuesFilter).
+		StoreToFileWithComments(configPath)
+	if err != nil {
+		return err
 	}
 
 	if globalFlags.Quiet {
@@ -1011,4 +1019,15 @@ func normalizeIFTAddress(cfg config.Config, chainID, address string) (string, er
 	}
 	// GMP identifies EVM senders by their checksummed address string.
 	return common.HexToAddress(address).Hex(), nil
+}
+
+// keepRenderedValuesFilter ensure rendered values are not masked with their original ${var}
+func keepRenderedValuesFilter(p ibcyaml.EnvPath) bool {
+	for _, pattern := range renderedPaths {
+		if ibcyaml.PathMatches(p.Path, pattern) {
+			return false
+		}
+	}
+
+	return true
 }

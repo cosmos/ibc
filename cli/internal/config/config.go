@@ -12,10 +12,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
 
 	"github.com/cosmos/ibc/cli/internal/network"
 	"github.com/cosmos/ibc/cli/internal/pkg/logging"
+	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
 )
 
 // Chain types
@@ -76,9 +76,9 @@ type Config struct {
 	Attestors     Attestors     `yaml:"attestors"`
 	Signers       Signers       `yaml:"signers"`
 
-	// keep track of the original file and its contents
+	// keep track of the original file and its env var references
 	originalFilePath string
-	originalYAML     *ast.File
+	envPaths         []ibcyaml.EnvPath
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -366,15 +366,15 @@ func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 	return attestors
 }
 
-func (c Config) StoreToFile(path string, forceUpdatePaths ...string) error {
-	return c.store(path, nil, forceUpdatePaths)
+func (c Config) StoreToFile(path string) error {
+	return c.store(path, nil)
 }
 
 // StoreToFileWithComments writes c to path as YAML, with a TODO comment
 // attached to every field CollectComments flags as left for the operator to
-// fill in. See asFileBytes for forceUpdatePaths.
-func (c Config) StoreToFileWithComments(path string, forceUpdatePaths ...string) error {
-	return c.store(path, CollectComments(c), forceUpdatePaths)
+// fill in.
+func (c Config) StoreToFileWithComments(path string) error {
+	return c.store(path, CollectComments(c))
 }
 
 func (c ServerConfig) Validate() error {

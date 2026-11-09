@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/parser"
 	"github.com/pkg/errors"
 
 	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
@@ -24,8 +24,8 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 		return Config{}, err
 	}
 
-	// ast tree, will be used to preserve ENV vars when updating/printing
-	originalYAML, err := parser.ParseBytes(bz, parser.ParseComments)
+	// locate env references, so writing the config back keeps them instead of their values
+	envPaths, err := ibcyaml.FindEnvPaths(bz)
 	if err != nil {
 		return Config{}, err
 	}
@@ -48,9 +48,30 @@ func LoadFromFile(path string, validate bool) (Config, error) {
 	}
 
 	config.originalFilePath = path
-	config.originalYAML = originalYAML
+	config.envPaths = envPaths
 
 	return config, nil
+}
+
+// EnvPaths list all config paths that contain env references.
+func (c Config) EnvPaths() []ibcyaml.EnvPath {
+	return slices.Clone(c.envPaths)
+}
+
+// FilterEnvPaths keeps only the paths that match the filter.
+// Useful to preserve rendered values of non-secret fields the program sets.
+func (c Config) FilterEnvPaths(filter func(ibcyaml.EnvPath) bool) Config {
+	var filtered []ibcyaml.EnvPath
+
+	for _, path := range c.envPaths {
+		if filter(path) {
+			filtered = append(filtered, path)
+		}
+	}
+
+	c.envPaths = filtered
+
+	return c
 }
 
 // KeyFileFallbacks returns the paths tried for a local signer key file.
@@ -80,7 +101,7 @@ func KeyFileFallbacks(keyPath string) []string {
 }
 
 func (c Config) WriteYAML(out io.Writer) error {
-	bz, err := c.asFileBytes(nil, nil)
+	bz, err := c.asFileBytes(nil)
 	if err != nil {
 		return err
 	}
@@ -90,9 +111,8 @@ func (c Config) WriteYAML(out io.Writer) error {
 }
 
 // WriteYAMLWithComments writes c as YAML with comments attached.
-// See asFileBytes for forceUpdatePaths.
-func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string, forceUpdatePaths ...string) error {
-	bz, err := c.asFileBytes(comments, forceUpdatePaths)
+func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string) error {
+	bz, err := c.asFileBytes(comments)
 	if err != nil {
 		return err
 	}
@@ -102,29 +122,17 @@ func (c Config) WriteYAMLWithComments(out io.Writer, comments map[string]string,
 }
 
 // asFileBytes renders c as YAML, putting env var references from the loaded file back
-// in place of their expanded values so secrets are not written out.
-// Paths in forceUpdatePaths (e.g. `$.chains[*].evm.ics26Router`) keep their new non-empty value
-// instead; use them only for non-secret values the program sets.
-func (c Config) asFileBytes(comments map[string]string, forceUpdatePaths []string) ([]byte, error) {
-	astFile, err := ibcyaml.ValueToFile(c)
+// in place of their expanded values so secrets are not written out. See FilterEnvPaths.
+func (c Config) asFileBytes(comments map[string]string) ([]byte, error) {
+	tree, err := ibcyaml.MaskEnvPaths(c, c.envPaths)
 	if err != nil {
 		return nil, err
 	}
 
-	astResultFile, err := ibcyaml.Merge(astFile, c.originalYAML, ibcyaml.PreserveEnv(forceUpdatePaths...))
-	switch {
-	case err != nil:
-		return nil, err
-	case len(astResultFile.Docs) != 1 || astResultFile.Docs[0].Body == nil:
-		return nil, fmt.Errorf("expected 1 document, got %d", len(astResultFile.Docs))
-	}
-
-	body := astResultFile.Docs[0].Body
-
-	return yaml.MarshalWithOptions(body, yaml.WithComment(toCommentMap(comments)))
+	return yaml.MarshalWithOptions(tree, yaml.WithComment(toCommentMap(comments)))
 }
 
-func (c Config) store(path string, comments map[string]string, forceUpdatePaths []string) error {
+func (c Config) store(path string, comments map[string]string) error {
 	err := EnsureDirectory(path)
 	if err != nil {
 		return err
@@ -153,7 +161,7 @@ func (c Config) store(path string, comments map[string]string, forceUpdatePaths 
 		return err
 	}
 
-	if err := c.WriteYAMLWithComments(tmp, comments, forceUpdatePaths...); err != nil {
+	if err := c.WriteYAMLWithComments(tmp, comments); err != nil {
 		_ = tmp.Close()
 		return err
 	}

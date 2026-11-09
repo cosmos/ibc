@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/api/v2/relayer"
+	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
 )
 
 func TestConfig(t *testing.T) {
@@ -314,9 +316,9 @@ server:
 			// ASSERT
 			require.NoError(t, err)
 			assert.Equal(t, "127.0.0.1:9091", config.Server.ListenAddress)
-			require.NotNil(t, config.originalYAML)
-			require.Contains(t, config.originalYAML.String(), "127.0.0.1:${SERVER_PORT}")
-			require.NotContains(t, config.originalYAML.String(), "127.0.0.1:9091")
+			require.Equal(t, []ibcyaml.EnvPath{
+				{Path: "$.server.listenAddr", Template: "127.0.0.1:${SERVER_PORT}"},
+			}, config.envPaths)
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
@@ -656,7 +658,7 @@ func unsetEnv(t *testing.T, key string) {
 func TestStoreToFilePreservesEnv(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
-		store     func(Config, string, ...string) error
+		store     func(Config, string) error
 		futureEnv bool
 	}{
 		{name: "plain", store: Config.StoreToFile},
@@ -755,6 +757,55 @@ chains:
 			require.Equal(t, string(data), string(repeated))
 		})
 	}
+}
+
+func TestConfigEnvPaths(t *testing.T) {
+	// ARRANGE
+	t.Setenv("CONFIG_RPC_KEY", "secret")
+	t.Setenv("CONFIG_ROUTER", "0x0000000000000000000000000000000000000001")
+	path := writeTestConfig(t, `
+chains:
+  - chainId: a
+    evm:
+      rpc: https://a.example/${CONFIG_RPC_KEY}
+      ics26Router: ${CONFIG_ROUTER}
+`)
+	cfg, err := LoadFromFile(path, false)
+	require.NoError(t, err)
+
+	t.Run("EnvPaths", func(t *testing.T) {
+		// ACT
+		paths := cfg.EnvPaths()
+		paths[0].Template = "mutated"
+
+		// ASSERT
+		require.Equal(t, []ibcyaml.EnvPath{
+			{Path: "$.chains[0].evm.rpc", Template: "https://a.example/${CONFIG_RPC_KEY}"},
+			{Path: "$.chains[0].evm.ics26Router", Template: "${CONFIG_ROUTER}"},
+		}, cfg.EnvPaths(), "EnvPaths must return a copy")
+	})
+
+	t.Run("FilterEnvPaths", func(t *testing.T) {
+		// ARRANGE
+		notRouter := func(p ibcyaml.EnvPath) bool { return p.Path != "$.chains[0].evm.ics26Router" }
+		updated := cfg
+		updated.Chains = slices.Clone(cfg.Chains)
+		evm := *cfg.Chains[0].EVM
+		evm.ICS26Router = "0x0000000000000000000000000000000000000999"
+		updated.Chains[0].EVM = &evm
+
+		// ACT
+		filtered := updated.FilterEnvPaths(notRouter)
+		require.NoError(t, filtered.StoreToFile(path))
+
+		// ASSERT
+		require.Len(t, cfg.EnvPaths(), 2, "original config must keep its paths")
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Contains(t, string(data), "rpc: https://a.example/${CONFIG_RPC_KEY}")
+		require.Contains(t, string(data), `ics26Router: "0x0000000000000000000000000000000000000999"`)
+		require.NotContains(t, string(data), "${CONFIG_ROUTER}")
+	})
 }
 
 func TestStoreToFilePreservesSymlink(t *testing.T) {

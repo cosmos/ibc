@@ -5,13 +5,12 @@ package yaml
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/goccy/go-yaml"
-	"github.com/goccy/go-yaml/ast"
-	"github.com/goccy/go-yaml/parser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,13 +43,13 @@ type testAuth struct {
 	SecretKey string `yaml:"secretKey,omitempty"`
 }
 
-func TestMerge(t *testing.T) {
+func TestMaskEnvPaths(t *testing.T) {
 	for _, tt := range []struct {
-		name             string
-		file             string
-		env              map[string]string
-		forceUpdatePaths []string
-		change           func(t *testing.T, cfg *testConfig)
+		name       string
+		file       string
+		env        map[string]string
+		keepValues []string
+		change     func(t *testing.T, cfg *testConfig)
 	}{
 		{
 			name: "scalars",
@@ -109,19 +108,31 @@ func TestMerge(t *testing.T) {
 			},
 		},
 		{
-			name:             "forceUpdatePaths",
-			file:             "04",
-			env:              map[string]string{"token": "secret-token", "router_a": "router-a-old", "router_b": "router-b-old"},
-			forceUpdatePaths: []string{"$.chains[*].router"},
+			name:       "keepValues",
+			file:       "04",
+			env:        map[string]string{"token": "secret-token", "router_a": "router-a-old", "router_b": "router-b-old"},
+			keepValues: []string{"$.chains[*].router"},
 			change: func(t *testing.T, cfg *testConfig) {
 				require.Len(t, cfg.Chains, 3)
 				require.Empty(t, cfg.Chains[2].Router, "router_c must be unset")
 
-				// forced: new value wins
+				// kept: new value wins
 				cfg.Chains[0].Router = "router-a-new"
 
-				// not forced: env reference wins
+				// not kept: env reference wins
 				cfg.Chains[0].RPC = "https://rpc.com/abc/changed"
+			},
+		},
+		{
+			name: "flowStyle",
+			file: "05",
+			env:  map[string]string{"token": "secret-token"},
+			change: func(t *testing.T, cfg *testConfig) {
+				require.Equal(t, []testChain{
+					{ID: "a", RPC: "https://rpc.com/abc/secret-token", Auth: &testAuth{}},
+				}, cfg.Chains)
+
+				cfg.Chains[0].Router = "router-a"
 			},
 		},
 	} {
@@ -131,53 +142,88 @@ func TestMerge(t *testing.T) {
 				t.Setenv(k, v)
 			}
 
-			cfg, original := loadTestConfig(t, filepath.Join("testdata", tt.file+".in.yaml"))
+			cfg, paths := loadTestConfig(t, filepath.Join("testdata", tt.file+".in.yaml"))
 			tt.change(t, &cfg)
+
+			paths = slices.DeleteFunc(paths, func(p EnvPath) bool {
+				return slices.ContainsFunc(tt.keepValues, func(pattern string) bool {
+					return PathMatches(p.Path, pattern)
+				})
+			})
 
 			expected, err := os.ReadFile(filepath.Join("testdata", tt.file+".out.yaml"))
 			require.NoError(t, err)
 
 			// ACT
-			out := filepath.Join(t.TempDir(), "out.yaml")
-			writeTestConfig(t, cfg, original, out, PreserveEnv(tt.forceUpdatePaths...))
+			tree, err := MaskEnvPaths(cfg, paths)
+			require.NoError(t, err)
+
+			actual, err := yaml.Marshal(tree)
+			require.NoError(t, err)
 
 			// ASSERT
-			actual, err := os.ReadFile(out)
-			require.NoError(t, err)
 			require.Equal(t, stripLicenseHeader(string(expected)), string(actual))
 		})
 	}
 }
 
-// loadTestConfig mirrors config.LoadFromFile: keep the raw AST, decode the env-expanded bytes.
-func loadTestConfig(t *testing.T, path string) (testConfig, *ast.File) {
+func TestFindEnvPaths(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		raw      string
+		expected []EnvPath
+	}{
+		{name: "empty", raw: "", expected: []EnvPath{}},
+		{name: "noEnv", raw: "a: $\nb: price$\n", expected: []EnvPath{}},
+		{
+			name: "flowStyle",
+			raw:  "tls: {caFile: ${CA}}\nlist: [x, $B]\n",
+			expected: []EnvPath{
+				{Path: "$.tls.caFile", Template: "${CA}"},
+				{Path: "$.list[1]", Template: "$B"},
+			},
+		},
+		{
+			name: "alias",
+			raw:  "db: &db postgres://u:${PASS}@h\nserver:\n  addr: *db\n",
+			expected: []EnvPath{
+				{Path: "$.db", Template: "postgres://u:${PASS}@h"},
+				{Path: "$.server.addr", Template: "postgres://u:${PASS}@h"},
+			},
+		},
+		{
+			name: "quoted",
+			raw:  "url: \"${DB} #1\"\n",
+			expected: []EnvPath{
+				{Path: "$.url", Template: "${DB} #1", quote: '"'},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ACT
+			paths, err := FindEnvPaths([]byte(tt.raw))
+
+			// ASSERT
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, paths)
+		})
+	}
+}
+
+// loadTestConfig mirrors config.LoadFromFile: find env paths in the raw bytes, decode the expanded bytes.
+func loadTestConfig(t *testing.T, path string) (testConfig, []EnvPath) {
 	t.Helper()
 
 	bz, err := os.ReadFile(path)
 	require.NoError(t, err)
 
-	original, err := parser.ParseBytes(bz, parser.ParseComments)
+	paths, err := FindEnvPaths(bz)
 	require.NoError(t, err)
 
 	var cfg testConfig
 	require.NoError(t, yaml.UnmarshalWithOptions([]byte(os.ExpandEnv(string(bz))), &cfg, yaml.DisallowUnknownField()))
 
-	return cfg, original
-}
-
-func writeTestConfig(t *testing.T, cfg testConfig, original *ast.File, path string, condition MergeCondition) {
-	t.Helper()
-
-	file, err := ValueToFile(cfg)
-	require.NoError(t, err)
-
-	merged, err := Merge(file, original, condition)
-	require.NoError(t, err)
-
-	bz, err := yaml.Marshal(merged.Docs[0].Body)
-	require.NoError(t, err)
-
-	require.NoError(t, os.WriteFile(path, bz, 0o600))
+	return cfg, paths
 }
 
 func stripLicenseHeader(s string) string {

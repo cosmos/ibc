@@ -12,4 +12,3 @@ chains:
   router: router-b-old
 - id: c
   rpc: https://c.example
-  router: ${router_c}
