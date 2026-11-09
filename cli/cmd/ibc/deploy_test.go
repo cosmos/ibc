@@ -194,7 +194,7 @@ func TestDeployCorePopulateConfig(t *testing.T) {
 			require.NoError(t, err)
 			cfg.Chains[0].EVM.ICS26Router = m.Core.Router
 			cfg.Chains[0].EVM.IBCMulticall = m.Core.Multicall
-			require.Equal(t, cfg, loaded)
+			require.EqualExportedValues(t, cfg, loaded)
 			populated, err := os.ReadFile(path)
 			require.NoError(t, err)
 			require.NoError(t, deployCore(cmd, nil))
@@ -381,7 +381,7 @@ func TestRenderConfigEmitsComments(t *testing.T) {
 	require.NoError(t, err)
 
 	rendered := captureStdout(t, func() {
-		require.NoError(t, config.PrintYAMLWithComments(merged, config.CollectComments(merged)))
+		require.NoError(t, merged.WriteYAMLWithComments(os.Stdout, config.CollectComments(merged)))
 	})
 
 	require.Contains(t, rendered, `signer: "" # TODO: signers[] alias that submits relay txs on chainA`)

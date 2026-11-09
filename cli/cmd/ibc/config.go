@@ -114,7 +114,7 @@ func configNew(_ *cobra.Command, _ []string) error {
 	cfg := config.DefaultConfig()
 
 	if flagConfigNewOut {
-		return config.PrintYAML(cfg)
+		return cfg.WriteYAML(os.Stdout)
 	}
 
 	if _, err := os.Stat(configPath); err == nil {

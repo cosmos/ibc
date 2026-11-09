@@ -15,6 +15,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/network"
 	"github.com/cosmos/ibc/cli/internal/pkg/logging"
+	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
 )
 
 // Chain types
@@ -75,7 +76,9 @@ type Config struct {
 	Attestors     Attestors     `yaml:"attestors"`
 	Signers       Signers       `yaml:"signers"`
 
+	// keep track of the original file and its env var references
 	originalFilePath string
+	envPaths         []ibcyaml.EnvPath
 }
 
 // ServerConfig config for RPC server for both relayer and attestor
@@ -364,14 +367,14 @@ func (c Config) AttestorsByChain(chainID string) []AttestorConfig {
 }
 
 func (c Config) StoreToFile(path string) error {
-	return storeConfig(c, path, nil)
+	return c.store(path, nil)
 }
 
 // StoreToFileWithComments writes c to path as YAML, with a TODO comment
 // attached to every field CollectComments flags as left for the operator to
 // fill in.
 func (c Config) StoreToFileWithComments(path string) error {
-	return storeConfig(c, path, CollectComments(c))
+	return c.store(path, CollectComments(c))
 }
 
 func (c ServerConfig) Validate() error {

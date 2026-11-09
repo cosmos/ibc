@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc/cli/api/v2/relayer"
+	ibcyaml "github.com/cosmos/ibc/cli/internal/yaml"
 )
 
 func TestConfig(t *testing.T) {
@@ -314,6 +316,9 @@ server:
 			// ASSERT
 			require.NoError(t, err)
 			assert.Equal(t, "127.0.0.1:9091", config.Server.ListenAddress)
+			require.Equal(t, []ibcyaml.EnvPath{
+				{Path: "$.server.listenAddr", Template: "127.0.0.1:${SERVER_PORT}"},
+			}, config.envPaths)
 		})
 
 		t.Run("invalidYaml", func(t *testing.T) {
@@ -647,6 +652,159 @@ func unsetEnv(t *testing.T, key string) {
 			return
 		}
 		require.NoError(t, os.Unsetenv(key))
+	})
+}
+
+func TestStoreToFilePreservesEnv(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		store     func(Config, string) error
+		futureEnv bool
+	}{
+		{name: "plain", store: Config.StoreToFile},
+		{name: "withComments", store: Config.StoreToFileWithComments},
+		{name: "plainFutureEnv", store: Config.StoreToFile, futureEnv: true},
+		{name: "withCommentsFutureEnv", store: Config.StoreToFileWithComments, futureEnv: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// ARRANGE
+			t.Setenv("CONFIG_PASSWORD", "original-password")
+			if tt.futureEnv {
+				unsetEnv(t, "CONFIG_RPC_KEY")
+			} else {
+				t.Setenv("CONFIG_RPC_KEY", "original-key")
+			}
+			t.Setenv("CONFIG_WS", "")
+			t.Setenv("CONFIG_JSON", "false")
+			path := writeTestConfig(t, `
+db:
+  type: postgres
+  url: &database postgres://user:${CONFIG_PASSWORD}@localhost/ibc # operator comment
+server:
+  listenAddr: *database
+logging:
+  json: ${CONFIG_JSON}
+chains:
+  - chainId: a
+    evm:
+      rpc: https://a.example/${CONFIG_RPC_KEY} # rpc key
+      ws: ${CONFIG_WS}
+  - chainId: b
+    evm:
+      rpc: https://b.example/$CONFIG_RPC_KEY
+`)
+			require.NoError(t, os.Chmod(path, 0o600))
+			cfg, err := LoadFromFile(path, false)
+			require.NoError(t, err)
+			if tt.futureEnv {
+				require.Equal(t, "https://a.example/", cfg.Chains[0].EVM.RPC)
+				require.Equal(t, "https://b.example/", cfg.Chains[1].EVM.RPC)
+			}
+			cfg.DB.URL = "postgres://override:literal@localhost/other"
+			cfg.Logging.JSON = true
+			cfg.Chains = append(cfg.Chains, ChainConfig{
+				ChainID: "new",
+				EVM:     &EVMChainConfig{RPC: "https://new.example"},
+			})
+			cfg.Chains[1].EVM.ICS26Router = "0x0000000000000000000000000000000000000123"
+			// Saving must not depend on the environment remaining unchanged.
+			t.Setenv("CONFIG_PASSWORD", "rotated-password")
+			if !tt.futureEnv {
+				t.Setenv("CONFIG_RPC_KEY", "rotated-key")
+			}
+
+			// ACT
+			require.NoError(t, tt.store(cfg, path))
+
+			// ASSERT
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Contains(t, string(data), "postgres://user:${CONFIG_PASSWORD}@localhost/ibc")
+			require.Contains(t, string(data), "https://a.example/${CONFIG_RPC_KEY}")
+			require.Contains(t, string(data), "https://b.example/$CONFIG_RPC_KEY")
+			require.Contains(t, string(data), "${CONFIG_WS}")
+			require.Contains(t, string(data), "${CONFIG_JSON}")
+			require.NotContains(t, string(data), "original-password")
+			require.NotContains(t, string(data), "original-key")
+			require.NotContains(t, string(data), "rotated-")
+			require.NotContains(t, string(data), "override:literal")
+			if tt.name == "withComments" {
+				require.Contains(t, string(data), "TODO: fill in")
+			}
+			if tt.futureEnv {
+				_, set := os.LookupEnv("CONFIG_RPC_KEY")
+				require.False(t, set, "RPC key must remain unset through the write")
+				t.Setenv("CONFIG_RPC_KEY", "rotated-key")
+			}
+			loaded, err := LoadFromFile(path, false)
+			require.NoError(t, err)
+			require.Equal(t, "postgres://user:rotated-password@localhost/ibc", loaded.DB.URL)
+			require.Equal(t, loaded.DB.URL, loaded.Server.ListenAddress)
+			require.False(t, loaded.Logging.JSON)
+			require.Len(t, loaded.Chains, 3)
+			require.Equal(t, "a", loaded.Chains[0].ChainID)
+			require.Equal(t, cfg.Chains[1].EVM.ICS26Router, loaded.Chains[1].EVM.ICS26Router)
+			require.Equal(t, "https://a.example/rotated-key", loaded.Chains[0].EVM.RPC)
+			require.Equal(t, "https://b.example/rotated-key", loaded.Chains[1].EVM.RPC)
+			require.Equal(t, "new", loaded.Chains[2].ChainID)
+			require.Equal(t, "https://new.example", loaded.Chains[2].EVM.RPC)
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+			require.NoError(t, tt.store(cfg, path))
+			repeated, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, string(data), string(repeated))
+		})
+	}
+}
+
+func TestConfigEnvPaths(t *testing.T) {
+	// ARRANGE
+	t.Setenv("CONFIG_RPC_KEY", "secret")
+	t.Setenv("CONFIG_ROUTER", "0x0000000000000000000000000000000000000001")
+	path := writeTestConfig(t, `
+chains:
+  - chainId: a
+    evm:
+      rpc: https://a.example/${CONFIG_RPC_KEY}
+      ics26Router: ${CONFIG_ROUTER}
+`)
+	cfg, err := LoadFromFile(path, false)
+	require.NoError(t, err)
+
+	t.Run("EnvPaths", func(t *testing.T) {
+		// ACT
+		paths := cfg.EnvPaths()
+		paths[0].Template = "mutated"
+
+		// ASSERT
+		require.Equal(t, []ibcyaml.EnvPath{
+			{Path: "$.chains[0].evm.rpc", Template: "https://a.example/${CONFIG_RPC_KEY}"},
+			{Path: "$.chains[0].evm.ics26Router", Template: "${CONFIG_ROUTER}"},
+		}, cfg.EnvPaths(), "EnvPaths must return a copy")
+	})
+
+	t.Run("FilterEnvPaths", func(t *testing.T) {
+		// ARRANGE
+		notRouter := func(p ibcyaml.EnvPath) bool { return p.Path != "$.chains[0].evm.ics26Router" }
+		updated := cfg
+		updated.Chains = slices.Clone(cfg.Chains)
+		evm := *cfg.Chains[0].EVM
+		evm.ICS26Router = "0x0000000000000000000000000000000000000999"
+		updated.Chains[0].EVM = &evm
+
+		// ACT
+		filtered := updated.FilterEnvPaths(notRouter)
+		require.NoError(t, filtered.StoreToFile(path))
+
+		// ASSERT
+		require.Len(t, cfg.EnvPaths(), 2, "original config must keep its paths")
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Contains(t, string(data), "rpc: https://a.example/${CONFIG_RPC_KEY}")
+		require.Contains(t, string(data), `ics26Router: "0x0000000000000000000000000000000000000999"`)
+		require.NotContains(t, string(data), "${CONFIG_ROUTER}")
 	})
 }
 
