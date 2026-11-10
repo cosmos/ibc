@@ -13,7 +13,7 @@ require (
 	github.com/cosmos/ibc-go/v11 v11.2.0
 	github.com/cosmos/kms v0.1.0
 	github.com/ethereum/go-ethereum v1.17.10
-	github.com/skip-mev/catalyst v0.0.0-beta.21.0.20261014033247-0901629c9945
+	github.com/skip-mev/catalyst v0.0.0-beta.21.0.20261110081609-9d703ca59441
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
 	golang.org/x/mod v0.42.0
@@ -77,7 +77,6 @@ require (
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/gogoproto v1.7.2 // indirect
 	github.com/cosmos/iavl v1.2.8 // indirect
-	github.com/cosmos/ibc/cli v0.0.0-20260925114553-e0d83d26ad12 // indirect
 	github.com/cosmos/ics23/go v0.11.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v1.0.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
@@ -366,7 +365,6 @@ require (
 )
 
 replace (
-	github.com/cosmos/ibc/cli => ./compat/cosmos-ibc-cli
 	github.com/lfdt-ibc/ibc/cli => ../cli
 	github.com/lfdt-ibc/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
 )
