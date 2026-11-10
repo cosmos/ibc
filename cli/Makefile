@@ -58,6 +58,7 @@ docker-build: ## Build the local Docker image
 
 lint: ## Lint the code
 	golangci-lint run
+	go mod tidy -diff
 
 lint-fix: ## Lint the code and fix errors
 	golangci-lint run --fix
