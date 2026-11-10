@@ -195,16 +195,11 @@ func newTarget(
 			return nil, err
 		}
 	}
-	switch chain.Type() {
-	case config.ChainTypeEVM:
-		return evm.New(ctx, evm.Options{
-			ChainID:     chainID,
-			RPCURL:      chain.EVM.RPC,
-			DeployerKey: key,
-		})
-	default:
-		return nil, errors.Errorf("chain %q has no supported deployment target", chainID)
-	}
+	return evm.New(ctx, evm.Options{
+		ChainID:     chainID,
+		RPCURL:      chain.EVM.RPC,
+		DeployerKey: key,
+	})
 }
 
 func confirmOrAbort(results []deploy.StepResult) error {

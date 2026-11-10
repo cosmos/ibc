@@ -65,7 +65,7 @@ func NewFromConfig(cfg config.Config, signers *signer.Set) (*Set, error) {
 
 	for _, pair := range pairs {
 		chain, ok := cfg.Chain(pair.ChainID)
-		if !ok || chain.Type() != config.ChainTypeEVM {
+		if !ok {
 			return nil, errors.Errorf("chain %q is not a configured evm chain", pair.ChainID)
 		}
 
