@@ -48,10 +48,10 @@ func (f *fakeTarget) ProvisionClient(context.Context, string, ClientSpec) (Clien
 	return ClientRef{Address: "0xclient"}, nil
 }
 
-func (f *fakeTarget) RegisterClient(_ context.Context, _ string, spec ClientSpec, ref ClientRef) (string, error) {
+func (f *fakeTarget) RegisterClient(_ context.Context, _ string, client manifest.Client) error {
 	f.registers++
-	f.registered[spec.ClientID] = ref.Address
-	return spec.ClientID, nil
+	f.registered[client.ClientID] = client.Address
+	return nil
 }
 
 func (f *fakeTarget) ClientRegistered(_ context.Context, _, clientID string) (string, bool, error) {
