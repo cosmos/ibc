@@ -238,10 +238,26 @@ func (w *Watcher) runSubscription(ctx context.Context) {
 	// keeps whatever the dropped one had already buffered.
 	eventsChan := make(chan v2.PacketEvent, eventBuffer)
 
-	eventStream, err := w.subscribe(ctx, eventsChan)
-	if err != nil {
-		triggerReconnect("Subscribing to send packets failed, retrying", err)
+	var eventStream stream
+
+	// connect subscribes, scheduling a retry if that fails.
+	connect := func() bool {
+		newStream, err := w.subscribe(ctx, eventsChan)
+		if err != nil {
+			triggerReconnect("Subscribing to send packets failed, retrying", err)
+			return false
+		}
+
+		eventStream = newStream
+		reconnectChan = nil
+
+		// future: consider gradual backoff decrease
+		backoff = w.cfg.MinBackoff
+
+		return true
 	}
+
+	connect()
 
 	defer func() {
 		metrics.subscription(ctx, w.chainID, false)
@@ -262,21 +278,13 @@ func (w *Watcher) runSubscription(ctx context.Context) {
 			eventStream = stream{}
 			triggerReconnect("Send packet subscription ended, reconnecting", err)
 		case <-reconnectChan:
-			newStream, err := w.subscribe(ctx, eventsChan)
-			if err != nil {
-				triggerReconnect("Subscribing to send packets failed, retrying", err)
+			if !connect() {
 				continue
 			}
 
-			eventStream = newStream
-			reconnectChan = nil
-
-			// future: consider gradual backoff decrease
-			backoff = w.cfg.MinBackoff
-
 			w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
 
-			// trigger clearer
+			// a reconnect may have missed sends; clear them now
 			w.clearRequest()
 		}
 	}
