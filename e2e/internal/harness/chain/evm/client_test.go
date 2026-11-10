@@ -18,6 +18,18 @@ func TestRequireEOARejectsZeroBeforeRPC(t *testing.T) {
 	require.ErrorContains(t, err, "EOA address is zero")
 }
 
+func TestBlockWait(t *testing.T) {
+	for _, tt := range []struct {
+		block, timeout, poll time.Duration
+	}{
+		{block: 2 * time.Second, timeout: 40 * time.Second, poll: 250 * time.Millisecond},
+		{block: 600 * time.Millisecond, timeout: 12 * time.Second, poll: 150 * time.Millisecond},
+		{block: 100 * time.Millisecond, timeout: 2 * time.Second, poll: 50 * time.Millisecond},
+	} {
+		require.Equal(t, TransactionWait{Timeout: tt.timeout, PollInterval: tt.poll}, BlockWait(tt.block), tt.block)
+	}
+}
+
 func TestTransactionSerializationObservesContext(t *testing.T) {
 	client := &EVMClient{txGate: make(chan struct{}, 1)}
 	client.txGate <- struct{}{}

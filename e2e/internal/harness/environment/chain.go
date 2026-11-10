@@ -405,21 +405,10 @@ func (t Timing) transactionWait() chainevm.TransactionWait {
 }
 
 func blockTiming(block time.Duration) Timing {
+	wait := chainevm.BlockWait(block)
 	return Timing{
 		BlockInterval:    block,
-		CompletionBudget: 20 * block,
-		PollInterval:     clampPoll(block / 4),
-	}
-}
-
-func clampPoll(d time.Duration) time.Duration {
-	const minPoll, maxPoll = 50 * time.Millisecond, 250 * time.Millisecond
-	switch {
-	case d < minPoll:
-		return minPoll
-	case d > maxPoll:
-		return maxPoll
-	default:
-		return d
+		CompletionBudget: wait.Timeout,
+		PollInterval:     wait.PollInterval,
 	}
 }

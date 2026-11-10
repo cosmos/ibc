@@ -80,8 +80,6 @@ type Spec struct {
 	// Followers is how many nodes beyond the validators run the chain. They
 	// sync from genesis and can be voted in.
 	Followers int
-	// Wait bounds the adapter's own transactions: funding and validator votes.
-	Wait evm.TransactionWait
 }
 
 type Chain struct {
@@ -247,7 +245,8 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 		api:      votingAPI(spec.Consensus),
 		logID:    spec.ID,
 		treasury: treasury,
-		wait:     spec.Wait,
+		// the adapter's own transactions: funding and validator votes
+		wait: evm.BlockWait(time.Duration(periodSecs) * time.Second),
 	}
 	defer func() {
 		if result == nil {
