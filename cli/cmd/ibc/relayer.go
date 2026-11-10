@@ -123,11 +123,7 @@ func relayerRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if err := app.RelayerService.Start(); err != nil {
-		app.Logger.Error("Failed to start relayer background loops", "err", err)
-		_ = app.Server.Stop()
-		return err
-	}
+	app.RelayerService.Start()
 
 	connected := make([]string, 0, len(cfg.Chains))
 	for _, chain := range cfg.Chains {
