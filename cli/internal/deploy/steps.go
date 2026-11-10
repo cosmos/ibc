@@ -189,10 +189,11 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			if err != nil {
 				return err
 			}
-			if _, regErr := t.RegisterClient(ctx, m.Core.Router, spec, ref); regErr != nil {
-				return regErr
+			client := specToClient(spec, ref.Address)
+			if err := t.RegisterClient(ctx, m.Core.Router, client); err != nil {
+				return err
 			}
-			m.UpsertClient(SpecToClient(spec, ref.Address))
+			m.UpsertClient(client)
 			return m.Save(dir)
 		},
 	}}
@@ -473,9 +474,9 @@ func resolveConstructor(m *manifest.Manifest, override string) (string, error) {
 	return "", fmt.Errorf("no send call constructor recorded")
 }
 
-// SpecToClient converts a ClientSpec and its provisioned address into the
+// specToClient converts a ClientSpec and its provisioned address into the
 // manifest.Client record.
-func SpecToClient(spec ClientSpec, address string) manifest.Client {
+func specToClient(spec ClientSpec, address string) manifest.Client {
 	client := manifest.Client{
 		ClientID:             spec.ClientID,
 		Address:              address,
@@ -507,7 +508,7 @@ func SpecToClient(spec ClientSpec, address string) manifest.Client {
 // clientConflicts reports the identity fields on which spec disagrees with
 // an already-recorded deployment.
 func clientConflicts(existing manifest.Client, spec ClientSpec) []string {
-	requested := SpecToClient(spec, existing.Address)
+	requested := specToClient(spec, existing.Address)
 	var diffs []string
 	diffs = conflict(diffs, "counterpartyChainId", existing.CounterpartyChainID, requested.CounterpartyChainID)
 	diffs = conflict(diffs, "counterpartyClientId", existing.CounterpartyClientID, requested.CounterpartyClientID)

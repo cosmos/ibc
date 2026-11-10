@@ -46,31 +46,23 @@ var (
 )
 
 // RegisterClient calls ICS26Router.addClient with the custom client ID.
-func (d *Driver) RegisterClient(
-	ctx context.Context,
-	router string,
-	spec deploy.ClientSpec,
-	ref deploy.ClientRef,
-) (string, error) {
+func (d *Driver) RegisterClient(ctx context.Context, router string, client manifest.Client) error {
 	contract, err := ics26router.NewContract(common.HexToAddress(router), d.backend)
 	if err != nil {
-		return "", err
+		return err
 	}
 	opts, err := d.transactOpts(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
-	tx, err := contract.AddClient(opts, spec.ClientID, ics26router.IICS02ClientMsgsCounterpartyInfo{
-		ClientId:     spec.CounterpartyClientID,
-		MerklePrefix: merklePrefix(deploy.SpecToClient(spec, ref.Address)),
-	}, common.HexToAddress(ref.Address))
+	tx, err := contract.AddClient(opts, client.ClientID, ics26router.IICS02ClientMsgsCounterpartyInfo{
+		ClientId:     client.CounterpartyClientID,
+		MerklePrefix: merklePrefix(client),
+	}, common.HexToAddress(client.Address))
 	if err != nil {
-		return "", fmt.Errorf("addClient %q: %w", spec.ClientID, err)
+		return fmt.Errorf("addClient %q: %w", client.ClientID, err)
 	}
-	if err := d.awaitMined(ctx, "addClient "+spec.ClientID, tx); err != nil {
-		return "", err
-	}
-	return spec.ClientID, nil
+	return d.awaitMined(ctx, "addClient "+client.ClientID, tx)
 }
 
 // ClientRegistered queries the router for clientID.

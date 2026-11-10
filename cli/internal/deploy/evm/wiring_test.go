@@ -110,9 +110,9 @@ func TestProvisionRegisterVerify(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ref.Address)
 
-	id, err := d.RegisterClient(ctx, router, spec, ref)
-	require.NoError(t, err)
-	require.Equal(t, "cli-2", id)
+	require.NoError(t, d.RegisterClient(ctx, router, manifest.Client{
+		ClientID: spec.ClientID, Address: ref.Address, CounterpartyClientID: spec.CounterpartyClientID,
+	}))
 
 	got, registered, err := d.ClientRegistered(ctx, router, "cli-2")
 	require.NoError(t, err)
@@ -397,18 +397,16 @@ func TestProvisionRegisterVerifyBesu(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, paused)
 
-			id, err := d.RegisterClient(ctx, core.Router, spec, ref)
-			require.NoError(t, err)
-			require.Equal(t, "besu-2", id)
+			client := manifest.Client{
+				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
+				Besu: &manifest.BesuParams{IBCRouter: fixture.RouterAddress.Hex()},
+			}
+			require.NoError(t, d.RegisterClient(ctx, core.Router, client))
 
 			m := manifest.New("1337", "evm")
 			m.Core.Router = core.Router
 			m.Core.Multicall = multicall.Address
 			m.TargetData = core.TargetData
-			client := manifest.Client{
-				ClientID: "besu-2", Address: ref.Address, CounterpartyClientID: "besu-1",
-				Besu: &manifest.BesuParams{IBCRouter: fixture.RouterAddress.Hex()},
-			}
 			m.UpsertClient(client)
 			report, err := d.Verify(ctx, m)
 			require.NoError(t, err)
