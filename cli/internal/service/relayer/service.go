@@ -185,16 +185,12 @@ func (s *Service) CheckReady(ctx context.Context) error {
 
 // Start begins the background relay dispatch loop and the packet watchers.
 // Either is skipped when nil.
-func (s *Service) Start() error {
+func (s *Service) Start() {
 	if s.dispatcher != nil {
-		if err := s.dispatcher.Start(); err != nil {
-			return err
-		}
+		s.dispatcher.Start()
 	}
 
 	s.watchers.Start()
-
-	return nil
 }
 
 // Stop cancels the background loops and blocks until they have exited. Watchers

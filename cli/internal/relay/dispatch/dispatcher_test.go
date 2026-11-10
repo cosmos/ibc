@@ -274,7 +274,7 @@ func TestRelayDispatcher(t *testing.T) {
 		pipelines := &fakePipelines{pipeline: newFakePipeline(true)}
 		dispatcher := NewRelayDispatcher(db, pipelines, time.Millisecond, slog.Default())
 
-		require.NoError(t, dispatcher.Start())
+		dispatcher.Start()
 		require.NoError(t, dispatcher.Stop(), "Stop must block until the loop has exited and the pipelines are closed")
 		assert.True(t, pipelines.closed)
 	})

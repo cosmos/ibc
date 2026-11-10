@@ -57,7 +57,7 @@ func NewRelayDispatcher(
 
 // Start begins the dispatch loop in its own goroutine.
 // Polls for dispatchable packets until Stop is called.
-func (d *RelayDispatcher) Start() error {
+func (d *RelayDispatcher) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	metrics.LastSuccess.Record(ctx, 0)
 	d.cancel = cancel
@@ -85,8 +85,6 @@ func (d *RelayDispatcher) Start() error {
 			}
 		}
 	}()
-
-	return nil
 }
 
 // Stop cancels the dispatch loop and blocks until it has exited and every
