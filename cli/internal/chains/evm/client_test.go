@@ -733,15 +733,20 @@ func TestReceiptErrors(t *testing.T) {
 
 	for name, read := range reads {
 		t.Run(name, func(t *testing.T) {
-			for receiptErr, want := range map[error]error{
-				ethereum.NotFound: v2.ErrTxNotFound,
-				assert.AnError:    assert.AnError,
+			for _, tt := range []struct {
+				name             string
+				receiptErr, want error
+			}{
+				{name: "notFound", receiptErr: ethereum.NotFound, want: v2.ErrTxNotFound},
+				{name: "otherError", receiptErr: assert.AnError, want: assert.AnError},
 			} {
-				ctx := t.Context()
-				client, eth := newTestClient(t)
-				eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, receiptErr).Once()
+				t.Run(tt.name, func(t *testing.T) {
+					ctx := t.Context()
+					client, eth := newTestClient(t)
+					eth.EXPECT().TransactionReceipt(ctx, txHash).Return(nil, tt.receiptErr).Once()
 
-				require.ErrorIs(t, read(ctx, client), want)
+					require.ErrorIs(t, read(ctx, client), tt.want)
+				})
 			}
 		})
 	}
