@@ -398,7 +398,6 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 		RunID:       ws.runID,
 		BlockPeriod: timing.BlockInterval,
 		Followers:   spec.Followers,
-		Wait:        timing.transactionWait(),
 	})
 	if err != nil {
 		return chainAcquisition{}, err

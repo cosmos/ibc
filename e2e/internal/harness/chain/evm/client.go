@@ -34,6 +34,16 @@ type TransactionWait struct {
 	PollInterval time.Duration
 }
 
+// BlockWait bounds a transaction on a chain that produces a block every
+// block: twenty blocks to land, polled about four times a block.
+func BlockWait(block time.Duration) TransactionWait {
+	const minPoll, maxPoll = 50 * time.Millisecond, 250 * time.Millisecond
+	return TransactionWait{
+		Timeout:      20 * block,
+		PollInterval: min(max(block/4, minPoll), maxPoll),
+	}
+}
+
 func (w TransactionWait) context(ctx context.Context) (context.Context, context.CancelFunc, error) {
 	switch {
 	case w.Timeout <= 0:
