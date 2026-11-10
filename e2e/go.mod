@@ -13,7 +13,7 @@ require (
 	github.com/cosmos/ibc-go/v11 v11.2.0
 	github.com/cosmos/kms v0.1.0
 	github.com/ethereum/go-ethereum v1.17.10
-	github.com/skip-mev/catalyst v0.0.0-beta.21.0.20261110081609-9d703ca59441
+	github.com/skip-mev/catalyst v0.0.0-beta.21.0.20261110144225-241900812e6a
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
 	golang.org/x/mod v0.42.0
@@ -328,7 +328,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
-	github.com/lfdt-ibc/ibc/cli v0.0.0
+	github.com/lfdt-ibc/ibc/cli v0.2.0-rc.1.0.20261110132656-59b25e7024a5
 	github.com/lfdt-ibc/ibc/gen/go/solidity-abi v0.0.0
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/magiconair/properties v1.18.12 // indirect
