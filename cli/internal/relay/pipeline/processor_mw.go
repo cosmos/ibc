@@ -28,15 +28,10 @@ type Processor interface {
 	pipeline.Processor[*processors.Transfer, *processors.Transfer]
 }
 
-// stage is the part of a Processor or BatchProcessor that applies asks.
-type stage interface {
-	ShouldProcess(tr *processors.Transfer) bool
-}
-
-// applies reports whether p runs on tr. An errored or failed transfer only
-// passes through the remaining stages.
-func applies(tr *processors.Transfer, p stage) bool {
-	return tr.Error() == "" && tr.Status != store.RelayStatusFailed && p.ShouldProcess(tr)
+// applies reports whether a stage with the given ShouldProcess runs on tr. An
+// errored or failed transfer only passes through the remaining stages.
+func applies(tr *processors.Transfer, shouldProcess func(*processors.Transfer) bool) bool {
+	return tr.Error() == "" && tr.Status != store.RelayStatusFailed && shouldProcess(tr)
 }
 
 // ProcessorMW wraps a Processor with the shared transfer handling: errored,
@@ -54,7 +49,7 @@ func NewProcessorMW(storage StatusStorage, internal Processor) ProcessorMW {
 
 func (mw ProcessorMW) Process(ctx context.Context, input *processors.Transfer) (*processors.Transfer, error) {
 	// input may be nil while the pipeline channels close down
-	if input == nil || !applies(input, mw.internal) {
+	if input == nil || !applies(input, mw.internal.ShouldProcess) {
 		return input, nil
 	}
 
@@ -99,8 +94,7 @@ func (mw ProcessorMW) Cancel(input *processors.Transfer, err error) {
 	mw.internal.Cancel(input, err)
 }
 
-// BatchProcessor a pipeline step for a batch of transfers; wrapped by
-// BatchProcessorMW.
+// BatchProcessor a pipeline step for a batch of transfers; run by BatchProcess.
 type BatchProcessor interface {
 	ShouldProcess(tr *processors.Transfer) bool
 	Status() store.RelayStatus
@@ -108,30 +102,19 @@ type BatchProcessor interface {
 	pipeline.Processor[[]*processors.Transfer, []*processors.Transfer]
 }
 
-// BatchProcessorMW the batch equivalent of ProcessorMW: it partitions the
-// batch into transfers this processor applies to and pass-throughs, persists
-// status transitions, and poisons rather than drops transfers on errors.
-type BatchProcessorMW struct {
+// batchProcessorMW the batch equivalent of ProcessorMW. BatchProcess only
+// batches transfers the processor applies to; the wrapper persists status
+// transitions and poisons rather than drops transfers on errors.
+type batchProcessorMW struct {
 	storage  StatusStorage
 	internal BatchProcessor
 }
 
-func NewBatchProcessorMW(storage StatusStorage, internal BatchProcessor) BatchProcessorMW {
-	return BatchProcessorMW{storage: storage, internal: internal}
-}
-
-func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Transfer) ([]*processors.Transfer, error) {
+func (mw batchProcessorMW) Process(ctx context.Context, batch []*processors.Transfer) ([]*processors.Transfer, error) {
 	var notProcessing []*processors.Transfer
 	var toProcess []*processors.Transfer
 
 	for _, input := range batch {
-		if !applies(input, mw.internal) {
-			// erroring here would fail the whole batch; pass these through
-			notProcessing = append(notProcessing, input)
-
-			continue
-		}
-
 		if err := mw.storage.UpdatePacketStatus(ctx, input.Key(), mw.internal.Status()); err != nil {
 			wrapped := errors.Wrapf(err, "updating packet status to %s from %s", mw.internal.Status(), input.Status)
 			mw.Cancel([]*processors.Transfer{input}, wrapped)
@@ -173,16 +156,8 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 	return append(output, notProcessing...), nil
 }
 
-func (mw BatchProcessorMW) Cancel(batch []*processors.Transfer, err error) {
+func (mw batchProcessorMW) Cancel(batch []*processors.Transfer, err error) {
 	mw.internal.Cancel(batch, err)
-}
-
-func (mw BatchProcessorMW) ShouldProcess(input *processors.Transfer) bool {
-	return mw.internal.ShouldProcess(input)
-}
-
-func (mw BatchProcessorMW) Status() store.RelayStatus {
-	return mw.internal.Status()
 }
 
 func batchError(output []*processors.Transfer) error {

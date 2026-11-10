@@ -118,10 +118,10 @@ func TestPipelineMetrics(t *testing.T) {
 				// ARRANGE
 				ctx := context.Background()
 				reader := newTestMetrics(t)
-				mw := NewBatchProcessorMW(
-					&statusRecorder{},
-					&metricBatchProcessor{process: tt.process},
-				)
+				mw := batchProcessorMW{
+					storage:  &statusRecorder{},
+					internal: &metricBatchProcessor{process: tt.process},
+				}
 
 				// ACT
 				_, err := mw.Process(ctx, []*processors.Transfer{testTransfer(t), testTransfer(t)})

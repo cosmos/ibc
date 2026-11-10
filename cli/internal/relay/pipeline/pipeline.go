@@ -148,7 +148,8 @@ func NewPipeline(
 		opts.TimeoutBatchSize,
 		opts.TimeoutBatchTimeout,
 		output,
-		NewBatchProcessorMW(deps.Storage, batchTimeoutPacket),
+		deps.Storage,
+		batchTimeoutPacket,
 	)
 
 	// clear timeout txs that failed, stalled, or omitted this packet
@@ -177,7 +178,8 @@ func NewPipeline(
 		opts.RecvBatchSize,
 		opts.RecvBatchTimeout,
 		output,
-		NewBatchProcessorMW(deps.Storage, batchRecvPacket),
+		deps.Storage,
+		batchRecvPacket,
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
@@ -217,7 +219,8 @@ func NewPipeline(
 		opts.AckBatchSize,
 		opts.AckBatchTimeout,
 		output,
-		NewBatchProcessorMW(deps.Storage, batchAckPacket),
+		deps.Storage,
+		batchAckPacket,
 	)
 
 	// clear ack txs that failed, stalled, or omitted this packet

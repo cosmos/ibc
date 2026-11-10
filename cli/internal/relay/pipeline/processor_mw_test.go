@@ -187,27 +187,10 @@ func TestProcessorMW(t *testing.T) {
 func TestBatchProcessorMW(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("partitionsBatch", func(t *testing.T) {
-		storage := &statusRecorder{}
-		applies := testTransfer(t)
-		errored := testTransfer(t)
-		errored.ProcessingError = errors.New("poisoned")
-
-		internal := &fakeBatchProcessor{shouldProcess: func(tr *processors.Transfer) bool { return tr == applies }}
-		mw := NewBatchProcessorMW(storage, internal)
-
-		out, err := mw.Process(ctx, []*processors.Transfer{applies, errored})
-
-		require.NoError(t, err)
-		assert.Len(t, out, 2)
-		require.Len(t, internal.processed, 1)
-		assert.Equal(t, []*processors.Transfer{applies}, internal.processed[0])
-	})
-
 	t.Run("statusUpdateFailureExcludesFromBatch", func(t *testing.T) {
 		storage := &statusRecorder{err: errors.New("db down")}
 		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return true }}
-		mw := NewBatchProcessorMW(storage, internal)
+		mw := batchProcessorMW{storage: storage, internal: internal}
 
 		tr := testTransfer(t)
 		out, err := mw.Process(ctx, []*processors.Transfer{tr})
@@ -220,28 +203,5 @@ func TestBatchProcessorMW(t *testing.T) {
 		// the transfer whose status update failed must not be processed,
 		// and an all-failed batch must not reach the processor at all
 		assert.Empty(t, internal.processed)
-	})
-
-	t.Run("processErrorPoisonsProcessedOnly", func(t *testing.T) {
-		storage := &statusRecorder{}
-		applies := testTransfer(t)
-		skipped := testTransfer(t)
-
-		internal := &fakeBatchProcessor{
-			shouldProcess: func(tr *processors.Transfer) bool { return tr == applies },
-			processErr:    errors.New("boom"),
-		}
-		mw := NewBatchProcessorMW(storage, internal)
-
-		out, err := mw.Process(ctx, []*processors.Transfer{applies, skipped})
-
-		require.NoError(t, err)
-		assert.Len(t, out, 2)
-		assert.Equal(t, "boom", applies.Error())
-		assert.Empty(t, skipped.Error())
-		require.Len(t, internal.processed, 1)
-		assert.Equal(t, []*processors.Transfer{applies}, internal.processed[0])
-		require.Len(t, internal.canceled, 1)
-		assert.Equal(t, []*processors.Transfer{applies}, internal.canceled[0])
 	})
 }

@@ -36,7 +36,7 @@ func TestBatchProcess(t *testing.T) {
 		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return true }}
 		in := make(chan *processors.Transfer)
 
-		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Minute, in, NewBatchProcessorMW(storage, internal))
+		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Minute, in, storage, internal)
 
 		go func() {
 			in <- testTransfer(t)
@@ -56,7 +56,7 @@ func TestBatchProcess(t *testing.T) {
 		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return true }}
 		in := make(chan *processors.Transfer)
 
-		out := BatchProcess(ctx, slog.Default(), 1, 50, 50*time.Millisecond, in, NewBatchProcessorMW(storage, internal))
+		out := BatchProcess(ctx, slog.Default(), 1, 50, 50*time.Millisecond, in, storage, internal)
 
 		go func() {
 			in <- testTransfer(t)
@@ -79,7 +79,7 @@ func TestBatchProcess(t *testing.T) {
 		}
 		in := make(chan *processors.Transfer)
 
-		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Hour, in, NewBatchProcessorMW(storage, internal))
+		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Hour, in, storage, internal)
 
 		errored := testTransfer(t)
 		errored.ProcessingError = errors.New("poisoned")
@@ -108,7 +108,7 @@ func TestBatchProcess(t *testing.T) {
 		slow := &blockingBatchProcessor{release: release}
 		in := make(chan *processors.Transfer)
 
-		out := BatchProcess(ctx, slog.Default(), 1, 1, time.Hour, in, NewBatchProcessorMW(storage, slow))
+		out := BatchProcess(ctx, slog.Default(), 1, 1, time.Hour, in, storage, slow)
 
 		// the first batch blocks in the processor; the collector must keep
 		// accepting input regardless

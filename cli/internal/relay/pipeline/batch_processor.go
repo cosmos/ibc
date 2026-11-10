@@ -23,7 +23,8 @@ func BatchProcess(
 	maxSize int,
 	maxDuration time.Duration,
 	in <-chan *processors.Transfer,
-	processor BatchProcessorMW,
+	storage StatusStorage,
+	processor BatchProcessor,
 ) <-chan *processors.Transfer {
 	out := make(chan *processors.Transfer)
 	toBatch := make(chan *processors.Transfer)
@@ -34,7 +35,7 @@ func BatchProcess(
 				continue
 			}
 
-			if !applies(i, processor) {
+			if !applies(i, processor.ShouldProcess) {
 				// transfers this processor does not apply to skip batching and
 				// flow through immediately
 				out <- i
@@ -79,7 +80,9 @@ func BatchProcess(
 		close(bufferedBatches)
 	}()
 
-	batchResults := pipeline.ProcessConcurrently(ctx, concurrency, processor, bufferedBatches)
+	batchResults := pipeline.ProcessConcurrently(
+		ctx, concurrency, batchProcessorMW{storage: storage, internal: processor}, bufferedBatches,
+	)
 
 	go func() {
 		// pulling results happens in its own goroutine: if more than a batch
