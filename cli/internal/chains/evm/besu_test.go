@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
+	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 func TestSealedHeaderRejectsNonBesu(t *testing.T) {
@@ -27,6 +28,28 @@ func TestSealedHeaderRejectsNonBesu(t *testing.T) {
 
 	_, err := client.SealedHeader(ctx, 7)
 	require.ErrorContains(t, err, "parse header 7: extra data list")
+}
+
+func TestSealedHeaderNamesTheBlockRead(t *testing.T) {
+	for _, tt := range []struct {
+		height uint64
+		number *big.Int
+		at     string
+	}{
+		{height: 7, number: big.NewInt(7), at: "7"},
+		{height: v2.LatestBlock, number: blockLatest, at: "latest"},
+		{height: v2.FinalizedBlock, number: blockFinalized, at: "finalized"},
+	} {
+		t.Run(tt.at, func(t *testing.T) {
+			ctx := context.Background()
+			client, eth := newTestClient(t)
+			eth.EXPECT().HeaderByNumber(ctx, tt.number).Return(nil, assert.AnError).Once()
+
+			_, err := client.SealedHeader(ctx, tt.height)
+			require.ErrorIs(t, err, assert.AnError)
+			require.ErrorContains(t, err, "getting header "+tt.at+":")
+		})
+	}
 }
 
 func TestBesuClientState(t *testing.T) {

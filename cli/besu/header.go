@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
@@ -316,6 +317,10 @@ func ReadSealedHeader(ctx context.Context, backend bind.ContractBackend, number 
 	at := "latest"
 	if number != nil {
 		at = number.String()
+		if number.Sign() < 0 {
+			// a negative number is one of the RPC's block tags, such as finalized
+			at = rpc.BlockNumber(number.Int64()).String()
+		}
 	}
 
 	header, err := backend.HeaderByNumber(ctx, number)
