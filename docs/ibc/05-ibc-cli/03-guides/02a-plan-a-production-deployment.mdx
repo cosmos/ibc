@@ -23,7 +23,8 @@ The attestor set and `minRequiredSigs` are fixed in the on-chain client. Verify 
 For a QBFT or IBFT 2.0 counterparty, see [Besu light clients](/ibc/04-light-clients/03-besu-light-client) for the parameter mechanics and update rules. In production:
 
 - Keep the default `trustLevel` of `2/3` unless the deployment's threat model explicitly selects a lower value.
-- Choose `trustingPeriod` from the counterparty's validator governance and key-retirement policy. It must be long enough that packet activity advances the client before expiry, but no longer than historical validators remain trustworthy.
+- Choose `trustingPeriod` from the counterparty's validator governance and key-retirement policy, no longer than historical validators remain trustworthy.
+- Enable [`autoUpdate`](/ibc/05-ibc-cli/04-reference/01-configuration#connections) on each Besu client's end, with an interval well inside `trustingPeriod`, so the client does not expire while no packets flow. Without it, the client advances only when the relayer delivers packets through it.
 
 ## Set contract permissions deliberately
 

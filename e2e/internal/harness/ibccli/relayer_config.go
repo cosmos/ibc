@@ -64,6 +64,9 @@ type RelayerClientEnd struct {
 	ClientID   string
 	ClientType clientkind.Kind
 	AutoRelay  bool
+	// AutoUpdateInterval, when positive, has the relayer update the client
+	// on this interval whether or not packets flow.
+	AutoUpdateInterval time.Duration
 }
 
 // RelayerConnection is a reciprocal on-chain client pair.
@@ -194,6 +197,9 @@ func relayerClientEndConfig(end RelayerClientEnd, signer, proverURL string) Clie
 		Type:      end.ClientType,
 		AutoRelay: autoRelay(end.AutoRelay),
 	}
+	if end.AutoUpdateInterval > 0 {
+		result.AutoUpdate = &AutoUpdateFileConfig{Enabled: true, Interval: end.AutoUpdateInterval.String()}
+	}
 	if proverURL != "" {
 		result.RemoteProver = &RemoteProverFileConfig{URL: proverURL}
 	}
@@ -270,6 +276,7 @@ type ClientEndFileConfig struct {
 	Type         clientkind.Kind         `yaml:"type"`
 	RemoteProver *RemoteProverFileConfig `yaml:"remoteProver,omitempty"`
 	AutoRelay    *AutoRelayFileConfig    `yaml:"autoRelay,omitempty"`
+	AutoUpdate   *AutoUpdateFileConfig   `yaml:"autoUpdate,omitempty"`
 }
 
 type RemoteProverFileConfig struct {
@@ -278,6 +285,11 @@ type RemoteProverFileConfig struct {
 
 type AutoRelayFileConfig struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+type AutoUpdateFileConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Interval string `yaml:"interval"`
 }
 
 func durationYAML(d time.Duration) string {
