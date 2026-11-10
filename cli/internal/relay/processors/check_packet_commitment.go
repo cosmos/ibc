@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/cosmos/ibc/cli/internal/chains"
 	"github.com/cosmos/ibc/cli/internal/store"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
@@ -15,7 +16,7 @@ import (
 // CheckPacketCommitment populates the ack or timeout tx details when the
 // packet commitment is already gone from the source chain.
 type CheckPacketCommitment struct {
-	chains  ChainClients
+	source  chains.Client
 	storage AckTimeoutTxStorage
 }
 
@@ -25,15 +26,12 @@ type AckTimeoutTxStorage interface {
 	UpdatePacketTimeoutTx(ctx context.Context, key store.PacketKey, tx store.PacketTx) error
 }
 
-func NewCheckPacketCommitment(chainClients ChainClients, storage AckTimeoutTxStorage) CheckPacketCommitment {
-	return CheckPacketCommitment{chains: chainClients, storage: storage}
+func NewCheckPacketCommitment(route RouteDeps, storage AckTimeoutTxStorage) CheckPacketCommitment {
+	return CheckPacketCommitment{source: route.Source.Chain, storage: storage}
 }
 
 func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Transfer, error) {
-	client, ok := p.chains.Get(tr.SourceChainID)
-	if !ok {
-		return nil, errors.Errorf("no configured chain client for source chain %s", tr.SourceChainID)
-	}
+	client := p.source
 
 	committed, err := client.IsPacketCommitted(ctx, tr.PacketSourceClientID, tr.PacketSequenceNumber)
 	if err != nil {
@@ -87,11 +85,7 @@ func (p CheckPacketCommitment) Process(ctx context.Context, tr *Transfer) (*Tran
 
 	switch {
 	case ackTx != nil && timeoutTx != nil:
-		return nil, errors.Errorf(
-			"found both ack tx %s and timeout tx %s, should not be possible",
-			ackTx.Hash,
-			timeoutTx.Hash,
-		)
+		return nil, errors.Wrapf(ErrInvariant, "found both ack tx %s and timeout tx %s", ackTx.Hash, timeoutTx.Hash)
 	case ackTx != nil:
 		tx := store.PacketTx{Hash: ackTx.Hash, Time: ackTx.Timestamp, RelayerAddress: ackTx.RelayerAddress}
 		if err := p.storage.UpdatePacketAckTx(ctx, tr.Key(), tx); err != nil {

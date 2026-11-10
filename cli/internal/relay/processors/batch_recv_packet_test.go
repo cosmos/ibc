@@ -15,34 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
-
-type staticChains map[string]chains.Client
-
-func (s staticChains) Get(chainID string) (chains.Client, bool) {
-	client, ok := s[chainID]
-	return client, ok
-}
-
-type staticProvers map[string]prover.Prover
-
-func (s staticProvers) Get(chainID, clientID string) (prover.Prover, bool) {
-	gen, ok := s[prover.Key(chainID, clientID)]
-	return gen, ok
-}
-
-type staticTxBuilders map[string]txbuilder.TxBuilder
-
-func (s staticTxBuilders) Get(chainID string) (txbuilder.TxBuilder, bool) {
-	builder, ok := s[chainID]
-	return builder, ok
-}
 
 // TestBatchRecvPacketSequenceAlignment guards against a regression where a
 // transfer whose tx hash fails to decode still contributed its sequence
@@ -127,16 +103,16 @@ func TestBatchRecvPacketSequenceAlignment(t *testing.T) {
 		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
-	p, err := NewBatchRecvPacket(
-		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
-		staticTxBuilders{route.DestinationChainID: txBuilder},
-		db,
-		txSubmitter,
-		route,
-		slog.Default(),
-	)
-	require.NoError(t, err)
+	p := NewBatchRecvPacket(RouteDeps{
+		Route:  route,
+		Source: RouteEnd{Chain: sourceChainClient},
+		Destination: RouteEnd{
+			Chain:       destinationChainClient,
+			Prover:      mockProver,
+			TxBuilder:   txBuilder,
+			TxSubmitter: txSubmitter,
+		},
+	}, db, slog.Default())
 
 	_, err = p.Process(context.Background(), []*Transfer{valid, invalid})
 	require.NoError(t, err)
@@ -234,16 +210,16 @@ func TestBatchRecvPacketToleratesPartialEventFetchFailure(t *testing.T) {
 		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
-	p, err := NewBatchRecvPacket(
-		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
-		staticTxBuilders{route.DestinationChainID: txBuilder},
-		db,
-		txSubmitter,
-		route,
-		slog.Default(),
-	)
-	require.NoError(t, err)
+	p := NewBatchRecvPacket(RouteDeps{
+		Route:  route,
+		Source: RouteEnd{Chain: sourceChainClient},
+		Destination: RouteEnd{
+			Chain:       destinationChainClient,
+			Prover:      mockProver,
+			TxBuilder:   txBuilder,
+			TxSubmitter: txSubmitter,
+		},
+	}, db, slog.Default())
 
 	_, err = p.Process(context.Background(), []*Transfer{healthy, failing})
 	require.NoError(t, err, "the batch as a whole must not fail just because one tx's events failed to fetch")
@@ -349,16 +325,16 @@ func TestBatchRecvPacketExcludesNotYetProvablePackets(t *testing.T) {
 		RelayerAddress: "0xrelayer",
 	}, nil).Once()
 
-	p, err := NewBatchRecvPacket(
-		staticChains{route.SourceChainID: sourceChainClient, route.DestinationChainID: destinationChainClient},
-		staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
-		staticTxBuilders{route.DestinationChainID: txBuilder},
-		db,
-		txSubmitter,
-		route,
-		slog.Default(),
-	)
-	require.NoError(t, err)
+	p := NewBatchRecvPacket(RouteDeps{
+		Route:  route,
+		Source: RouteEnd{Chain: sourceChainClient},
+		Destination: RouteEnd{
+			Chain:       destinationChainClient,
+			Prover:      mockProver,
+			TxBuilder:   txBuilder,
+			TxSubmitter: txSubmitter,
+		},
+	}, db, slog.Default())
 
 	_, err = p.Process(context.Background(), []*Transfer{provable, tooRecent})
 	require.NoError(t, err, "the batch as a whole must not fail just because one packet isn't provable yet")

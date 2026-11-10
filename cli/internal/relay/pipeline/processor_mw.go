@@ -122,9 +122,7 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 	var toProcess []*processors.Transfer
 
 	for _, input := range batch {
-		switch {
-		case input.Error() != "", input.Status == store.RelayStatusFailed, !mw.internal.ShouldProcess(input):
-			// erroring here would fail the whole batch; pass these through
+		if !mw.Accepts(input) {
 			notProcessing = append(notProcessing, input)
 
 			continue
@@ -175,8 +173,11 @@ func (mw BatchProcessorMW) Cancel(batch []*processors.Transfer, err error) {
 	mw.internal.Cancel(batch, err)
 }
 
-func (mw BatchProcessorMW) ShouldProcess(input *processors.Transfer) bool {
-	return mw.internal.ShouldProcess(input)
+// Accepts reports whether tr joins one of this stage's batches. Errored,
+// failed and non-applicable transfers flow past: erroring on them would fail
+// the whole batch.
+func (mw BatchProcessorMW) Accepts(tr *processors.Transfer) bool {
+	return tr.Error() == "" && tr.Status != store.RelayStatusFailed && mw.internal.ShouldProcess(tr)
 }
 
 func (mw BatchProcessorMW) Status() store.RelayStatus {

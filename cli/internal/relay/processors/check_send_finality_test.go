@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
 	"github.com/cosmos/ibc/cli/internal/store"
 	"github.com/cosmos/ibc/cli/internal/tests/mocks"
 )
@@ -23,30 +22,6 @@ func testSendFinalityRoute() Route {
 		DestinationChainID:  "8453",
 		DestinationClientID: "ethereum-0",
 	}
-}
-
-func TestNewCheckSendFinality(t *testing.T) {
-	route := testSendFinalityRoute()
-
-	t.Run("missingChainClientErrors", func(t *testing.T) {
-		_, err := NewCheckSendFinality(
-			staticChains{},
-			staticProvers{
-				prover.Key(route.DestinationChainID, route.DestinationClientID): mocks.NewMockProver(t),
-			},
-			route,
-		)
-		require.Error(t, err)
-	})
-
-	t.Run("missingProverErrors", func(t *testing.T) {
-		_, err := NewCheckSendFinality(
-			staticChains{route.SourceChainID: mocks.NewMockClient(t)},
-			staticProvers{},
-			route,
-		)
-		require.Error(t, err)
-	})
 }
 
 func TestCheckSendFinalityProcess(t *testing.T) {
@@ -71,12 +46,13 @@ func TestCheckSendFinalityProcess(t *testing.T) {
 		mockProver := mocks.NewMockProver(t)
 		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
-		p, err := NewCheckSendFinality(
-			staticChains{route.SourceChainID: sourceChainClient},
-			staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
-			route,
+		p := NewCheckSendFinality(
+			RouteDeps{
+				Route:       route,
+				Source:      RouteEnd{Chain: sourceChainClient},
+				Destination: RouteEnd{Prover: mockProver},
+			},
 		)
-		require.NoError(t, err)
 
 		tr := newTransfer()
 		out, err := p.Process(context.Background(), tr)
@@ -91,15 +67,16 @@ func TestCheckSendFinalityProcess(t *testing.T) {
 		mockProver := mocks.NewMockProver(t)
 		mockProver.EXPECT().LatestProvableHeight(mock.Anything).Return(uint64(100), time.Time{}, nil).Once()
 
-		p, err := NewCheckSendFinality(
-			staticChains{route.SourceChainID: sourceChainClient},
-			staticProvers{prover.Key(route.DestinationChainID, route.DestinationClientID): mockProver},
-			route,
+		p := NewCheckSendFinality(
+			RouteDeps{
+				Route:       route,
+				Source:      RouteEnd{Chain: sourceChainClient},
+				Destination: RouteEnd{Prover: mockProver},
+			},
 		)
-		require.NoError(t, err)
 
 		tr := newTransfer()
-		_, err = p.Process(context.Background(), tr)
+		_, err := p.Process(context.Background(), tr)
 		require.ErrorIs(t, err, ErrSendNotFinalized)
 	})
 }

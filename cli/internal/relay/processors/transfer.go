@@ -85,14 +85,6 @@ func (t *Transfer) IsComplete() bool {
 	return t.AckTxHash != nil
 }
 
-// Route identifies the client pair a pipeline relays.
-type Route struct {
-	SourceChainID       string
-	SourceClientID      string
-	DestinationChainID  string
-	DestinationClientID string
-}
-
 // Retryable pipeline conditions
 var (
 	ErrSendNotFinalized     = errors.New("send tx not finalized")
@@ -103,3 +95,7 @@ var (
 	ErrRetryingAckPacket     = errors.New("retrying ack packet")
 	ErrRetryingTimeoutPacket = errors.New("retrying timeout packet")
 )
+
+// ErrInvariant a transfer reached a state the pipeline's own checks rule out.
+// It marks a relayer bug rather than a chain or network condition.
+var ErrInvariant = errors.New("relayer invariant violated")

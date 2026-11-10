@@ -143,11 +143,7 @@ func (m *instrumentation) excessiveRelayLatency(ctx context.Context, packets []s
 }
 
 func excessiveLatencyLeg(p store.Packet, now time.Time) (string, bool) {
-	switch p.Status {
-	case store.RelayStatusCompleteWithAck,
-		store.RelayStatusCompleteWithWriteAckError,
-		store.RelayStatusCompleteWithTimeout,
-		store.RelayStatusFailed:
+	if store.IsTerminal(p.Status) {
 		return "", false
 	}
 
