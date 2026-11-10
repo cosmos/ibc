@@ -11,6 +11,7 @@ import (
 
 	"github.com/cosmos/ibc/cli/internal/relay/processors"
 	"github.com/cosmos/ibc/cli/internal/txsubmitter"
+	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
 )
 
 const (
@@ -28,9 +29,7 @@ type Storage interface {
 	processors.RecvTxStorage
 	processors.AckTimeoutTxStorage
 	processors.WriteAckStorage
-	processors.ClearRecvTxStorage
-	processors.ClearAckTxStorage
-	processors.ClearTimeoutTxStorage
+	processors.ClearRelayTxStorage
 	processors.TxStorage
 }
 
@@ -158,7 +157,7 @@ func NewPipeline(
 		stageConcurrency,
 		NewProcessorMW(
 			deps.Storage,
-			processors.NewRetryTimeoutPacket(deps.Chains, srcTxSubmitter, deps.Storage, route),
+			processors.NewRetryRelayTx(v2.RelayKindTimeout, deps.Chains, srcTxSubmitter, deps.Storage, route),
 		),
 		output,
 	)
@@ -183,8 +182,15 @@ func NewPipeline(
 	)
 
 	// clear stuck or failed recv txs so they are redelivered next run
-	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
-		NewProcessorMW(deps.Storage, processors.NewRetryRecvPacket(dstTxSubmitter, deps.Storage, route)), output)
+	output = pipeline.ProcessConcurrently(
+		ctx,
+		stageConcurrency,
+		NewProcessorMW(
+			deps.Storage,
+			processors.NewRetryRelayTx(v2.RelayKindRecv, deps.Chains, dstTxSubmitter, deps.Storage, route),
+		),
+		output,
+	)
 
 	// extract the write ack from the recv tx on the destination chain
 	output = pipeline.ProcessConcurrently(ctx, stageConcurrency,
@@ -229,7 +235,7 @@ func NewPipeline(
 		stageConcurrency,
 		NewProcessorMW(
 			deps.Storage,
-			processors.NewRetryAckPacket(deps.Chains, srcTxSubmitter, deps.Storage, route),
+			processors.NewRetryRelayTx(v2.RelayKindAck, deps.Chains, srcTxSubmitter, deps.Storage, route),
 		),
 		output,
 	)

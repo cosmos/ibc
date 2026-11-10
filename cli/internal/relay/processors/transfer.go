@@ -105,7 +105,5 @@ var (
 	ErrTimeoutNotFinalized  = errors.New("timeout timestamp not finalized")
 	ErrWriteAckNotFinalized = errors.New("write ack tx not finalized")
 
-	ErrRetryingRecvPacket    = errors.New("retrying recv packet")
-	ErrRetryingAckPacket     = errors.New("retrying ack packet")
-	ErrRetryingTimeoutPacket = errors.New("retrying timeout packet")
+	ErrRetryingRelayTx = errors.New("retrying relay tx")
 )

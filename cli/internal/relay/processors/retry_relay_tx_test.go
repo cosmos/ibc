@@ -77,8 +77,8 @@ func TestRetryRelayTx(t *testing.T) {
 		{
 			name: "recv",
 			kind: v2.RelayKindRecv,
-			newProcessor: func(_ ChainClients, sub txsubmitter.TxSubmitter, s *clearRecorder) retryProcessor {
-				return NewRetryRecvPacket(sub, s, route)
+			newProcessor: func(c ChainClients, sub txsubmitter.TxSubmitter, s *clearRecorder) retryProcessor {
+				return NewRetryRelayTx(v2.RelayKindRecv, c, sub, s, route)
 			},
 			setTx:             func(p *store.Packet, h *string, at *time.Time) { p.RecvTxHash, p.RecvTxTime = h, at },
 			status:            store.RelayStatusDeliverRecvPacket,
@@ -86,13 +86,13 @@ func TestRetryRelayTx(t *testing.T) {
 			txChainID:         route.DestinationChainID,
 			txClientID:        route.DestinationClientID,
 			skipsWithWriteAck: true,
-			retrying:          ErrRetryingRecvPacket,
+			retrying:          ErrRetryingRelayTx,
 		},
 		{
 			name: "ack",
 			kind: v2.RelayKindAck,
 			newProcessor: func(c ChainClients, sub txsubmitter.TxSubmitter, s *clearRecorder) retryProcessor {
-				return NewRetryAckPacket(c, sub, s, route)
+				return NewRetryRelayTx(v2.RelayKindAck, c, sub, s, route)
 			},
 			setTx:           func(p *store.Packet, h *string, at *time.Time) { p.AckTxHash, p.AckTxTime = h, at },
 			status:          store.RelayStatusDeliverAckPacket,
@@ -100,13 +100,13 @@ func TestRetryRelayTx(t *testing.T) {
 			txChainID:       route.SourceChainID,
 			txClientID:      route.SourceClientID,
 			checksExecution: true,
-			retrying:        ErrRetryingAckPacket,
+			retrying:        ErrRetryingRelayTx,
 		},
 		{
 			name: "timeout",
 			kind: v2.RelayKindTimeout,
 			newProcessor: func(c ChainClients, sub txsubmitter.TxSubmitter, s *clearRecorder) retryProcessor {
-				return NewRetryTimeoutPacket(c, sub, s, route)
+				return NewRetryRelayTx(v2.RelayKindTimeout, c, sub, s, route)
 			},
 			setTx:           func(p *store.Packet, h *string, at *time.Time) { p.TimeoutTxHash, p.TimeoutTxTime = h, at },
 			status:          store.RelayStatusDeliverTimeoutPacket,
@@ -114,7 +114,7 @@ func TestRetryRelayTx(t *testing.T) {
 			txChainID:       route.SourceChainID,
 			txClientID:      route.SourceClientID,
 			checksExecution: true,
-			retrying:        ErrRetryingTimeoutPacket,
+			retrying:        ErrRetryingRelayTx,
 		},
 	} {
 		newTransfer := func(withTx bool) (*Transfer, *store.Packet) {
@@ -151,7 +151,7 @@ func TestRetryRelayTx(t *testing.T) {
 			retryErr error,
 			client *mocks.MockClient,
 			storage *clearRecorder,
-		) (*Transfer, *Transfer, error, metricdata.ResourceMetrics) {
+		) (*Transfer, *Transfer, metricdata.ResourceMetrics, error) {
 			t.Helper()
 
 			suite := newMetricsTestSuite(t)
@@ -167,7 +167,7 @@ func TestRetryRelayTx(t *testing.T) {
 			var data metricdata.ResourceMetrics
 			require.NoError(t, suite.reader.Collect(suite.ctx, &data))
 
-			return tr, out, err, data
+			return tr, out, data, err
 		}
 
 		t.Run(kind.name, func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestRetryRelayTx(t *testing.T) {
 				}
 				storage := &clearRecorder{}
 
-				tr, out, err, data := run(t, false, nil, client, storage)
+				tr, out, data, err := run(t, false, nil, client, storage)
 
 				require.NoError(t, err)
 				assert.Same(t, tr, out)
@@ -216,7 +216,7 @@ func TestRetryRelayTx(t *testing.T) {
 				// not checked for execution
 				storage := &clearRecorder{}
 
-				tr, out, err, data := run(t, true, nil, mocks.NewMockClient(t), storage)
+				tr, out, data, err := run(t, true, nil, mocks.NewMockClient(t), storage)
 
 				require.ErrorIs(t, err, kind.retrying)
 				assert.Nil(t, out)
@@ -235,10 +235,10 @@ func TestRetryRelayTx(t *testing.T) {
 			t.Run("shouldRetryErrors", func(t *testing.T) {
 				storage := &clearRecorder{}
 
-				_, out, err, _ := run(t, false, assert.AnError, mocks.NewMockClient(t), storage)
+				_, out, _, err := run(t, false, assert.AnError, mocks.NewMockClient(t), storage)
 
 				require.ErrorIs(t, err, assert.AnError)
-				assert.NotErrorIs(t, err, kind.retrying)
+				require.NotErrorIs(t, err, kind.retrying)
 				assert.Nil(t, out)
 				assert.Empty(t, storage.cleared)
 			})
@@ -246,10 +246,10 @@ func TestRetryRelayTx(t *testing.T) {
 			t.Run("clearErrors", func(t *testing.T) {
 				storage := &clearRecorder{err: assert.AnError}
 
-				_, out, err, _ := run(t, true, nil, mocks.NewMockClient(t), storage)
+				_, out, _, err := run(t, true, nil, mocks.NewMockClient(t), storage)
 
 				require.ErrorIs(t, err, assert.AnError)
-				assert.NotErrorIs(t, err, kind.retrying)
+				require.NotErrorIs(t, err, kind.retrying)
 				assert.Nil(t, out)
 			})
 
@@ -263,7 +263,7 @@ func TestRetryRelayTx(t *testing.T) {
 					uint64(7), route.SourceClientID, route.DestinationClientID).Return(false, nil).Once()
 				storage := &clearRecorder{}
 
-				_, out, err, data := run(t, false, nil, client, storage)
+				_, out, data, err := run(t, false, nil, client, storage)
 
 				require.ErrorIs(t, err, kind.retrying)
 				assert.Nil(t, out)
@@ -281,10 +281,10 @@ func TestRetryRelayTx(t *testing.T) {
 					uint64(7), route.SourceClientID, route.DestinationClientID).Return(false, assert.AnError).Once()
 				storage := &clearRecorder{}
 
-				_, out, err, _ := run(t, false, nil, client, storage)
+				_, out, _, err := run(t, false, nil, client, storage)
 
 				require.ErrorIs(t, err, assert.AnError)
-				assert.NotErrorIs(t, err, kind.retrying)
+				require.NotErrorIs(t, err, kind.retrying)
 				assert.Nil(t, out)
 				assert.Empty(t, storage.cleared)
 			})

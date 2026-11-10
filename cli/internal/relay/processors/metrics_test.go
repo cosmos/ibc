@@ -201,7 +201,7 @@ func TestMetrics(t *testing.T) {
 				Status:                 store.RelayStatusDeliverRecvPacket,
 				PacketTimeoutTimestamp: time.Now().Add(time.Hour),
 			}, slog.Default())
-			tr.ProcessingError = ErrRetryingRecvPacket
+			tr.ProcessingError = ErrRetryingRelayTx
 
 			// ACT
 			_, err := NewStateFinisher(&fakeStatusStorage{}).Process(suite.ctx, tr)
