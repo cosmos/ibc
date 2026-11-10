@@ -13,7 +13,6 @@ import (
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
 	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
@@ -93,16 +92,13 @@ func New(chainID string, eth ETHClient, chainSigner signer.Signer, opts ChainOpt
 	if !ok || id.Sign() <= 0 {
 		return nil, errors.Errorf("invalid EVM chain ID %q", chainID)
 	}
-	if chainSigner.Type() != signer.ECDSA {
-		return nil, errors.New("EVM transactions require an ECDSA signer")
-	}
-	pub, err := crypto.DecompressPubkey(chainSigner.PublicKey())
+	address, err := signer.EVMAddress(chainSigner)
 	if err != nil {
-		return nil, errors.Wrapf(err, "decompressing signer public key for chain %q", chainID)
+		return nil, errors.Wrapf(err, "signer for chain %q", chainID)
 	}
 	c := &TxSubmitter{
 		chainID: chainID, eth: eth, signer: chainSigner,
-		address: crypto.PubkeyToAddress(*pub), ethSigner: types.LatestSignerForChainID(id), opts: opts,
+		address: address, ethSigner: types.LatestSignerForChainID(id), opts: opts,
 	}
 	metrics.setWallet(chainID, c.address.Hex(), eth)
 	return c, nil
@@ -143,7 +139,7 @@ func (c *TxSubmitter) Submit(ctx context.Context, intent v2.TxIntent) (_ *v2.Sub
 	}
 	for range maxBroadcastAttempts {
 		txData.GasFeeCap, txData.GasTipCap = fee, tip
-		tx, err := signTransaction(ctx, types.NewTx(txData), c.signer, c.ethSigner, c.address)
+		tx, err := signer.SignEVMTx(ctx, types.NewTx(txData), c.signer, c.ethSigner, c.address)
 		if err != nil {
 			return nil, err
 		}

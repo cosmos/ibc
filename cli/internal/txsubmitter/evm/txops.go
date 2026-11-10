@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 
 	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
 )
 
 func estimateFees(
@@ -40,31 +39,6 @@ func capFees(fee, tip, limit *big.Int) (*big.Int, *big.Int) {
 		tip = fee
 	}
 	return fee, tip
-}
-
-func signTransaction(
-	ctx context.Context,
-	tx *types.Transaction,
-	chainSigner signer.Signer,
-	ethSigner types.Signer,
-	address common.Address,
-) (*types.Transaction, error) {
-	sig, err := chainSigner.Sign(ctx, ethSigner.Hash(tx).Bytes())
-	if err != nil {
-		return nil, errors.Wrapf(err, "signing transaction with address %s", address)
-	}
-	signed, err := tx.WithSignature(ethSigner, sig)
-	if err != nil {
-		return nil, errors.Wrap(err, "attaching transaction signature")
-	}
-	sender, err := types.Sender(ethSigner, signed)
-	if err != nil {
-		return nil, errors.Wrap(err, "recovering transaction sender")
-	}
-	if sender != address {
-		return nil, errors.New("transaction signature does not match configured sender")
-	}
-	return signed, nil
 }
 
 func broadcast(ctx context.Context, eth ETHClient, tx *types.Transaction) error {

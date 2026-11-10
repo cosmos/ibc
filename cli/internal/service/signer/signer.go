@@ -4,7 +4,6 @@ package signer
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/hex"
 	"strings"
 
@@ -113,37 +112,27 @@ func DecodeHex(raw string) ([]byte, error) {
 	return hex.DecodeString(strings.TrimPrefix(raw, "0x"))
 }
 
-// LocalECDSAKey loads the private key of a configured local ECDSA signer, for
-// tooling that signs with the raw key. Remote signers are rejected: their key
-// never leaves the KMS.
-func LocalECDSAKey(cfg config.SignerConfig) (*ecdsa.PrivateKey, error) {
+// EVMAddressOf derives the EVM address of a configured local ECDSA signer
+// from its key file. Remote signers are rejected, so resolving an address
+// never calls a KMS.
+func EVMAddressOf(cfg config.SignerConfig) (string, error) {
 	if cfg.Type != config.SignerLocal {
-		return nil, errors.Errorf("remote signer %q has no local key", cfg.Alias)
+		return "", errors.Errorf("remote signer %q has no local key", cfg.Alias)
 	}
 
 	path, err := config.ExpandHome(cfg.File)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	key, err := LocalKeyFromFile(config.KeyFileFallbacks(path)...)
 	if err != nil {
-		return nil, errors.Wrapf(err, "signer %q", cfg.Alias)
+		return "", errors.Wrapf(err, "signer %q", cfg.Alias)
 	}
 
 	if key.Type() != keyfile.ECDSA {
-		return nil, errors.Errorf("signer %q is not an ecdsa key", cfg.Alias)
+		return "", errors.Errorf("signer %q is not an ecdsa key", cfg.Alias)
 	}
 
-	return crypto.ToECDSA(key.PrivateKey())
-}
-
-// EVMAddressOf derives the EVM address of a configured local ECDSA signer.
-func EVMAddressOf(cfg config.SignerConfig) (string, error) {
-	key, err := LocalECDSAKey(cfg)
-	if err != nil {
-		return "", err
-	}
-
-	return crypto.PubkeyToAddress(key.PublicKey).Hex(), nil
+	return PublicKeyToEVMAddress(key.PublicKey())
 }
