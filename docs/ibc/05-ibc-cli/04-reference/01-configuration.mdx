@@ -251,7 +251,7 @@ See [Observability and metrics](/ibc/05-ibc-cli/04-reference/04-observability-an
 
 `ibc deploy core` deploys the router and multicall. {/* [cli/internal/deploy/steps.go: CoreSteps] */} Omit their addresses before deployment, then fill them in from the manifest, or let `ibc deploy render-config` write the finished blocks. {/* [cli/cmd/ibc/deploy.go: renderedChain] */}
 
-The deployer must be a local signer, because deployment requires direct access to the key. {/* [cli/cmd/ibc/deploy.go: deployerKey] */}
+The deployer can be a local or remote signer. A remote deployer signs each deployment transaction through its KMS. {/* [cli/cmd/ibc/deploy.go: loadDeployer] */}
 
 ## `relayer`
 
@@ -315,7 +315,7 @@ The relayer uses these defaults unless you override them.
 | `chainOverrides[].abandonUnrecoverablePackets` | `bool` | optional | Stops re-probing packets whose send log the endpoint will not serve. They are remembered but never looked at again, so turning it back off recovers them against an archive endpoint. |
 | `chainOverrides[].evm.pendingTxTimeout` | `duration` | `2m` | Sets how long to wait before retrying an unmined transaction or reusing a stalled nonce. |
 
-{/* [relayer.go:L38](cli/internal/config/relayer.go#L38) */} {/* [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) */} {/* [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) */} {/* [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) */} {/* [evm.go:L26](cli/internal/txsubmitter/evm/evm.go#L26) */}
+{/* [relayer.go:L38](cli/internal/config/relayer.go#L38) */} {/* [opts.go:L14](cli/internal/relay/pipeline/opts.go#L14) */} {/* [opts.go:L15](cli/internal/relay/pipeline/opts.go#L15) */} {/* [opts.go:L16](cli/internal/relay/pipeline/opts.go#L16) */} {/* [evm.go:L25](cli/internal/txsubmitter/evm/evm.go#L25) */}
 
 {/* GEN:config:relayer:chainOverrides END */}
 

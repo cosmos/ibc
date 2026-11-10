@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"log/slog"
@@ -164,14 +163,18 @@ func deployerSigner(cfg config.Config, alias string) (config.SignerConfig, error
 	return sc, nil
 }
 
-// deployerKey loads the deployer's private key; deployment tooling signs with
-// the raw key, so the signer must be a local ECDSA key.
-func deployerKey(cfg config.Config, alias string) (*ecdsa.PrivateKey, error) {
+// loadDeployer builds the deployer's signer, local or remote. A remote
+// deployer signs each transaction through its KMS.
+func loadDeployer(ctx context.Context, cfg config.Config, alias string) (signer.Signer, error) {
 	sc, err := deployerSigner(cfg, alias)
 	if err != nil {
 		return nil, err
 	}
-	return signer.LocalECDSAKey(sc)
+	s, _, err := signer.NewSignerFromConfig(ctx, sc)
+	if err != nil {
+		return nil, errors.Wrapf(err, "deployer signer %q", alias)
+	}
+	return s, nil
 }
 
 // newTarget builds the deploy target for a chain based on its configured
@@ -187,18 +190,18 @@ func newTarget(
 	if !ok {
 		return nil, errors.Errorf("chain %q not declared in config", chainID)
 	}
-	var key *ecdsa.PrivateKey
+	var deployer signer.Signer
 	if needSigner {
 		var err error
-		key, err = deployerKey(cfg, resolveDeployerAlias(chain, deployerFlag))
+		deployer, err = loadDeployer(ctx, cfg, resolveDeployerAlias(chain, deployerFlag))
 		if err != nil {
 			return nil, err
 		}
 	}
 	return evm.New(ctx, evm.Options{
-		ChainID:     chainID,
-		RPCURL:      chain.EVM.RPC,
-		DeployerKey: key,
+		ChainID:  chainID,
+		RPCURL:   chain.EVM.RPC,
+		Deployer: deployer,
 	})
 }
 
@@ -831,12 +834,16 @@ func populateRenderedConfig(merged config.Config) error {
 
 // deployerAddress derives the deployer's EVM address, for use as the default
 // IFT owner.
-func deployerAddress(cfg config.Config, alias string) (string, error) {
-	sc, err := deployerSigner(cfg, alias)
+func deployerAddress(ctx context.Context, cfg config.Config, alias string) (string, error) {
+	deployer, err := loadDeployer(ctx, cfg, alias)
 	if err != nil {
 		return "", err
 	}
-	return signer.EVMAddressOf(sc)
+	address, err := signer.EVMAddress(deployer)
+	if err != nil {
+		return "", errors.Wrapf(err, "deployer signer %q", alias)
+	}
+	return address.Hex(), nil
 }
 
 func deployGMP(cmd *cobra.Command, _ []string) error {
@@ -869,7 +876,7 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagDeployChain)
 	}
-	deployer, err := deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+	deployer, err := deployerAddress(cmd.Context(), cfg, resolveDeployerAlias(chain, flagDeployDeployer))
 	if err != nil {
 		return err
 	}
