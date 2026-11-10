@@ -175,9 +175,6 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagQueryIFTChain)
 	}
-	if chain.Type() != config.ChainTypeEVM {
-		return errors.Errorf("chain %q is not an EVM chain", flagQueryIFTChain)
-	}
 
 	account, err := resolveAddress(cfg, flagQueryIFTAccount)
 	if err != nil {
@@ -238,9 +235,6 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 	chain, ok := cfg.Chain(flagTxIFTChain)
 	if !ok {
 		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q not declared in config", flagTxIFTChain)
-	}
-	if chain.Type() != config.ChainTypeEVM {
-		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q is not an EVM chain", flagTxIFTChain)
 	}
 
 	key, err := deployerKey(cfg, flagTxIFTFrom)

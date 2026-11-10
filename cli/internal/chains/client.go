@@ -118,10 +118,6 @@ func NewClientSetFromConfig(cfg config.Config) (*ClientSet, error) {
 	clients := make(map[string]Client, len(cfg.Chains))
 
 	for _, chain := range cfg.Chains {
-		if chain.Type() != config.ChainTypeEVM {
-			return nil, errors.Errorf("unsupported chain type for chain %q", chain.ChainID)
-		}
-
 		client, err := evm.New(chain.ChainID, chain.EVM.RPC, chain.EVM.WS, chain.EVM.ICS26Router)
 		if err != nil {
 			return nil, errors.Wrapf(err, "creating evm client for chain %q", chain.ChainID)

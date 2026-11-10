@@ -46,31 +46,22 @@ func NewSetFromConfig(cfg config.Config) (*Set, error) {
 	builders := make(map[string]TxBuilder, len(cfg.Chains))
 
 	for _, chainCfg := range cfg.Chains {
-		switch chainCfg.Type() {
-		case config.ChainTypeEVM:
-			if !common.IsHexAddress(chainCfg.EVM.ICS26Router) {
-				return nil, errors.Errorf(
-					"chain %q: invalid ics26 router address %q",
-					chainCfg.ChainID,
-					chainCfg.EVM.ICS26Router,
-				)
-			}
-
-			multicall, err := config.ParseEVMAddress(chainCfg.EVM.IBCMulticall)
-			if err != nil {
-				return nil, errors.Wrapf(err, "chain %q: invalid ibcMulticall", chainCfg.ChainID)
-			}
-			builders[chainCfg.ChainID] = evm.New(
-				common.HexToAddress(chainCfg.EVM.ICS26Router),
-				multicall,
-			)
-		default:
+		if !common.IsHexAddress(chainCfg.EVM.ICS26Router) {
 			return nil, errors.Errorf(
-				"chain %q: unsupported chain type %q for tx building",
+				"chain %q: invalid ics26 router address %q",
 				chainCfg.ChainID,
-				chainCfg.Type(),
+				chainCfg.EVM.ICS26Router,
 			)
 		}
+
+		multicall, err := config.ParseEVMAddress(chainCfg.EVM.IBCMulticall)
+		if err != nil {
+			return nil, errors.Wrapf(err, "chain %q: invalid ibcMulticall", chainCfg.ChainID)
+		}
+		builders[chainCfg.ChainID] = evm.New(
+			common.HexToAddress(chainCfg.EVM.ICS26Router),
+			multicall,
+		)
 	}
 
 	return NewSet(builders), nil

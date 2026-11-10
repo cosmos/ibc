@@ -548,21 +548,13 @@ func (s *Service) validateRelayArgs(chainID, txHash string) (common.Hash, error)
 }
 
 func (s *Service) normalizeTxHash(chainID, txHash string) (common.Hash, error) {
-	if chainID == "" {
-		return normalizeEVMTxHash(txHash)
+	if chainID != "" {
+		if _, ok := s.cfg.Chain(chainID); !ok {
+			return common.Hash{}, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
+		}
 	}
 
-	chain, ok := s.cfg.Chain(chainID)
-	if !ok {
-		return common.Hash{}, errors.Wrapf(ErrInvalidInput, "unsupported chain %q", chainID)
-	}
-
-	switch chain.Type() {
-	case config.ChainTypeEVM:
-		return normalizeEVMTxHash(txHash)
-	default:
-		return common.Hash{}, errors.Wrapf(ErrInvalidInput, "unsupported chain type for chain %q", chainID)
-	}
+	return normalizeEVMTxHash(txHash)
 }
 
 func normalizeEVMTxHash(txHash string) (common.Hash, error) {
