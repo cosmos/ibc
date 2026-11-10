@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -575,45 +574,33 @@ func assertPublicRelaying(ctx context.Context, t testing.TB, chain *environment.
 
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
+	multicallABI, err := ibcmulticall.ContractMetaData.GetAbi()
+	require.NoError(t, err)
 	evm, err := chain.EVM()
 	require.NoError(t, err)
 	require.NoError(t, evm.UseContractCaller(func(client bind.ContractCaller) error {
-		assertPublicRelayingWith(ctx, t, client, routerABI, authority, m)
+		manager, err := accessmanager.NewAccessManagerCaller(common.HexToAddress(authority), client)
+		require.NoError(t, err)
+		multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), client)
+		require.NoError(t, err)
+		gotAuthority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
+		require.NoError(t, err)
+		require.Equal(t, common.HexToAddress(authority), gotAuthority)
+		caller := common.HexToAddress("0x1000000000000000000000000000000000000001")
+		for _, tc := range []struct {
+			caller, target common.Address
+			selector       [4]byte
+		}{
+			{caller, common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
+			{caller, common.HexToAddress(m.Core.Multicall), [4]byte(multicallABI.Methods["multicall"].ID)},
+			{common.HexToAddress(m.Core.Multicall), common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
+		} {
+			permission, callErr := manager.CanCall(&bind.CallOpts{Context: ctx}, tc.caller, tc.target, tc.selector)
+			require.NoError(t, callErr)
+			require.True(t, permission.Immediate, "relay method is not publicly callable")
+		}
 		return nil
 	}))
-}
-
-func assertPublicRelayingWith(
-	ctx context.Context,
-	t testing.TB,
-	client bind.ContractCaller,
-	routerABI *abi.ABI,
-	authority string,
-	m deployManifest,
-) {
-	t.Helper()
-	manager, err := accessmanager.NewAccessManagerCaller(common.HexToAddress(authority), client)
-	require.NoError(t, err)
-	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), client)
-	require.NoError(t, err)
-	gotAuthority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
-	require.NoError(t, err)
-	require.Equal(t, common.HexToAddress(authority), gotAuthority)
-	multicallABI, err := ibcmulticall.ContractMetaData.GetAbi()
-	require.NoError(t, err)
-	caller := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	for _, tc := range []struct {
-		caller, target common.Address
-		selector       [4]byte
-	}{
-		{caller, common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
-		{caller, common.HexToAddress(m.Core.Multicall), [4]byte(multicallABI.Methods["multicall"].ID)},
-		{common.HexToAddress(m.Core.Multicall), common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
-	} {
-		permission, callErr := manager.CanCall(&bind.CallOpts{Context: ctx}, tc.caller, tc.target, tc.selector)
-		require.NoError(t, callErr)
-		require.True(t, permission.Immediate, "relay method is not publicly callable")
-	}
 }
 
 // sentPacket returns the block and sequence of the one packet the router
