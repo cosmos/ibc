@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu"
 )
 
 // fixtures holds <consensus>.json: live headers and proofs, plus synthetic

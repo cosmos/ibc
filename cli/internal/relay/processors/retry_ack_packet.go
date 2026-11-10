@@ -8,9 +8,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/store"
-	"github.com/cosmos/ibc/cli/internal/txsubmitter"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/txsubmitter"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // ClearAckTxStorage clears a recorded relay tx so it is resubmitted.

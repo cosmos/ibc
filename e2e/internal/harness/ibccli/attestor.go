@@ -28,8 +28,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
 
-	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
-	"github.com/cosmos/ibc/cli/keyfile"
+	attestorv2 "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	"github.com/lfdt-ibc/ibc/cli/keyfile"
 )
 
 const (

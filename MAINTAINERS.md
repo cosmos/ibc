@@ -2,7 +2,7 @@
 
 # Maintainers
 
-This file lists the Maintainers of cosmos/ibc, and the people with merge rights. The roles and their criteria are defined in [GOVERNANCE.md](GOVERNANCE.md) and the Charter; this file records who currently holds them and how the role is granted and removed. Maintainers are the voting members of the TSC.
+This file lists the Maintainers of lfdt-ibc/ibc, and the people with merge rights. The roles and their criteria are defined in [GOVERNANCE.md](GOVERNANCE.md) and the Charter; this file records who currently holds them and how the role is granted and removed. Maintainers are the voting members of the TSC.
 
 ## Maintainers
 

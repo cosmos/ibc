@@ -9,7 +9,7 @@ description: >-
 
 The attestation light client replaces header verification with a signature check. Instead of following a counterparty chain's consensus, it trusts a fixed set of ECDSA attestors and accepts a height, a timestamp or a set of packet commitments once a quorum of that set has signed it.
 
-The Go implementation is the package `attestations` in [`modules/light-clients/attestations`](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/attestations), imported as:
+The Go implementation is the package `attestations` in [`modules/light-clients/attestations`](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/light-clients/attestations), imported as:
 
 ```go
 import ibcattestations "github.com/cosmos/ibc-go/v11/modules/light-clients/attestations"
@@ -23,7 +23,7 @@ For the protocol-level description — what attestors are, how proofs reach a ch
 
 ## Trust model
 
-The attestor set and the quorum threshold are fixed at client creation. `ClientState.Validate` ([`client_state.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/client_state.go)) rejects a client state whose attestor list is empty, whose `MinRequiredSigs` is zero or exceeds the number of attestors, or whose attestor list contains an empty address, an address that is not a hex address, or a duplicate after normalization.
+The attestor set and the quorum threshold are fixed at client creation. `ClientState.Validate` ([`client_state.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/client_state.go)) rejects a client state whose attestor list is empty, whose `MinRequiredSigs` is zero or exceeds the number of attestors, or whose attestor list contains an empty address, an address that is not a hex address, or a duplicate after normalization.
 
 There is no mechanism to add, remove or rotate attestors afterwards. The only state transition available to the client beyond adding consensus states is being frozen.
 
@@ -42,9 +42,9 @@ There is no mechanism to add, remove or rotate attestors afterwards. The only st
 
 ### `ConsensusState`
 
-One field, `Timestamp uint64`, in nanoseconds. `ValidateBasic` rejects a zero timestamp. `GetTimestamp()` is deprecated and panics; read the timestamp through `LightClientModule.TimestampAtHeight`, which returns the stored nanosecond value ([`consensus_state.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/consensus_state.go)).
+One field, `Timestamp uint64`, in nanoseconds. `ValidateBasic` rejects a zero timestamp. `GetTimestamp()` is deprecated and panics; read the timestamp through `LightClientModule.TimestampAtHeight`, which returns the stored nanosecond value ([`consensus_state.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/consensus_state.go)).
 
-Consensus states are stored per height under the standard `host.ConsensusStateKey` in the client's prefixed store ([`store.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/store.go)).
+Consensus states are stored per height under the standard `host.ConsensusStateKey` in the client's prefixed store ([`store.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/store.go)).
 
 ## The client message
 
@@ -55,9 +55,9 @@ Both client updates and proofs use the same envelope, `AttestationProof`, which 
 | `AttestationData` | `[]byte` | ABI-encoded `StateAttestation` or `PacketAttestation` |
 | `Signatures` | `[][]byte` | Each exactly `SignatureLength` (65) bytes, `r \|\| s \|\| v` |
 
-`ValidateBasic` ([`attestation_proof.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/attestation_proof.go)) requires non-empty attestation data, requires the data to decode as either a `PacketAttestation` with at least one packet or a `StateAttestation`, requires at least one signature, and requires each signature to be 65 bytes.
+`ValidateBasic` ([`attestation_proof.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/attestation_proof.go)) requires non-empty attestation data, requires the data to decode as either a `PacketAttestation` with at least one packet or a `StateAttestation`, requires at least one signature, and requires each signature to be 65 bytes.
 
-The two attestation payloads are Go structs in [`abi.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/abi.go):
+The two attestation payloads are Go structs in [`abi.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/abi.go):
 
 ```go
 type StateAttestation struct {
@@ -84,7 +84,7 @@ type PacketCompact struct {
 
 ## Signature verification
 
-Signatures do not cover the attestation data directly. `TaggedSigningInput` ([`signature.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/signature.go)) computes:
+Signatures do not cover the attestation data directly. `TaggedSigningInput` ([`signature.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/signature.go)) computes:
 
 ```text
 digest = sha256( typeTag || sha256(attestationData) )
@@ -106,7 +106,7 @@ Quorum is counted as the number of signatures supplied, not the number that veri
 
 `VerifyClientMessage` refuses a frozen client, refuses a client message that is not an `*AttestationProof`, and verifies the signatures against the `0x01` tag. It does not inspect the height or the timestamp.
 
-`UpdateState` ([`update.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/update.go)) then decodes the `StateAttestation`, writes a `ConsensusState` at `clienttypes.NewHeight(0, stateAttestation.Height)`, raises `LatestHeight` if the attested height is greater, and stores the client state. An update may therefore write a consensus state at a height at or below `LatestHeight`.
+`UpdateState` ([`update.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/update.go)) then decodes the `StateAttestation`, writes a `ConsensusState` at `clienttypes.NewHeight(0, stateAttestation.Height)`, raises `LatestHeight` if the attested height is greater, and stores the client state. An update may therefore write a consensus state at a height at or below `LatestHeight`.
 
 `UpdateState` panics rather than returning an error on a wrong client message type or undecodable data, on the assumption that `VerifyClientMessage` ran first.
 
@@ -118,7 +118,7 @@ Note that a consensus state is written at a height only once a timestamp has bee
 
 ## Proof verification
 
-`verifyMembership` and `verifyNonMembership` ([`client_state.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/client_state.go)) share their preconditions. Both refuse a frozen client and an empty path, both require a consensus state to already exist at the proof height, both unmarshal the `proof` bytes as a protobuf `AttestationProof`, both verify signatures against the `0x02` tag, both require `packetAttestation.Height` to equal the proof height's revision height, and both require a non-empty packet list.
+`verifyMembership` and `verifyNonMembership` ([`client_state.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/client_state.go)) share their preconditions. Both refuse a frozen client and an empty path, both require a consensus state to already exist at the proof height, both unmarshal the `proof` bytes as a protobuf `AttestationProof`, both verify signatures against the `0x02` tag, both require `packetAttestation.Height` to equal the proof height's revision height, and both require a non-empty packet list.
 
 The path must be a `commitmenttypesv2.MerklePath` with exactly one key element, and the comparison key is `crypto.Keccak256(merklePath.KeyPath[0])`.
 
@@ -134,7 +134,7 @@ Verification scans for entries whose `Path` matches the hashed path. If none mat
 
 ## Client status
 
-`Status` ([`light_client_module.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/light_client_module.go)):
+`Status` ([`light_client_module.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/light_client_module.go)):
 
 | Status | Condition |
 | --- | --- |
@@ -150,7 +150,7 @@ Verification scans for entries whose `Path` matches the hashed path. If none mat
 - `VerifyUpgradeAndUpdateState` returns `clienttypes.ErrInvalidUpgradeClient`.
 - No attestor rotation: the set is fixed at creation.
 - Revision numbers are always 0; only the revision height is meaningful.
-- Genesis is a no-op: `DefaultGenesis` returns nil and `ValidateGenesis` always succeeds ([`module.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/module.go)).
+- Genesis is a no-op: `DefaultGenesis` returns nil and `ValidateGenesis` always succeeds ([`module.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/module.go)).
 - No module-level CLI: `GetTxCmd` and `GetQueryCmd` both return nil. Use the 02-client commands.
 
 ## Integration
@@ -179,7 +179,7 @@ ibcattestations.RegisterInterfaces(registry)
 
 ## Errors
 
-[`errors.go`](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/attestations/errors.go) registers, under codespace `attestations`: `ErrInvalidAttestationProof`, `ErrInvalidSignature`, `ErrInvalidQuorum`, `ErrDuplicateSigner`, `ErrUnknownSigner`, `ErrInvalidAttestationData`, `ErrInvalidHeight`, `ErrInvalidTimestamp`, `ErrClientFrozen`, `ErrNotMember`, `ErrInvalidPath`, `ErrInvalidValue`, `ErrProcessedTimeNotFound`, `ErrProcessedHeightNotFound`, `ErrDelayPeriodNotPassed`, `ErrNonMembershipFailed`.
+[`errors.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/attestations/errors.go) registers, under codespace `attestations`: `ErrInvalidAttestationProof`, `ErrInvalidSignature`, `ErrInvalidQuorum`, `ErrDuplicateSigner`, `ErrUnknownSigner`, `ErrInvalidAttestationData`, `ErrInvalidHeight`, `ErrInvalidTimestamp`, `ErrClientFrozen`, `ErrNotMember`, `ErrInvalidPath`, `ErrInvalidValue`, `ErrProcessedTimeNotFound`, `ErrProcessedHeightNotFound`, `ErrDelayPeriodNotPassed`, `ErrNonMembershipFailed`.
 
 ## See also
 

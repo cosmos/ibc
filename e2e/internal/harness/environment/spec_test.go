@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
 )
 
 func TestSpecValidateMixedGraph(t *testing.T) {

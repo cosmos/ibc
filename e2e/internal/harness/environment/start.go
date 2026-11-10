@@ -13,10 +13,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/anvil"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/besu"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 const (

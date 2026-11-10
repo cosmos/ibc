@@ -56,15 +56,15 @@ This type would indicate the revision number (the number of times the chain ID h
 
 Refs:
 
-- Issue [#439](https://github.com/cosmos/ibc/issues/439) on IBC specification repository.
-- Specification changes in [#447](https://github.com/cosmos/ibc/pull/447)
+- Issue [#439](https://github.com/lfdt-ibc/ibc/issues/439) on IBC specification repository.
+- Specification changes in [#447](https://github.com/lfdt-ibc/ibc/pull/447)
 - Implementation changes for the abstract height type, [SDK#7211](https://github.com/cosmos/cosmos-sdk/pull/7211)
 
 ### Tendermint requires misbehaviour detection during updates
 
 The initial release of the IBC module and the 07-tendermint light client implementation did not support misbehaviour detection during update nor did it prevent overwriting of previous updates.
 Despite the fact that we designed the `ClientState` interface and developed the 07-tendermint client, we failed to detect even a duplicate update that constituted misbehaviour and thus should freeze the client.
-This was fixed in PR [#141](https://github.com/cosmos/ibc-go/pull/141) which required light client implementations to be aware that they must handle duplicate updates and misbehaviour detection.
+This was fixed in PR [#141](https://github.com/lfdt-ibc/ibc-go/pull/141) which required light client implementations to be aware that they must handle duplicate updates and misbehaviour detection.
 Misbehaviour detection during updates is not applicable to the solomachine nor localhost.
 It is also not obvious that `CheckHeaderAndUpdateState` should be performing this functionality.
 
@@ -72,7 +72,7 @@ It is also not obvious that `CheckHeaderAndUpdateState` should be performing thi
 
 The localhost has been broken since the initial version of the IBC module.
 The localhost tried to be developed underneath the 02-client interfaces without special exception, but this proved to be impossible.
-The issues were outlined in [#27](https://github.com/cosmos/ibc-go/issues/27) and further discussed in the attempted ADR in [#75](https://github.com/cosmos/ibc-go/pull/75).
+The issues were outlined in [#27](https://github.com/lfdt-ibc/ibc-go/issues/27) and further discussed in the attempted ADR in [#75](https://github.com/lfdt-ibc/ibc-go/pull/75).
 Unlike all other clients, the localhost requires access to the entire IBC store and not just the prefixed client store.
 
 ### Solomachine doesn't set consensus states
@@ -83,13 +83,13 @@ This causes setting of the consensus state at the 02-client level to use unneces
 It also causes timeouts to fail with solo machines.
 Previously, the timeout logic within IBC would obtain the consensus state at the height a timeout is being proved.
 This is problematic for the solo machine as no consensus state is set.
-See issue [#562](https://github.com/cosmos/ibc/issues/562) on the IBC specification repo.
+See issue [#562](https://github.com/lfdt-ibc/ibc/issues/562) on the IBC specification repo.
 
 ### New clients may want to do batch updates
 
 New light clients may not function in a similar fashion to 06-solomachine and 07-tendermint.
 They may require setting many consensus states in a single update.
-As @seunlanlege [states](https://github.com/cosmos/ibc-go/issues/284#issuecomment-1005583679):
+As @seunlanlege [states](https://github.com/lfdt-ibc/ibc-go/issues/284#issuecomment-1005583679):
 
 > I'm in support of these changes for 2 reasons:
 >
@@ -122,7 +122,7 @@ To reduce complexity of the codebase, the `Header`/`Misbehaviour` interfaces sho
 
 ### Split `CheckHeaderAndUpdateState` into 4 functions
 
-See [#668](https://github.com/cosmos/ibc-go/issues/668).
+See [#668](https://github.com/lfdt-ibc/ibc-go/issues/668).
 
 Split `CheckHeaderAndUpdateState` into 4 functions:
 
@@ -170,7 +170,7 @@ This fixes the issues outlined for the solo machine client.
 ### Add generic verification functions
 
 As the complexity and the functionality grows, new verification functions will be required for additional paths.
-This was explained in [#684](https://github.com/cosmos/ibc/issues/684) on the specification repo.
+This was explained in [#684](https://github.com/lfdt-ibc/ibc/issues/684) on the specification repo.
 These generic verification functions would be immediately useful for the new paths added in connection/channel upgradability as well as for custom paths defined by IBC applications such as Interchain Queries.
 The old verification functions (`VerifyClientState`, `VerifyConnection`, etc) should be removed in favor of the generic verification functions.
 
@@ -198,8 +198,8 @@ No notable consequences
 
 Issues:
 
-- [#284](https://github.com/cosmos/ibc-go/issues/284)
+- [#284](https://github.com/lfdt-ibc/ibc-go/issues/284)
 
 PRs:
 
-- [#1871](https://github.com/cosmos/ibc-go/pull/1871)
+- [#1871](https://github.com/lfdt-ibc/ibc-go/pull/1871)

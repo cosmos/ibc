@@ -9,10 +9,10 @@ import (
 
 	"github.com/cockroachdb/errors"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
-	"github.com/cosmos/ibc/cli/internal/txsubmitter/evm"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
+	"github.com/lfdt-ibc/ibc/cli/internal/txsubmitter/evm"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // TxSubmitter simulates, signs, and broadcasts transactions on a single chain;

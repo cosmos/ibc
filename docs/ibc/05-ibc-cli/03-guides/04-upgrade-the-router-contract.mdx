@@ -37,7 +37,7 @@ The last line reads the deployer's raw private key, because Foundry cannot read 
 
 ## 2. Get the router source
 
-For a different target version, review the contracts repository's [upgradeability overview](https://github.com/cosmos/ibc-contracts/blob/main/UPGRADEABILITY.md#solidity-contracts) and [release policy](https://github.com/cosmos/ibc-contracts/blob/main/RELEASES.md#solidity-contracts).
+For a different target version, review the contracts repository's [upgradeability overview](https://github.com/lfdt-ibc/ibc-contracts/blob/main/UPGRADEABILITY.md#solidity-contracts) and [release policy](https://github.com/lfdt-ibc/ibc-contracts/blob/main/RELEASES.md#solidity-contracts).
 The policy defines minor Solidity releases as requiring a new initializer for storage changes.
 Patch releases require neither storage changes nor a new initializer.
 Major releases introduce API-breaking changes.
@@ -45,7 +45,7 @@ Major releases introduce API-breaking changes.
 Check the target release for required initialization and function-role changes.
 See [Permissions and upgrades](/ibc/06-ibc-solidity-contracts/06-permissions-and-upgrades#proxies-and-upgrade-authority) for storage-layout and access-control considerations.
 
-This guide builds the new logic from the [ibc-contracts](https://github.com/cosmos/ibc-contracts) commit the IBC CLI pins, which is the source of the logic `ibc deploy core` deployed.
+This guide builds the new logic from the [ibc-contracts](https://github.com/lfdt-ibc/ibc-contracts) commit the IBC CLI pins, which is the source of the logic `ibc deploy core` deployed.
 
 For your own upgrade, check out the release you are shipping. Compare its `IBCRolesLib` and `DeployAccessManagerWithRoles` with your deployment's assignments. If the release newly marks a function `restricted`, assign its selector before you call `upgradeToAndCall`. The old logic does not consult the access manager for that function, so the assignment changes nothing until the upgrade, and callers the release admits never lose access.
 
@@ -60,7 +60,7 @@ The IBC CLI pins the module at a pseudo-version, which ends in a 12-character co
 2. Clone the repository next to your IBC clone:
 
 ```bash
-git clone https://github.com/cosmos/ibc-contracts.git ../../ibc-contracts
+git clone https://github.com/lfdt-ibc/ibc-contracts.git ../../ibc-contracts
 ```
 
 3. Check out the commit:

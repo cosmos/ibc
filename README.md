@@ -2,12 +2,12 @@
 
 # Inter-Blockchain Communication Protocol (IBC)
 
-[![CodeQL](https://github.com/cosmos/ibc/actions/workflows/codeql.yml/badge.svg)](https://github.com/cosmos/ibc/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/cosmos/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/cosmos/ibc)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/cosmos/ibc/blob/main/LICENSE)
+[![CodeQL](https://github.com/lfdt-ibc/ibc/actions/workflows/codeql.yml/badge.svg)](https://github.com/lfdt-ibc/ibc/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/lfdt-ibc/ibc/badge)](https://scorecard.dev/viewer/?uri=github.com/lfdt-ibc/ibc)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/lfdt-ibc/ibc/blob/main/LICENSE)
 [![Discord](https://img.shields.io/discord/669268347736686612?logo=discord&label=Discord)](https://discord.com/invite/interchain)
-[![Version](https://img.shields.io/github/v/tag/cosmos/ibc?filter=cli/v*&label=version)](https://github.com/cosmos/ibc/releases)
-[![codecov](https://codecov.io/gh/cosmos/ibc/graph/badge.svg)](https://codecov.io/gh/cosmos/ibc)
+[![Version](https://img.shields.io/github/v/tag/lfdt-ibc/ibc?filter=cli/v*&label=version)](https://github.com/lfdt-ibc/ibc/releases)
+[![codecov](https://codecov.io/gh/lfdt-ibc/ibc/graph/badge.svg)](https://codecov.io/gh/lfdt-ibc/ibc)
 
 ![banner](./.github/assets/cosmos-ibc-github.jpg)
 
@@ -57,17 +57,17 @@ IBC v2 is the latest iteration of the IBC protocol. It streamlines the integrati
 
 | Interchain Standard Number | Standard Title | Stage | Implementations | Maintainer |
 | -------------------------- | -------------- | ----- | --------------- | ---------- |
-| [2](spec/IBC_V2/core/ics-002-client-semantics/README.md) | Client Semantics | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
-| [4](spec/IBC_V2/core/ics-004-packet-semantics/PACKET_HANDLER.md) | Packet Semantics | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
-| [5](spec/IBC_V2/core/ics-005-port-allocation/README.md) | Port Allocation | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
-| [24](spec/IBC_V2/core/ics-024-host-requirements/README.md) | Host Requirements | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
-| [26](spec/IBC_V2/core/ics-026-application-callbacks/README.md) | IBC Application Callbacks | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [2](spec/IBC_V2/core/ics-002-client-semantics/README.md) | Client Semantics | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
+| [4](spec/IBC_V2/core/ics-004-packet-semantics/PACKET_HANDLER.md) | Packet Semantics | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
+| [5](spec/IBC_V2/core/ics-005-port-allocation/README.md) | Port Allocation | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
+| [24](spec/IBC_V2/core/ics-024-host-requirements/README.md) | Host Requirements | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
+| [26](spec/IBC_V2/core/ics-026-application-callbacks/README.md) | IBC Application Callbacks | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
 
 #### App
 
 | Interchain Standard Number | Version | Standard Title | Stage | Implementations | Maintainer |
 | -------------------------- | ------- | -------------- | ----- | --------------- | ---------- |
-| [27](spec/IBC_V2/app/ics-027-gmp/README.md) | v2 | General Message Passing | Draft | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [27](spec/IBC_V2/app/ics-027-gmp/README.md) | v2 | General Message Passing | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
 
 ### IBC v1 Specifications
 
@@ -83,24 +83,24 @@ IBC v1 is the original version of the protocol. It establishes cross-chain commu
 
 | Interchain Standard Number                                    | Standard Title             | Stage     | Implementations | Maintainer    |
 | ------------------------------------------------------------- | -------------------------- | --------- | --------------- | ------------- |
-| [2](spec/core/ics-002-client-semantics/README.md)             | Client Semantics           | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [3](spec/core/ics-003-connection-semantics/README.md)         | Connection Semantics       | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [4](spec/core/ics-004-channel-and-packet-semantics/README.md) | Channel & Packet Semantics | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [5](spec/core/ics-005-port-allocation/README.md)              | Port Allocation            | Candidate | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
-| [23](spec/core/ics-023-vector-commitments/README.md)          | Vector Commitments         | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [24](spec/core/ics-024-host-requirements/README.md)           | Host Requirements          | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [25](spec/core/ics-025-handler-interface/README.md)           | Handler Interface          | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [26](spec/core/ics-026-routing-module/README.md)              | Routing Module             | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
-| [33](spec/core/ics-033-multi-hop/README.md)                   | Multi-hop Messaging        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
+| [2](spec/core/ics-002-client-semantics/README.md)             | Client Semantics           | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [3](spec/core/ics-003-connection-semantics/README.md)         | Connection Semantics       | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [4](spec/core/ics-004-channel-and-packet-semantics/README.md) | Channel & Packet Semantics | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [5](spec/core/ics-005-port-allocation/README.md)              | Port Allocation            | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
+| [23](spec/core/ics-023-vector-commitments/README.md)          | Vector Commitments         | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [24](spec/core/ics-024-host-requirements/README.md)           | Host Requirements          | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [25](spec/core/ics-025-handler-interface/README.md)           | Handler Interface          | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [26](spec/core/ics-026-routing-module/README.md)              | Routing Module             | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
+| [33](spec/core/ics-033-multi-hop/README.md)                   | Multi-hop Messaging        | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go) | Protocol team |
 
 #### Light Clients
 
 | Interchain Standard Number                                      | Standard Title             | Stage | Implementations | Maintainer    |
 | --------------------------------------------------------------- | -------------------------- | ----- | --------------- | ------------- |
-| [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/06-solomachine) | Protocol team |
-| [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/07-tendermint), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-clients/ics07-tendermint) | Protocol team |
-| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/08-wasm), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-clients/ics08-wasm) | Protocol team / [Composable Finance](https://www.github.com/ComposableFi) |
-| [9](spec/client/ics-009-loopback-cilent/README.md)       | Loopback Client            | Draft | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/09-localhost) | Protocol team |
+| [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/light-clients/06-solomachine) | Protocol team |
+| [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/light-clients/07-tendermint), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-clients/ics07-tendermint) | Protocol team |
+| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/light-clients/08-wasm), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-clients/ics08-wasm) | Protocol team / [Composable Finance](https://www.github.com/ComposableFi) |
+| [9](spec/client/ics-009-loopback-cilent/README.md)       | Loopback Client            | Draft | [ibc-go](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/light-clients/09-localhost) | Protocol team |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft | | [Octopus Network](https://oct.network) |
 
 #### Relayer
@@ -113,9 +113,9 @@ IBC v1 is the original version of the protocol. It establishes cross-chain commu
 
 | Interchain Standard Number                               | Version | Standard Title          | Stage     | Implementations                                                                                                           | Maintainer         |
 | -------------------------------------------------------- | ------- | ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| [20](spec/app/ics-020-fungible-token-transfer/README.md) | v1      | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-apps/ics20-transfer)    | Protocol team      |
+| [20](spec/app/ics-020-fungible-token-transfer/README.md) | v1      | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/apps/transfer), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-apps/ics20-transfer)    | Protocol team      |
 | [20](spec/app/ics-020-fungible-token-transfer/deprecated/README.md) | v2      | Fungible Token Transfer | DEPRECATED |  | Protocol team      |
-| [27](spec/app/ics-027-interchain-accounts/README.md)     | v1      | Interchain Accounts     | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts)                                  | Protocol team      | 
+| [27](spec/app/ics-027-interchain-accounts/README.md)     | v1      | Interchain Accounts     | Candidate | [ibc-go](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/apps/27-interchain-accounts)                                  | Protocol team      | 
 | [28](spec/app/ics-028-cross-chain-validation/README.md)  | v1      | Cross-Chain Validation  | Candidate | [interchain-security](https://github.com/cosmos/interchain-security/tree/main)                                            | Cosmos Hub team    |
 | [29](spec/app/ics-029-fee-payment)                       | v1      | General Relayer Incentivization Mechanism | DEPRECATED |                                                   | Protocol team      |
 | [30](spec/app/ics-030-middleware)                        | v1      | IBC Application Middleware | N/A      | N/A                                                                                                                       | Protocol team      |
@@ -132,5 +132,5 @@ The Interchain Standards are also translated into the following languages:
 
 ## Archive Papers
 
-- [The Interblockchain Communication Protocol: An Overview, 2022](https://github.com/cosmos/ibc/blob/31f41387942ee71188b6a9799d1a55849e008c97/archive/papers/2020-05/build/paper.pdf)
-- [IBC Protocol Specification, 2017](https://github.com/cosmos/ibc/blob/31f41387942ee71188b6a9799d1a55849e008c97/archive/v0_3_1_IBC.pdf)
+- [The Interblockchain Communication Protocol: An Overview, 2022](https://github.com/lfdt-ibc/ibc/blob/31f41387942ee71188b6a9799d1a55849e008c97/archive/papers/2020-05/build/paper.pdf)
+- [IBC Protocol Specification, 2017](https://github.com/lfdt-ibc/ibc/blob/31f41387942ee71188b6a9799d1a55849e008c97/archive/v0_3_1_IBC.pdf)

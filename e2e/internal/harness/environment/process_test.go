@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 func TestBindCLIFollowsEnvironmentLifetime(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/poll"
 )
 
 func awaitHealth(ctx context.Context, address string, exited <-chan struct{}) error {

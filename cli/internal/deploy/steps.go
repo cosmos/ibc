@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
 )
 
 // Step is one idempotent deployment step. A nil Done means never

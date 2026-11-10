@@ -6,9 +6,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/cosmos/ibc/cli/internal/relay/pipeline"
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/pipeline"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // Deduper rejects transfers already in flight in the wrapped pipeline.

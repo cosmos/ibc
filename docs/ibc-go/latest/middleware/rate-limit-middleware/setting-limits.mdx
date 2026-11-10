@@ -7,7 +7,7 @@ This guide covers configuring limits on a chain that already has the middleware 
 
 ## The four governance messages
 
-The module accepts [four governance messages](https://github.com/cosmos/ibc-go/blob/2619d6ec8543b2e0cbc1a234dad38b4ae2299a27/proto/ibc/03-applications/rate_limiting/v1/tx.proto), each requiring the governance authority as the signer. Together they cover the full life of a limit:
+The module accepts [four governance messages](https://github.com/lfdt-ibc/ibc-go/blob/2619d6ec8543b2e0cbc1a234dad38b4ae2299a27/proto/ibc/03-applications/rate_limiting/v1/tx.proto), each requiring the governance authority as the signer. Together they cover the full life of a limit:
 
 - `MsgAddRateLimit` creates a limit.
 - `MsgUpdateRateLimit` replaces a limit's quota and resets its flow.

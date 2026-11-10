@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
-	chainimpl "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	chainimpl "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
 )
 
 func TestFundingUnavailableWithoutManagedControl(t *testing.T) {

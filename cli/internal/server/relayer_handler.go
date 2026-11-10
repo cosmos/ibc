@@ -10,8 +10,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	proto "github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/cli/internal/service/relayer"
+	proto "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/relayer"
 )
 
 // RelayerHandler handles relayer RPC requests.

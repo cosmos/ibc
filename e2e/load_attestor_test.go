@@ -17,12 +17,12 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
-	attestoribc "github.com/cosmos/ibc/cli/attestor/evm/ibc"
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
-	"github.com/cosmos/ibc/e2e/internal/loadtest"
+	attestorv2 "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	attestoribc "github.com/lfdt-ibc/ibc/cli/attestor/evm/ibc"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/e2e/internal/loadtest"
 )
 
 // E2E_LOAD=true, E2E_LOAD=1, or -e2e.load required

@@ -19,12 +19,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
-	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
-	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	attestorv2 "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	relayerv2 "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	attestorevm "github.com/lfdt-ibc/ibc/cli/attestor/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 // commitmentCorruptingAttestor forwards real attestations, but can replace a

@@ -5,7 +5,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
 ### Stage 1 - `Strawman`
 
 - ***Purpose***: Start the specification process
-- ***Entrance Criteria***: [Open an issue](https://github.com/cosmos/ibc/issues/new) on this repository with a short outline of your proposal and a specification name.
+- ***Entrance Criteria***: [Open an issue](https://github.com/lfdt-ibc/ibc/issues/new) on this repository with a short outline of your proposal and a specification name.
 - ***Acceptance Requirements***: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
 - ***Spec Quality***: Outline only. Link to any prior documentation, discussion, or reference materials.
 - ***Changes Expected Post-Acceptance***: N/A

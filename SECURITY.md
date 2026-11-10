@@ -8,7 +8,7 @@ Do not open a public issue, pull request, or discussion for a suspected vulnerab
 
 In-scope vulnerabilities are reported through the [Cosmos bug bounty program on Immunefi](https://immunefi.com/bug-bounty/cosmos/). In scope means a bug that gives an attacker a capability they should not have on a correctly configured production chain or relayer: minting, stealing, or locking funds; forging or replaying packets; bypassing light client verification; or halting a chain through IBC. Include affected versions, impact, the conditions required, and an end-to-end proof of concept.
 
-Issues outside that scope go to public GitHub issues through the normal process, or, where borderline, to the private IBC security channel ([GitHub Security Advisories](https://github.com/cosmos/ibc/security/advisories/new) or the restricted IBC security list).
+Issues outside that scope go to public GitHub issues through the normal process, or, where borderline, to the private IBC security channel ([GitHub Security Advisories](https://github.com/lfdt-ibc/ibc/security/advisories/new) or the restricted IBC security list).
 
 ### Triage and timelines
 

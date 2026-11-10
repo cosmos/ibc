@@ -7,9 +7,9 @@ import (
 
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/cosmos/ibc/cli/internal/otel"
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/otel"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 type instrumentation struct {

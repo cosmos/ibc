@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
 )
 
 var _ chain.FaultInjector = (*Chain)(nil)

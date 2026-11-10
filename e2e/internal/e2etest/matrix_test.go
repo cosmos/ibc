@@ -14,9 +14,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
 )
 
 func TestMatrixCollectorJoinsSelectionsAndSpec(t *testing.T) {

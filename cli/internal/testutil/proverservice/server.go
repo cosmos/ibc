@@ -17,14 +17,14 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/relay/prover/attestation"
-	attestorservice "github.com/cosmos/ibc/cli/internal/service/attestor"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	proverv2 "github.com/lfdt-ibc/ibc/cli/api/v2/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover/attestation"
+	attestorservice "github.com/lfdt-ibc/ibc/cli/internal/service/attestor"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 const readHeaderTimeout = 5 * time.Second

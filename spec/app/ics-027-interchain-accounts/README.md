@@ -327,7 +327,7 @@ message InterchainAccountPacketData  {
 }
 ```
 
-The acknowledgment packet structure is defined as in [ics4](https://github.com/cosmos/ibc-go/blob/main/proto/ibc/core/channel/v1/channel.proto#L135-L148). If an error occurs on the host chain the acknowledgment contains the error message.
+The acknowledgment packet structure is defined as in [ics4](https://github.com/lfdt-ibc/ibc-go/blob/main/proto/ibc/core/channel/v1/channel.proto#L135-L148). If an error occurs on the host chain the acknowledgment contains the error message.
 
 ```proto
 message Acknowledgement {
@@ -587,7 +587,7 @@ function onChanUpgradeInit(
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
   // function of the ICS4Wrapper interface.
-  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  // See https://github.com/lfdt-ibc/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel !== null)
   currentMetadata = UnmarshalJSON(channel.version)
@@ -636,7 +636,7 @@ function onChanUpgradeTry(
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
   // function of the ICS4Wrapper interface.
-  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  // See https://github.com/lfdt-ibc/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel !== null)
   currentMetadata = UnmarshalJSON(channel.version)
@@ -677,7 +677,7 @@ function onChanUpgradeAck(
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
   // function of the ICS4Wrapper interface.
-  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  // See https://github.com/lfdt-ibc/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel !== null)
   currentMetadata = UnmarshalJSON(channel.version)
@@ -788,7 +788,7 @@ The `icacontroller-` prefix on the controller port identifier is optional and ho
 
 ## Example Implementations
 
-- Implementation of ICS 27 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 27 in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 
 ## Future Improvements
 

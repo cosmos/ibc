@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	proto "github.com/cosmos/ibc/cli/api/v2/attestor"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	proto "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 func TestService(t *testing.T) {

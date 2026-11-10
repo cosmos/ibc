@@ -15,7 +15,7 @@ jobs:
       artifact-metadata: write
     steps:
       # Build, then put the release files in out/assets.
-      - uses: cosmos/ibc/.github/actions/attest-release-assets@<commit-sha> # main
+      - uses: lfdt-ibc/ibc/.github/actions/attest-release-assets@<commit-sha> # main
         with:
           name: ibc-cli-v1.2.3-linux-amd64
           platform: linux-amd64

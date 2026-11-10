@@ -12,7 +12,7 @@
     },
   },
   "packages": {
-    "@cosmos/solidity-ibc-eureka": ["ibc-contracts@github:cosmos/ibc-contracts#35388c8", {}, "cosmos-ibc-contracts-35388c8"],
+    "@cosmos/solidity-ibc-eureka": ["ibc-contracts@github:cosmos/ibc-contracts#35388c8", {}, "lfdt-ibc-ibc-contracts-35388c8", "sha512-JFsXOijjuXhgFlihTr32Ua3nuZfCGgyJ2U6AY9Lao2L7wyrKUe63y/CmSVhes8Car4jRehmLzFCO2AbEkuU3/w=="],
 
     "@openzeppelin/contracts": ["@openzeppelin/contracts@5.7.0", "", {}, "sha512-IL2AZpI+7THMzt1u6Cxmc1zLwVnudtUGvrqXQ/HnbLKfQ/8dIWMMQPDwPIjRQzNrlAo4cxZaCGRB/XvwPo9ILA=="],
 
