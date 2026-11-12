@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
 )
 
 // Runtime contains process-local bindings that are separate from the durable Spec.

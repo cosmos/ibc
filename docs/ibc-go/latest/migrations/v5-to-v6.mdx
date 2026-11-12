@@ -32,7 +32,7 @@ For more information please refer to the ICS27 controller submodule documentatio
 
 ### Upgrade proposal
 
-Please refer to [PR #2383](https://github.com/cosmos/ibc-go/pull/2383) for integrating the ICS27 channel capability migration logic or follow the steps outlined below:
+Please refer to [PR #2383](https://github.com/lfdt-ibc/ibc-go/pull/2383) for integrating the ICS27 channel capability migration logic or follow the steps outlined below:
 
 1. Add the upgrade migration logic to chain distribution. This may be, for example, maintained under a package `app/upgrades/v6`.
 
@@ -75,7 +75,7 @@ return mm.RunMigrations(ctx, configurator, vm)
 }
 ```
 
-2. Set the upgrade handler in `app.go`. The `moduleName` parameter refers to the authentication module's `ScopedKeeper` name. This is the name provided upon instantiation in `app.go` via the [`x/capability` keeper `ScopeToModule(moduleName string)`](https://github.com/cosmos/cosmos-sdk/blob/v0.46.1/x/capability/keeper/keeper.go#L70) method. [See here for an example in `simapp`](https://github.com/cosmos/ibc-go/blob/v5.0.0/testing/simapp/app.go#L304).
+2. Set the upgrade handler in `app.go`. The `moduleName` parameter refers to the authentication module's `ScopedKeeper` name. This is the name provided upon instantiation in `app.go` via the [`x/capability` keeper `ScopeToModule(moduleName string)`](https://github.com/cosmos/cosmos-sdk/blob/v0.46.1/x/capability/keeper/keeper.go#L70) method. [See here for an example in `simapp`](https://github.com/lfdt-ibc/ibc-go/blob/v5.0.0/testing/simapp/app.go#L304).
 
 ```go expandable
 app.UpgradeKeeper.SetUpgradeHandler(
@@ -103,8 +103,8 @@ The `Base Application` was intended to be composed with the ICS27 controller sub
 
 Prior to ibc-go v6 the controller submodule exposed only these two functions (to which we will refer as the legacy APIs):
 
-* [`RegisterInterchainAccount`](https://github.com/cosmos/ibc-go/blob/v5.0.0/modules/apps/27-interchain-accounts/controller/keeper/account.go#L19)
-* [`SendTx`](https://github.com/cosmos/ibc-go/blob/v5.0.0/modules/apps/27-interchain-accounts/controller/keeper/relay.go#L18)
+* [`RegisterInterchainAccount`](https://github.com/lfdt-ibc/ibc-go/blob/v5.0.0/modules/apps/27-interchain-accounts/controller/keeper/account.go#L19)
+* [`SendTx`](https://github.com/lfdt-ibc/ibc-go/blob/v5.0.0/modules/apps/27-interchain-accounts/controller/keeper/relay.go#L18)
 
 However, these functions have now been deprecated in favour of the new controller submodule `MsgServer` and will be removed in later releases.
 
@@ -129,7 +129,7 @@ app.ICAAuthKeeper = icaauthkeeper.NewKeeper(
 
 Please note that the authentication module's `ScopedKeeper` name is still needed as part of the channel capability migration described in section [Upgrade proposal](#upgrade-proposal) above. Therefore the authentication module's `ScopedKeeper` cannot be completely removed from the chain code until the migration has run.
 
-In the future, the use of the legacy APIs for accessing packet callbacks will be replaced by IBC Actor Callbacks (see [ADR 008](https://github.com/cosmos/ibc-go/pull/1976) for more details) and it will also be possible to access them with the `MsgServiceRouter`.
+In the future, the use of the legacy APIs for accessing packet callbacks will be replaced by IBC Actor Callbacks (see [ADR 008](https://github.com/lfdt-ibc/ibc-go/pull/1976) for more details) and it will also be possible to access them with the `MsgServiceRouter`.
 
 **My authentication module does not need access to IBC packet callbacks**
 

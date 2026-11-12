@@ -5,8 +5,8 @@ package main
 import (
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
 )
 
 // resolveAttestorToken resolves one attestor token: an attestors[].name or a

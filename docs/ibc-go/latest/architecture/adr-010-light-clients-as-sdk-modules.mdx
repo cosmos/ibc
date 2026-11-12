@@ -21,7 +21,7 @@ ibc-go has 3 main consumers:
 Relayers listen and respond to events emitted by ibc-go while IBC light clients and applications are invoked by core IBC.
 Currently there exists two different approaches to callbacks being invoked by core IBC.
 
-IBC light clients currently are invoked by a `ClientState` and `ConsensusState` interface as defined by [core IBC](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L36).
+IBC light clients currently are invoked by a `ClientState` and `ConsensusState` interface as defined by [core IBC](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L36).
 The 02-client submodule will retrieve the `ClientState` or `ConsensusState` from the IBC store in order to perform callbacks to the light client.
 This design requires all required information for the light client to function to be stored in the `ClientState` or `ConsensusState` or potentially under metadata keys for a specific client instance.
 Additional information may be provided by core IBC via the defined interface arguments if that information is generic enough to be useful to all IBC light clients.
@@ -45,7 +45,7 @@ Instead of using two different approaches to invoking callbacks, IBC light clien
 Over time and as necessary, core IBC should adjust its interactions with light clients such that they are SDK modules as opposed to interfaces.
 
 One immediate decision that has already been applied is to formalize light client type registration via the inclusion of an `AppModuleBasic` within the `ModuleManager` for a chain.
-The [tendermint](https://github.com/cosmos/ibc-go/pull/2825) and [solo machine](https://github.com/cosmos/ibc-go/pull/2826) clients were refactored to include this `AppModuleBasic` implementation and core IBC will no longer include either type as registered by default.
+The [tendermint](https://github.com/lfdt-ibc/ibc-go/pull/2825) and [solo machine](https://github.com/lfdt-ibc/ibc-go/pull/2826) clients were refactored to include this `AppModuleBasic` implementation and core IBC will no longer include either type as registered by default.
 
 Longer term solutions include using internal module communication as described in [ADR 033](https://github.com/cosmos/cosmos-sdk/blob/main/docs/architecture/adr-033-protobuf-inter-module-comm.md) on the SDK.
 The following functions should become callbacks invoked via intermodule communication:

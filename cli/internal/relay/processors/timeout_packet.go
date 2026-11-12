@@ -10,12 +10,12 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
-	"github.com/cosmos/ibc/cli/internal/store"
-	"github.com/cosmos/ibc/cli/internal/txsubmitter"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/txbuilder"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/txsubmitter"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // BatchTimeoutPacket delivers one timeout tx on the source chain for a batch

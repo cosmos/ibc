@@ -69,7 +69,7 @@ def _():
 
 @case("leaves external .md links alone")
 def _():
-    src = "See [the readme](https://github.com/cosmos/ibc/blob/main/README.md)."
+    src = "See [the readme](https://github.com/lfdt-ibc/ibc/blob/main/README.md)."
     assert specgen.transform(src, REL) == src
 
 
@@ -203,13 +203,13 @@ def _():
 @case("a link to an excluded governance file becomes a GitHub URL")
 def _():
     out = specgen.transform("[p](../PROCESS.md)", "ics-001-ics-standard/README.md")
-    assert out == "[p](https://github.com/cosmos/ibc/blob/main/spec/PROCESS.md)", out
+    assert out == "[p](https://github.com/lfdt-ibc/ibc/blob/main/spec/PROCESS.md)", out
 
 
 @case("a link escaping spec/ becomes a GitHub URL")
 def _():
     out = specgen.transform("[r](../../README.md)", "ics-001-ics-standard/README.md")
-    assert out == "[r](https://github.com/cosmos/ibc/blob/main/README.md)", out
+    assert out == "[r](https://github.com/lfdt-ibc/ibc/blob/main/README.md)", out
 
 
 @case("leaves an already-absolute .md link alone")

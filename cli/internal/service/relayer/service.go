@@ -19,12 +19,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/relay/dispatch"
-	"github.com/cosmos/ibc/cli/internal/relay/watcher"
-	"github.com/cosmos/ibc/cli/internal/store"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/dispatch"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/watcher"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // Service represents relayer business logic.

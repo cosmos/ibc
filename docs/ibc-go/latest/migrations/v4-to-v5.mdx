@@ -42,7 +42,7 @@ func NewAnteHandler(options HandlerOptions) (sdk.AnteHandler, error) {
 }
 ```
 
-The `AnteDecorator` was actually renamed twice, but in [this PR](https://github.com/cosmos/ibc-go/pull/1820) you can see the changes made for the final rename.
+The `AnteDecorator` was actually renamed twice, but in [this PR](https://github.com/lfdt-ibc/ibc-go/pull/1820) you can see the changes made for the final rename.
 
 ## IBC Apps
 
@@ -335,7 +335,7 @@ The `MockEmptyAcknowledgement` type has been renamed to `EmptyAcknowledgement` (
 
 The `TestingApp` interface in `testing` has gone through some modifications:
 
-* The return type of the function `GetStakingKeeper` is not the concrete type `stakingkeeper.Keeper` anymore (where `stakingkeeper` is an import alias for `"github.com/cosmos/cosmos-sdk/x/staking/keeper"`), but it has been changed to the interface `ibctestingtypes.StakingKeeper` (where `ibctestingtypes` is an import alias for `""github.com/cosmos/ibc-go/v5/testing/types"`). See this [PR](https://github.com/cosmos/ibc-go/pull/2028) for more details. The `StakingKeeper` interface is defined as:
+* The return type of the function `GetStakingKeeper` is not the concrete type `stakingkeeper.Keeper` anymore (where `stakingkeeper` is an import alias for `"github.com/cosmos/cosmos-sdk/x/staking/keeper"`), but it has been changed to the interface `ibctestingtypes.StakingKeeper` (where `ibctestingtypes` is an import alias for `""github.com/cosmos/ibc-go/v5/testing/types"`). See this [PR](https://github.com/lfdt-ibc/ibc-go/pull/2028) for more details. The `StakingKeeper` interface is defined as:
 
 ```go
 type StakingKeeper interface {

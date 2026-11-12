@@ -2,7 +2,7 @@
 
 package environment
 
-import "github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+import "github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 
 // BindCLI gives a Driver process-local access to every resolved Chain
 // endpoint without exposing endpoint values to the caller. The binding is

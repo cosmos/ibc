@@ -15,12 +15,12 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/anvil"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	chainevm "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/anvil"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 // This deterministic identity is not one of Anvil's provider-default funded accounts.

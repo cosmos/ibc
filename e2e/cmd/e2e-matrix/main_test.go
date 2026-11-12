@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
 )
 
 func TestParseOptionsRequiresExactlyOneAction(t *testing.T) {

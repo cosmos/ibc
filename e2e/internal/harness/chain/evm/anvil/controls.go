@@ -10,8 +10,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
 )
 
 var _ chain.BlockController = (*Chain)(nil)

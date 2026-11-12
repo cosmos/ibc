@@ -11,7 +11,7 @@ description: >-
 
 inputs:
   image:
-    description: Image name without tag or digest, e.g. `ghcr.io/cosmos/ibc`.
+    description: Image name without tag or digest, e.g. `ghcr.io/lfdt-ibc/ibc`.
     required: true
   digest:
     description: >-

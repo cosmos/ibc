@@ -14,10 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
-	"github.com/cosmos/ibc/cli/internal/service/attestor"
+	attestorevm "github.com/lfdt-ibc/ibc/cli/attestor/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/ecrecover"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/attestor"
 )
 
 // quorumResult the aggregated, quorum-verified attestation for one claim:

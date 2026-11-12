@@ -10,9 +10,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/livevalidate"
-	"github.com/cosmos/ibc/cli/internal/pkg/logging"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/livevalidate"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/logging"
 )
 
 // set in init()

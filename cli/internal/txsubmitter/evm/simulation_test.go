@@ -10,7 +10,7 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 func TestSimulateRelayTxDecodesMisbehavior(t *testing.T) {

@@ -137,7 +137,7 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 ## History
 
-Aug 21, 2024 - [Initial draft](https://github.com/cosmos/ibc/pull/1144)
+Aug 21, 2024 - [Initial draft](https://github.com/lfdt-ibc/ibc/pull/1144)
 
 ## Copyright
 

@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/cosmos/ibc/cli/internal/store"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // CheckPacketCommitment populates the ack or timeout tx details when the

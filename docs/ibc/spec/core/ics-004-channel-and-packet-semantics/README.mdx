@@ -917,7 +917,7 @@ function recvPacket(
     // completed. In that case, implementations must also make sure that any packet with 
     // a sequence already used before the channel upgrade is rejected. This is needed to 
     // prevent replay attacks (see this PR in ibc-go for an example of how this is achieved:
-    // https://github.com/cosmos/ibc-go/pull/5651).
+    // https://github.com/lfdt-ibc/ibc-go/pull/5651).
     
     // all assertions passed (except sequence check), we can alter state
 
@@ -1518,7 +1518,7 @@ Data structures & encoding can be versioned at the connection or channel level. 
 
 ## Example Implementations
 
-- Implementation of ICS 04 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 04 in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 - Implementation of ICS 04 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History

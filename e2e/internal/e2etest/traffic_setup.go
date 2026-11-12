@@ -20,13 +20,13 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/erc1967proxy"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/evmiftsendcall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/iftbatchtransfershim"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/testerc20"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/counter"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/iftbatchtransfershim"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/testerc20"
 )
 
 var testERC20Transactor = mustBinding(testerc20.NewTestERC20Transactor(common.Address{}, nil))
