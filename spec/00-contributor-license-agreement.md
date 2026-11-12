@@ -1,14 +1,16 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 # Community Specification Contributor License Agreement 1.0
 
-By making a Contribution to this repository, I agree to the terms of the following documents located at [https://github.com/CommunitySpecification/1.0](https://github.com/CommunitySpecification/1.0):
+By making a Contribution to this repository, I agree to the terms of the following documents:
 
-(a) Community Specification License 1.0 (01-community-specification-license-v1.md)
+(a) Community Specification License 1.0, located at [https://github.com/CommunitySpecification/1.0](https://github.com/CommunitySpecification/1.0) ([01-community-specification-license-v1.md](01-community-specification-license-v1.md))
 
-(b) Community Specification Governance Policy 1.0 (05-governance.md)
+(b) This repository's governance policy ([05-governance.md](05-governance.md)), which adopts the repository's [GOVERNANCE.md](../GOVERNANCE.md)
 
-(c) Community Specification Contribution Policy 1.0 (06-contributing.md)
+(c) This repository's contribution policy ([06-contributing.md](06-contributing.md)), which adopts the repository's [CONTRIBUTING.md](../CONTRIBUTING.md) and the standardisation stages in [PROCESS.md](PROCESS.md)
 
-(d) Community Specification Code of Conduct (08-code-of-conduct.md)
+(d) This repository's Code of Conduct ([08-code-of-conduct.md](08-code-of-conduct.md)), which adopts the repository's [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)
 
 
 In addition, for source code contributions, I certify that:

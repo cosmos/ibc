@@ -2,19 +2,11 @@
 
 # Notices
 
-This file is the repository's Notices file: the `Notices.md` named in the [Community Specification License 1.0](01-community-specification-license-v1.md) and the `Notice.md` named in the [Code of Conduct](08-code-of-conduct.md). License acceptances, withdrawals and Exclusion Notices are made by pull request to this file.
+This file is the repository's Notices file: the `Notices.md` (or `Notice.md`) named in the [Community Specification License 1.0](01-community-specification-license-v1.md). License acceptances, withdrawals and Exclusion Notices are made by pull request to this file.
 
 ## Code of Conduct
 
-Contact for Code of Conduct issues or inquires: the Code of Conduct responders below. You can contact any one of them, so a complaint never has to go to someone it concerns. [TSC_MEMBERS.md](../TSC_MEMBERS.md#code-of-conduct-responders) is the authoritative list.
-
-- Giovanni Vitali ([@giocosmos](https://github.com/giocosmos))
-- Dennis Fang ([@dhfang](https://github.com/dhfang))
-- Gjermund Garaba ([@gjermundgaraba](https://github.com/gjermundgaraba))
-- Serdar Türkmenafşar ([@srdtrk](https://github.com/srdtrk))
-- Dmitry Shlemin ([@swift1337](https://github.com/swift1337))
-- Dylan Kilkenny ([@dylankilkenny](https://github.com/dylankilkenny))
-- Jun Kimura ([@bluele](https://github.com/bluele))
+Contact for Code of Conduct issues or inquiries: the Code of Conduct responders listed in [TSC_MEMBERS.md](../TSC_MEMBERS.md#code-of-conduct-responders). You can contact any one of them, so a complaint never has to go to someone it concerns.
 
 Concerns can also be escalated to LF Decentralized Trust, as described in the repository's [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md).
 

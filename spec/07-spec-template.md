@@ -83,7 +83,7 @@ This version (vN) of ICS (number) cancels and replaces version vN-1, which has b
 
 Known patent licensing exclusions are available in the specification’s repository’s [Notices](03-notices.md) file.
 
-Any feedback or questions on this document should be directed to specifications repository, located at [https://github.com/cosmos/ibc](https://github.com/cosmos/ibc).
+Any feedback or questions on this document should be directed to specifications repository, located at [https://github.com/lfdt-ibc/ibc](https://github.com/lfdt-ibc/ibc).
 
 THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 

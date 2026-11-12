@@ -39,4 +39,4 @@ Anyone may step down at any time by a pull request removing themselves. A Mainta
 
 ## Removal
 
-Merge rights may be revoked for cause, including Code of Conduct violations or sustained conduct against the project's interest, by a Maintainer vote under the Charter. There is no individual veto; a single objection slows and forces discussion under lazy consensus but does not unilaterally block. Serious cases follow the Code of Conduct process rather than this file.
+Merge rights may be revoked for cause, including [Code of Conduct](CODE_OF_CONDUCT.md) violations or sustained conduct against the project's interest, by a Maintainer vote under the Charter. There is no individual veto; a single objection slows and forces discussion under lazy consensus but does not unilaterally block. Serious cases follow the Code of Conduct process rather than this file.

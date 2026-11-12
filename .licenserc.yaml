@@ -53,7 +53,6 @@ header:
       - "cli/internal/service/**/*.mock.go"
       - "gen/go/solidity-abi/*/contract.go"
 
-
     comment: never
     license-location-threshold: 80
 
@@ -66,12 +65,13 @@ header:
       - "spec/**/*.md"
       - "docs/ibc/spec/**/*.mdx"
 
-    # Copied verbatim from github.com/CommunitySpecification/Community_Specification.
-    # 02 to 07 are filled in here and carry the header.
+    # The license text is copied verbatim from
+    # github.com/CommunitySpecification/Community_Specification. 00 and 02 to
+    # 08 are adapted here and carry the header: 00 names this repository's
+    # policies, and 05, 06 and 08 defer to the root GOVERNANCE.md,
+    # CONTRIBUTING.md and CODE_OF_CONDUCT.md.
     paths-ignore:
-      - "spec/00-contributor-license-agreement.md"
       - "spec/01-community-specification-license-v1.md"
-      - "spec/08-code-of-conduct.md"
 
     comment: never
     # Line 1, or line 2 inside YAML frontmatter, which GitHub and Mintlify
