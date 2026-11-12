@@ -117,8 +117,6 @@ TX=$(./bin/ibc tx ift send --chain 41001 --ift "$(./bin/ibc deploy show 41001 | 
 
 The relayer will pick up the packet automatically and relay it to the destination.
 
-Relay submission does not require another block on the receiving chain beforehand. Once the required proofs are available, the relayer simulates and submits the relay transactions; simulation validates the client updates and packets.
-
 3. Watch it settle:
 
 ```bash
