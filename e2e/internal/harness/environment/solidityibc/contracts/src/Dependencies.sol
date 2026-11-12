@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.28;
 
 // Solidity IBC v3.0.2 deploys OpenZeppelin's AccessManager directly, but its Go

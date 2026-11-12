@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: Apache-2.0
 // TEST APPLICATION ONLY — not a product contract.
 // USE FOR LOCALNETS ONLY AS ANYONE CAN TRANSFER FROM THIS CONTRACT (E2E TESTS)
 pragma solidity 0.8.28;

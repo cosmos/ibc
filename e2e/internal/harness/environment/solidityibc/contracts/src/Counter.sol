@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: Apache-2.0
 // TEST APPLICATION ONLY — not a product contract.
 pragma solidity 0.8.28;
 
