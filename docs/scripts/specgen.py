@@ -123,22 +123,29 @@ def check_fences(text, rel):
 
 
 _DISCLAIMER = "THESE MATERIALS ARE PROVIDED “AS IS.”"
+_POLICY = "CONTRIBUTING.md#copyright-and-license"
 
 
 def check_copyright(text, rel):
-    """Raise if `text` has no Copyright section carrying the CSL disclaimer.
+    """Raise if `text` lacks the Copyright section every published spec ends with.
 
-    Section 8.2 of the Community Specification License requires every
-    distribution of the specifications to carry its warranty disclaimer, and
-    each published page is distributed on its own. The section to copy is the
-    one in spec/ics-template.md.
+    The section points to the repository's license policy, the Copyright and
+    license section of CONTRIBUTING.md, and carries the warranty disclaimer
+    that section 8.2 of the Community Specification License requires in every
+    distribution; each published page is distributed on its own. The section
+    to copy is the one in spec/ics-template.md.
     """
     m = re.search(r"^## Copyright\s*$", text, re.M)
-    if not m or _DISCLAIMER not in text[m.end():]:
+    section = text[m.end():] if m else ""
+    missing = [what for what, needle in (
+        ("the link to CONTRIBUTING.md's Copyright and license section", _POLICY),
+        ("the Community Specification License disclaimer", _DISCLAIMER),
+    ) if needle not in section]
+    if not m or missing:
         raise ValueError(
-            f"spec/{rel}: no Copyright section with the Community "
-            "Specification License disclaimer. Copy the Copyright section "
-            "from spec/ics-template.md to the end of the file.")
+            f"spec/{rel}: Copyright section missing or without "
+            f"{' and '.join(missing) or 'its content'}. Copy the Copyright "
+            "section from spec/ics-template.md to the end of the file.")
 
 
 def _outside_fences(text, fn):

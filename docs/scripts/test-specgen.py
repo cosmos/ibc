@@ -30,7 +30,8 @@ def case(name):
 REL = "core/ics-004-channel-and-packet-semantics/README.md"
 
 # What every published source must end with; see specgen.check_copyright.
-COPYRIGHT = "\n## Copyright\n\n" + specgen._DISCLAIMER + "\n"
+COPYRIGHT = ("\n## Copyright\n\nSee [Copyright and license](" + specgen._POLICY + ").\n\n"
+             + specgen._DISCLAIMER + "\n")
 
 
 @case("strips the .md suffix from internal links")
@@ -424,6 +425,17 @@ def _():
         pass
     else:
         assert False, "a Copyright section without the disclaimer was accepted"
+
+
+@case("rejects a Copyright section that does not point to CONTRIBUTING.md")
+def _():
+    src = "# X\n\n## Copyright\n\n" + specgen._DISCLAIMER + "\n"
+    try:
+        specgen.check_copyright(src, REL)
+    except ValueError as e:
+        assert "CONTRIBUTING.md" in str(e), e
+    else:
+        assert False, "a Copyright section without the policy link was accepted"
 
 
 @case("accepts the template's Copyright section")
