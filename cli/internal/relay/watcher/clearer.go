@@ -56,7 +56,7 @@ type Result struct {
 
 	PacketsAlreadyStored int
 
-	// PacketsRecovered packet has seq commitment onchain && even log has been found,
+	// PacketsRecovered packet has seq commitment onchain && event log has been found,
 	// insert/upsert DB row
 	PacketsRecovered int
 
@@ -115,7 +115,6 @@ func (c *Clearer) Clear(ctx context.Context, clientID string) (Result, error) {
 		return Result{}, errors.Wrapf(err, "reading the latest block height")
 	}
 
-	// clientID-specific clearer
 	clientClearer := &clientClearer{
 		Clearer:           c,
 		clientID:          clientID,
@@ -179,7 +178,7 @@ func (c *clientClearer) clear(ctx context.Context) (Result, error) {
 		return Result{}, errors.Wrapf(err, "listing recorded sequences")
 	}
 
-	// query unresolved packages one more time. This might succeed ONLY
+	// query unresolved packets one more time. This might succeed ONLY
 	// if an operator changes RPC to an archival one
 	// todo(swift1337): implement a cursor + cap for unresolved sequences
 	seqsPreviouslyUnresolved := state.Unresolved
@@ -267,7 +266,7 @@ func (c *clientClearer) queryLiveSequences(
 			return nil
 		}
 
-		// len(found) <= len(chunk) because some seqs might be missing
+		// len(found) <= len(sequences) because some seqs might be missing
 		// note: evm client chunks queries automatically
 		found, err := c.chain.PacketCommitments(ctx, c.clientID, sequences, c.latestBlockHeight)
 		if err != nil {

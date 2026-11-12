@@ -137,7 +137,7 @@ func (c AttestationClientConfig) validate() error {
 	return nil
 }
 
-// validCustomClientID mirrors Solidity IBC v3's IBCIdentifiers validation. The
+// validCustomClientID mirrors Solidity IBC's IBCIdentifiers validation. The
 // access-controlled addClient overload rejects generated "client-" identifiers
 // and accepts only these explicit custom identifiers.
 func validCustomClientID(id string) bool {

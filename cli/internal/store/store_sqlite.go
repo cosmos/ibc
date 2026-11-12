@@ -60,7 +60,7 @@ func NewSqliteWithOptions(path string, connectionOpts map[string]string) (*Sqlit
 			return nil, errors.Wrapf(err, "open sqlite in memory")
 		}
 
-		// shared memory database is a single connection
+		// each connection opens its own private in-memory database, so keep exactly one
 		db.SetMaxOpenConns(1)
 
 		return &SqliteDB{

@@ -126,7 +126,7 @@ func TestRelay(t *testing.T) {
 		clients.EXPECT().Get(chainIDEth).Return(client, true).Once()
 		client.EXPECT().TxPacketEvents(ctx, txHashBytes(t)).Return(events, nil).Once()
 
-		// request and packets land in one transaction; hash normalized to lowercase
+		// packets land in one transaction; hash normalized to lowercase
 		st.EXPECT().
 			Transact(ctx, mock.AnythingOfType("func(store.Repository) error")).
 			RunAndReturn(func(_ context.Context, fn func(store.Repository) error) error {

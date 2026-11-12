@@ -48,7 +48,8 @@ func (i *IBCInstance) ICS27GMPAddress() EVMAddress {
 	return i.ics27GMP
 }
 
-// IBCMulticallAddress returns the deployed batching proxy.
+// IBCMulticallAddress returns the IBCMulticall batching proxy. It is zero for
+// attached instances, which resolve only the router and access manager.
 func (i *IBCInstance) IBCMulticallAddress() EVMAddress {
 	return i.ibcMulticall
 }

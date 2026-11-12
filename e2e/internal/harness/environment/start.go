@@ -237,9 +237,10 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 		id     AttestorID
 		client string
 	}
-	// Solidity IBC v3 attestations do not yet include domain separation. Reusing one
-	// signer across Clients would allow the same signed bytes to be replayed in
-	// another Client context, so signer isolation is a graph-wide invariant.
+	// Solidity IBC attestations are domain-separated only by attestation type, not
+	// by Client. Reusing one signer across Clients would allow the same signed bytes
+	// to be replayed in another Client context, so signer isolation is a graph-wide
+	// invariant.
 	attestorAddresses := make(map[string]attestorUse)
 	for _, connection := range spec.Connections {
 		for _, end := range connection.ends() {

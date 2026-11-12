@@ -135,7 +135,7 @@ func (m *Manifest) Save(dir string) error {
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }() // Best-effort cleanup; errors are acceptable
 	if _, err := tmp.Write(bz); err != nil {
-		_ = tmp.Close() // Ignore error; file will be cleaned up on next restart
+		_ = tmp.Close() // Ignore error; the deferred Remove cleans up the file
 		return err
 	}
 	if err := tmp.Close(); err != nil {

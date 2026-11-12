@@ -28,7 +28,6 @@ env:
   GO_BUILD_FLAGS: -trimpath
 
 jobs:
-  # Prepare Docker metadata
   image-metadata:
     name: Prepare Docker metadata
     runs-on: ubuntu-latest
@@ -57,7 +56,7 @@ jobs:
           echo "image_tag=${tag:0:116}" >> "$GITHUB_OUTPUT"
 
   # Build binaries. They do not depend on the image tag, so they build even when image-metadata
-  # fails, and only the image job can push to the registry.
+  # fails, and only the image and publish-manifest jobs can push to the registry.
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     # CGO is off, so every platform cross-compiles on one runner type.

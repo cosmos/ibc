@@ -20,9 +20,9 @@
 # Each chain owns a mnemonic (A_MNEMONIC / B_MNEMONIC) and every account on that
 # chain comes out of it: FUNDED_ACCOUNTS addresses are
 # derived per chain and funded in that chain's genesis. By convention index 0 is
-# the chain's deployer and index 1 its validator, so the two chains share no
-# accounts at all — separate funded sets, separate deployers, separate
-# validators.
+# the chain's deployer and index 1 its validator. B_MNEMONIC defaults to
+# A_MNEMONIC, so out of the box both chains derive the same accounts; set
+# different phrases for separate funded sets, deployers, and validators.
 
 CHAINS=(A B)
 

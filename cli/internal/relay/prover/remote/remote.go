@@ -20,7 +20,7 @@ import (
 	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
-// todo: make it configurable in ibc.yaml
+// todo: make it configurable in ibc.yml
 const (
 	maxResponseBytes = 1 << 20 // 1MB
 	requestTimeout   = 30 * time.Second

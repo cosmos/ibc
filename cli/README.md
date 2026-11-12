@@ -5,7 +5,7 @@
 IBC CLI deploys IBC onto a chain and runs the relayer and attestor
 processes that carry packets across it.
 
-See [`docs/ibc/ibc-cli/`](../docs/ibc/05-ibc-cli) for guides on operating IBC CLI.
+See [`docs/ibc/05-ibc-cli/`](../docs/ibc/05-ibc-cli) for guides on operating IBC CLI.
 Start with [Deploy IBC and send a token](../docs/ibc/05-ibc-cli/02-tutorial/01-deploy-ibc-and-send-a-token.mdx),
 which brings up two chains, deploys the stack on both, and moves a token
 between them.
@@ -75,6 +75,6 @@ for a worked example.
 
 ## E2E
 
-Repository-wide black-box tests live in [`../e2e/`](../e2e/README.md), with the
-harness in `../e2e/internal/harness` as a separate Go module. From the
+Repository-wide black-box tests live in [`../e2e/`](../e2e/README.md), a separate Go
+module, with the harness in `../e2e/internal/harness`. From the
 repository root, `make -C e2e doctor && make -C e2e test` runs the suite.

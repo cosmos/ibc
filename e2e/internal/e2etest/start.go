@@ -240,8 +240,6 @@ func guardLoadTest(t testing.TB) bool {
 		t.Skipf("e2etest: load tests are skipped when %s or -%s is not specified", envLoad, flagNameLoad)
 	}
 
-	// expected invariants
-
 	return isLoadTest
 }
 

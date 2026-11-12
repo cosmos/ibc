@@ -22,8 +22,8 @@ func TestDefaultLevel(t *testing.T) {
 		{"debug", "debug", slog.LevelDebug},
 		{"info", "info", slog.LevelInfo},
 		{"Capital warn", "WARN", slog.LevelWarn},
-		{"empty input defaults to info", "", slog.LevelInfo},     // empty falls back to info
-		{"invalid defaults to info", "nonsense", slog.LevelInfo}, // unrecognized falls back to info
+		{"empty input defaults to info", "", slog.LevelInfo},
+		{"invalid defaults to info", "nonsense", slog.LevelInfo},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := Default(false, tt.inputLevel)

@@ -300,10 +300,6 @@ func TestClientStepsDivergentSpecError(t *testing.T) {
 	require.Equal(t, []string{"0xa"}, c.Attestation.Attestors)
 }
 
-// initialHeight/initialTimestamp default from the live counterparty head and
-// change every invocation; they are launch-time trusted state, not client
-// identity, so a rerun differing only in them skips cleanly and leaves the
-// deploy-time values in the manifest.
 func TestGMPStepsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()
@@ -358,6 +354,10 @@ func TestGMPStepsInterruptedDeploy(t *testing.T) {
 	require.Equal(t, 0, target.gmpProvisions)
 }
 
+// initialHeight/initialTimestamp default from the live counterparty head and
+// change every invocation; they are launch-time trusted state, not client
+// identity, so a rerun differing only in them skips cleanly and leaves the
+// deploy-time values in the manifest.
 func TestClientStepsRerunIgnoresTrustedStateDrift(t *testing.T) {
 	dir := t.TempDir()
 	target := newFakeTarget()

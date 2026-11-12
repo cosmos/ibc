@@ -117,7 +117,6 @@ func (s *Server) Register(h Handler) {
 		handlerOptions = append(handlerOptions, otel.WrapConnectHandler())
 	}
 
-	// we might want to pass some global options here later
 	prefix, handler := h.Register(handlerOptions...)
 	s.logger.Debug("Registered handler", "prefix", prefix)
 

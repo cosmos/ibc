@@ -12,7 +12,7 @@ for metric modes, names, labels, and semantics.
 1. Ensure unique attribute keys are present in `otel/metrics.go` (eg `AttrChainID`, `AttrAttestor`). Add new if needed.
 2. Create `metrics.go` based on the following reference example. Don't enforce units if not necessary.
 3. Keep metric-related code in `<pkg>/metrics.go`, create small helpers to make metrics recording
-  more concise for callers. See `latestHeight(...)` and `recordOperation(...)` in attestor's metrics.
+  more concise for callers. See `latestHeight(...)` and `record(...)` in attestor's metrics.
 4. Leave metrics unitless (except durations).
 
 ```go

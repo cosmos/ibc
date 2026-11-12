@@ -45,7 +45,7 @@ type catalystPacket struct {
 }
 
 // AwaitPacketsFromCatalyst queries the relayer until each broadcast transaction
-// is indexed and waits for every packet it emitted to stay succeeded.
+// is indexed and waits for every packet it emitted to reach succeeded.
 func AwaitPacketsFromCatalyst(
 	ctx context.Context,
 	route e2etest.Route,
@@ -112,7 +112,7 @@ func AwaitPacketsFromCatalyst(
 }
 
 // given N catalyst tx, discover all packets emitted by them
-// discovers up to maxLookupsPerPoll packets per poll do avoid scanning
+// looks up at most maxLookupsPerPoll transactions per poll to avoid scanning
 // too recent packets (they need some time to be indexed)
 func discoverCatalystPackets(
 	ctx context.Context,

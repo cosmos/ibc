@@ -88,8 +88,8 @@ type errorWriter struct{ err error }
 
 func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
 
-// fakeRelayerAPI serves the relayer wire contract: Status on an unknown
-// transaction reports CodeNotFound; Relay records the submitted arguments.
+// fakeRelayerAPI serves the relayer wire contract: Packets lists nothing for
+// an unknown transaction; Relay records the submitted arguments.
 type fakeRelayerAPI struct {
 	relayerv2.UnimplementedRelayerApiServiceHandler
 	relayed  []*relayerv2.RelayRequest

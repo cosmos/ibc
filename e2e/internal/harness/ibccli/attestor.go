@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package ibccli manages IBC CLI processes as black boxes.
 package ibccli
 
 import (
@@ -58,8 +57,8 @@ type AttestorLaunch struct {
 	ChainID     string
 	RPCURL      string
 	ICS26Router string
-	// Local signers require PrivateKeyHex; remote signers require GRPC and
-	// RemoteKeyID instead.
+	// Local signers require PrivateKeyHex; remote signers require SignerGRPC
+	// and SignerRemoteKeyID instead.
 	PrivateKeyHex     string
 	SignerGRPC        string
 	SignerRemoteKeyID string
@@ -174,7 +173,7 @@ func StartAttestor(ctx context.Context, launch AttestorLaunch) (*AttestorProcess
 func (p *AttestorProcess) SignerAddress() common.Address { return p.signerAddress }
 
 // Endpoint is the attestor's announced listen address as a bare host:port,
-// the form the relayer configuration requires for remote attestors.
+// a form the relayer configuration accepts for remote attestors.
 func (p *AttestorProcess) Endpoint() string { return p.address }
 
 // LatestHeight queries the attestor's LatestHeight RPC for its configured

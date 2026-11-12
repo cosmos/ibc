@@ -32,8 +32,8 @@ type Options struct {
 }
 
 // OptionsFromConfig maps chain overrides onto pipeline options: recv batching
-// follows the destination chain, ack and timeout batching and the ack relay
-// flags follow the source chain.
+// follows the destination chain, ack and timeout batching follow the source
+// chain.
 func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 	opts := Options{
 		RecvBatchSize:       DefaultBatchSize,
