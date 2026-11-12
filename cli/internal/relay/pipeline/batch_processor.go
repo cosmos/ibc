@@ -9,7 +9,7 @@ import (
 
 	"github.com/deliveryhero/pipeline/v2"
 
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
 )
 
 // BatchProcess batches the transfers the processor applies to

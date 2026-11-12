@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
 )
 
 // RelayerConfig describes one relayer process configuration for the black-box

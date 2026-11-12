@@ -10,7 +10,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/testutil/certs"
+	"github.com/lfdt-ibc/ibc/cli/internal/testutil/certs"
 )
 
 func TestTLSClientConfigValidate(t *testing.T) {

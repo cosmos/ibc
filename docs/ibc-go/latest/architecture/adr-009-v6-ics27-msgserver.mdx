@@ -30,7 +30,7 @@ To minimize disruption to developers working on the original design of the ICS 2
 
 ### Msg server
 
-To achieve this, as stated by [@damiannolan](https://github.com/cosmos/ibc-go/issues/2026#issue-1341640594), it was proposed to:
+To achieve this, as stated by [@damiannolan](https://github.com/lfdt-ibc/ibc-go/issues/2026#issue-1341640594), it was proposed to:
 
 > Add a new `MsgServer` to `27-interchain-accounts` which exposes two distinct rpc endpoints:
 >
@@ -54,7 +54,7 @@ Authentication modules should interact with the controller module via the messag
 For now, it will be allowed to set a `nil` underlying application.
 A future version may remove the underlying application entirely.
 
-See issue [#2040](https://github.com/cosmos/ibc-go/issues/2040)
+See issue [#2040](https://github.com/lfdt-ibc/ibc-go/issues/2040)
 
 ### Channel capability claiming
 
@@ -66,7 +66,7 @@ Channel capability migrations will be added in two steps:
 - Upgrade handler migration which modifies the channel capability owner from the underlying app to the controller module
 - ICS 27 module automatic migration which asserts the upgrade handler channel capability migration has been performed successfully
 
-See issue [#2033](https://github.com/cosmos/ibc-go/issues/2033)
+See issue [#2033](https://github.com/lfdt-ibc/ibc-go/issues/2033)
 
 ### Middleware enabled channels
 
@@ -76,11 +76,11 @@ If the account was created via the legacy API, then the underlying application c
 
 If the account was created with the new API (message server), then the underlying application callbacks will not be executed.
 
-See issue [#2145](https://github.com/cosmos/ibc-go/issues/2145)
+See issue [#2145](https://github.com/lfdt-ibc/ibc-go/issues/2145)
 
 ### Future considerations
 
-[ADR 008](https://github.com/cosmos/ibc-go/pull/1976) proposes the creation of a middleware which enables callers of an IBC packet send to perform application logic in conjunction with the IBC application.
+[ADR 008](https://github.com/lfdt-ibc/ibc-go/pull/1976) proposes the creation of a middleware which enables callers of an IBC packet send to perform application logic in conjunction with the IBC application.
 The underlying application can be removed at the availability of such a middleware as that will be the preferred method for executing application logic upon a ICS 27 packet send.
 
 ### Miscellaneous
@@ -88,11 +88,11 @@ The underlying application can be removed at the availability of such a middlewa
 In order to avoid import cycles, the genesis types have been moved to their own directory.
 A new protobuf package has been created for the genesis types.
 
-See PR [#2133](https://github.com/cosmos/ibc-go/pull/2133)
+See PR [#2133](https://github.com/lfdt-ibc/ibc-go/pull/2133)
 
 An additional field has been added to the `ActiveChannel` type to store the `IsMiddlewareEnabled` field upon genesis import/export.
 
-See issue [#2165](https://github.com/cosmos/ibc-go/issues/2165)
+See issue [#2165](https://github.com/lfdt-ibc/ibc-go/issues/2165)
 
 ## Consequences
 

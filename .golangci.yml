@@ -26,7 +26,7 @@ formatters:
       sections:
         - "standard"
         - "default"
-        - "prefix(github.com/cosmos/ibc)"
+        - "prefix(github.com/cosmos/ibc,github.com/lfdt-ibc/ibc)"
         - "blank" # e.g. sql drivers
     gofmt:
       rewrite-rules:

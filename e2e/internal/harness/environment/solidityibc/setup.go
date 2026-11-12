@@ -26,12 +26,12 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27account"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/routeraccess"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/escrow"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/routeraccess"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/accessmanager"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/escrow"
 )
 
 type contractBackend interface {

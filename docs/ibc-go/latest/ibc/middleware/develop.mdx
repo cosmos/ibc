@@ -23,7 +23,7 @@ func MarshalAsIBCDoes(ack channeltypes.Acknowledgement) ([]byte, error) {
 }
 ```
 
-The interfaces a middleware must implement are found [here](https://github.com/cosmos/ibc-go/blob/main/modules/core/05-port/types/module.go).
+The interfaces a middleware must implement are found [here](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/core/05-port/types/module.go).
 
 ```go
 // Middleware implements the ICS26 Module interface
@@ -76,7 +76,7 @@ func (im *IBCMiddleware) SetICS4Wrapper(wrapper porttypes.ICS4Wrapper) {
 
 ## Implement `IBCModule` interface
 
-`IBCMiddleware` is a struct that implements the [ICS-26 `IBCModule` interface (`porttypes.IBCModule`)](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/05-port/types/module.go#L13-L118). It is recommended to separate these callbacks into a separate file `ibc_middleware.go`.
+`IBCMiddleware` is a struct that implements the [ICS-26 `IBCModule` interface (`porttypes.IBCModule`)](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/05-port/types/module.go#L13-L118). It is recommended to separate these callbacks into a separate file `ibc_middleware.go`.
 
 > Note how this is analogous to implementing the same interfaces for IBC applications that act as base applications.
 
@@ -179,7 +179,7 @@ return version, nil
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L314-L324) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L314-L324) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnChanOpenTry`
 
@@ -236,7 +236,7 @@ return version, nil
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L327-L336) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L327-L336) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnChanOpenAck`
 
@@ -270,7 +270,7 @@ doCustomLogic()
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L339-L347) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L339-L347) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnChanOpenConfirm`
 
@@ -288,7 +288,7 @@ return app.OnChanOpenConfirm(ctx, portID, channelID)
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L350-L352) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L350-L352) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnChanCloseInit`
 
@@ -306,7 +306,7 @@ return app.OnChanCloseInit(ctx, portID, channelID)
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L355-L357) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L355-L357) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnChanCloseConfirm`
 
@@ -324,7 +324,7 @@ return app.OnChanCloseConfirm(ctx, portID, channelID)
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L360-L362) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L360-L362) an example implementation of this callback for the Callbacks Middleware module.
 
 ### Packet callbacks
 
@@ -352,7 +352,7 @@ doCustomLogic(ack) // middleware may modify outgoing ack
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L225-L265) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L225-L265) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnAcknowledgementPacket`
 
@@ -374,7 +374,7 @@ return app.OnAcknowledgementPacket(ctx, channelVersion, packet, ack, relayer)
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L139-L180) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L139-L180) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnTimeoutPacket`
 
@@ -395,7 +395,7 @@ return app.OnTimeoutPacket(ctx, channelVersion, packet, relayer)
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L186-L218) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L186-L218) an example implementation of this callback for the Callbacks Middleware module.
 
 ## ICS-04 wrappers
 
@@ -419,7 +419,7 @@ type Keeper struct {
 
 For stateless middleware, the `ics4Wrapper` can be passed on directly without having to instantiate a keeper struct for the middleware.
 
-[The interface](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/05-port/types/module.go#L119-L143) looks as follows:
+[The interface](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/05-port/types/module.go#L119-L143) looks as follows:
 
 ```go expandable
 // This is implemented by ICS4 and all middleware that are wrapping base application.
@@ -480,7 +480,7 @@ return ics4Wrapper.SendPacket(
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L92-L133) an example implementation of this function for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L92-L133) an example implementation of this function for the Callbacks Middleware module.
 
 ### `WriteAcknowledgement`
 
@@ -500,7 +500,7 @@ return ics4Wrapper.WriteAcknowledgement(packet, ack_bytes)
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L272-L311) an example implementation of this function for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L272-L311) an example implementation of this function for the Callbacks Middleware module.
 
 ### `GetAppVersion`
 
@@ -529,7 +529,7 @@ return metadata.AppVersion, true
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L366-L368) an example implementation of this function for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/ibc_middleware.go#L366-L368) an example implementation of this function for the Callbacks Middleware module.
 
 ## Wiring Interface Requirements
 

@@ -84,7 +84,7 @@ As tokens are sent across chains using the ICS 20 protocol, they begin to accrue
 
 The ICS 20 token traces are represented by a list of `ics20Port` and `ics20Channel` pairs, which are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different paths are not treated as being fungible.
 
-A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
+A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/lfdt-ibc/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
 The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through chain A, chain B, and chain C. The order of operations is outlined as `A -> B -> C -> A -> C -> B -> A`.
 
@@ -807,7 +807,7 @@ and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementations
 
-- Implementation of ICS 20 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 20 in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 - Implementation of ICS 20 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
@@ -826,11 +826,11 @@ July 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
 
-Sep 22, 2023 - [Support for multi-token packets](https://github.com/cosmos/ibc/pull/1020)
+Sep 22, 2023 - [Support for multi-token packets](https://github.com/lfdt-ibc/ibc/pull/1020)
 
-March 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
+March 5, 2024 - [Support for path forwarding](https://github.com/lfdt-ibc/ibc/pull/1090)
 
-June 18, 2024 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
+June 18, 2024 - [Support for data protobuf encoding](https://github.com/lfdt-ibc/ibc/pull/1118)
 
 ## Copyright
 

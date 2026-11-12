@@ -12,11 +12,11 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/cli/internal/bootstrap"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/otel"
-	"github.com/cosmos/ibc/cli/internal/pkg/graceful"
+	"github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/cli/internal/bootstrap"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/otel"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/graceful"
 )
 
 var (

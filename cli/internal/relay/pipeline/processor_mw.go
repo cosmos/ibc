@@ -8,8 +8,8 @@ import (
 	"github.com/deliveryhero/pipeline/v2"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // StatusStorage persists packet status transitions.

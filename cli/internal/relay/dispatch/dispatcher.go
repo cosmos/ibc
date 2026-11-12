@@ -9,8 +9,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // DefaultPollInterval how often the dispatcher polls for dispatchable packets.

@@ -937,7 +937,7 @@ const file_relayer_proto_rawDesc = "" +
 	"\x19PACKET_STATE_RELAY_FAILED\x10\x062\xa9\x01\n" +
 	"\x11RelayerApiService\x12F\n" +
 	"\x05Relay\x12\x1c.ibc.v2.relayer.RelayRequest\x1a\x1d.ibc.v2.relayer.RelayResponse\"\x00\x12L\n" +
-	"\aPackets\x12\x1e.ibc.v2.relayer.PacketsRequest\x1a\x1f.ibc.v2.relayer.PacketsResponse\"\x00B*Z(github.com/cosmos/ibc/cli/api/v2/relayerb\x06proto3"
+	"\aPackets\x12\x1e.ibc.v2.relayer.PacketsRequest\x1a\x1f.ibc.v2.relayer.PacketsResponse\"\x00B,Z*github.com/lfdt-ibc/ibc/cli/api/v2/relayerb\x06proto3"
 
 var (
 	file_relayer_proto_rawDescOnce sync.Once

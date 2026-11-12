@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	migrate "github.com/rubenv/sql-migrate"
 
-	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
 )
 
 const migrationTemplate = `-- SPDX-License-Identifier: Apache-2.0

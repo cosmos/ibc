@@ -14,8 +14,8 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/cosmos/ibc/cli/internal/otel"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/otel"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 func TestSubscriptionHealth(t *testing.T) {

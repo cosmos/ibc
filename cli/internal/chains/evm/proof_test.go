@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/besu/besutest"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu/besutest"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 func hexBytes(nodes [][]byte) []hexutil.Bytes {

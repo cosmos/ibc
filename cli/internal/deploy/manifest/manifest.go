@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
 )
 
 const schemaVersion = 1

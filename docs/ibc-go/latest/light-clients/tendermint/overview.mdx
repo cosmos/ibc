@@ -9,7 +9,7 @@ title: Overview
 
 Learn about the 07-tendermint light client module.
 
-The Tendermint client is the first and most deployed light client in IBC. It implements the IBC [light client module interface](https://github.com/cosmos/ibc-go/blob/v9.0.0-beta.1/modules/core/exported/client.go#L41-L123) to track a counterparty running [CometBFT](https://github.com/cometbft/cometbft) consensus.
+The Tendermint client is the first and most deployed light client in IBC. It implements the IBC [light client module interface](https://github.com/lfdt-ibc/ibc-go/blob/v9.0.0-beta.1/modules/core/exported/client.go#L41-L123) to track a counterparty running [CometBFT](https://github.com/cometbft/cometbft) consensus.
 
 <Note>
   Tendermint is the old name of CometBFT which has been retained in IBC to avoid
@@ -83,7 +83,7 @@ message ConsensusState {
 
 ## Updates
 
-Once the initial client state and consensus state are submitted, future consensus states can be added to the client by submitting IBC [headers](https://github.com/cosmos/ibc-go/blob/v9.0.0-beta.1/proto/ibc/lightclients/tendermint/v1/tendermint.proto#L76-L94). These headers contain all necessary information to run the CometBFT light client protocol.
+Once the initial client state and consensus state are submitted, future consensus states can be added to the client by submitting IBC [headers](https://github.com/lfdt-ibc/ibc-go/blob/v9.0.0-beta.1/proto/ibc/lightclients/tendermint/v1/tendermint.proto#L76-L94). These headers contain all necessary information to run the CometBFT light client protocol.
 
 ```proto expandable
 message Header {
@@ -153,7 +153,7 @@ The Tendermint light client directly tracks consensus of a CometBFT counterparty
 
 In case the malicious subset of the validators exceeds the trust level of the client, then the client can be deceived into accepting invalid blocks and the connection is no longer secure.
 
-The Tendermint client has some mitigations in place to prevent this. If there are two valid blocks signed by the counterparty validator set at the same height \[e.g. a valid block signed by an honest subset and an invalid block signed by a malicious one], then these conflicting headers can be submitted to the client as [misbehaviour](https://github.com/cosmos/ibc-go/blob/v9.0.0-beta.1/proto/ibc/lightclients/tendermint/v1/tendermint.proto#L65-L74). The client will verify the headers and freeze the client; preventing any future updates and proof verification from succeeding. This effectively halts communication with the compromised counterparty while out-of-band social consensus can unwind any damage done.
+The Tendermint client has some mitigations in place to prevent this. If there are two valid blocks signed by the counterparty validator set at the same height \[e.g. a valid block signed by an honest subset and an invalid block signed by a malicious one], then these conflicting headers can be submitted to the client as [misbehaviour](https://github.com/lfdt-ibc/ibc-go/blob/v9.0.0-beta.1/proto/ibc/lightclients/tendermint/v1/tendermint.proto#L65-L74). The client will verify the headers and freeze the client; preventing any future updates and proof verification from succeeding. This effectively halts communication with the compromised counterparty while out-of-band social consensus can unwind any damage done.
 
 Similarly, if the timestamps of the headers are not monotonically increasing, this can also be evidence of malicious behaviour and cause the client to freeze.
 

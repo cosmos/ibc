@@ -206,7 +206,7 @@ The v2 constructor takes four arguments: the keeper by value, the module being w
 The v2 middleware enforces the same limits as v1. It converts each v2 payload to the internal packet form and calls the same keeper logic, so a denom's limit applies identically regardless of which IBC version carried the transfer.
 
 <Warning>
-The transfer v2 route through rate limiting is added by [pull request #8984](https://github.com/cosmos/ibc-go/pull/8984). On an ibc-go version from before that change, only the v1 stack is wired. Confirm the version in use includes it before wiring v2.
+The transfer v2 route through rate limiting is added by [pull request #8984](https://github.com/lfdt-ibc/ibc-go/pull/8984). On an ibc-go version from before that change, only the v1 stack is wired. Confirm the version in use includes it before wiring v2.
 </Warning>
 
 ## What can go wrong

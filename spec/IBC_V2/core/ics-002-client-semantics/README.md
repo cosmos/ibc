@@ -488,7 +488,7 @@ New client types can be added by IBC implementations at-will as long as they con
 
 ## Example Implementations
 
-Please see the ibc-go implementations of light clients for examples of how to implement your own: <https://github.com/cosmos/ibc-go/blob/main/modules/light-clients>.
+Please see the ibc-go implementations of light clients for examples of how to implement your own: <https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients>.
 
 ## History
 
@@ -504,9 +504,9 @@ Jan 26, 2020 - Addition of query interface
 
 Jul 27, 2022 - Addition of `verifyClientState` function, and move `ClientState` to the `provableStore`
 
-August 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: <https://github.com/cosmos/ibc-go/pull/1871>
+August 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: <https://github.com/lfdt-ibc/ibc-go/pull/1871>
 
-August 22, 2024 - [Changes for IBC/TAO V2](https://github.com/cosmos/ibc/pull/1147)  
+August 22, 2024 - [Changes for IBC/TAO V2](https://github.com/lfdt-ibc/ibc/pull/1147)  
 
 ## Copyright
 

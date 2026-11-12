@@ -23,11 +23,11 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/besu/besutest"
-	"github.com/cosmos/ibc/cli/internal/deploy"
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu/besutest"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 const simChainID = 1337 // ethclient/simulated fixed chain id

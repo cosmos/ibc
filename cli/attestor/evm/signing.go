@@ -6,7 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 
-	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/ecrecover"
 )
 
 // Signer signs a 32-byte ECDSA digest.

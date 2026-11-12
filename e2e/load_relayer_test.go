@@ -14,10 +14,10 @@ import (
 	catalyst "github.com/skip-mev/catalyst/chains/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
-	"github.com/cosmos/ibc/e2e/internal/loadtest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/e2e/internal/loadtest"
 )
 
 // E2E_LOAD=true, E2E_LOAD=1, or -e2e.load required

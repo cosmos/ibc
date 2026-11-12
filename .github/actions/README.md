@@ -2,7 +2,7 @@
 
 # Shared release actions
 
-These composite actions sign the release artifacts of cosmos/ibc, [cosmos/ibc-go](https://github.com/cosmos/ibc-go), and [cosmos/ibc-contracts](https://github.com/cosmos/ibc-contracts), so anyone can check where an artifact came from and that it is unchanged. Each repository builds its artifacts in its own `release.yml`, then calls these actions.
+These composite actions sign the release artifacts of lfdt-ibc/ibc, [lfdt-ibc/ibc-go](https://github.com/lfdt-ibc/ibc-go), and [lfdt-ibc/ibc-contracts](https://github.com/lfdt-ibc/ibc-contracts), so anyone can check where an artifact came from and that it is unchanged. Each repository builds its artifacts in its own `release.yml`, then calls these actions.
 
 - An **SBOM** (software bill of materials) lists the packages an artifact was built from, in [SPDX](https://spdx.dev) format. Use it to check a release for vulnerable dependencies.
 - An **attestation** is a signed statement tied to an artifact's SHA-256 digest. Each artifact gets two: its build provenance, which names the workflow and commit that built it, and its SBOM.
@@ -18,7 +18,7 @@ Each action's README has a minimal example. The [release workflow](../workflows/
 
 ## Use and change the actions
 
-- Pin the actions by full commit SHA, because a tag or branch can move. The `cosmos` organization's Actions policy must allow `cosmos/ibc` actions in the calling repository.
+- Pin the actions by full commit SHA, because a tag or branch can move. The `cosmos` organization's Actions policy must allow `lfdt-ibc/ibc` actions in the calling repository.
 - Signatures name the calling repository's own `release.yml`, because these are composite actions rather than a reusable workflow.
 - ibc-go and ibc-contracts pick up a change only when they bump the SHA, so keep inputs backwards compatible.
 - Do not tag the actions with `cli/v*` tags. Pushing one runs the IBC CLI release.

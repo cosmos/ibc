@@ -23,9 +23,9 @@ application, without forcing other applications to use this implementation.
 ### Motivation
 
 There has been much discussion on a general incentivization mechanism for relayers. A simple proposal was created to
-[extend ICS-20 to incentivize relaying](https://github.com/cosmos/ibc/pull/577) on the destination chain. However,
+[extend ICS-20 to incentivize relaying](https://github.com/lfdt-ibc/ibc/pull/577) on the destination chain. However,
 it was very specific to ICS-20 and would not work for other protocols. This was then extended to a more
-[general fee payment design](https://github.com/cosmos/ibc/issues/578) that could be adopted by any ICS application
+[general fee payment design](https://github.com/lfdt-ibc/ibc/issues/578) that could be adopted by any ICS application
 protocol.
 
 In general, the Interchain dream will never scale unless there is a clear way to incentivize relayers. We seek to
@@ -71,7 +71,7 @@ store all fee payment info only on the source chain. The source chain is the one
 to incentivize the packet. The fee distribution may be implementation specific and thus does not need to be in the IBC spec
 (just high-level requirements are needed in this doc).
 
-We require that the [relayer address is exposed to application modules](https://github.com/cosmos/ibc/pull/579) for
+We require that the [relayer address is exposed to application modules](https://github.com/lfdt-ibc/ibc/pull/579) for
 all packet-related messages, so the modules are able to incentivize the packet relayer. `acknowledgePacket`, `timeoutPacket`,
 and `timeoutOnClose` messages will therefore have the relayer address and be capable of sending escrowed tokens to such address.
 However, we need a way to reliably get the address of the relayer that submitted `recvPacket` on the destination chain to
@@ -587,7 +587,7 @@ Not applicable.
 
 ## Example Implementations
 
-- Implementation of ICS 29 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 29 in Go can be found in [ibc-go repository](https://github.com/lfdt-ibc/ibc-go).
 
 ## History
 

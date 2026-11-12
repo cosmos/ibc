@@ -31,7 +31,7 @@ In some cases, there is a necessity to "mock" non-existence proofs if the counte
 
 The state verification functions for all IBC data types have been consolidated into two generic methods, `VerifyMembership` and `VerifyNonMembership`.
 
-From the [`LightClientModule` interface definition](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/exported/client.go#L56), we find:
+From the [`LightClientModule` interface definition](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/exported/client.go#L56), we find:
 
 ```go expandable
 // VerifyMembership is a generic proof verification method which verifies 
@@ -69,6 +69,6 @@ VerifyNonMembership(
 error
 ```
 
-Both are expected to be provided with a standardised key path, `exported.Path`, as defined in [ICS-24 host requirements](https://github.com/cosmos/ibc/tree/main/spec/core/ics-024-host-requirements). Membership verification requires callers to provide the value marshalled as `[]byte`. Delay period values should be zero for non-packet processing verification. A zero proof height is now allowed by core IBC and may be passed into `VerifyMembership` and `VerifyNonMembership`. Light clients are responsible for returning an error if a zero proof height is invalid behaviour.
+Both are expected to be provided with a standardised key path, `exported.Path`, as defined in [ICS-24 host requirements](https://github.com/lfdt-ibc/ibc/tree/main/spec/core/ics-024-host-requirements). Membership verification requires callers to provide the value marshalled as `[]byte`. Delay period values should be zero for non-packet processing verification. A zero proof height is now allowed by core IBC and may be passed into `VerifyMembership` and `VerifyNonMembership`. Light clients are responsible for returning an error if a zero proof height is invalid behaviour.
 
-Please refer to the [ICS-23 implementation](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/23-commitment/types/merkle.go#L131-L205) for a concrete example.
+Please refer to the [ICS-23 implementation](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/23-commitment/types/merkle.go#L131-L205) for a concrete example.

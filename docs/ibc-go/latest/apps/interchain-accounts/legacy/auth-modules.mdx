@@ -10,11 +10,11 @@ description: This document is deprecated and will be removed in future releases.
 
 ## Synopsis
 
-Authentication modules play the role of the `Base Application` as described in [ICS-30 IBC Middleware](https://github.com/cosmos/ibc/tree/master/spec/app/ics-030-middleware), and enable application developers to perform custom logic when working with the Interchain Accounts controller API.
+Authentication modules play the role of the `Base Application` as described in [ICS-30 IBC Middleware](https://github.com/lfdt-ibc/ibc/tree/master/spec/app/ics-030-middleware), and enable application developers to perform custom logic when working with the Interchain Accounts controller API.
 
 The controller submodule is used for account registration and packet sending. It executes only logic required of all controllers of interchain accounts. The type of authentication used to manage the interchain accounts remains unspecified. There may exist many different types of authentication which are desirable for different use cases. Thus the purpose of the authentication module is to wrap the controller submodule with custom authentication logic.
 
-In ibc-go, authentication modules are connected to the controller chain via a middleware stack. The controller submodule is implemented as [middleware](https://github.com/cosmos/ibc/tree/master/spec/app/ics-030-middleware) and the authentication module is connected to the controller submodule as the base application of the middleware stack. To implement an authentication module, the `IBCModule` interface must be fulfilled. By implementing the controller submodule as middleware, any amount of authentication modules can be created and connected to the controller submodule without writing redundant code.
+In ibc-go, authentication modules are connected to the controller chain via a middleware stack. The controller submodule is implemented as [middleware](https://github.com/lfdt-ibc/ibc/tree/master/spec/app/ics-030-middleware) and the authentication module is connected to the controller submodule as the base application of the middleware stack. To implement an authentication module, the `IBCModule` interface must be fulfilled. By implementing the controller submodule as middleware, any amount of authentication modules can be created and connected to the controller submodule without writing redundant code.
 
 The authentication module must:
 

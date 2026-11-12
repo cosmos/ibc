@@ -19,7 +19,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
+	"github.com/lfdt-ibc/ibc/cli/internal/tests/mocks"
 )
 
 func TestEVMGasSpent(t *testing.T) {

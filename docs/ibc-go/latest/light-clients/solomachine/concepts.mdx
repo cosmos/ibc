@@ -59,7 +59,7 @@ data := &ClientStateData{
 dataBz, err := cdc.Marshal(data)
 ```
 
-The helper functions `...DataBytes()` in [proof.go](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/06-solomachine/proof.go) handle this
+The helper functions `...DataBytes()` in [proof.go](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/06-solomachine/proof.go) handle this
 functionality.
 
 2. Construct the `SignBytes` and marshal it.
@@ -78,7 +78,7 @@ signBytes := &SignBytes{
 signBz, err := cdc.Marshal(signBytes)
 ```
 
-The helper functions `...SignBytes()` in [proof.go](https://github.com/cosmos/ibc-go/blob/main/modules/light-clients/06-solomachine/proof.go) handle this functionality.
+The helper functions `...SignBytes()` in [proof.go](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/light-clients/06-solomachine/proof.go) handle this functionality.
 The `DataType` field is used to disambiguate what type of data was signed to prevent potential
 proto encoding overlap.
 

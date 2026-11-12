@@ -13,7 +13,7 @@ Learn how to build IBC light client modules and fulfill the interfaces required 
 
 - [IBC Overview](/ibc-go/latest/ibc/overview)
 - [IBC Transport, Authentication, and Ordering Layer - Clients](https://tutorials.cosmos.network/academy/3-ibc/4-clients.html)
-- [ICS-002 Client Semantics](https://github.com/cosmos/ibc/tree/main/spec/core/ics-002-client-semantics)
+- [ICS-002 Client Semantics](https://github.com/lfdt-ibc/ibc/tree/main/spec/core/ics-002-client-semantics)
 
 </Note>
 
@@ -34,7 +34,7 @@ Throughout this guide the `07-tendermint` light client module may be referred to
 
 ### `LightClientModule`
 
-`LightClientModule` is an interface defined by core IBC which allows for modular light client implementations. All light client implementations _must_ implement the [`LightClientModule` interface](https://github.com/cosmos/ibc-go/blob/501a8462345da099144efe91d495bfcfa18d760d/modules/core/exported/client.go#L51) so that core IBC may redirect calls to the light client module.
+`LightClientModule` is an interface defined by core IBC which allows for modular light client implementations. All light client implementations _must_ implement the [`LightClientModule` interface](https://github.com/lfdt-ibc/ibc-go/blob/501a8462345da099144efe91d495bfcfa18d760d/modules/core/exported/client.go#L51) so that core IBC may redirect calls to the light client module.
 
 For example a light client module may need to:
 
@@ -45,7 +45,7 @@ For example a light client module may need to:
 
 The methods which make up this interface are detailed at a more granular level in the [`LightClientModule` section of this guide](/ibc-go/latest/light-clients/developer-guide/light-client-module).
 
-Please refer to the `07-tendermint`'s [`LightClientModule` definition](https://github.com/cosmos/ibc-go/blob/501a8462345da099144efe91d495bfcfa18d760d/modules/light-clients/07-tendermint/light_client_module.go#L17) for more information.
+Please refer to the `07-tendermint`'s [`LightClientModule` definition](https://github.com/lfdt-ibc/ibc-go/blob/501a8462345da099144efe91d495bfcfa18d760d/modules/light-clients/07-tendermint/light_client_module.go#L17) for more information.
 
 ### `ClientState`
 
@@ -58,10 +58,10 @@ For example:
 - Constraints used for state verification.
 - Constraints used for client upgrades.
 
-The `ClientState` type maintained within the light client module _must_ implement the [`ClientState`](https://github.com/cosmos/ibc-go/tree/02-client-refactor-beta1/modules/core/exported/client.go#L36) interface defined in `core/modules/exported/client.go`.
+The `ClientState` type maintained within the light client module _must_ implement the [`ClientState`](https://github.com/lfdt-ibc/ibc-go/tree/02-client-refactor-beta1/modules/core/exported/client.go#L36) interface defined in `core/modules/exported/client.go`.
 The methods which make up this interface are detailed at a more granular level in the [`ClientState` section of this guide](/ibc-go/latest/light-clients/developer-guide/client-state).
 
-Please refer to the `07-tendermint` light client module's [`ClientState` definition](https://github.com/cosmos/ibc-go/tree/02-client-refactor-beta1/proto/ibc/lightclients/tendermint/v1/tendermint.proto#L18) containing information such as chain ID, status, latest height, unbonding period and proof specifications.
+Please refer to the `07-tendermint` light client module's [`ClientState` definition](https://github.com/lfdt-ibc/ibc-go/tree/02-client-refactor-beta1/proto/ibc/lightclients/tendermint/v1/tendermint.proto#L18) containing information such as chain ID, status, latest height, unbonding period and proof specifications.
 
 ### `ConsensusState`
 
@@ -69,17 +69,17 @@ Please refer to the `07-tendermint` light client module's [`ClientState` definit
 
 For example, the `ConsensusState` of the `07-tendermint` light client module defines a trusted root which is used by the `ClientState` to perform verification of membership and non-membership commitment proofs, as well as the next validator set hash used for verifying headers can be trusted in client updates.
 
-The `ConsensusState` type maintained within the light client module _must_ implement the [`ConsensusState`](https://github.com/cosmos/ibc-go/tree/02-client-refactor-beta1/modules/core/exported/client.go#L134) interface defined in `modules/core/exported/client.go`.
+The `ConsensusState` type maintained within the light client module _must_ implement the [`ConsensusState`](https://github.com/lfdt-ibc/ibc-go/tree/02-client-refactor-beta1/modules/core/exported/client.go#L134) interface defined in `modules/core/exported/client.go`.
 The methods which make up this interface are detailed at a more granular level in the [`ConsensusState` section of this guide](/ibc-go/latest/light-clients/developer-guide/consensus-state).
 
 ### `Height`
 
 `Height` defines a monotonically increasing sequence number which provides ordering of consensus state data persisted through client updates.
-IBC light client module developers are expected to use the [concrete type](https://github.com/cosmos/ibc-go/tree/02-client-refactor-beta1/proto/ibc/core/client/v1/client.proto#L89) provided by the `02-client` submodule. This implements the expectations required by the [`Height`](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L156) interface defined in `modules/core/exported/client.go`.
+IBC light client module developers are expected to use the [concrete type](https://github.com/lfdt-ibc/ibc-go/tree/02-client-refactor-beta1/proto/ibc/core/client/v1/client.proto#L89) provided by the `02-client` submodule. This implements the expectations required by the [`Height`](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L156) interface defined in `modules/core/exported/client.go`.
 
 ### `ClientMessage`
 
-`ClientMessage` refers to the interface type [`ClientMessage`](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L147) used for performing updates to a `ClientState` stored on chain.
+`ClientMessage` refers to the interface type [`ClientMessage`](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L147) used for performing updates to a `ClientState` stored on chain.
 This may be any concrete type which produces a change in state to the IBC client when verified.
 
 The following are considered as valid update scenarios:

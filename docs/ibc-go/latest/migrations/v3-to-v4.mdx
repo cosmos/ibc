@@ -44,11 +44,11 @@ The Fee Middleware module, as the name suggests, plays the role of an IBC middle
 
 Please read the Fee Middleware integration documentation for an in depth guide on how to configure the module correctly in order to incentivize IBC packets.
 
-Take a look at the following diff for an [example setup](https://github.com/cosmos/ibc-go/pull/1432/files#diff-d18972debee5e64f16e40807b2ae112ddbe609504a93ea5e1c80a5d489c3a08aL366) of how to incentivize ics27 channels.
+Take a look at the following diff for an [example setup](https://github.com/lfdt-ibc/ibc-go/pull/1432/files#diff-d18972debee5e64f16e40807b2ae112ddbe609504a93ea5e1c80a5d489c3a08aL366) of how to incentivize ics27 channels.
 
 ### Migration to fix support for base denoms with slashes
 
-As part of [v1.5.0](https://github.com/cosmos/ibc-go/releases/tag/v1.5.0), [v2.3.0](https://github.com/cosmos/ibc-go/releases/tag/v2.3.0) and [v3.1.0](https://github.com/cosmos/ibc-go/releases/tag/v3.1.0) some [migration handler code sample was documented](/ibc-go/latest/migrations/support-denoms-with-slashes#upgrade-proposal) that needs to run in order to correct the trace information of coins transferred using ICS20 whose base denom contains slashes.
+As part of [v1.5.0](https://github.com/lfdt-ibc/ibc-go/releases/tag/v1.5.0), [v2.3.0](https://github.com/lfdt-ibc/ibc-go/releases/tag/v2.3.0) and [v3.1.0](https://github.com/lfdt-ibc/ibc-go/releases/tag/v3.1.0) some [migration handler code sample was documented](/ibc-go/latest/migrations/support-denoms-with-slashes#upgrade-proposal) that needs to run in order to correct the trace information of coins transferred using ICS20 whose base denom contains slashes.
 
 Based on feedback from the community we add now an improved solution to run the same migration that does not require copying a large piece of code over from the migration document, but instead requires only adding a one-line upgrade handler.
 
@@ -83,7 +83,7 @@ The `WriteAcknowledgement` API now takes the `exported.Acknowledgement` type ins
 This is an API breaking change and as such IBC application developers will have to update any calls to `WriteAcknowledgement`.
 
 The `OnChanOpenInit` application callback has been modified.
-The return signature now includes the application version as detailed in the latest IBC [spec changes](https://github.com/cosmos/ibc/pull/629).
+The return signature now includes the application version as detailed in the latest IBC [spec changes](https://github.com/lfdt-ibc/ibc/pull/629).
 
 The `NewErrorAcknowledgement` method signature has changed.
 It now accepts an `error` rather than a `string`. This was done in order to prevent accidental state changes.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-module github.com/cosmos/ibc/cli
+module github.com/lfdt-ibc/ibc/cli
 
 go 1.26.10
 
@@ -12,12 +12,12 @@ require (
 	github.com/cometbft/cometbft v0.40.0
 	github.com/cosmos/ibc-contracts/packages/go-abigen v0.0.0-20261030132820-35388c8547b3
 	github.com/cosmos/ibc-go/v11 v11.2.0
-	github.com/cosmos/ibc/gen/go/solidity-abi v0.0.0
 	github.com/cosmos/kms v0.1.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 	github.com/deliveryhero/pipeline/v2 v2.2.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/jackc/pgx/v5 v5.12.0
+	github.com/lfdt-ibc/ibc/gen/go/solidity-abi v0.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/rubenv/sql-migrate v1.8.1
 	github.com/spf13/cobra v1.10.2
@@ -367,4 +367,4 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-replace github.com/cosmos/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi
+replace github.com/lfdt-ibc/ibc/gen/go/solidity-abi => ../gen/go/solidity-abi

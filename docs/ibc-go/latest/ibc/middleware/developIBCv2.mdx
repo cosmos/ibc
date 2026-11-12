@@ -32,7 +32,7 @@ func MarshalAsIBCDoes(ack channeltypes.Acknowledgement) ([]byte, error) {
 }
 ```
 
-The interfaces a middleware must implement are found in [core/api](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/api/module.go#L11). Note that this interface has changed from IBC classic.
+The interfaces a middleware must implement are found in [core/api](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/api/module.go#L11). Note that this interface has changed from IBC classic.
 
 An `IBCMiddleware` struct implementing the `Middleware` interface, can be defined with its constructor as follows:
 
@@ -70,7 +70,7 @@ The ICS4Wrapper has been removed in IBC v2 and there are no channel handshake ca
 
 ## Implement `IBCModule` interface
 
-`IBCMiddleware` is a struct that implements the [`IBCModule` interface (`api.IBCModule`)](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/api/module.go#L11-L53). It is recommended to separate these callbacks into a separate file `ibc_middleware.go`.
+`IBCMiddleware` is a struct that implements the [`IBCModule` interface (`api.IBCModule`)](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/api/module.go#L11-L53). It is recommended to separate these callbacks into a separate file `ibc_middleware.go`.
 
 > Note how this is analogous to implementing the same interfaces for IBC applications that act as base applications.
 
@@ -149,7 +149,7 @@ doCustomPostProcessLogic(recvResult) // middleware may modify recvResult
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L161-L230) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L161-L230) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnAcknowledgementPacket`
 
@@ -184,7 +184,7 @@ error {
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L236-L302) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L236-L302) an example implementation of this callback for the Callbacks Middleware module.
 
 #### `OnTimeoutPacket`
 
@@ -216,7 +216,7 @@ error {
 }
 ```
 
-See [here](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L309-L367) an example implementation of this callback for the Callbacks Middleware module.
+See [here](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L309-L367) an example implementation of this callback for the Callbacks Middleware module.
 
 ### WriteAckWrapper
 
@@ -242,7 +242,7 @@ api.WriteAcknowledgementWrapper {
 
 ### `WriteAcknowledgement`
 
-This is where the middleware acknowledgement handling is finalised. An example is shown in the [callbacks middleware](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L369-L454)
+This is where the middleware acknowledgement handling is finalised. An example is shown in the [callbacks middleware](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/apps/callbacks/v2/ibc_middleware.go#L369-L454)
 
 ```go expandable
 // WriteAcknowledgement facilitates acknowledgement being written asynchronously

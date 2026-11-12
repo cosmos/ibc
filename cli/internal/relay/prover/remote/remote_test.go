@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	proverv2 "github.com/lfdt-ibc/ibc/cli/api/v2/prover"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 func TestProverRequestTimeout(t *testing.T) {

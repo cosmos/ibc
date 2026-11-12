@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
 )
 
 // fakeTarget satisfies Target for engine tests.

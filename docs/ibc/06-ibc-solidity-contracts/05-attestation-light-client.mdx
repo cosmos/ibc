@@ -10,7 +10,7 @@ One instance is deployed per client and registered on the ICS26Router under a cl
 
 Verification is self-contained. The client checks signatures against its own configuration and stores what it accepts, reaching outside itself for nothing.
 
-Source: [AttestationLightClient.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol)
+Source: [AttestationLightClient.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/light-clients/attestation/AttestationLightClient.sol)
 
 Interacts with: [ICS26Router](/ibc/06-ibc-solidity-contracts/02-ics26-router), which drives its updates and proof checks, and the [attestors](/ibc/04-light-clients/02-attestors) that produce its signatures. The trust model it implements is detailed on [the attestation light client page](/ibc/04-light-clients/01-attestation-light-client).
 

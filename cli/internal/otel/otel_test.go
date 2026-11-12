@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/contrib/otelconf"
 
-	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
 )
 
 func TestProvider(t *testing.T) {

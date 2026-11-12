@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 func TestBatchProcess(t *testing.T) {

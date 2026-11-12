@@ -9,7 +9,7 @@ ICS27GMP is the General Message Passing application. It carries arbitrary call p
 
 A sender reaches it to dispatch a call. The router reaches it to deliver a packet. A received call runs from an ICS27Account that ICS27GMP deploys, so the contract being called sees an address unique to the remote sender. Senders can build on ICS27GMP: [IFT](/ibc/06-ibc-solidity-contracts/04-ift-contracts) is built on GMP to fungibly move tokens across chains.
 
-Source: [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol), with the account contract and the libraries listed below. The model behind this surface is on [GMP: how it works](/ibc/03-applications/01-gmp).
+Source: [ICS27GMP.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol), with the account contract and the libraries listed below. The model behind this surface is on [GMP: how it works](/ibc/03-applications/01-gmp).
 
 Interacts with: [ICS26Router](/ibc/06-ibc-solidity-contracts/02-ics26-router) for sends and packet callbacks, its own ICS27Account children, the AccessManager that holds its authority, and every sending contract it calls back, including [IFT contracts](/ibc/06-ibc-solidity-contracts/04-ift-contracts).
 
@@ -17,10 +17,10 @@ Interacts with: [ICS26Router](/ibc/06-ibc-solidity-contracts/02-ics26-router) fo
 
 | Contract | Kind | What it does | Source |
 |----------|------|--------------|--------|
-| ICS27GMP | Deployed contract, behind an ERC1967 proxy | Sends call payloads and executes received ones | [ICS27GMP.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol) |
-| ICS27Account | Deployed once as the account implementation, then one proxy instance per `(clientId, sender, salt)`, behind a shared beacon | Makes the destination call on a remote sender's behalf | [ICS27Account.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Account.sol) |
-| ICS27Lib | Library, compiled into ICS27GMP | Supplies the GMP constants, the acknowledgement encoding, and the account beacon-proxy bytecode used for CREATE2 | [ICS27Lib.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Lib.sol) |
-| IBCSenderCallbacksLib | Library, compiled into ICS27GMP | Checks a sender's ERC165 support and makes the acknowledgement or timeout callback | [IBCSenderCallbacksLib.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCSenderCallbacksLib.sol) |
+| ICS27GMP | Deployed contract, behind an ERC1967 proxy | Sends call payloads and executes received ones | [ICS27GMP.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/ICS27GMP.sol) |
+| ICS27Account | Deployed once as the account implementation, then one proxy instance per `(clientId, sender, salt)`, behind a shared beacon | Makes the destination call on a remote sender's behalf | [ICS27Account.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Account.sol) |
+| ICS27Lib | Library, compiled into ICS27GMP | Supplies the GMP constants, the acknowledgement encoding, and the account beacon-proxy bytecode used for CREATE2 | [ICS27Lib.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS27Lib.sol) |
+| IBCSenderCallbacksLib | Library, compiled into ICS27GMP | Checks a sender's ERC165 support and makes the acknowledgement or timeout callback | [IBCSenderCallbacksLib.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCSenderCallbacksLib.sol) |
 
 One ICS27Account exists per `(clientId, sender, salt)` triple, so a chain holds one account for every distinct triple that has received a call.
 

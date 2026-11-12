@@ -24,7 +24,7 @@ Highlighted improvements for app developers with IBC v2:
 ## Implement the `IBCModule` interface
 
 The Cosmos SDK expects all IBC modules to implement the [`IBCModule`
-interface](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/api/module.go#L9-L53). This interface contains all of the callbacks IBC expects modules to implement. Note that for IBC v2, an application developer no longer needs to implement callbacks for the channel handshake. Note that this interface is distinct from the [porttypes.IBCModule interface][porttypes.IBCModule] used for IBC Classic.
+interface](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/api/module.go#L9-L53). This interface contains all of the callbacks IBC expects modules to implement. Note that for IBC v2, an application developer no longer needs to implement callbacks for the channel handshake. Note that this interface is distinct from the [porttypes.IBCModule interface][porttypes.IBCModule] used for IBC Classic.
 
 ```go
 // IBCModule implements the application interface given the keeper.
@@ -60,13 +60,13 @@ With IBC v2, modules are not directly connected. Instead a pair of clients are c
 Briefly, a successful packet flow works as follows:
 
 1. A user sends a message to the IBC packet handler
-2. The IBC packet handler validates the message, creates the packet and stores the commitment and returns the packet sequence number. The [`Payload`](https://github.com/cosmos/ibc-go/blob/fe25b216359fab71b3228461b05dbcdb1a554158/proto/ibc/core/channel/v2/packet.proto#L26-L38), which contains application specific data, is routed to the relevant application.
+2. The IBC packet handler validates the message, creates the packet and stores the commitment and returns the packet sequence number. The [`Payload`](https://github.com/lfdt-ibc/ibc-go/blob/fe25b216359fab71b3228461b05dbcdb1a554158/proto/ibc/core/channel/v2/packet.proto#L26-L38), which contains application specific data, is routed to the relevant application.
 3. If the counterparty writes an acknowledgement of the packet then the sending chain will process the acknowledgement.
 4. If the packet is not successfully received before the timeout, then the sending chain processes the packet's timeout.
 
 #### Sending packets
 
-[`MsgSendPacket`](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/04-channel/v2/types/tx.pb.go#L69-L75) is sent by a user to the [channel v2 message server](https://github.com/cosmos/ibc-go/blob/main/modules/core/04-channel/v2/keeper/msg_server.go), which calls `ChannelKeeperV2.SendPacket`. This validates the message, creates the packet, stores the commitment and returns the packet sequence number. The application must specify its own payload which is used by the application and sent with `MsgSendPacket`.
+[`MsgSendPacket`](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/04-channel/v2/types/tx.pb.go#L69-L75) is sent by a user to the [channel v2 message server](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/core/04-channel/v2/keeper/msg_server.go), which calls `ChannelKeeperV2.SendPacket`. This validates the message, creates the packet, stores the commitment and returns the packet sequence number. The application must specify its own payload which is used by the application and sent with `MsgSendPacket`.
 
 An application developer needs to implement the custom logic the application executes when a packet is sent.
 
@@ -209,7 +209,7 @@ message GenesisState {
 }
 ```
 
-You can see an example for transfer [here](https://github.com/cosmos/ibc-go/blob/main/proto/ibc/03-applications/transfer/v1/genesis.proto).
+You can see an example for transfer [here](https://github.com/lfdt-ibc/ibc-go/blob/main/proto/ibc/03-applications/transfer/v1/genesis.proto).
 
 Add port ID as a key to the module store:
 
@@ -226,7 +226,7 @@ const (
 )
 ```
 
-Note that with IBC v2, the version does not need to be added as a key (as required with IBC classic) because versioning of applications is now contained within the [packet Payload](https://github.com/cosmos/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/04-channel/v2/types/packet.go#L23-L32).
+Note that with IBC v2, the version does not need to be added as a key (as required with IBC classic) because versioning of applications is now contained within the [packet Payload](https://github.com/lfdt-ibc/ibc-go/blob/4dc625ae138c52bfe5b8585c24de9b16ddcf6186/modules/core/04-channel/v2/types/packet.go#L23-L32).
 
 Add port ID to `x/<moduleName>/types/genesis.go`:
 
@@ -292,7 +292,7 @@ More information on implementing the IBCModule Keepers can be found in the [keep
 
 ## Packets and Payloads
 
-Applications developers need to define the `Payload` contained within an [IBC packet](https://github.com/cosmos/ibc-go/blob/fe25b216359fab71b3228461b05dbcdb1a554158/proto/ibc/core/channel/v2/packet.proto#L11-L24). Note that in IBC v2 the `timeoutHeight` has been removed and only `timeoutTimestamp` is used. A packet can contain multiple payloads in a list. Each Payload includes:
+Applications developers need to define the `Payload` contained within an [IBC packet](https://github.com/lfdt-ibc/ibc-go/blob/fe25b216359fab71b3228461b05dbcdb1a554158/proto/ibc/core/channel/v2/packet.proto#L11-L24). Note that in IBC v2 the `timeoutHeight` has been removed and only `timeoutTimestamp` is used. A packet can contain multiple payloads in a list. Each Payload includes:
 
 ```go expandable
 // Payload contains the source and destination ports and payload for the application (version, encoding, raw bytes)
@@ -340,4 +340,4 @@ It is also possible to define your own custom success acknowledgement which will
 
 More information on implementing the IBC Router can be found in the [routing section](/ibc-go/latest/ibc/apps/routing).
 
-[porttypes.IBCModule]: https://github.com/cosmos/ibc-go/blob/main/modules/core/05-port/types/module.go
+[porttypes.IBCModule]: https://github.com/lfdt-ibc/ibc-go/blob/main/modules/core/05-port/types/module.go

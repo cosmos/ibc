@@ -45,7 +45,7 @@ app.UpgradeKeeper.SetUpgradeHandler("MigrateTraces",
 
 This is only necessary if there are denom traces in the store with incorrect trace information from previously received coins that had a slash in the base denom. However, it is recommended that any chain upgrading to support base denominations with slashes runs this code for safety.
 
-For a more detailed sample, please check out the code changes in [this pull request](https://github.com/cosmos/ibc-go/pull/1680).
+For a more detailed sample, please check out the code changes in [this pull request](https://github.com/lfdt-ibc/ibc-go/pull/1680).
 
 ### Genesis Migration
 
@@ -88,4 +88,4 @@ return appState, nil
 }
 ```
 
-For a more detailed sample, please check out the code changes in [this pull request](https://github.com/cosmos/ibc-go/pull/1528).
+For a more detailed sample, please check out the code changes in [this pull request](https://github.com/lfdt-ibc/ibc-go/pull/1528).

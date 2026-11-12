@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/ecrecover"
 )
 
 func TestRecover(t *testing.T) {

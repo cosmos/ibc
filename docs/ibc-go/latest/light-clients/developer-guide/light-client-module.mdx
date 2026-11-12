@@ -13,9 +13,9 @@ description: Status must return the status of the client.
 * An `Expired` status indicates that a client is not allowed to be used because it was not updated for longer than the trusting period.
 * An `Unknown` status indicates that there was an error in determining the status of a client.
 
-All possible `Status` types can be found [here](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L22-L32).
+All possible `Status` types can be found [here](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/exported/client.go#L22-L32).
 
-This field is returned in the response of the gRPC [`ibc.core.client.v1.Query/ClientStatus`](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/02-client/types/query.pb.go#L665) endpoint.
+This field is returned in the response of the gRPC [`ibc.core.client.v1.Query/ClientStatus`](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/02-client/types/query.pb.go#L665) endpoint.
 
 ## `TimestampAtHeight` method
 
@@ -31,7 +31,7 @@ This value is used to facilitate timeouts by checking the packet timeout timesta
 Clients must validate the initial consensus state, and set the initial client state and consensus state in the provided client store.
 Clients may also store any necessary client-specific metadata.
 
-`Initialize` is called when a [client is created](https://github.com/cosmos/ibc-go/blob/v7.0.0/modules/core/02-client/keeper/client.go#L30).
+`Initialize` is called when a [client is created](https://github.com/lfdt-ibc/ibc-go/blob/v7.0.0/modules/core/02-client/keeper/client.go#L30).
 
 ## `UpdateState` method
 

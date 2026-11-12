@@ -22,11 +22,11 @@ type MsgRegisterInterchainAccount struct {
 This message is expected to fail if:
 
 * `Owner` is an empty string or contains more than 2048 bytes.
-* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
+* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/lfdt-ibc/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
 
 This message will construct a new `MsgChannelOpenInit` on chain and route it to the core IBC message server to initiate the opening step of the channel handshake.
 
-The controller submodule will generate a new port identifier. The caller is expected to provide an appropriate application version string. For example, this may be an ICS-27 JSON encoded [`Metadata`](https://github.com/cosmos/ibc-go/blob/v6.0.0/proto/ibc/03-applications/interchain_accounts/v1/metadata.proto#L11) type.
+The controller submodule will generate a new port identifier. The caller is expected to provide an appropriate application version string. For example, this may be an ICS-27 JSON encoded [`Metadata`](https://github.com/lfdt-ibc/ibc-go/blob/v6.0.0/proto/ibc/03-applications/interchain_accounts/v1/metadata.proto#L11) type.
 If the `Version` string is omitted, the controller submodule will construct a default version string in the `OnChanOpenInit` handshake callback.
 
 ```go
@@ -54,7 +54,7 @@ type MsgSendTx struct {
 This message is expected to fail if:
 
 * `Owner` is an empty string or contains more than 2048 bytes.
-* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/cosmos/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
+* `ConnectionID` is invalid (see [24-host naming requirements](https://github.com/lfdt-ibc/ibc/blob/master/spec/core/ics-024-host-requirements/README.md#paths-identifiers-separators)).
 * `PacketData` contains an `UNSPECIFIED` type enum, the length of `Data` bytes is zero or the `Memo` field exceeds 256 characters in length.
 * `RelativeTimeout` is zero.
 
@@ -72,7 +72,7 @@ The packet `Sequence` is returned in the message response.
 
 ### Queries
 
-It is possible to use [`MsgModuleQuerySafe`](https://github.com/cosmos/ibc-go/blob/eecfa5c09a4c38a5c9f2cc2a322d2286f45911da/proto/ibc/03-applications/interchain_accounts/host/v1/tx.proto#L41-L51) to execute a list of queries on the host chain. This message can be included in the list of encoded `sdk.Msg`s of `InterchainPacketData`. The host chain will return on the acknowledgment the responses for all the queries. Please note that only module safe queries can be executed ([deterministic queries that are safe to be called from within the state machine](https://docs.cosmos.network/sdk/latest/learn/concepts/modules#queries)).
+It is possible to use [`MsgModuleQuerySafe`](https://github.com/lfdt-ibc/ibc-go/blob/eecfa5c09a4c38a5c9f2cc2a322d2286f45911da/proto/ibc/03-applications/interchain_accounts/host/v1/tx.proto#L41-L51) to execute a list of queries on the host chain. This message can be included in the list of encoded `sdk.Msg`s of `InterchainPacketData`. The host chain will return on the acknowledgment the responses for all the queries. Please note that only module safe queries can be executed ([deterministic queries that are safe to be called from within the state machine](https://docs.cosmos.network/sdk/latest/learn/concepts/modules#queries)).
 
 The queries available from Cosmos SDK are:
 

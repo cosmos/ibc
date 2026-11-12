@@ -7,7 +7,7 @@ icon: "route"
 
 The `ICS26Router` contract is the core router of IBC-solidity. Every packet in either direction passes through it. It validates each call and records the outcome in its own store. It works with light clients to verify proofs, and it forwards payloads to applications.
 
-Source: [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol). The protocol model behind this surface is on [Core: router and store](/ibc/02-how-ibc-works/03-core-router-and-store) and [Packet lifecycle](/ibc/02-how-ibc-works/06-packet-lifecycle).
+Source: [ICS26Router.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol). The protocol model behind this surface is on [Core: router and store](/ibc/02-how-ibc-works/03-core-router-and-store) and [Packet lifecycle](/ibc/02-how-ibc-works/06-packet-lifecycle).
 
 ## What the router does
 
@@ -19,13 +19,13 @@ Interacts with: [AttestationLightClient](/ibc/06-ibc-solidity-contracts/05-attes
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
-| ICS26Router | Deployed contract | The packet router itself | [ICS26Router.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol) |
-| IBCMulticall | Deployed contract | Batches a relayer's calls to the router, so a failed packet delivery does not revert the rest of the batch | [IBCMulticall.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCMulticall.sol) |
-| ICS02ClientUpgradeable | Abstract base, compiled into ICS26Router | The light client and counterparty registry | [ICS02ClientUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS02ClientUpgradeable.sol) |
-| IBCStoreUpgradeable | Abstract base, compiled into ICS26Router | The provable commitment store | [IBCStoreUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCStoreUpgradeable.sol) |
-| ICS24Host | Library | Commitment paths, commitment hashes, and the universal error acknowledgement constant | [ICS24Host.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS24Host.sol) |
-| IBCIdentifiers | Library | The client-ID prefix and the custom-identifier validation rules | [IBCIdentifiers.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCIdentifiers.sol) |
-| RelayerHelper | Standalone contract, deployed by the repository's Solidity tests | Read-only packet-status queries against the router's store | [RelayerHelper.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/RelayerHelper.sol) |
+| ICS26Router | Deployed contract | The packet router itself | [ICS26Router.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/ICS26Router.sol) |
+| IBCMulticall | Deployed contract | Batches a relayer's calls to the router, so a failed packet delivery does not revert the rest of the batch | [IBCMulticall.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCMulticall.sol) |
+| ICS02ClientUpgradeable | Abstract base, compiled into ICS26Router | The light client and counterparty registry | [ICS02ClientUpgradeable.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS02ClientUpgradeable.sol) |
+| IBCStoreUpgradeable | Abstract base, compiled into ICS26Router | The provable commitment store | [IBCStoreUpgradeable.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCStoreUpgradeable.sol) |
+| ICS24Host | Library | Commitment paths, commitment hashes, and the universal error acknowledgement constant | [ICS24Host.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/ICS24Host.sol) |
+| IBCIdentifiers | Library | The client-ID prefix and the custom-identifier validation rules | [IBCIdentifiers.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IBCIdentifiers.sol) |
+| RelayerHelper | Standalone contract, deployed by the repository's Solidity tests | Read-only packet-status queries against the router's store | [RelayerHelper.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/RelayerHelper.sol) |
 
 ```mermaid
 flowchart LR
@@ -44,7 +44,7 @@ Every IBC application is registered on a port, and implements three router-only 
 
 | Function | What it does |
 |---|---|
-| `addIBCApp(address app)` | Registers an application under its own address, as a hex string, for a port identifier. Role-gated. The ibc-contracts deployment script, [`DeployAccessManagerWithRoles`](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/scripts/deployments/DeployAccessManagerWithRoles.sol), opens it to every address. |
+| `addIBCApp(address app)` | Registers an application under its own address, as a hex string, for a port identifier. Role-gated. The ibc-contracts deployment script, [`DeployAccessManagerWithRoles`](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/scripts/deployments/DeployAccessManagerWithRoles.sol), opens it to every address. |
 | `addIBCApp(string calldata portId, address app)` | Registers an application under a custom port identifier. Role-gated. |
 | `getIBCApp(string calldata portId)` | Returns the application registered on a port. |
 

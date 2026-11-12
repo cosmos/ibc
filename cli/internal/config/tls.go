@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cosmos/ibc/cli/internal/network"
+	"github.com/lfdt-ibc/ibc/cli/internal/network"
 )
 
 // TLSClientConfig holds the settings for an outbound TLS connection. For every
