@@ -32,7 +32,7 @@ var (
 	cmdKeysNew = &cobra.Command{
 		Use:   "new [type] [name]",
 		Short: "Create a new signing key",
-		Long:  "Saves key into <ibc-home>/keys/<name> or prints to stdout if name is not provided",
+		Long:  "Saves key as a JSON file in <ibc-home>/keys/, or prints to stdout if name is not provided",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE:  keysNew,
 	}
@@ -40,7 +40,7 @@ var (
 	cmdKeysImport = &cobra.Command{
 		Use:   "import [type] [name]",
 		Short: "Import a signing key",
-		Long:  "Import a private key into <ibc-home>/keys/<name>",
+		Long:  "Import a private key into <ibc-home>/keys/ as a JSON file named after the key",
 		Args:  cobra.ExactArgs(2),
 		RunE:  keysImport,
 	}
@@ -48,7 +48,7 @@ var (
 	cmdKeysShow = &cobra.Command{
 		Use:   "show [name]",
 		Short: "Show key details",
-		Long:  "Show key details from <ibc-home>/keys/<name>; optionally print the private key",
+		Long:  "Show key details from the key's JSON file in <ibc-home>/keys/; optionally print the private key",
 		Args:  cobra.ExactArgs(1),
 		RunE:  keysShow,
 	}

@@ -199,7 +199,7 @@ func init() {
 		&flagDeployAttestors,
 		"attestors",
 		nil,
-		"attestors for the new client as addresses, attestation names, or signer aliases (default: configured attestations for the tracked chain)",
+		"attestors for the new client as addresses, attestor names, or signer aliases (default: configured attestors for the tracked chain)",
 	)
 	daf.Uint8Var(&flagDeployThreshold, "threshold", 1, "signature threshold")
 	daf.Uint64Var(&flagDeployHeight, "height", 0, "initial trusted height (default: counterparty head)")

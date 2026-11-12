@@ -173,9 +173,6 @@ func (x *StateAttestationResponse) GetAttestation() *Attestation {
 }
 
 // Request message for getting an attestation for a set of packets.
-// This request's parameters does not include a height at the moment, because
-// we are currently only attesting to the latest height, and using the returned
-// height to request a state attestation.
 type PacketAttestationRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Attestor string                 `protobuf:"bytes,1,opt,name=attestor,proto3" json:"attestor,omitempty"`
@@ -183,7 +180,7 @@ type PacketAttestationRequest struct {
 	Packets [][]byte `protobuf:"bytes,2,rep,name=packets,proto3" json:"packets,omitempty"`
 	// The height to attest to the packets at
 	Height uint64 `protobuf:"varint,3,opt,name=height,proto3" json:"height,omitempty"`
-	// The type of commitment to attest (packet or acknowledgment)
+	// The type of commitment to attest (packet, acknowledgment, or receipt)
 	// Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward
 	// compatibility)
 	CommitmentType CommitmentType `protobuf:"varint,4,opt,name=commitment_type,json=commitmentType,proto3,enum=ibc.v2.attestor.CommitmentType" json:"commitment_type,omitempty"`

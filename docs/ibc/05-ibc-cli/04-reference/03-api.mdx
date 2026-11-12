@@ -311,7 +311,7 @@ Both attestation calls return this shape.
 | `attested_data` | `bytes` | The attested data |
 | `signature` | `bytes` | The attestation signature |
 
-{/* [attestor.proto:L80](proto/cli/attestor.proto#L80) */}
+{/* [attestor.proto:L77](proto/cli/attestor.proto#L77) */}
 
 {/* GEN:api:msg:Attestation END */}
 
@@ -373,9 +373,9 @@ Retrieves an attestation for a set of packets.
 | `attestor` | `string` | Which attestor to ask, by its `name` in the `attestors` block. |
 | `packets` | `bytes[]` | The packets to attest to |
 | `height` | `uint64` | The height to attest to the `packets` at |
-| `commitment_type` | `CommitmentType` | The type of commitment to attest (packet or acknowledgment) Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward compatibility) |
+| `commitment_type` | `CommitmentType` | The type of commitment to attest (packet, acknowledgment, or receipt) Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward compatibility) |
 
-{/* [attestor.proto:L35](proto/cli/attestor.proto#L35) */}
+{/* [attestor.proto:L32](proto/cli/attestor.proto#L32) */}
 
 {/* GEN:api:msg:PacketAttestationRequest END */}
 
@@ -391,7 +391,7 @@ Retrieves an attestation for a set of packets.
 | `COMMITMENT_TYPE_ACK` | Acknowledgment commitment (for WriteAcknowledgement events) |
 | `COMMITMENT_TYPE_RECEIPT` | Receipt commitment (for Timeout events - non-membership proof) |
 
-{/* [attestor.proto:L69](proto/cli/attestor.proto#L69) */}
+{/* [attestor.proto:L66](proto/cli/attestor.proto#L66) */}
 
 {/* GEN:api:enum:CommitmentType END */}
 
@@ -403,7 +403,7 @@ Retrieves an attestation for a set of packets.
 |---|---|---|
 | `attestation` | `Attestation` | The signed attestation, in the `Attestation` table. |
 
-{/* [attestor.proto:L51](proto/cli/attestor.proto#L51) */}
+{/* [attestor.proto:L48](proto/cli/attestor.proto#L48) */}
 
 {/* GEN:api:msg:PacketAttestationResponse END */}
 
@@ -427,7 +427,7 @@ Returns the latest height the attestor will generate attestations for.
 |---|---|---|
 | `attestor` | `string` | Which attestor to ask, by its `name` in the `attestors` block. |
 
-{/* [attestor.proto:L55](proto/cli/attestor.proto#L55) */}
+{/* [attestor.proto:L52](proto/cli/attestor.proto#L52) */}
 
 {/* GEN:api:msg:LatestHeightRequest END */}
 
@@ -439,7 +439,7 @@ Returns the latest height the attestor will generate attestations for.
 |---|---|---|
 | `height` | `uint64` | The highest height this attestor will attest to. |
 
-{/* [attestor.proto:L57](proto/cli/attestor.proto#L57) */}
+{/* [attestor.proto:L54](proto/cli/attestor.proto#L54) */}
 
 {/* GEN:api:msg:LatestHeightResponse END */}
 
@@ -463,7 +463,7 @@ Returns identity information about a configured attestor.
 |---|---|---|
 | `attestor` | `string` | Which attestor to ask, by its `name` in the `attestors` block. |
 
-{/* [attestor.proto:L59](proto/cli/attestor.proto#L59) */}
+{/* [attestor.proto:L56](proto/cli/attestor.proto#L56) */}
 
 {/* GEN:api:msg:InfoRequest END */}
 
@@ -476,7 +476,7 @@ Returns identity information about a configured attestor.
 | `chain_id` | `string` | The chain this attestor watches. |
 | `address` | `string` | The attestor's signing address. |
 
-{/* [attestor.proto:L61](proto/cli/attestor.proto#L61) */}
+{/* [attestor.proto:L58](proto/cli/attestor.proto#L58) */}
 
 {/* GEN:api:msg:InfoResponse END */}
 
