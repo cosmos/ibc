@@ -74,7 +74,7 @@ func TestRenderGroupsSubtestsNoEnvironmentAndSorts(t *testing.T) {
 		t.Fatalf("tests not sorted:\n%s", text)
 	}
 	for _, want := range []string{
-		"<!-- SPDX-License-Identifier: Apache-2.0 -->",
+		"<!-- SPDX-License-Identifier: CC-BY-4.0 -->",
 		"| `TestA` | None | No environment | No environment | No environment |",
 		"EVM (node lifecycle); EVM portable",
 		"environment: 1× Anvil; 1× Attached EVM; 2 IBC instances; 1 connection; 0 attestors",
