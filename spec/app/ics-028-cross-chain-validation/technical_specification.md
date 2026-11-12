@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 <!-- omit in toc -->
 # CCV: Technical Specification
 
@@ -137,3 +139,11 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 [&uparrow; Back to Outline](#outline)
 
 The remainder of this technical specification is split into [Data Structures](./data_structures.md) and [Methods](./methods.md).
+
+## Copyright
+
+This specification is subject to the Community Specification License 1.0, available at [https://github.com/CommunitySpecification/1.0](https://github.com/CommunitySpecification/1.0).
+
+If source code is included in the specification, that code is subject to the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license unless otherwise marked. In the case of any conflict or confusion within this specification between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

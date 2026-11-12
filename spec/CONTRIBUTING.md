@@ -1,6 +1,10 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 # Contribution Guidelines
 
 Thanks for your interest in contributing to IBC! Contributions are always welcome. 
+
+The specifications are developed under the Community Specification process. By contributing you agree to the [Contributor License Agreement](00-contributor-license-agreement.md), and your contribution is made under the [Community Specification License 1.0](01-community-specification-license-v1.md) and the [Contribution Policy](06-contributing.md). Every commit must be signed off with `git commit -s`; see the repository's [CONTRIBUTING.md](../CONTRIBUTING.md#developer-certificate-of-origin-dco).
 
 Contributing to this repo can mean many things such as participating in discussion or proposing changes. To ensure a smooth workflow for all contributors, the general procedure for contributing has been established:
 

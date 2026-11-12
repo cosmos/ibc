@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+
 // Every frozen page must carry noindex and a canonical that resolves to a
 // real page in latest/. A canonical pointing at a 404 is worse than none:
 // it tells search engines to rank a page that does not exist.

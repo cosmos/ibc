@@ -13,6 +13,9 @@ scripts/
 README.md
 AGENTS.md
 
+# The CC BY 4.0 license text for the documentation, for the repository.
+LICENSE
+
 # The deploy runbook: an open plan-tier decision and a known-breakage list,
 # neither of which belongs on a public page. Only this file -- the rest of
 # mintlify/ is the stylesheet, brand assets, fonts and images the site serves,

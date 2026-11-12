@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 <!-- omit in toc -->
 # CCV: System Model and Properties
 
@@ -428,4 +430,12 @@ i.e., we informally prove the properties described in the [previous section](#de
     Thus, `Token(Power(cc,hi,val)) = pBonded(hp,val)`. 
 
 - ***Consumer Rewards Distribution***: The first part of the *Consumer Rewards Distribution* property (i.e., the tokens are eventually minted on the provider chain and then distributed among the validators) follows directly from *Distribution Liveness* and *Distribution Warranty*. 
-  The second part of the *Consumer Rewards Distribution* property (i.e., the total supply of tokens is preserved) follows directly from the *Supply* property of the Fungible Token Transfer protocol (see [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
+  The second part of the *Consumer Rewards Distribution* property (i.e., the total supply of tokens is preserved) follows directly from the *Supply* property of the Fungible Token Transfer protocol (see [ICS 20](../ics-020-fungible-token-transfer/README.md)).
+
+## Copyright
+
+This specification is subject to the Community Specification License 1.0, available at [https://github.com/CommunitySpecification/1.0](https://github.com/CommunitySpecification/1.0).
+
+If source code is included in the specification, that code is subject to the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license unless otherwise marked. In the case of any conflict or confusion within this specification between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

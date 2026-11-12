@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 ## IBC Standardisation Process
 
 IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.

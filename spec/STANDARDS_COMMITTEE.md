@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 ## Standards Committee
 
 Currently, the core standardisation committee consists of:

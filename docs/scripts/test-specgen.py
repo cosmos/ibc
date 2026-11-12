@@ -29,6 +29,9 @@ def case(name):
 
 REL = "core/ics-004-channel-and-packet-semantics/README.md"
 
+# What every published source must end with; see specgen.check_copyright.
+COPYRIGHT = "\n## Copyright\n\n" + specgen._DISCLAIMER + "\n"
+
 
 @case("strips the .md suffix from internal links")
 def _():
@@ -261,7 +264,7 @@ def _():
 def _():
     with tempfile.TemporaryDirectory() as root:
         os.makedirs(os.path.join(root, "spec"))
-        open(os.path.join(root, "spec", "bad.md"), "w").write("no heading\n")
+        open(os.path.join(root, "spec", "bad.md"), "w", encoding="utf-8").write("no heading\n" + COPYRIGHT)
         out = os.path.join(root, "docs", "ibc", "spec")
         os.makedirs(out)
         open(os.path.join(out, "old.mdx"), "w").write("old")
@@ -294,7 +297,7 @@ def _():
 def _():
     with tempfile.TemporaryDirectory() as root:
         os.makedirs(os.path.join(root, "spec"))
-        open(os.path.join(root, "spec", "a.md"), "w").write("# A\n")
+        open(os.path.join(root, "spec", "a.md"), "w", encoding="utf-8").write("# A\n" + COPYRIGHT)
         out = os.path.join(root, "docs", "ibc", "spec")
         os.makedirs(out)
         open(os.path.join(out, "old.mdx"), "w").write("old")
@@ -323,7 +326,7 @@ def _():
 def _():
     with tempfile.TemporaryDirectory() as root:
         os.makedirs(os.path.join(root, "spec"))
-        open(os.path.join(root, "spec", "a.md"), "w").write("# A\n")
+        open(os.path.join(root, "spec", "a.md"), "w", encoding="utf-8").write("# A\n" + COPYRIGHT)
         base = os.path.join(root, "docs", "ibc")
         os.makedirs(os.path.join(base, "spec.old"))
         specgen.write_tree(root, os.path.join(base, "spec"))
@@ -345,7 +348,7 @@ def _():
 def _():
     with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
         os.makedirs(os.path.join(root, "spec", "core"))
-        open(os.path.join(root, "spec", "core", "x.md"), "w").write("prose\n")
+        open(os.path.join(root, "spec", "core", "x.md"), "w", encoding="utf-8").write("prose\n" + COPYRIGHT)
         try:
             specgen.generate(root, out)
         except ValueError as e:
@@ -401,6 +404,44 @@ def _():
     specgen.check_fences("a\n\n```go\nx\n```\n\nb\n", REL)
 
 
+@case("rejects a source with no Copyright section")
+def _():
+    try:
+        specgen.check_copyright("# X\n\nbody\n", REL)
+    except ValueError as e:
+        assert "ics-template.md" in str(e), e
+        assert REL in str(e), e
+    else:
+        assert False, "a source with no Copyright section was accepted"
+
+
+@case("rejects a Copyright section without the disclaimer")
+def _():
+    src = "# X\n\n## Copyright\n\nSubject to the Community Specification License 1.0.\n"
+    try:
+        specgen.check_copyright(src, REL)
+    except ValueError:
+        pass
+    else:
+        assert False, "a Copyright section without the disclaimer was accepted"
+
+
+@case("accepts the template's Copyright section")
+def _():
+    template = os.path.join(specgen.SRC, "ics-template.md")
+    specgen.check_copyright(open(template, encoding="utf-8").read(), REL)
+
+
+@case("every published source carries the disclaimer")
+def _():
+    for dirpath, _, names in os.walk(specgen.SRC):
+        for name in names:
+            rel = os.path.relpath(os.path.join(dirpath, name), specgen.SRC)
+            if name.endswith(".md") and not specgen.excluded(rel):
+                text = open(os.path.join(dirpath, name), encoding="utf-8").read()
+                specgen.check_copyright(text, rel)
+
+
 @case("every generated page carries the generated-file header")
 def _():
     with tempfile.TemporaryDirectory() as out:
@@ -432,7 +473,7 @@ def _():
     with tempfile.TemporaryDirectory() as d:
         src = os.path.join(d, "spec", "core", "ics-001-x")
         os.makedirs(src)
-        open(os.path.join(src, "README.md"), "w").write("# X\n\nbody\n")
+        open(os.path.join(src, "README.md"), "w", encoding="utf-8").write("# X\n\nbody\n" + COPYRIGHT)
         # What a clone without the LFS client leaves on disk.
         open(os.path.join(src, "diagram.png"), "w").write(
             "version https://git-lfs.github.com/spec/v1\n"
@@ -452,7 +493,7 @@ def _():
     with tempfile.TemporaryDirectory() as d:
         src = os.path.join(d, "spec", "core", "ics-001-x")
         os.makedirs(src)
-        open(os.path.join(src, "README.md"), "w").write("# X\n\nbody\n")
+        open(os.path.join(src, "README.md"), "w", encoding="utf-8").write("# X\n\nbody\n" + COPYRIGHT)
         png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
         open(os.path.join(src, "diagram.png"), "wb").write(png)
         with tempfile.TemporaryDirectory() as out:

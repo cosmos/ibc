@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Community-Spec-1.0
 title: "CCV: Overview and Basic Concepts"
 ---
 {/* Generated from spec/app/ics-028-cross-chain-validation/overview_and_basic_concepts.md by docs/scripts/specgen.py. Edits here are overwritten. */}
@@ -357,3 +358,11 @@ As a prerequisite of this approach, every consumer chain must open a token trans
 
 - On receiving a `ChanOpenAck` message, the consumer CCV module initiates the opening handshake for the token transfer channel using the same client and connection as for the CCV channel. 
 - On receiving a `ChanOpenTry` message, the provider CCV module adds the address of the distribution module account to the channel version as metadata (as defined in [ICS 4](/ibc/spec/core/ics-004-channel-and-packet-semantics/README#definitions)).
+
+## Copyright
+
+This specification is subject to the Community Specification License 1.0, available at [https://github.com/CommunitySpecification/1.0](https://github.com/CommunitySpecification/1.0).
+
+If source code is included in the specification, that code is subject to the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license unless otherwise marked. In the case of any conflict or confusion within this specification between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

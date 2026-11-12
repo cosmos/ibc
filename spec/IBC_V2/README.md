@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Community-Spec-1.0
 title: IBC v2
 stage: EXPERIMENTAL
 version compatibility: ibc-go v10.0.0
@@ -200,3 +201,11 @@ We are guaranteed that the source identifier is unique on the source chain, the 
 Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain.
 
 In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client on the destination chain (retrieved using destination identifier) with the packet commitment path derived by the source identifier. This verification check can only pass if the chain identified by the destination client committed the packet we received under the source client identifier. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct . Since the sender only sends packets intended for the destination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the receiver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
+
+## Copyright
+
+This specification is subject to the Community Specification License 1.0, available at [https://github.com/CommunitySpecification/1.0](https://github.com/CommunitySpecification/1.0).
+
+If source code is included in the specification, that code is subject to the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) license unless otherwise marked. In the case of any conflict or confusion within this specification between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

@@ -55,6 +55,17 @@ SITE_BASE = "/ibc/spec"
 # Governance and process documents. They describe how the standards process
 # works, not what the standards say, and are read on GitHub.
 EXCLUDE = {
+    # The Community Specification framework: the license, agreements and
+    # policies that govern spec/, not pages of the specification.
+    "00-contributor-license-agreement.md",
+    "01-community-specification-license-v1.md",
+    "02-scope.md",
+    "03-notices.md",
+    "04-license.md",
+    "05-governance.md",
+    "06-contributing.md",
+    "07-spec-template.md",
+    "08-code-of-conduct.md",
     "CONTRIBUTING.md",
     "PROCESS.md",
     "STANDARDS_COMMITTEE.md",
@@ -109,6 +120,25 @@ def check_fences(text, rel):
             f"spec/{rel}: {n} code-fence markers, an odd number, so one fence "
             "is never closed. Close it in the source: an unclosed fence makes "
             "the rest of the file render as code and skips every rewrite.")
+
+
+_DISCLAIMER = "THESE MATERIALS ARE PROVIDED “AS IS.”"
+
+
+def check_copyright(text, rel):
+    """Raise if `text` has no Copyright section carrying the CSL disclaimer.
+
+    Section 8.2 of the Community Specification License requires every
+    distribution of the specifications to carry its warranty disclaimer, and
+    each published page is distributed on its own. The section to copy is the
+    one in spec/ics-template.md.
+    """
+    m = re.search(r"^## Copyright\s*$", text, re.M)
+    if not m or _DISCLAIMER not in text[m.end():]:
+        raise ValueError(
+            f"spec/{rel}: no Copyright section with the Community "
+            "Specification License disclaimer. Copy the Copyright section "
+            "from spec/ics-template.md to the end of the file.")
 
 
 def _outside_fences(text, fn):
@@ -225,6 +255,29 @@ def ensure_title(text, rel):
     return f"---\ntitle: {json.dumps(title, ensure_ascii=False)}\n---\n\n{text}"
 
 
+_SPDX_COMMENT = re.compile(
+    r"^\{/\* *SPDX-License-Identifier: *(\S+) *\*/\}\n+", re.M)
+
+
+def lift_spdx(text):
+    """Put the license on the first line inside the frontmatter.
+
+    A source with frontmatter carries its SPDX identifier there already. A
+    source without one opens with an HTML comment, which transform() turned
+    into an MDX comment that now sits below the frontmatter ensure_title()
+    synthesised; move it up so every page has the license on line 2.
+    """
+    m = _FRONTMATTER.match(text)
+    if not m or "SPDX-License-Identifier" in m.group(0):
+        return text
+    s = _SPDX_COMMENT.search(text, m.end())
+    if not s:
+        return text
+    rest = text[:s.start()] + text[s.end():]
+    return ("---\n# SPDX-License-Identifier: " + s.group(1) + "\n"
+            + rest[len("---\n"):])
+
+
 def add_header(text, rel):
     """Insert the generated-file header after the frontmatter block."""
     m = _FRONTMATTER.match(text)
@@ -249,8 +302,9 @@ def generate(root, out):
                 with open(full, encoding="utf-8") as fh:
                     src_text = fh.read()
                 check_fences(src_text, rel)
-                body = add_header(
-                    ensure_title(transform(src_text, rel), rel), rel)
+                check_copyright(src_text, rel)
+                body = add_header(lift_spdx(
+                    ensure_title(transform(src_text, rel), rel)), rel)
                 with open(dest, "w", encoding="utf-8") as fh:
                     fh.write(body)
                 written.append(dest_rel)
