@@ -28,11 +28,11 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27account"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
-	"github.com/cosmos/ibc/cli/besu"
-	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
-	"github.com/cosmos/ibc/cli/internal/deploy"
-	"github.com/cosmos/ibc/cli/routeraccess"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/accessmanager"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	chainsevm "github.com/lfdt-ibc/ibc/cli/internal/chains/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
+	"github.com/lfdt-ibc/ibc/cli/routeraccess"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/accessmanager"
 )
 
 // backend is the subset of ethclient the driver needs; narrowed for tests.

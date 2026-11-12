@@ -13,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-yaml"
 
-	"github.com/cosmos/ibc/cli/internal/network"
-	"github.com/cosmos/ibc/cli/internal/pkg/logging"
+	"github.com/lfdt-ibc/ibc/cli/internal/network"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/logging"
 )
 
 // Chain types

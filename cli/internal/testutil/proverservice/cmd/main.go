@@ -18,7 +18,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/cosmos/ibc/cli/internal/testutil/proverservice"
+	"github.com/lfdt-ibc/ibc/cli/internal/testutil/proverservice"
 )
 
 func main() {

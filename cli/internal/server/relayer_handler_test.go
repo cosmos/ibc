@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	proto "github.com/cosmos/ibc/cli/api/v2/relayer"
-	relayerservice "github.com/cosmos/ibc/cli/internal/service/relayer"
+	proto "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	relayerservice "github.com/lfdt-ibc/ibc/cli/internal/service/relayer"
 )
 
 type relayerServiceStub struct {

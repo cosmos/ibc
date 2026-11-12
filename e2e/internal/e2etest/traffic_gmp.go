@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics27gmp"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/counter"
 )
 
 var gmpTransactor = mustBinding(ics27gmp.NewContractTransactor(common.Address{}, nil))

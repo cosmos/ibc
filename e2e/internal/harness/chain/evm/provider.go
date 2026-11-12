@@ -2,7 +2,7 @@
 
 package evm
 
-import "github.com/cosmos/ibc/e2e/internal/harness/chain"
+import "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
 
 type Identity struct {
 	id     string

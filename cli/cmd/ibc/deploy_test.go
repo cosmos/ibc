@@ -21,11 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/deploy"
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
 )
 
 // newLocalSignerConfig generates a real local secp256k1 key, stores it to a

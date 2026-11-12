@@ -10,7 +10,7 @@ That behavior is built on GMP. An IFT defines no packet type, and instead a tran
 
 An issuer deploys one of two Solidity variants, which differ only in who the contract's authority is. The authority registers a bridge and send-call constructor for each counterparty IFT implementation.
 
-Source: [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](/ibc/03-applications/02-ift).
+Source: [IFTBaseUpgradeable.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol), with the deployable variants and the encoders listed below. The behavior behind this surface is on [IFT: how it works](/ibc/03-applications/02-ift).
 
 ## What an IFT contract does
 
@@ -28,12 +28,12 @@ One variant is deployed per token, with the abstract base compiled into it. Each
 
 | Contract | Kind | What it does | Source |
 |---|---|---|---|
-| `IFTBaseUpgradeable` | Abstract base, compiled into `IFTOwnable` and `IFTAccessManaged` | The shared burn, mint, and refund surface | [IFTBaseUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol) |
-| `IFTRateLimitUpgradeable` | Abstract base, compiled into `IFTBaseUpgradeable` | The inbound and outbound rate limits | [IFTRateLimitUpgradeable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTRateLimitUpgradeable.sol) |
-| `IFTOwnable` | Deployed contract, behind an ERC1967 proxy | An IFT whose authority is one owner address | [IFTOwnable.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTOwnable.sol) |
-| `IFTAccessManaged` | Deployed contract, behind an ERC1967 proxy | An IFT whose authority is an external AccessManager | [IFTAccessManaged.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTAccessManaged.sol) |
-| `EVMIFTSendCallConstructor` | Encoder contract, stateless | Builds the mint call for an EVM counterparty | [EVMIFTSendCallConstructor.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/EVMIFTSendCallConstructor.sol) |
-| `CosmosIFTSendCallConstructor` | Encoder contract, configured at construction | Builds the mint call for a Cosmos SDK counterparty | [CosmosIFTSendCallConstructor.sol](https://github.com/cosmos/ibc-contracts/blob/main/ibc-solidity/contracts/utils/CosmosIFTSendCallConstructor.sol) |
+| `IFTBaseUpgradeable` | Abstract base, compiled into `IFTOwnable` and `IFTAccessManaged` | The shared burn, mint, and refund surface | [IFTBaseUpgradeable.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTBaseUpgradeable.sol) |
+| `IFTRateLimitUpgradeable` | Abstract base, compiled into `IFTBaseUpgradeable` | The inbound and outbound rate limits | [IFTRateLimitUpgradeable.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTRateLimitUpgradeable.sol) |
+| `IFTOwnable` | Deployed contract, behind an ERC1967 proxy | An IFT whose authority is one owner address | [IFTOwnable.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTOwnable.sol) |
+| `IFTAccessManaged` | Deployed contract, behind an ERC1967 proxy | An IFT whose authority is an external AccessManager | [IFTAccessManaged.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/IFTAccessManaged.sol) |
+| `EVMIFTSendCallConstructor` | Encoder contract, stateless | Builds the mint call for an EVM counterparty | [EVMIFTSendCallConstructor.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/EVMIFTSendCallConstructor.sol) |
+| `CosmosIFTSendCallConstructor` | Encoder contract, configured at construction | Builds the mint call for a Cosmos SDK counterparty | [CosmosIFTSendCallConstructor.sol](https://github.com/lfdt-ibc/ibc-contracts/blob/main/ibc-solidity/contracts/utils/CosmosIFTSendCallConstructor.sol) |
 
 The external surface is declared in `IIFT`, the data structures in `IIFTMsgs`, and the errors in `IIFTErrors`. An encoder implements `IIFTSendCallConstructor`, which is the one interface an issuer writes against to support a new counterparty.
 
@@ -131,7 +131,7 @@ Both directions share the capacity and window but track usage separately, across
 - **Outbound** covers the burn in `iftTransfer`. A send over the limit reverts, so no packet is sent.
 - **Inbound** covers `iftMint` and refunds. A mint over the limit fails the receive and produces an error acknowledgement, which refunds the sender. A refund over the limit reverts and the pending transfer stays recorded, so the relayer can retry once the bucket has refilled.
 
-Flow in one direction never restores allowance in the other, and the authority's local `mint` is not limited. Changing the limit keeps the refill accrued under the old settings and applies the new rate from then on. [The IFT rate limiting ADR](https://github.com/cosmos/ibc-contracts/blob/main/docs/adr/solidity/ift-ratelimit.md) explains these choices.
+Flow in one direction never restores allowance in the other, and the authority's local `mint` is not limited. Changing the limit keeps the refill accrued under the old settings and applies the new rate from then on. [The IFT rate limiting ADR](https://github.com/lfdt-ibc/ibc-contracts/blob/main/docs/adr/solidity/ift-ratelimit.md) explains these choices.
 
 ## Sending a transfer
 

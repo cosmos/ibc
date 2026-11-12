@@ -931,16 +931,16 @@
         "header": "Repositories",
         "items": [
           {
-            "label": "cosmos/ibc",
-            "href": "https://github.com/cosmos/ibc"
+            "label": "lfdt-ibc/ibc",
+            "href": "https://github.com/lfdt-ibc/ibc"
           },
           {
-            "label": "cosmos/ibc-go",
-            "href": "https://github.com/cosmos/ibc-go"
+            "label": "lfdt-ibc/ibc-go",
+            "href": "https://github.com/lfdt-ibc/ibc-go"
           },
           {
-            "label": "cosmos/ibc-contracts",
-            "href": "https://github.com/cosmos/ibc-contracts"
+            "label": "lfdt-ibc/ibc-contracts",
+            "href": "https://github.com/lfdt-ibc/ibc-contracts"
           }
         ]
       },

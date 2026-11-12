@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	relayerv2 "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 // AwaitState waits for the packet to reach want. If want is pending and the

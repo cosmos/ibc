@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-module github.com/cosmos/ibc/gen/go/solidity-abi
+module github.com/lfdt-ibc/ibc/gen/go/solidity-abi
 
 go 1.26.10
 

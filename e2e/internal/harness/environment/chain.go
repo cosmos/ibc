@@ -15,8 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	chainimpl "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	chainimpl "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
+	chainevm "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
 )
 
 var (

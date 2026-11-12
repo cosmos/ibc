@@ -16,10 +16,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment/solidityibc"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment/solidityibc"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 type connectionDependencies struct {

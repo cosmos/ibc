@@ -7,7 +7,7 @@ name: Release
 # container image built from the same linux archives.
 #
 # The attesting, signing and publishing steps are the shared actions in .github/actions, which
-# cosmos/ibc-go and cosmos/ibc-contracts use too. This repository uses them from the tagged commit.
+# lfdt-ibc/ibc-go and lfdt-ibc/ibc-contracts use too. This repository uses them from the tagged commit.
 
 on:
   push:

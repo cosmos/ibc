@@ -25,11 +25,11 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          outputs: type=image,name=ghcr.io/cosmos/ibc,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/lfdt-ibc/ibc,push-by-digest=true,name-canonical=true,push=true
           provenance: false
-      - uses: cosmos/ibc/.github/actions/attest-image@<commit-sha> # main
+      - uses: lfdt-ibc/ibc/.github/actions/attest-image@<commit-sha> # main
         with:
-          image: ghcr.io/cosmos/ibc
+          image: ghcr.io/lfdt-ibc/ibc
           digest: ${{ steps.push.outputs.digest }}
 ```
 
@@ -40,9 +40,9 @@ jobs:
 After combining the platform images into an index, attest and sign the index:
 
 ```yaml
-      - uses: cosmos/ibc/.github/actions/attest-image@<commit-sha> # main
+      - uses: lfdt-ibc/ibc/.github/actions/attest-image@<commit-sha> # main
         with:
-          image: ghcr.io/cosmos/ibc
+          image: ghcr.io/lfdt-ibc/ibc
           digest: ${{ steps.index.outputs.digest }}
           sbom: "false"
           sign: "true"
@@ -52,7 +52,7 @@ After combining the platform images into an index, attest and sign the index:
 - `sbom: "false"` skips the SBOM, because each platform image already has one.
 - `recursive: "true"` also signs the platform images the index lists.
 
-Create and tag the index as the `Publish manifest` and `Tag signed image` steps of cosmos/ibc's [release workflow](../../workflows/release.yml) do. They tag the index only after this action signs it, so the tag never points at an unsigned image.
+Create and tag the index as the `Publish manifest` and `Tag signed image` steps of lfdt-ibc/ibc's [release workflow](../../workflows/release.yml) do. They tag the index only after this action signs it, so the tag never points at an unsigned image.
 
 ## Single-platform image
 

@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/tests/mocks"
 )
 
 func testConnection() config.ConnectionConfig {

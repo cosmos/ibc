@@ -22,13 +22,13 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/deploy"
-	"github.com/cosmos/ibc/cli/internal/deploy/evm"
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
-	"github.com/cosmos/ibc/cli/keyfile"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
+	"github.com/lfdt-ibc/ibc/cli/keyfile"
 )
 
 const (

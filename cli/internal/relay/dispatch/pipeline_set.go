@@ -9,9 +9,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/relay/pipeline"
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/pipeline"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
 )
 
 // PipelineSet creates and caches one pipeline per route.

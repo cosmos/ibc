@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/cosmos/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
 )
 
 func TestRegisterMetrics(t *testing.T) {

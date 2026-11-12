@@ -21,10 +21,10 @@ import (
 	"github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 
-	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/container"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm/poll"
+	chainpkg "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/container"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm/poll"
 )
 
 const (

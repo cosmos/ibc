@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
+	"github.com/lfdt-ibc/ibc/cli/internal/tests/mocks"
 )
 
 func TestRemote(t *testing.T) {

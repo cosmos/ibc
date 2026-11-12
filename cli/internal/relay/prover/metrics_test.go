@@ -15,10 +15,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/otel"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/otel"
+	"github.com/lfdt-ibc/ibc/cli/internal/tests/mocks"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 func TestInstrumentation(t *testing.T) {

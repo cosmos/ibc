@@ -13,9 +13,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	chainimpl "github.com/cosmos/ibc/e2e/internal/harness/chain"
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
+	chainimpl "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
+	chainevm "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
 )
 
 func TestStartValidatesRuntimeBeforeAcquisition(t *testing.T) {

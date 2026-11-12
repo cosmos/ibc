@@ -18,9 +18,9 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/internal/deploy"
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
 )
 
 // evmMerklePrefix is the empty prefix attestation clients verify EVM

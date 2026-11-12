@@ -74,7 +74,7 @@ ModuleBasics = module.NewBasicManager(
 )
 ```
 
-It may be useful to reference the [PR](https://github.com/cosmos/ibc-go/pull/2825) which added the `AppModuleBasic` for the tendermint client.
+It may be useful to reference the [PR](https://github.com/lfdt-ibc/ibc-go/pull/2825) which added the `AppModuleBasic` for the tendermint client.
 
 #### Solo machine registration
 
@@ -96,7 +96,7 @@ ModuleBasics = module.NewBasicManager(
 )
 ```
 
-It may be useful to reference the [PR](https://github.com/cosmos/ibc-go/pull/2826) which added the `AppModuleBasic` for the solo machine client.
+It may be useful to reference the [PR](https://github.com/lfdt-ibc/ibc-go/pull/2826) which added the `AppModuleBasic` for the solo machine client.
 
 ### Testing package API
 
@@ -136,7 +136,7 @@ The function `GetTimestampAtHeight` has been added to the `ClientState` interfac
 
 Prior to ibc-go/v7 the `ClientState` interface defined a method for each data type which was being verified in the counterparty state store.
 The state verification functions for all IBC data types have been consolidated into two generic methods, `VerifyMembership` and `VerifyNonMembership`.
-Both are expected to be provided with a standardised key path, `exported.Path`, as defined in [ICS 24 host requirements](https://github.com/cosmos/ibc/tree/main/spec/core/ics-024-host-requirements). Membership verification requires callers to provide the marshalled value `[]byte`. Delay period values should be zero for non-packet processing verification. A zero proof height is now allowed by core IBC and may be passed into `VerifyMembership` and `VerifyNonMembership`. Light clients are responsible for returning an error if a zero proof height is invalid behaviour.
+Both are expected to be provided with a standardised key path, `exported.Path`, as defined in [ICS 24 host requirements](https://github.com/lfdt-ibc/ibc/tree/main/spec/core/ics-024-host-requirements). Membership verification requires callers to provide the marshalled value `[]byte`. Delay period values should be zero for non-packet processing verification. A zero proof height is now allowed by core IBC and may be passed into `VerifyMembership` and `VerifyNonMembership`. Light clients are responsible for returning an error if a zero proof height is invalid behaviour.
 
 See below for an example of how ibc-go now performs channel state verification.
 
@@ -243,7 +243,7 @@ message Misbehaviour {
 
 ### `SignBytes`
 
-Most notably, the `SignBytes` protobuf definition has been modified to replace the `data_type` field with a new field, `path`. The `path` field is defined as `bytes` and represents a serialized [ICS-24](https://github.com/cosmos/ibc/tree/main/spec/core/ics-024-host-requirements) standardized key path under which the `data` is stored.
+Most notably, the `SignBytes` protobuf definition has been modified to replace the `data_type` field with a new field, `path`. The `path` field is defined as `bytes` and represents a serialized [ICS-24](https://github.com/lfdt-ibc/ibc/tree/main/spec/core/ics-024-host-requirements) standardized key path under which the `data` is stored.
 
 ```diff
 message SignBytes {
@@ -272,7 +272,7 @@ message SignatureAndData {
 }
 ```
 
-For more information, please refer to [ADR-007](https://github.com/cosmos/ibc-go/blob/02-client-refactor-beta1/docs/architecture/adr-007-solomachine-signbytes.md).
+For more information, please refer to [ADR-007](https://github.com/lfdt-ibc/ibc-go/blob/02-client-refactor-beta1/docs/architecture/adr-007-solomachine-signbytes.md).
 
 ### IBC module constants
 

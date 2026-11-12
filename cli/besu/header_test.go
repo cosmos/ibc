@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/besu/besutest"
-	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu/besutest"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/ecrecover"
 )
 
 // Each fixture chain's headers parse to the consensus it runs: under the other

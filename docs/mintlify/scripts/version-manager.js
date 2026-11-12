@@ -97,7 +97,7 @@ function loadVersionsRegistry() {
       data.products[subdir] = {
         versions: discovered,
         defaultVersion: 'latest',
-        repository: `cosmos/${subdir}`,
+        repository: `lfdt-ibc/${subdir}`,
         changelogPath: 'CHANGELOG.md'
       };
     } else {
@@ -106,7 +106,7 @@ function loadVersionsRegistry() {
       const stable = merged.filter(validateVersionFormat).sort(compareVersionsDesc);
       const special = ['latest'].filter(s => merged.includes(s));
       data.products[subdir].versions = [...special, ...stable];
-      if (!data.products[subdir].repository)    data.products[subdir].repository    = `cosmos/${subdir}`;
+      if (!data.products[subdir].repository)    data.products[subdir].repository    = `lfdt-ibc/${subdir}`;
       if (!data.products[subdir].changelogPath) data.products[subdir].changelogPath = 'CHANGELOG.md';
     }
   }

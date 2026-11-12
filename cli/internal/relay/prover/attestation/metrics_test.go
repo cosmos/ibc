@@ -14,8 +14,8 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	attestorevm "github.com/cosmos/ibc/cli/attestor/evm"
-	"github.com/cosmos/ibc/cli/internal/service/attestor"
+	attestorevm "github.com/lfdt-ibc/ibc/cli/attestor/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/attestor"
 )
 
 func testMetrics(t *testing.T) *sdkmetric.ManualReader {

@@ -29,7 +29,7 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // ics26 router events consumed by the client

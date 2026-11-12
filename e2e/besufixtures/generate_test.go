@@ -24,10 +24,10 @@ import (
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
 	hostv2 "github.com/cosmos/ibc-go/v11/modules/core/24-host/v2"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/besu/besutest"
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu/besutest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
 )
 
 const (

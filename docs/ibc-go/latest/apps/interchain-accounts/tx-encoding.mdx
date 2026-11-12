@@ -6,7 +6,7 @@ description: >-
   bytes within InterchainAccountPacketData.
 ---
 
-When orchestrating an interchain account transaction, which comprises multiple `sdk.Msg` objects represented as `Any` types, the transactions must be encoded as bytes within [`InterchainAccountPacketData`](https://github.com/cosmos/ibc-go/blob/v7.2.0/proto/ibc/03-applications/interchain_accounts/v1/packet.proto#L21-L26).
+When orchestrating an interchain account transaction, which comprises multiple `sdk.Msg` objects represented as `Any` types, the transactions must be encoded as bytes within [`InterchainAccountPacketData`](https://github.com/lfdt-ibc/ibc-go/blob/v7.2.0/proto/ibc/03-applications/interchain_accounts/v1/packet.proto#L21-L26).
 
 ```protobuf
 // InterchainAccountPacketData is comprised of a raw transaction, type of transaction and optional memo field.
@@ -17,7 +17,7 @@ message InterchainAccountPacketData {
 }
 ```
 
-The `data` field must be encoded as a [`CosmosTx`](https://github.com/cosmos/ibc-go/blob/v7.2.0/proto/ibc/03-applications/interchain_accounts/v1/packet.proto#L28-L31).
+The `data` field must be encoded as a [`CosmosTx`](https://github.com/lfdt-ibc/ibc-go/blob/v7.2.0/proto/ibc/03-applications/interchain_accounts/v1/packet.proto#L28-L31).
 
 ```protobuf
 // CosmosTx contains a list of sdk.Msg's. It should be used when sending transactions to an SDK host chain.
@@ -26,7 +26,7 @@ message CosmosTx {
 }
 ```
 
-The encoding method for `CosmosTx` is determined during the channel handshake process. If the channel version [metadata's `encoding` field](https://github.com/cosmos/ibc-go/blob/v7.2.0/proto/ibc/03-applications/interchain_accounts/v1/metadata.proto#L22) is marked as `proto3`, then `CosmosTx` undergoes protobuf encoding. Conversely, if the field is set to `proto3json`, then [proto3 json](https://protobuf.dev/programming-guides/proto3/#json) encoding takes place, which generates a JSON representation of the protobuf message.
+The encoding method for `CosmosTx` is determined during the channel handshake process. If the channel version [metadata's `encoding` field](https://github.com/lfdt-ibc/ibc-go/blob/v7.2.0/proto/ibc/03-applications/interchain_accounts/v1/metadata.proto#L22) is marked as `proto3`, then `CosmosTx` undergoes protobuf encoding. Conversely, if the field is set to `proto3json`, then [proto3 json](https://protobuf.dev/programming-guides/proto3/#json) encoding takes place, which generates a JSON representation of the protobuf message.
 
 ## Protobuf Encoding
 

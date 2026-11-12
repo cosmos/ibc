@@ -8,9 +8,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/chains/evm"
-	"github.com/cosmos/ibc/cli/internal/config"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // Client provides chain state queries.

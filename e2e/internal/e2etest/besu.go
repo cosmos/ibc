@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
 )
 
 // BesuHeaders reads a managed Besu Chain's headers and seals headers it never

@@ -4,8 +4,8 @@ Thanks for your interest in contributing to IBC! Contributions are always welcom
 
 Contributing to this repo can mean many things such as participating in discussion or proposing changes. To ensure a smooth workflow for all contributors, the general procedure for contributing has been established:
 
-- Feel free to [open](https://github.com/cosmos/ibc/issues/new) an issue to raise a question, explain a concern, or discuss a possible future feature, protocol change, or standard.
-  - Make sure first that the issue does not already [exist](https://github.com/cosmos/ibc/issues).
+- Feel free to [open](https://github.com/lfdt-ibc/ibc/issues/new) an issue to raise a question, explain a concern, or discuss a possible future feature, protocol change, or standard.
+  - Make sure first that the issue does not already [exist](https://github.com/lfdt-ibc/ibc/issues).
   - Participate in thoughtful discussion on the issue.
 
 - If you would like to contribute in fixing / closing an issue:
@@ -50,7 +50,7 @@ Ensure that you base and target your PR on the `master` branch.
 ### Development Procedure
 
 - The latest state of development is on `master`.
-- Create a development branch either on `github.com/cosmos/ibc` or your fork (using `git remote add fork`).
+- Create a development branch either on `github.com/lfdt-ibc/ibc` or your fork (using `git remote add fork`).
   - To ensure a clear ownership of branches on the ibc repo, branches must be named with the convention `{moniker}/{issue#}-branch-name`
 - Before submitting a pull request, begin `git rebase` on top of `master`. 
   **Since standards cannot be compiled, make sure that the changes in your PR remains consistent with the new commits on the `master` branch**.

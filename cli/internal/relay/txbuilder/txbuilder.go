@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	"github.com/cosmos/ibc/cli/internal/relay/txbuilder/evm"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/txbuilder/evm"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // TxBuilder builds transactions from packet relay and client update details

@@ -15,9 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ift"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/iftbatchtransfershim"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/iftbatchtransfershim"
 )
 
 var (
