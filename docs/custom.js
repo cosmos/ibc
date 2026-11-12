@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* Nav highlight accent, one per section.
 
    Each tab gets its own Cosmos brand hue (Brand Refresh Aug 2026), so the

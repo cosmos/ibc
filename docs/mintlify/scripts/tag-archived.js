@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 
 /**
  * tag-archived.js
@@ -105,6 +106,18 @@ function discoverArchivedVersions(product) {
 // ---------------------------------------------------------------------------
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
+const SPDX_HEAD_RE = /^#\s*SPDX-License-Identifier:[^\r\n]*(\r?\n|$)/;
+
+/**
+ * Prepends `keys` (newline-terminated YAML lines) to front matter `fm`,
+ * keeping a leading SPDX comment on the first line, where
+ * `make lint-license` looks for it.
+ */
+export function prependKeys(fm, keys) {
+  const m = fm.match(SPDX_HEAD_RE);
+  if (!m) return keys + fm;
+  return `${m[0].trimEnd()}\n${keys}${fm.slice(m[0].length)}`;
+}
 
 /**
  * Returns the relative page path within a product+version dir.
@@ -181,12 +194,12 @@ function injectFrontMatter(filePath, product, baseUrl, dryRun) {
       note();
       const newFm = cm
         ? fm.replace(/^canonical\s*:.*$/m, `canonical: '${url}'`)
-        : `canonical: '${url}'\n${fm}`;
+        : prependKeys(fm, `canonical: '${url}'\n`);
       if (!dryRun) fs.writeFileSync(filePath, raw.replace(FRONTMATTER_RE, () => `---\n${newFm}\n---`), 'utf8');
       return true;
     }
     note();
-    const newFm = `noindex: true\ncanonical: '${url}'\n${fm}`;
+    const newFm = prependKeys(fm, `noindex: true\ncanonical: '${url}'\n`);
     if (!dryRun) fs.writeFileSync(filePath, raw.replace(FRONTMATTER_RE, () => `---\n${newFm}\n---`), 'utf8');
     return true;
   } else {
@@ -292,4 +305,8 @@ async function main() {
   if (args.dryRun) warn('Re-run without --dry-run to apply changes.');
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+// Compare real paths: on macOS /tmp is a symlink to /private/tmp, and
+// import.meta.url is always resolved.
+const isMain = process.argv[1]
+  && fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(process.argv[1]);
+if (isMain) main().catch(err => { console.error(err); process.exit(1); });

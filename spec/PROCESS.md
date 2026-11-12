@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 ## IBC Standardisation Process
 
 IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
@@ -27,14 +29,14 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
     
     For a more detailed description of standard requirements, see [ICS 1](../spec/ics-001-ics-standard).
   
-    For more details on submitting a PR, take a look at the [Pull Requests](./CONTRIBUTING.md#pull-requests) section in the contribution guidelines.
+    For more details on submitting a PR, take a look at the [Specifications](../CONTRIBUTING.md#specifications) section of the repository's contribution guidelines.
   - Identified `author(s)` who will advance the proposal in the header of the standard file
   - Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
-  - The specification team expects that this proposal will be finalised and eventually included in the IBC standard set.
+  - The TSC expects that this proposal will be finalised and eventually included in the IBC standard set.
 - ***Spec Quality***:
   - Follows the structure laid out in ICS 1 and provides a reasonable overview of the proposed addition.
 - ***Acceptance Requirements***:
-  - The PR has received two approvals from members of the [core specification committee](./STANDARDS_COMMITTEE.md), at which point it can be merged into the IBC repository.
+  - The PR has received two approvals from [TSC members](../TSC_MEMBERS.md), at which point it can be merged into the IBC repository.
 - ***Changes Expected Post-Acceptance***:
   - Changes to details but not to the key concepts are expected after a standard enters draft stage. Implementers should work with the spec authors as work continues on spec development.
 - ***Implementation Types Expected***:
@@ -53,7 +55,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
 - ***Spec Quality***:
   - Complete: all semantics, syntax and API are completed as described
 - ***Acceptance Requirements***:
-  - The PR changing the stage to "candidate" has been approved by two members of the core specification team.
+  - The PR changing the stage to "candidate" has been approved by two [TSC members](../TSC_MEMBERS.md).
 - ***Changes Expected Post-Acceptance***:
   - Limited: only those deemed critical based on implementation experiences.
 - ***Implementation Types Expected***:
@@ -70,7 +72,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
   - Acceptance tests are written and merged into the relevant repositories
   - All files in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repository
 - ***Acceptance Requirements***:
-  - The PR changing the stage to "finalised" has been approved by representatives from all relevant ecosystem stakeholders, and all members of the core specification team.
+  - The PR changing the stage to "finalised" has been approved by representatives from all relevant ecosystem stakeholders, and all [TSC members](../TSC_MEMBERS.md).
 - ***Spec Quality***:
   - Final: All changes as a result of implementation experience are integrated
 - ***Changes Expected Post-Acceptance***:
@@ -81,3 +83,15 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
 ### Calls for implementation and feedback
 
 When an addition is accepted at the “candidate” (stage 3) maturity level, the committee is signifying that it believes design work is complete and further refinement will require implementation experience, significant usage and external feedback.
+
+## Copyright
+
+This document is licensed under the Community Specification License 1.0, and source code included in it under the Apache License 2.0 unless otherwise marked. In the case of any conflict or confusion within this document between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+The repository uses three licenses, as set out in [Copyright and license](https://github.com/lfdt-ibc/ibc/blob/main/CONTRIBUTING.md#copyright-and-license):
+
+- **Specifications:** [Community Specification License 1.0](https://github.com/lfdt-ibc/ibc/blob/main/spec/01-community-specification-license-v1.md) ([canonical text](https://github.com/CommunitySpecification/1.0))
+- **Code:** [Apache License 2.0](https://github.com/lfdt-ibc/ibc/blob/main/LICENSE) ([canonical text](https://www.apache.org/licenses/LICENSE-2.0))
+- **Documentation:** [Creative Commons Attribution 4.0 International](https://github.com/lfdt-ibc/ibc/blob/main/docs/LICENSE) ([canonical text](https://creativecommons.org/licenses/by/4.0/legalcode))
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

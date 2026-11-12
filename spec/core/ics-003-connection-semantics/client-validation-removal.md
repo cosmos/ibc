@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Community-Spec-1.0 -->
+
 # Client Validation Removal
 
 The IBC protocol is no longer requiring that chains verify that the underlying counterparty client of a connection is a valid client of their consensus protocol. In order to understand the motivation for these changes, this document will describe why the validation existed in the first place, what challenges they introduced, and what the consequences are of removing them.
@@ -27,3 +29,15 @@ As mentioned above, the client validation in the connection handshake prevents t
 Thus, social consensus is already a key element of how IBC functions for end users. We can extend the use of this pre-existing social consensus to also prevent users from sending on misconfigured connection ends rather than enforcing validation in the protocol. By removing the validation, we vastly simplify the connection handshake protocol: removing two proof verifications in both `ConnOpenTry` and `ConnOpenAck`. Ledgers no longer need to track their own consensus in order to explicitly validate a counterparty's client. This gives much more freedom and flexibility to how clients are implemented and written into state.
 
 While removing client validation in the connection handshake does open the slight possibility of misconfigured but still usable channels, social consensus will be relied on going forward to ensure these misconfigured channels do not get usage.
+
+## Copyright
+
+This specification is licensed under the Community Specification License 1.0, and source code included in it under the Apache License 2.0 unless otherwise marked. In the case of any conflict or confusion within this specification between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+The repository uses three licenses, as set out in [Copyright and license](https://github.com/lfdt-ibc/ibc/blob/main/CONTRIBUTING.md#copyright-and-license):
+
+- **Specifications:** [Community Specification License 1.0](https://github.com/lfdt-ibc/ibc/blob/main/spec/01-community-specification-license-v1.md) ([canonical text](https://github.com/CommunitySpecification/1.0))
+- **Code:** [Apache License 2.0](https://github.com/lfdt-ibc/ibc/blob/main/LICENSE) ([canonical text](https://www.apache.org/licenses/LICENSE-2.0))
+- **Documentation:** [Creative Commons Attribution 4.0 International](https://github.com/lfdt-ibc/ibc/blob/main/docs/LICENSE) ([canonical text](https://creativecommons.org/licenses/by/4.0/legalcode))
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

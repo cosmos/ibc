@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # AGENTS.md — the docs tree
 
 The Mintlify site lives here. `docs/` is the site root: Mintlify resolves every
@@ -147,8 +149,14 @@ Copy anchors from a render rather than deriving them.
 | `scripts/refgen.py` | `cli/`, `proto/`, `gen/` | CLI reference tables in `ibc/05-ibc-cli/` |
 | `scripts/specgen.py` | `spec/` | `ibc/spec/` |
 
-Both have a `--check` mode. Nothing in CI runs it, so after changing `cli/`,
-`proto/` or `gen/`, follow `scripts/AGENTS.md` and run it yourself.
+Both have a `--check` mode. CI runs `specgen.py --check` (the `Spec` workflow),
+so regenerate `ibc/spec/` in the same pull request as any change to `spec/`.
+Nothing in CI runs `refgen.py --check`, so after changing `cli/`, `proto/` or
+`gen/`, follow `scripts/AGENTS.md` and run it yourself.
+
+Every published spec page must end with the Copyright section from
+`spec/ics-template.md`, including the warranty disclaimer the Community
+Specification License requires. `specgen.py` refuses a source without it.
 
 Site tooling — version freezing, link checking — is in `mintlify/scripts/`.
 

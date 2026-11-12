@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+
 // Three drift conditions, all of which ship silently: a page that exists but
 // is unreachable from the sidebar, a nav entry pointing at a file that was
 // renamed or removed, and a page listed in navigation more than once.

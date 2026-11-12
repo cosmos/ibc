@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 
 /**
  * Fixture tests for check-github-refs.js

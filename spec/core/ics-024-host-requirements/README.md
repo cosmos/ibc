@@ -1,4 +1,5 @@
 ---
+# SPDX-License-Identifier: Community-Spec-1.0
 ics: 24
 title: Host State Machine Requirements
 stage: draft
@@ -118,20 +119,20 @@ actually used in the private store implementation.
 
 Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../client/ics-007-tendermint-client) and may vary for other client types.
 
-| Store          | Path format                                                                    | Value type        | Defined in |
-| -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| provableStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
-| privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
-| privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
-| provableStore  | "channelEnds/ports/{identifier}/channels/{identifier}"                         | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                     | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Store         | Path format                                                                 | Value type     | Defined in                                       |
+| ------------- | --------------------------------------------------------------------------- | -------------- | ------------------------------------------------ |
+| provableStore | "clients/{identifier}/clientState"                                          | ClientState    | [ICS 2](../ics-002-client-semantics)             |
+| provableStore | "clients/{identifier}/consensusStates/{height}"                             | ConsensusState | [ICS 7](../../client/ics-007-tendermint-client)  |
+| privateStore  | "clients/{identifier}/connections                                           | []Identifier   | [ICS 3](../ics-003-connection-semantics)         |
+| provableStore | "connections/{identifier}"                                                  | ConnectionEnd  | [ICS 3](../ics-003-connection-semantics)         |
+| privateStore  | "ports/{identifier}"                                                        | CapabilityKey  | [ICS 5](../ics-005-port-allocation)              |
+| provableStore | "channelEnds/ports/{identifier}/channels/{identifier}"                      | ChannelEnd     | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                 | uint64         | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                 | uint64         | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                  | uint64         | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}" | bytes          | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes          | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"        | bytes          | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Module layout
 
@@ -404,7 +405,15 @@ Jul 27, 2022 - Move `ClientState` to the `provableStore`, and add "Client state 
 
 ## Copyright
 
-All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+This specification is licensed under the Community Specification License 1.0, and source code included in it under the Apache License 2.0 unless otherwise marked. In the case of any conflict or confusion within this specification between the Community Specification License and the designated source code license, the terms of the Community Specification License shall apply.
+
+The repository uses three licenses, as set out in [Copyright and license](https://github.com/lfdt-ibc/ibc/blob/main/CONTRIBUTING.md#copyright-and-license):
+
+- **Specifications:** [Community Specification License 1.0](https://github.com/lfdt-ibc/ibc/blob/main/spec/01-community-specification-license-v1.md) ([canonical text](https://github.com/CommunitySpecification/1.0))
+- **Code:** [Apache License 2.0](https://github.com/lfdt-ibc/ibc/blob/main/LICENSE) ([canonical text](https://www.apache.org/licenses/LICENSE-2.0))
+- **Documentation:** [Creative Commons Attribution 4.0 International](https://github.com/lfdt-ibc/ibc/blob/main/docs/LICENSE) ([canonical text](https://creativecommons.org/licenses/by/4.0/legalcode))
+
+THESE MATERIALS ARE PROVIDED “AS IS.” The Contributors and Licensees expressly disclaim any warranties (express, implied, or otherwise), including implied warranties of merchantability, non-infringement, fitness for a particular purpose, or title, related to the materials.  The entire risk as to implementing or otherwise using the materials is assumed by the implementer and user. IN NO EVENT WILL THE CONTRIBUTORS OR LICENSEES BE LIABLE TO ANY OTHER PARTY FOR LOST PROFITS OR ANY FORM OF INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER FROM ANY CAUSES OF ACTION OF ANY KIND WITH RESPECT TO THIS DELIVERABLE OR ITS GOVERNING AGREEMENT, WHETHER BASED ON BREACH OF CONTRACT, TORT (INCLUDING NEGLIGENCE), OR OTHERWISE, AND WHETHER OR NOT THE OTHER MEMBER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---
 
