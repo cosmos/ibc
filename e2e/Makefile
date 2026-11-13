@@ -25,6 +25,7 @@ doctor-tools: ## Check the generation and lint tools used by e2e checks
 
 lint: ## Lint code
 	golangci-lint run
+	go mod tidy -diff
 
 lint-fix: ## Lint & fix code
 	golangci-lint run --fix
