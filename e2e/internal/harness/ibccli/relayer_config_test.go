@@ -232,3 +232,29 @@ func TestClientTypesPerEnd(t *testing.T) {
 	require.Equal(t, clientkind.Besu, file.Relayer.Connections[0].ClientA.Type)
 	require.Equal(t, clientkind.Attestation, file.Relayer.Connections[0].ClientB.Type)
 }
+
+func TestClearOnStartYAML(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value *bool
+		want  string
+	}{
+		{"unset leaves the CLI default", nil, ""},
+		{"false is written", new(false), "clearOnStart: false"},
+		{"true is written", new(true), "clearOnStart: true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testRelayerConfig()
+			cfg.ClearOnStart = tc.value
+			file, err := buildRelayerFileConfig(cfg)
+			require.NoError(t, err)
+			data, err := yaml.Marshal(file.Relayer)
+			require.NoError(t, err)
+			if tc.want == "" {
+				require.NotContains(t, string(data), "clearOnStart")
+				return
+			}
+			require.Contains(t, string(data), tc.want)
+		})
+	}
+}

@@ -521,7 +521,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		require.NoError(t, err)
 		assert.Empty(t, sequences)
 
-		_, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 12, 11)
+		sequences, err = s.ListPacketSequences(ctx, chainIDEth, clientID, 12, 11)
 		require.NoError(t, err)
 		require.Empty(t, sequences)
 	})
