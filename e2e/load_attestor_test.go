@@ -164,12 +164,12 @@ func newLoadTestAttestor(t *testing.T) *loadTestAttestor {
 	sender := e2etest.NewSigner(t)
 	relayerSigner := e2etest.NewSigner(t)
 
-	// Given relayer deployment with clearing enabled and two routes
+	// Given relayer deployment with one route
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 
 	driver, deployment := e2etest.Deploy(t, env, sender, relayerSigner, route)
 
-	// Given deployed transfer apps for both routes
+	// Given deployed transfer app
 	transferApp := e2etest.NewTransfer(t, env, deployment, sender, route)
 
 	// Given a relayer

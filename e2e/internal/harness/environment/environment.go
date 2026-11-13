@@ -121,8 +121,9 @@ func (e *Environment) Attestors() []AttestorID {
 }
 
 // Close releases acquired effects in reverse acquisition order, then removes
-// the private workspace. Successful effects are never repeated. If cleanup
-// fails or ctx expires, a later call retries only unfinished effects.
+// the private and diagnostics workspace directories. Successful effects are
+// never repeated. If cleanup fails or ctx expires, a later call retries only
+// unfinished effects.
 func (e *Environment) Close(ctx context.Context) error {
 	e.closeMu.Lock()
 	defer e.closeMu.Unlock()

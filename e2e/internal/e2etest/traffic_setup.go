@@ -45,7 +45,7 @@ func RequiredSignerBalance() *big.Int {
 	return new(big.Int).Mul(big.NewInt(1_000), big.NewInt(weiPerEther))
 }
 
-// Coins converts $counts * 10^18 wei
+// Coins converts coins to wei: coins * 10^18.
 func Coins(coins int64) *big.Int {
 	return new(big.Int).Mul(big.NewInt(coins), big.NewInt(weiPerEther))
 }
@@ -130,8 +130,10 @@ func (d *Deployment) RouteClients(id RouteID) (RouteClients, bool) {
 	return clients, ok
 }
 
-// Deploy writes a temporary black-box configuration, runs its migration, and
-// deploys TestERC20 + Counter on each Chain. It does not start the relayer.
+// Deploy deploys TestERC20, Counter, and an IFT token with its send-call
+// constructor and batch shim on each Chain, registers the IFT bridges for each
+// route, then writes a temporary black-box configuration and runs its
+// migration. It does not start the relayer.
 func Deploy(
 	t testing.TB,
 	env *environment.Environment,

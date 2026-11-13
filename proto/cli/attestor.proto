@@ -29,9 +29,6 @@ message StateAttestationRequest {
 message StateAttestationResponse { Attestation attestation = 1; }
 
 // Request message for getting an attestation for a set of packets.
-// This request's parameters does not include a height at the moment, because
-// we are currently only attesting to the latest height, and using the returned
-// height to request a state attestation.
 message PacketAttestationRequest {
   string attestor = 1;
 
@@ -41,7 +38,7 @@ message PacketAttestationRequest {
   // The height to attest to the packets at
   uint64 height = 3;
 
-  // The type of commitment to attest (packet or acknowledgment)
+  // The type of commitment to attest (packet, acknowledgment, or receipt)
   // Defaults to COMMITMENT_TYPE_PACKET if not specified (for backward
   // compatibility)
   CommitmentType commitment_type = 4;

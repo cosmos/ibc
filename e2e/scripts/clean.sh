@@ -48,7 +48,7 @@ sweep() {
 }
 
 # Match the IBC CLI running `relayer run`, scoped to the
-# harness's compiled config (ibc-cli.config.yaml, always in --config of a harness-spawned daemon) so a
+# harness's compiled config (ibc-cli.config.yaml, the --config of every relayer e2etest.Deploy configures) so a
 # developer's own unrelated `ibc relayer run` is never signaled.
 sweep "e2e relayer daemons" '(^|[[:space:]])relayer[[:space:]]+run[[:space:]].*ibc-cli\.config\.yaml'
 

@@ -104,8 +104,8 @@ jobs:
           echo "::error::Tagged commit ${GITHUB_SHA} is not on main or a release/* branch"
           exit 1
 
-  # Builds and attests the archives. Only the image job pushes to the registry, so this job, which
-  # also builds darwin, has no packages permission.
+  # Builds and attests the archives. Only the image and publish-manifest jobs push to the registry,
+  # so this job, which also builds darwin, has no packages permission.
   build:
     name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
     needs: [validate-tag]

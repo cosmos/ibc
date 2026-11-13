@@ -28,7 +28,7 @@ type Set struct {
 	set map[string]Signer
 }
 
-// KeyType & SignerType enums
+// Key types, re-exported from keyfile.Type
 const (
 	EDDSA = keyfile.EDDSA
 	ECDSA = keyfile.ECDSA

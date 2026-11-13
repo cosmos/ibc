@@ -55,8 +55,8 @@ func (c Config) ReconcileDeployment(d DeploymentConfig) (Config, []Conflict, err
 }
 
 // mergeChains replaces a chain wholesale. Rendering starts from the existing
-// chain entry and only sets the deployed router, so a conflict here means the
-// router actually changed.
+// chain entry and only sets the deployed router and multicall, so a conflict
+// here means one of them actually changed.
 func mergeChains(existing, incoming []ChainConfig, conflicts *[]Conflict) []ChainConfig {
 	out := append([]ChainConfig(nil), existing...)
 

@@ -23,8 +23,8 @@ check_prerequisites() {
     || info "cast not on PATH — falling back to $FOUNDRY_IMAGE for key derivation"
 }
 
-# Run `cast`, preferring a host binary and falling back to the pinned foundry
-# image. Key derivation happens before any compose network exists, so this
+# Run `cast`, preferring a host binary and falling back to the $FOUNDRY_IMAGE
+# foundry image. Key derivation happens before any compose network exists, so this
 # helper deliberately runs without --network.
 cast_cli() {
   if command -v cast >/dev/null 2>&1; then
@@ -69,14 +69,14 @@ run_phase() {
 }
 
 # Render a template by substituting `${VAR}` placeholders with the values of
-# matching environment variables (variables must be exported — call sites
-# should `set -a` around state.env sourcing or pass them inline).
+# matching environment variables (variables must be exported, as _init_chain
+# in chains.sh does).
 #
 # Pure substitution: no `$(...)` execution, no command parsing of expanded
-# content. This matters when a placeholder expands to multi-line YAML — the
-# previous eval+heredoc approach treated lines of the expanded value as
-# commands and emitted spurious "command not found" errors (and was a
-# security foot-gun).
+# content. This matters when a placeholder expands to multi-line JSON
+# (GENESIS_ALLOC) — the previous eval+heredoc approach treated lines of the
+# expanded value as commands and emitted spurious "command not found" errors
+# (and was a security foot-gun).
 #
 # Heals the docker-bind-mount-created-a-directory case: if the output path
 # is an empty directory, remove it first.

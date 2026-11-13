@@ -70,9 +70,9 @@ func (m *instrumentation) batch(
 	))
 }
 
-// processors/batch_ack.go
-// processors/batch_recv.go
-// processors/batch_relay.go
+// processors/batch_ack_packet.go
+// processors/batch_recv_packet.go
+// processors/timeout_packet.go
 func batchProcessorName(status store.RelayStatus) string {
 	switch status {
 	case store.RelayStatusDeliverRecvPacket:

@@ -34,7 +34,8 @@ func testConnection() config.ConnectionConfig {
 	}
 }
 
-// localCandidate builds a mock Attestor registered under the Service.
+// localCandidate builds a mock Attestor named alias that watches
+// watchedChainID and reports address.
 func localCandidate(t *testing.T, alias, watchedChainID, address string) attestor.Attestor {
 	t.Helper()
 

@@ -19,7 +19,7 @@ jobs:
         with:
           name: ibc-cli-v1.2.3-linux-amd64
           platform: linux-amd64
-          sbom-file: cli/dist/ibc
+          sbom-file: cli/bin/ibc
 ```
 
 - `name` is the SBOM's file name, without `.spdx.json`.

@@ -12,7 +12,7 @@ for metric modes, names, labels, and semantics.
 1. Ensure unique attribute keys are present in `otel/metrics.go` (eg `AttrChainID`, `AttrAttestor`). Add new if needed.
 2. Create `metrics.go` based on the following reference example. Don't enforce units if not necessary.
 3. Keep metric-related code in `<pkg>/metrics.go`, create small helpers to make metrics recording
-  more concise for callers. See `latestHeight(...)` and `recordOperation(...)` in attestor's metrics.
+  more concise for callers. See `latestHeight(...)` and `record(...)` in attestor's metrics.
 4. Leave metrics unitless (except durations).
 
 ```go
@@ -34,6 +34,8 @@ type instrumentation struct {
 
 var metrics = otel.RegisterMetrics("attestor", newInstrumentation)
 
+const callerDefault = "internal"
+
 func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	operation, err := m.Float64Histogram("attestor_operation", otel.UnitMilliseconds())
 	if err != nil {
@@ -51,7 +53,7 @@ func newInstrumentation(m metric.Meter) (*instrumentation, error) {
 	}, nil
 }
 
-func (m *instrumentation) recordOperation(
+func (m *instrumentation) record(
 	ctx context.Context,
 	operation, chainID, attestor string,
 	err error,
@@ -61,6 +63,7 @@ func (m *instrumentation) recordOperation(
 		otel.AttrChainID.String(chainID),
 		otel.AttrAttestor.String(attestor),
 		otel.AttrResultError(err),
+		otel.AttrCallerFromCaller(ctx, callerDefault),
 	)
 }
 
@@ -68,6 +71,7 @@ func (m *instrumentation) latestHeight(ctx context.Context, attestor, chainID st
 	m.LatestHeight.Record(ctx, int64(height), metric.WithAttributes(
 		otel.AttrChainID.String(chainID),
 		otel.AttrAttestor.String(attestor),
+		otel.AttrCallerFromCaller(ctx, callerDefault),
 	))
 }
 ```

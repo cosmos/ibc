@@ -31,7 +31,7 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/internal/pkg/graceful"
 )
 
-// Provider owns the metrics pipeline and Prometheus HTTP server.
+// Provider owns the metrics pipeline and, in simple mode, the Prometheus HTTP server.
 type Provider struct {
 	logger    *slog.Logger
 	meter     metric.MeterProvider
@@ -62,7 +62,7 @@ func GlobalSetup(ctx context.Context, cfg config.Observability, logger *slog.Log
 }
 
 // New bootstraps the OpenTelemetry pipeline.
-// If it does not return an error, make sure to call shutdown for proper cleanup.
+// If it does not return an error, make sure to call Stop for proper cleanup.
 // note: right now, only metrics are configured (logging and tracing are not)
 // see: https://opentelemetry.io/docs/languages/go/getting-started/#add-opentelemetry-instrumentation
 func New(_ context.Context, cfg config.Observability, logger *slog.Logger) (provider *Provider, err error) {
@@ -138,7 +138,6 @@ func newSimpleMeterProvider(
 		sdk.WithReader(metricExporter),
 	)
 
-	// create new mux + server
 	mux := http.NewServeMux()
 	mux.Handle(simpleMetricsPath, promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 	server := &http.Server{

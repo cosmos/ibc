@@ -39,7 +39,7 @@ func reapProcess(cmd *exec.Cmd, hooks processHooks) *processHandle {
 			hooks.BeforeWait()
 		}
 		err := cmd.Wait()
-		// Publish reaped under mu before closing done so SignalAndWait never signals a recycled pid.
+		// Publish reaped under mu before closing done so signalAndWait never signals a recycled pid.
 		h.mu.Lock()
 		h.waitErr = err
 		h.reaped = true

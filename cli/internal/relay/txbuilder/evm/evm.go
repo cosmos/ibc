@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evm implements txbuilder.TxBuilder for EVM chains: it packs an
-// ICS26Router.updateClient call plus one recvPacket/ackPacket/timeoutPacket
-// call per packet relay item into an IBCMulticall batch.
+// Package evm implements txbuilder.TxBuilder for EVM chains: it packs one
+// ICS26Router.updateClient call per client update payload plus one
+// recvPacket/ackPacket/timeoutPacket call per packet relay item into an
+// IBCMulticall batch.
 package evm
 
 import (
@@ -136,7 +137,7 @@ func packRelayItem(item v2.PacketRelayItem) ([]byte, error) {
 	}
 }
 
-// height converts a plain attested height into the router's versioned height
+// height converts a plain proof height into the router's versioned height
 // type. EVM chains have no notion of a revision/epoch, so RevisionNumber is
 // always 0.
 func height(h uint64) ics26router.IICS02ClientMsgsHeight {

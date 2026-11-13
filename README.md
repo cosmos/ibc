@@ -17,7 +17,7 @@ This repository is the canonical home of the inter-blockchain communication prot
 
 It consolidates design rationale, protocol semantics, and encoding descriptions for IBC, including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP), alongside the software that deploys IBC onto a chain and relays packets across it.
 
-Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contribution guidelines.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## Repository layout
 
@@ -38,12 +38,11 @@ Contributions are welcome. See [CONTRIBUTING.md](spec/CONTRIBUTING.md) for contr
 - [How IBC works](docs/ibc/02-how-ibc-works/01-overview.mdx) covers the components that carry one packet between two chains.
 - [IBC CLI](docs/ibc/05-ibc-cli/01-overview.mdx) covers deploying IBC and running the processes that operate it.
 
-<!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of IBC, you can also read [this blog post](https://medium.com/the-interchain-foundation/eli5-what-is-ibc-def44d7b5b4c).
 
 ## Releases
 
-See [`RELEASES.md`](RELEASES.md) for how to cut a release and how to verify its signed files and image.
+See [`RELEASES.md`](RELEASES.md) for versioning, supported release lines, and release signing.
 
 ## Interchain Standards
 

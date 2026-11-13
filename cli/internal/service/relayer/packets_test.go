@@ -178,7 +178,8 @@ func TestPacketsRejectsUnconfiguredChains(t *testing.T) {
 }
 
 // Filters over data still match nothing rather than erroring: the relayer only
-// knows packets it was asked to relay, so absence is not an error.
+// knows packets it has recorded, from relay requests or its watchers, so
+// absence is not an error.
 func TestPacketsUnknownDataFiltersReturnEmpty(t *testing.T) {
 	t.Parallel()
 

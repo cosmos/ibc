@@ -135,7 +135,7 @@ func buildRelayerFileConfig(cfg RelayerConfig) (fileConfig, error) {
 		DB:            dbConfig{Type: dbTypeSQLite, URL: cfg.DBPath},
 		Observability: otelFileConfig(cfg.Observability),
 		Signers:       []signerConfig{processSigner},
-		// The default 5s dispatch poll is mainnet-shaped; harness awaits are sub-second.
+		// The default 1s dispatch poll is mainnet-shaped; harness awaits are sub-second.
 		Relayer: &relayerFileConfig{
 			DispatchPollInterval: "100ms",
 			ClearOnStart:         cfg.ClearOnStart,

@@ -122,7 +122,7 @@ Keys live in `<ibc-home>/keys/`, one file each. These can be named by signers in
 
 {/* GEN:cli:cmd:keys-import START */}
 
-Import a private key into `<ibc-home>/keys/<name>`.
+Import a private key into `<ibc-home>/keys/` as a JSON file named after the key.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -151,7 +151,7 @@ Lists every key from `<ibc-home>/keys/`.
 
 {/* GEN:cli:cmd:keys-new START */}
 
-Saves key into `<ibc-home>/keys/<name>` or prints to stdout if name is not provided.
+Saves key as a JSON file in `<ibc-home>/keys/`, or prints to stdout if name is not provided.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -169,7 +169,7 @@ ibc keys new ecdsa relayer --populate-config
 
 {/* GEN:cli:cmd:keys-show START */}
 
-Show key details from `<ibc-home>/keys/<name>`; optionally print the private key.
+Show key details from the key's JSON file in `<ibc-home>/keys/`; optionally print the private key.
 
 | Flag | Default | Description |
 |---|---|---|
@@ -205,7 +205,7 @@ Deploy and register an attestation light client.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--attestors <strings>` | configured attestations for the tracked chain | Attestors for the new client as addresses, attestation names, or signer aliases. |
+| `--attestors <strings>` | configured attestors for the tracked chain | Attestors for the new client as addresses, attestor names, or signer aliases. |
 | `--client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Client id. |
 | `--counterparty-chain <string>` | required | Counterparty chain id the client tracks. |
 | `--counterparty-client-id <string>` | `cli-<a>-<b>`, chain ids sorted | Counterparty's client id. |

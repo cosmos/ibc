@@ -53,7 +53,7 @@ make -C e2e test E2E_MODE=production E2E_FLAGS='-run TestCrossRoute -parallel 1 
 `-e2e.mode` in `E2E_FLAGS` overrides `E2E_MODE`. `-e2e.load` overrides `E2E_LOAD`. After a hard crash, use
 `make -C e2e clean-dry-run` and then `make -C e2e clean`.
 
-Every environment-backed test calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
+Every environment-backed test except the `TestLoad*` load tests calls `t.Parallel()` and boots its own environment; the Makefile caps concurrency at four environments. Pass `E2E_FLAGS='-parallel 1 -count=1'` to serialize when debugging.
 
 ## Writing a test
 

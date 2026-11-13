@@ -26,7 +26,7 @@ const (
 	DefaultPendingTxTimeout = 2 * time.Minute
 	// requestTimeout bounds Submit and ShouldRetry.
 	requestTimeout = 10 * time.Second
-	// maxInFlight limits outstanding nonces per chain; stalled nonces can still be reused.
+	// maxInFlight limits outstanding nonces per sender; stalled nonces can still be reused.
 	maxInFlight = 16
 	// maxBroadcastAttempts limits broadcasts per Submit, including fee replacements.
 	maxBroadcastAttempts = 8

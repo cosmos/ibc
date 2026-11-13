@@ -485,7 +485,7 @@ func testRepoReadWrite(t *testing.T, s Store) {
 		insert(chainIDEth, clientID, 9, RelayStatusCompleteWithAck)
 		insert(chainIDEth, clientID, 11, RelayStatusNotSelected)
 
-		// Neither another client on the same chain nor the same client on another chain moves the maximum
+		// Neither another client on the same chain nor the same client on another chain shows up in the range
 		insert(chainIDEth, otherClientID, 500, RelayStatusPending)
 		insert(chainIDBase, clientID, 900, RelayStatusPending)
 

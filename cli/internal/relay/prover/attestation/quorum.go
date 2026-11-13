@@ -212,9 +212,10 @@ func joinResponseErrors(responses []quorumResponse) string {
 	return strings.Join(msgs, "; ")
 }
 
-// latestProvableHeight finds a height every attestor in the quorum has. It fans
-// LatestHeight out concurrently and takes the minimum among the attestors
-// that answered, requiring at least threshold of them to respond.
+// latestProvableHeight finds the highest height at least threshold attestors
+// have reached. It fans LatestHeight out concurrently and takes the
+// threshold-th highest among the attestors that answered, requiring at least
+// threshold of them to respond.
 func latestProvableHeight(
 	ctx context.Context,
 	logger *slog.Logger,

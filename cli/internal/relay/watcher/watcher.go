@@ -45,7 +45,7 @@ type Config struct {
 	MinBackoff time.Duration
 	MaxBackoff time.Duration
 
-	// CleanOnStart runs a pass as soon as the first subscription is live.
+	// CleanOnStart runs a pass as soon as the watcher starts.
 	CleanOnStart bool
 	// ClearInterval how often a pass runs after that.
 	ClearInterval time.Duration
@@ -135,7 +135,7 @@ func (w *Watcher) Start() error {
 	eventsChan := make(chan v2.PacketEvent, eventBuffer)
 	metrics.subscription(ctx, w.chainID, false)
 
-	// run clearer only if:
+	// only the clearer runs if:
 	// - client has NO websocket endpoint
 	// - client has websocket endpoint, but subscription fails
 	eventStream, err := w.subscribe(ctx, eventsChan)
@@ -228,8 +228,9 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 }
 
 func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (stream, error) {
-	// note that for evm implementation cancel() is unused because websocket loop
-	// doesn't rely on provided context (see geth's code)
+	// note that for evm implementation the websocket loop doesn't rely on the
+	// provided context (see geth's code); cancel() only aborts an in-flight
+	// block header fetch for a received log
 	ctx, cancel := context.WithCancel(ctx)
 	sub, err := w.chain.SubscribeSendPackets(ctx, w.clientIDs, events)
 	if err != nil {
@@ -292,7 +293,6 @@ func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 
 			w.logger.Info("Resubscribed to send packets", "clientIDs", w.clientIDs)
 
-			// trigger clearer
 			w.clearRequest()
 		}
 	}
@@ -323,7 +323,7 @@ func (w *Watcher) clearRequest() {
 	select {
 	case w.clearNow <- struct{}{}:
 	default:
-		// already running
+		// a pass is already queued
 	}
 }
 

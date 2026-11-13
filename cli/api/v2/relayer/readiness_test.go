@@ -20,7 +20,7 @@ func TestProcessReadiness(t *testing.T) {
 		HTTP:            "127.0.0.1:3000",
 	})
 	require.NoError(t, err)
-	// the e2e harness reads readiness as one exact stdout line; the encoding must stay compact
-	//nolint:testifylint // JSONEq would not catch a switch to indented output
+	// the e2e harness parses these field names from the JSON log line on stderr
+	//nolint:testifylint // pin the exact wire format, not just JSON equivalence
 	require.Equal(t, `{"event":"ready","chainsConnected":["chain-a"],"http":"127.0.0.1:3000"}`, string(encoded))
 }

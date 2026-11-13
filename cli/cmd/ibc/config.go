@@ -17,8 +17,8 @@ import (
 
 // set in init()
 var (
-	// if true, perform extra validation checks like connecting to RPC,
-	// checking EVM addresses, etc.
+	// if true, perform extra validation checks like connecting to the database
+	// and RPC endpoints, and checking on-chain client registrations.
 	flagConfigValidateLive bool
 
 	// if true, output the config file to stdout

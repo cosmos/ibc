@@ -937,7 +937,7 @@ func dbTypeFromURL(raw string) string {
 }
 
 // toCommentMap converts comments (YAML path -> text) into a yaml.CommentMap
-// of line comments, as PrintYAMLWithComments/store both need.
+// of line comments, as PrintYAMLWithComments/storeConfig both need.
 func toCommentMap(comments map[string]string) yaml.CommentMap {
 	cm := make(yaml.CommentMap, len(comments))
 	for path, text := range comments {
