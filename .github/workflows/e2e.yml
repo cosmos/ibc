@@ -98,10 +98,16 @@ jobs:
       - run: go install github.com/ethereum/go-ethereum/cmd/abigen@v1.17.4
       - run: make -C e2e check-stale
 
-  e2e:
+  e2e-shard:
+    name: e2e (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: changes
     if: github.event_name == 'schedule' || needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Each shard runs every Nth test (e2e/scripts/shard-tests.sh). Add a number to add a shard.
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       E2E_MODE: ${{ github.event_name == 'schedule' && 'production' || 'complete' }}
     steps:
@@ -114,7 +120,19 @@ jobs:
             e2e/go.sum
             gen/go/solidity-abi/go.sum
       - run: docker info
-      - run: make -C e2e test E2E_FLAGS='-count=1 -v'
+      - run: make -C e2e test E2E_FLAGS='-count=1 -v' E2E_SHARD="$E2E_SHARD"
+        env:
+          E2E_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+
+  # Required check; shard job names change with the shard count.
+  e2e:
+    if: always()
+    needs: [changes, e2e-shard]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
 
   matrix:
     runs-on: ubuntu-latest
