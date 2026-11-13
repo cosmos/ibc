@@ -8,8 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 // CheckTimeoutFinality gates timing out a packet on the source client's

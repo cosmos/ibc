@@ -27,8 +27,8 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"gopkg.in/yaml.v3"
 
-	attestorv2 "github.com/cosmos/ibc/cli/api/v2/attestor"
-	"github.com/cosmos/ibc/cli/keyfile"
+	attestorv2 "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	"github.com/lfdt-ibc/ibc/cli/keyfile"
 )
 
 const testPrivateKey = "0000000000000000000000000000000000000000000000000000000000000006"

@@ -22,11 +22,11 @@ import (
 	reflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	"google.golang.org/grpc/status"
 
-	"github.com/cosmos/ibc/cli/api/v2/attestor"
-	"github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/cli/internal/config"
-	attestorservice "github.com/cosmos/ibc/cli/internal/service/attestor"
-	relayerservice "github.com/cosmos/ibc/cli/internal/service/relayer"
+	"github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	"github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	attestorservice "github.com/lfdt-ibc/ibc/cli/internal/service/attestor"
+	relayerservice "github.com/lfdt-ibc/ibc/cli/internal/service/relayer"
 )
 
 func TestServerHealthCheck(t *testing.T) {

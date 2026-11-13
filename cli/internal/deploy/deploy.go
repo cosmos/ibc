@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
 )
 
 // GMPPortID is the fixed IBC port the ICS27-GMP app registers under

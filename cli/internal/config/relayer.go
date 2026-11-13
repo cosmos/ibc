@@ -18,7 +18,7 @@ const (
 const DefaultClearOnStart = true
 
 // DefaultRemoteProverRequestTimeout bounds remote prover RPCs when requestTimeout is unset.
-const DefaultRemoteProverRequestTimeout = time.Minute
+const DefaultRemoteProverRequestTimeout = 30 * time.Second
 
 // builtInClientTypes are the types the IBC CLI proves without a ProverService.
 var builtInClientTypes = []string{ClientTypeAttestation, ClientTypeBesu}

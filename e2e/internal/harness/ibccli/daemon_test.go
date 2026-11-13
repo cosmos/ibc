@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
+	relayerv2 "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
 )
 
 func TestParseReadinessLog(t *testing.T) {

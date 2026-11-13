@@ -12,8 +12,8 @@ import (
 	"connectrpc.com/connect"
 	"github.com/pkg/errors"
 
-	proto "github.com/cosmos/ibc/cli/api/v2/attestor"
-	"github.com/cosmos/ibc/cli/internal/network"
+	proto "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
+	"github.com/lfdt-ibc/ibc/cli/internal/network"
 )
 
 // RemoteAttestor provides attestation data from a remote gRPC service.

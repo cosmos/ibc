@@ -10,10 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	relayerv2 "github.com/cosmos/ibc/cli/api/v2/relayer"
-	"github.com/cosmos/ibc/e2e/internal/e2etest"
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	relayerv2 "github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/e2e/internal/e2etest"
+	chainevm "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 func TestAutoRelay_PacketIsClearedOnRestart(t *testing.T) {

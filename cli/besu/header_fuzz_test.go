@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/besu"
-	"github.com/cosmos/ibc/cli/besu/besutest"
-	"github.com/cosmos/ibc/cli/internal/pkg/ecrecover"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	"github.com/lfdt-ibc/ibc/cli/besu/besutest"
+	"github.com/lfdt-ibc/ibc/cli/internal/pkg/ecrecover"
 )
 
 // FuzzParseSealedHeader parses node-supplied headers. Whatever it accepts it

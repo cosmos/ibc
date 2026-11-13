@@ -41,7 +41,7 @@ touch, and which only reading can check. See the `reference-drift` skill, run
 after regenerating and triggered by check mode going red.
 
 --------------------------------------------------------------------------
-THE PAGES LIVE IN cosmos/ibc (Evan, 2026-08-21)
+THE PAGES LIVE IN lfdt-ibc/ibc (Evan, 2026-08-21)
 --------------------------------------------------------------------------
 The reference pages are upstream's, at cli/docs/, and are edited there. This
 copy of the tool runs against the pinned clone so the docs project can still

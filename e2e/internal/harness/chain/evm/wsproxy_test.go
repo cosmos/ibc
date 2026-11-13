@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	chainevm "github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
+	chainevm "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
 )
 
 func TestWebSocketProxy(t *testing.T) {

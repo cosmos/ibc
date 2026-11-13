@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/ethclient"
 
-	chainpkg "github.com/cosmos/ibc/e2e/internal/harness/chain"
+	chainpkg "github.com/lfdt-ibc/ibc/e2e/internal/harness/chain"
 )
 
 type AttachedSpec struct {

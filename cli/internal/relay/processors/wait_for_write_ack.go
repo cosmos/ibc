@@ -8,8 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/cosmos/ibc/cli/internal/store"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // WriteAckStorage persists write ack details and clears recv txs.

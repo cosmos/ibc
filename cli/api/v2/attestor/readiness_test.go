@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/api/v2/attestor"
+	"github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
 )
 
 func TestProcessReadiness(t *testing.T) {

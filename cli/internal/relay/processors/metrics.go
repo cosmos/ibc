@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/cosmos/ibc/cli/internal/otel"
-	"github.com/cosmos/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/otel"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
 type relayType string

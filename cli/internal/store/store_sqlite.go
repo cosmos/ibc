@@ -13,8 +13,8 @@ import (
 	"github.com/pkg/errors"
 	migrate "github.com/rubenv/sql-migrate"
 
-	"github.com/cosmos/ibc/cli/internal/config"
-	reposqlite "github.com/cosmos/ibc/cli/internal/store/repository/sqlite"
+	"github.com/lfdt-ibc/ibc/cli/internal/config"
+	reposqlite "github.com/lfdt-ibc/ibc/cli/internal/store/repository/sqlite"
 
 	//nolint:blank-imports // SQL driver
 	_ "modernc.org/sqlite"

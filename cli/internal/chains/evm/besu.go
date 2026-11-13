@@ -12,8 +12,8 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besulightclient"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/besumsgs"
-	"github.com/cosmos/ibc/cli/besu"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	"github.com/lfdt-ibc/ibc/cli/besu"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // SealedHeader returns the sealed Besu header at height, or the head at

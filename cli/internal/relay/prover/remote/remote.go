@@ -15,9 +15,9 @@ import (
 	"github.com/pkg/errors"
 
 	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
-	proverv2 "github.com/cosmos/ibc/cli/api/v2/prover"
-	"github.com/cosmos/ibc/cli/internal/network"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	proverv2 "github.com/lfdt-ibc/ibc/cli/api/v2/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/network"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 const maxResponseBytes = 1 << 20 // 1MB

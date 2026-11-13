@@ -9,9 +9,9 @@ description: >-
 
 ICS27-GMP is the IBC v2 protocol for general cross-chain execution; its packets carry the payload version `ics27-2`. A sender on one chain asks a destination chain to execute a payload, and the destination executes it through an account derived deterministically from the packet metadata — no handshake, no per-account channel.
 
-The Go implementation lives in [`modules/apps/27-gmp`](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-gmp). The protocol itself is specified in [ICS-027-GMP](/ibc/spec/IBC_V2/app/ics-027-gmp/README); read that for the normative rules this module implements. For the EVM counterpart, see [ICS27 GMP and accounts](/ibc/06-ibc-solidity-contracts/03-ics27-gmp-and-accounts).
+The Go implementation lives in [`modules/apps/27-gmp`](https://github.com/lfdt-ibc/ibc-go/tree/main/modules/apps/27-gmp). The protocol itself is specified in [ICS-027-GMP](/ibc/spec/IBC_V2/app/ics-027-gmp/README); read that for the normative rules this module implements. For the EVM counterpart, see [ICS27 GMP and accounts](/ibc/06-ibc-solidity-contracts/03-ics27-gmp-and-accounts).
 
-The module fixes these identifiers ([`types/keys.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/keys.go)):
+The module fixes these identifiers ([`types/keys.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/keys.go)):
 
 | Constant | Value |
 | --- | --- |
@@ -26,7 +26,7 @@ The module fixes these identifiers ([`types/keys.go`](https://github.com/cosmos/
 ## How it works
 
 1. A sender submits `MsgSendCall` with a source client, a receiver, a payload, a salt and a timeout.
-2. `Keeper.SendCall` builds a `GMPPacketData`, marshals it with the requested encoding, and sends it as an IBC v2 payload on `gmpport` with version `ics27-2` ([`keeper/msg_server.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/keeper/msg_server.go)).
+2. `Keeper.SendCall` builds a `GMPPacketData`, marshals it with the requested encoding, and sends it as an IBC v2 payload on `gmpport` with version `ics27-2` ([`keeper/msg_server.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/keeper/msg_server.go)).
 3. On the destination chain, `IBCModule.OnRecvPacket` validates the ports and version, decodes the packet, and hands it to `Keeper.OnRecvPacket`.
 4. The keeper derives — and, on first use, creates — the GMP account for `(destinationClient, sender, salt)`, then executes the payload's messages as that account.
 5. The marshaled `TxMsgData` of the executed messages is returned to the source chain inside an `Acknowledgement`.
@@ -37,7 +37,7 @@ The derived address depends only on `(clientId, sender, salt)`, so it can be com
 
 ### `GMPPacketData`
 
-The IBC packet payload, defined in [`types/packet.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/packet.go) and constructed by `types.NewGMPPacketData`:
+The IBC packet payload, defined in [`types/packet.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/packet.go) and constructed by `types.NewGMPPacketData`:
 
 | Field | Go type | Notes |
 | --- | --- | --- |
@@ -53,17 +53,17 @@ On the Cosmos side `Receiver` is not used to dispatch the call. The destination 
 
 ### `AccountIdentifier` and `ICS27Account`
 
-`AccountIdentifier` (from [`types/account.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/account.go)) holds `ClientId`, `Sender` and `Salt`. `ICS27Account` pairs a bech32 `Address` with the `AccountId` that produced it. The keeper keeps both directions: `Accounts` is keyed by the `(client, sender, salt)` triple and `AccountsByAddress` by `sdk.AccAddress` ([`keeper/keeper.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/keeper/keeper.go)).
+`AccountIdentifier` (from [`types/account.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/account.go)) holds `ClientId`, `Sender` and `Salt`. `ICS27Account` pairs a bech32 `Address` with the `AccountId` that produced it. The keeper keeps both directions: `Accounts` is keyed by the `(client, sender, salt)` triple and `AccountsByAddress` by `sdk.AccAddress` ([`keeper/keeper.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/keeper/keeper.go)).
 
 ### `Acknowledgement`
 
-A single field, `Result []byte` ([`types/ack.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/ack.go)). See [Acknowledgements](#acknowledgements) for what the Go module puts in it.
+A single field, `Result []byte` ([`types/ack.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/ack.go)). See [Acknowledgements](#acknowledgements) for what the Go module puts in it.
 
 ## Sending a call
 
 ### `MsgSendCall`
 
-`MsgSendCall` is the only transaction message the module defines. `types.NewMsgSendCall` constructs it; `ValidateBasic` ([`types/msgs.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/msgs.go)) enforces:
+`MsgSendCall` is the only transaction message the module defines. `types.NewMsgSendCall` constructs it; `ValidateBasic` ([`types/msgs.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/msgs.go)) enforces:
 
 | Field | Rule |
 | --- | --- |
@@ -92,7 +92,7 @@ The autoCLI command for it is:
 <appd> tx gmp send-call [source_client] [sender] [receiver] [salt] [payload] [timeout_timestamp] [memo] [encoding]
 ```
 
-`encoding` is optional ([`types/autocli.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/autocli.go)).
+`encoding` is optional ([`types/autocli.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/autocli.go)).
 
 ### What `SendCall` does
 
@@ -102,7 +102,7 @@ The autoCLI command for it is:
 
 ### Encodings
 
-The three encoding constants are defined in [`types/packet.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/packet.go):
+The three encoding constants are defined in [`types/packet.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/packet.go):
 
 | Constant | Value |
 | --- | --- |
@@ -110,7 +110,7 @@ The three encoding constants are defined in [`types/packet.go`](https://github.c
 | `types.EncodingJSON` | `application/json` |
 | `types.EncodingABI` | `application/x-solidity-abi` |
 
-`EncodingABI` is the default when `MsgSendCall.Encoding` is empty. It encodes `GMPPacketData` and `Acknowledgement` as Solidity ABI tuples so an EVM counterparty can decode them; the encoder and decoder are plain Go, in [`types/solidity_abi.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/solidity_abi.go), built on `go-ethereum`'s `accounts/abi` package. `GMPPacketData` encodes as a single tuple of `(string sender, string receiver, bytes salt, bytes payload, string memo)` and `Acknowledgement` as a tuple of `(bytes result)`. For what the counterparty does with those bytes, see [ICS27 GMP and accounts](/ibc/06-ibc-solidity-contracts/03-ics27-gmp-and-accounts).
+`EncodingABI` is the default when `MsgSendCall.Encoding` is empty. It encodes `GMPPacketData` and `Acknowledgement` as Solidity ABI tuples so an EVM counterparty can decode them; the encoder and decoder are plain Go, in [`types/solidity_abi.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/solidity_abi.go), built on `go-ethereum`'s `accounts/abi` package. `GMPPacketData` encodes as a single tuple of `(string sender, string receiver, bytes salt, bytes payload, string memo)` and `Acknowledgement` as a tuple of `(bytes result)`. For what the counterparty does with those bytes, see [ICS27 GMP and accounts](/ibc/06-ibc-solidity-contracts/03-ics27-gmp-and-accounts).
 
 `UnmarshalPacketData` and `UnmarshalAcknowledgement` re-marshal whatever they decoded and reject the input if the bytes do not round-trip exactly. Protobuf decoding additionally rejects unknown fields. This means an encoder that pads, reorders or adds fields will fail on receipt even though the data is nominally parseable.
 
@@ -132,7 +132,7 @@ Because the length prefixes are explicit, distinct triples cannot collide by con
 
 ### Queries
 
-Two gRPC queries are exposed ([`keeper/query_server.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/keeper/query_server.go)):
+Two gRPC queries are exposed ([`keeper/query_server.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/keeper/query_server.go)):
 
 | RPC | CLI | Returns |
 | --- | --- | --- |
@@ -143,7 +143,7 @@ Two gRPC queries are exposed ([`keeper/query_server.go`](https://github.com/cosm
 
 ## Receiving a call
 
-`IBCModule.OnRecvPacket` ([`ibc_module.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/ibc_module.go)) returns a failure `RecvPacketResult` — not an error — whenever any of these fails:
+`IBCModule.OnRecvPacket` ([`ibc_module.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/ibc_module.go)) returns a failure `RecvPacketResult` — not an error — whenever any of these fails:
 
 - either port on the payload is not `gmpport`
 - the payload version is not `ics27-2`
@@ -154,7 +154,7 @@ Two gRPC queries are exposed ([`keeper/query_server.go`](https://github.com/cosm
 
 In every case it emits `ics27_gmp_recv_packet` with `success=false` and the error string.
 
-`Keeper.OnRecvPacket` ([`keeper/relay.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/keeper/relay.go)) then:
+`Keeper.OnRecvPacket` ([`keeper/relay.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/keeper/relay.go)) then:
 
 1. Builds the `AccountIdentifier` from the **destination** client, the packet's `Sender` and its `Salt`.
 2. Gets or creates the ICS27 account and loads it from the account keeper.
@@ -184,7 +184,7 @@ On failure, the module returns `PacketStatus_Failure` and core IBC writes the er
 
 ## Events
 
-Defined in [`types/events.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/events.go) and emitted from `internal/events`:
+Defined in [`types/events.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/events.go) and emitted from `internal/events`:
 
 | Event type | Emitted by |
 | --- | --- |
@@ -195,7 +195,7 @@ Both carry `sender`, `receiver`, `salt`, `payload`, `memo`, `source_client`, `de
 
 ## Errors
 
-[`types/errors.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/errors.go) registers, under codespace `gmp`:
+[`types/errors.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/errors.go) registers, under codespace `gmp`:
 
 `ErrInvalidCodec`, `ErrInvalidMemo`, `ErrInvalidSalt`, `ErrInvalidPayload`, `ErrInvalidTimeoutTimestamp`, `ErrInvalidEncoding`, `ErrAbiDecoding`, `ErrAbiEncoding`, `ErrAccountAlreadyExists`, `ErrAccountNotFound`, `ErrInvalidMsgRoute`, `ErrInvalidVersion`.
 
@@ -203,7 +203,7 @@ Both carry `sender`, `receiver`, `salt`, `payload`, `memo`, `source_client`, `de
 
 ## Integrating the module
 
-`keeper.NewKeeper` takes the codec, a `KVStoreService`, an `AccountKeeper`, a `MessageRouter` and an authority string; it panics on an empty authority ([`keeper/keeper.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/keeper/keeper.go)).
+`keeper.NewKeeper` takes the codec, a `KVStoreService`, an `AccountKeeper`, a `MessageRouter` and an authority string; it panics on an empty authority ([`keeper/keeper.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/keeper/keeper.go)).
 
 ```go
 import (
@@ -227,11 +227,11 @@ Register the store key `gmptypes.StoreKey`, add `gmp.NewAppModule(app.GMPKeeper)
 ibcRouterV2.AddRoute(gmptypes.PortID, gmp.NewIBCModule(app.GMPKeeper))
 ```
 
-The module's `AccountKeeper` dependency is narrow — `NewAccountWithAddress`, `GetAccount`, `SetAccount` ([`types/expected_keepers.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/expected_keepers.go)).
+The module's `AccountKeeper` dependency is narrow — `NewAccountWithAddress`, `GetAccount`, `SetAccount` ([`types/expected_keepers.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/expected_keepers.go)).
 
 ### Genesis
 
-`GenesisState` carries `Ics27Accounts`, a list of `RegisteredICS27Account`. Validation requires each account address and each `AccountId.Sender` to parse as bech32, each `AccountId.ClientId` to be a valid client identifier, and each salt to be within the 32-byte limit ([`types/genesis.go`](https://github.com/cosmos/ibc-go/blob/main/modules/apps/27-gmp/types/genesis.go)). The default genesis state is an empty list.
+`GenesisState` carries `Ics27Accounts`, a list of `RegisteredICS27Account`. Validation requires each account address and each `AccountId.Sender` to parse as bech32, each `AccountId.ClientId` to be a valid client identifier, and each salt to be within the 32-byte limit ([`types/genesis.go`](https://github.com/lfdt-ibc/ibc-go/blob/main/modules/apps/27-gmp/types/genesis.go)). The default genesis state is an empty list.
 
 ## See also
 

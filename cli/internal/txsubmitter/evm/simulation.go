@@ -15,8 +15,8 @@ import (
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ics26router"
-	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	chainsevm "github.com/lfdt-ibc/ibc/cli/internal/chains/evm"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // updateResultMisbehavior is ILightClientMsgs.UpdateResult.Misbehavior.

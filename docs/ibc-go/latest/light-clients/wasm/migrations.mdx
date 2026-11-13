@@ -145,7 +145,7 @@ Please refer to the [`cosmwasm_std`](https://docs.rs/cosmwasm-std/2.0.4/cosmwasm
 
 ### Chains
 
-In the 08-wasm versions compatible with ibc-go v7.3.x and above from the v7 release line, the checksums of the uploaded Wasm bytecodes are all stored under a single key. From ibc-go v8.0.x the checksums are stored using [`collections.KeySet`](https://docs.cosmos.network/sdk/latest/guides/state/collections#keyset), whose full functionality became available in Cosmos SDK v0.50. There is therefore an [automatic migration handler](https://github.com/cosmos/ibc-go/blob/57fcdb9a9a9db9b206f7df2f955866dc4e10fef4/modules/light-clients/08-wasm/module.go#L115-L118) configured in the 08-wasm module to migrate the stored checksums to `collections.KeySet`.
+In the 08-wasm versions compatible with ibc-go v7.3.x and above from the v7 release line, the checksums of the uploaded Wasm bytecodes are all stored under a single key. From ibc-go v8.0.x the checksums are stored using [`collections.KeySet`](https://docs.cosmos.network/sdk/latest/guides/state/collections#keyset), whose full functionality became available in Cosmos SDK v0.50. There is therefore an [automatic migration handler](https://github.com/lfdt-ibc/ibc-go/blob/57fcdb9a9a9db9b206f7df2f955866dc4e10fef4/modules/light-clients/08-wasm/module.go#L115-L118) configured in the 08-wasm module to migrate the stored checksums to `collections.KeySet`.
 
 ## From v0.1.0+ibc-go-v8.0-wasmvm-v1.5 to v0.2.0-ibc-go-v8.3-wasmvm-v2.0
 

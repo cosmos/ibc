@@ -511,7 +511,7 @@ func TestRemoteProverRequestTimeout(t *testing.T) {
 		want    time.Duration
 		wantErr string
 	}{
-		{name: "unset", want: time.Minute},
+		{name: "unset", want: 30 * time.Second},
 		{name: "configured", field: "requestTimeout: 5m", want: 5 * time.Minute},
 		{name: "subsecond", field: "requestTimeout: 250ms", want: 250 * time.Millisecond},
 		{name: "zero", field: "requestTimeout: 0s", wantErr: "requestTimeout: must be positive"},

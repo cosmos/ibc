@@ -26,7 +26,7 @@ v                     without deliberation
 <!-- List of tests that need to be performed with previous
 versions to guarantee that no regression is introduced -->
 
-- [ ] [E2E tests](https://github.com/cosmos/ibc/actions/workflows/e2e.yml) pass for the release commit.
+- [ ] [E2E tests](https://github.com/lfdt-ibc/ibc/actions/workflows/e2e.yml) pass for the release commit.
 - [ ] Database migrations (`ibc migrate up`) apply cleanly on top of the previous release.
 - [ ] Existing configs from the previous release load without manual changes.
 
@@ -41,11 +41,11 @@ versions to guarantee that no regression is introduced -->
 <!-- Remove any items that are not applicable. -->
 
 - [ ] Branch off main to create release branch in the form of `release/vx.y.z` and add branch protection rules.
-- [ ] Cut the release by following [`RELEASES.md`](https://github.com/cosmos/ibc/blob/main/RELEASES.md#cut-a-release).
+- [ ] Cut the release by following [`RELEASES.md`](https://github.com/lfdt-ibc/ibc/blob/main/RELEASES.md#cut-a-release).
 
 ## Post-release checklist
 
-- [ ] Update [`CHANGELOG.md`](https://github.com/cosmos/ibc/blob/main/CHANGELOG.md)
+- [ ] Update [`CHANGELOG.md`](https://github.com/lfdt-ibc/ibc/blob/main/CHANGELOG.md)
 - [ ] Update the docs (`docs/`) with any version-specific changes, and permalinks with links of the released tag. See `docs/AGENTS.md`.
 
 ---

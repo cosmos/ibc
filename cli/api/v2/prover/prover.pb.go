@@ -718,7 +718,7 @@ const file_prover_proto_rawDesc = "" +
 	"\rProverService\x12q\n" +
 	"\x14LatestProvableHeight\x12*.ibc.v2.prover.LatestProvableHeightRequest\x1a+.ibc.v2.prover.LatestProvableHeightResponse\"\x00\x12q\n" +
 	"\x14ClientUpdatePayloads\x12*.ibc.v2.prover.ClientUpdatePayloadsRequest\x1a+.ibc.v2.prover.ClientUpdatePayloadsResponse\"\x00\x12Y\n" +
-	"\fPacketProofs\x12\".ibc.v2.prover.PacketProofsRequest\x1a#.ibc.v2.prover.PacketProofsResponse\"\x00B)Z'github.com/cosmos/ibc/cli/api/v2/proverb\x06proto3"
+	"\fPacketProofs\x12\".ibc.v2.prover.PacketProofsRequest\x1a#.ibc.v2.prover.PacketProofsResponse\"\x00B+Z)github.com/lfdt-ibc/ibc/cli/api/v2/proverb\x06proto3"
 
 var (
 	file_prover_proto_rawDescOnce sync.Once

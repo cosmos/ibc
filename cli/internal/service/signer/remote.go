@@ -13,8 +13,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/cosmos/ibc/cli/internal/network"
-	"github.com/cosmos/ibc/cli/keyfile"
+	"github.com/lfdt-ibc/ibc/cli/internal/network"
+	"github.com/lfdt-ibc/ibc/cli/keyfile"
 )
 
 // RemoteSigner wraps KMS remote signer.

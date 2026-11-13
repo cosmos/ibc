@@ -16,9 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 
-	chainsevm "github.com/cosmos/ibc/cli/internal/chains/evm"
-	"github.com/cosmos/ibc/cli/internal/service/signer"
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	chainsevm "github.com/lfdt-ibc/ibc/cli/internal/chains/evm"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // Transaction limits.

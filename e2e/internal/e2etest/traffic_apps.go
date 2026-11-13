@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
-	"github.com/cosmos/ibc/gen/go/solidity-abi/counter"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/counter"
 )
 
 // NewTransfer constructs the Transfer app for a route. The sender must be the

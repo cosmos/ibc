@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/internal/chains"
-	"github.com/cosmos/ibc/cli/internal/relay/pipeline"
-	"github.com/cosmos/ibc/cli/internal/relay/processors"
-	"github.com/cosmos/ibc/cli/internal/relay/prover"
-	"github.com/cosmos/ibc/cli/internal/relay/txbuilder"
-	"github.com/cosmos/ibc/cli/internal/store"
-	"github.com/cosmos/ibc/cli/internal/tests/mocks"
-	"github.com/cosmos/ibc/cli/internal/txsubmitter"
+	"github.com/lfdt-ibc/ibc/cli/internal/chains"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/pipeline"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/processors"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/prover"
+	"github.com/lfdt-ibc/ibc/cli/internal/relay/txbuilder"
+	"github.com/lfdt-ibc/ibc/cli/internal/store"
+	"github.com/lfdt-ibc/ibc/cli/internal/tests/mocks"
+	"github.com/lfdt-ibc/ibc/cli/internal/txsubmitter"
 )
 
 func testTransfer(t *testing.T) *processors.Transfer {

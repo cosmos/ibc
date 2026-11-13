@@ -14,9 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/keyfile"
-	"github.com/cosmos/ibc/e2e/internal/harness/chain/evm"
-	"github.com/cosmos/ibc/e2e/internal/harness/environment"
+	"github.com/lfdt-ibc/ibc/cli/keyfile"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/chain/evm"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/environment"
 )
 
 const relayerSignerAlias = "e2etest-relayer"

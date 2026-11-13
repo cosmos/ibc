@@ -9,8 +9,8 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/cosmos/ibc/e2e/internal/harness/clientkind"
-	"github.com/cosmos/ibc/e2e/internal/harness/ibccli"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/clientkind"
+	"github.com/lfdt-ibc/ibc/e2e/internal/harness/ibccli"
 )
 
 // EVMAddress is a non-secret, checksummed contract or signer address returned

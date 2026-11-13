@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v2 "github.com/cosmos/ibc/cli/internal/types/v2"
+	v2 "github.com/lfdt-ibc/ibc/cli/internal/types/v2"
 )
 
 // fakeChain models what one chain has sent and what is still committed at a

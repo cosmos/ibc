@@ -13,7 +13,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: cosmos/ibc/.github/actions/publish-draft-release@<commit-sha> # main
+      - uses: lfdt-ibc/ibc/.github/actions/publish-draft-release@<commit-sha> # main
         with:
           name: ibc-cli-v1.2.3
           title: IBC CLI v1.2.3
@@ -33,7 +33,7 @@ On a release that is already published, the action uploads only the files that a
 A release that also publishes an image should push it only after the files verify. Call the action first with `verify-only`, in a job the image jobs need. It verifies the files without signing or publishing anything, so the job only needs `contents: read`.
 
 ```yaml
-      - uses: cosmos/ibc/.github/actions/publish-draft-release@<commit-sha> # main
+      - uses: lfdt-ibc/ibc/.github/actions/publish-draft-release@<commit-sha> # main
         with:
           name: ibc-cli-v1.2.3
           verify-only: "true"

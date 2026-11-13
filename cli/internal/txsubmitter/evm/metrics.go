@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/cosmos/ibc/cli/internal/otel"
+	"github.com/lfdt-ibc/ibc/cli/internal/otel"
 )
 
 var weiPerNativeToken = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)

@@ -897,7 +897,7 @@
   "footer": {
     "socials": {
       "x": "https://twitter.com/cosmos",
-      "github": "https://github.com/cosmos",
+      "github": "https://github.com/lfdt-ibc",
       "discord": "https://discord.gg/interchain",
       "website": "https://cosmos.network"
     },
@@ -907,23 +907,23 @@
         "items": [
           {
             "label": "Learn how IBC works",
-            "href": "/ibc/01-introduction/01-what-is-ibc"
+            "href": "/docs/ibc/01-introduction/01-what-is-ibc"
           },
           {
             "label": "IBC CLI",
-            "href": "/ibc/05-ibc-cli/01-overview"
+            "href": "/docs/ibc/05-ibc-cli/01-overview"
           },
           {
             "label": "IBC-Solidity",
-            "href": "/ibc/06-ibc-solidity-contracts/01-overview"
+            "href": "/docs/ibc/06-ibc-solidity-contracts/01-overview"
           },
           {
             "label": "IBC-Go",
-            "href": "/ibc-go/latest/intro"
+            "href": "/docs/ibc-go/latest/intro"
           },
           {
             "label": "Specification",
-            "href": "/ibc/spec/ics-001-ics-standard/README"
+            "href": "/docs/ibc/spec/ics-001-ics-standard/README"
           }
         ]
       },
@@ -931,16 +931,16 @@
         "header": "Repositories",
         "items": [
           {
-            "label": "cosmos/ibc",
-            "href": "https://github.com/cosmos/ibc"
+            "label": "lfdt-ibc/ibc",
+            "href": "https://github.com/lfdt-ibc/ibc"
           },
           {
-            "label": "cosmos/ibc-go",
-            "href": "https://github.com/cosmos/ibc-go"
+            "label": "lfdt-ibc/ibc-go",
+            "href": "https://github.com/lfdt-ibc/ibc-go"
           },
           {
-            "label": "cosmos/ibc-contracts",
-            "href": "https://github.com/cosmos/ibc-contracts"
+            "label": "lfdt-ibc/ibc-contracts",
+            "href": "https://github.com/lfdt-ibc/ibc-contracts"
           }
         ]
       },
@@ -949,7 +949,7 @@
         "items": [
           {
             "label": "Security audits",
-            "href": "/ibc/07-security/01-audits"
+            "href": "/docs/ibc/07-security/01-audits"
           },
           {
             "label": "Bug Bounty",

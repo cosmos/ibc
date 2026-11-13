@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc/cli/api/v2/relayer"
+	"github.com/lfdt-ibc/ibc/cli/api/v2/relayer"
 )
 
 func TestProcessReadiness(t *testing.T) {

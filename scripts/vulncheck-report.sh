@@ -41,7 +41,7 @@ ALLOW_GHSAS=""
 OSV_CONFIG="${REPO_ROOT}/cli/osv-scanner.toml"
 GO_VULN_DB="https://vuln.go.dev"
 # Our own module paths are shown relative to this, so "Affects" reads "cli, e2e".
-OUR_PREFIX="github.com/cosmos/ibc/"
+OUR_PREFIX="github.com/lfdt-ibc/ibc/"
 
 die() {
   echo "vulncheck-report: $*" >&2

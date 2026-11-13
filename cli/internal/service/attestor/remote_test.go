@@ -11,7 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/stretchr/testify/require"
 
-	proto "github.com/cosmos/ibc/cli/api/v2/attestor"
+	proto "github.com/lfdt-ibc/ibc/cli/api/v2/attestor"
 )
 
 func newTestRemoteAttestor(name string, client proto.AttestationServiceClient) *RemoteAttestor {
