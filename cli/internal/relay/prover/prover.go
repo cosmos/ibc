@@ -161,7 +161,9 @@ func newProver(
 			return nil, errors.Wrap(err, "remoteProver")
 		}
 
-		return remote.NewFromEndpoint(endpoint, client.ChainID, client.ClientID, logger), nil
+		return remote.NewFromEndpoint(
+			endpoint, client.ChainID, client.ClientID, client.RemoteProver.RequestTimeoutOrDefault(), logger,
+		), nil
 	}
 
 	switch client.Type {
