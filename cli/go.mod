@@ -33,6 +33,7 @@ require (
 	golang.org/x/sync v0.24.0
 	google.golang.org/grpc v1.85.0
 	modernc.org/sqlite v1.61.0
+	pgregory.net/rapid v1.3.0
 )
 
 require (
@@ -188,7 +189,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	nhooyr.io/websocket v1.8.17 // indirect
-	pgregory.net/rapid v1.3.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
