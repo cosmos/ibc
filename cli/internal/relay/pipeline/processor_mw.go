@@ -28,6 +28,17 @@ type Processor interface {
 	pipeline.Processor[*processors.Transfer, *processors.Transfer]
 }
 
+// stage is the part of a Processor or BatchProcessor that applies asks.
+type stage interface {
+	ShouldProcess(tr *processors.Transfer) bool
+}
+
+// applies reports whether p runs on tr. An errored or failed transfer only
+// passes through the remaining stages.
+func applies(tr *processors.Transfer, p stage) bool {
+	return tr.Error() == "" && tr.Status != store.RelayStatusFailed && p.ShouldProcess(tr)
+}
+
 // ProcessorMW wraps a Processor with the shared transfer handling: errored,
 // failed, and non-applicable transfers pass through untouched; the status
 // transition is persisted before processing; processor errors poison the
@@ -43,15 +54,7 @@ func NewProcessorMW(storage StatusStorage, internal Processor) ProcessorMW {
 
 func (mw ProcessorMW) Process(ctx context.Context, input *processors.Transfer) (*processors.Transfer, error) {
 	// input may be nil while the pipeline channels close down
-	if input == nil || input.Error() != "" {
-		return input, nil
-	}
-
-	if input.Status == store.RelayStatusFailed {
-		return input, nil
-	}
-
-	if !mw.internal.ShouldProcess(input) {
+	if input == nil || !applies(input, mw.internal) {
 		return input, nil
 	}
 
@@ -122,8 +125,7 @@ func (mw BatchProcessorMW) Process(ctx context.Context, batch []*processors.Tran
 	var toProcess []*processors.Transfer
 
 	for _, input := range batch {
-		switch {
-		case input.Error() != "", input.Status == store.RelayStatusFailed, !mw.internal.ShouldProcess(input):
+		if !applies(input, mw.internal) {
 			// erroring here would fail the whole batch; pass these through
 			notProcessing = append(notProcessing, input)
 

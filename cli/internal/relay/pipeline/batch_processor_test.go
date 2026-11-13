@@ -71,26 +71,33 @@ func TestBatchProcess(t *testing.T) {
 		close(in)
 	})
 
-	t.Run("bypassesNonApplicableAndErrored", func(t *testing.T) {
+	t.Run("bypassesNonApplicableErroredAndFailed", func(t *testing.T) {
 		storage := &statusRecorder{}
-		internal := &fakeBatchProcessor{shouldProcess: func(*processors.Transfer) bool { return false }}
+		notApplicable := testTransfer(t)
+		internal := &fakeBatchProcessor{
+			shouldProcess: func(tr *processors.Transfer) bool { return tr != notApplicable },
+		}
 		in := make(chan *processors.Transfer)
 
 		out := BatchProcess(ctx, slog.Default(), 1, 2, time.Hour, in, NewBatchProcessorMW(storage, internal))
 
 		errored := testTransfer(t)
 		errored.ProcessingError = errors.New("poisoned")
+		failed := testTransfer(t)
+		failed.Status = store.RelayStatusFailed
 
 		go func() {
-			in <- testTransfer(t)
+			in <- notApplicable
 			in <- errored
-			close(in)
+			in <- failed
 		}()
 
-		// both arrive without any batch having been released (timeout is 1h)
-		got := collect(out, 2)
+		// all arrive while the input is open and no batch has been released
+		// (timeout is 1h)
+		got := collect(out, 3)
+		close(in)
 
-		assert.Len(t, got, 2)
+		assert.ElementsMatch(t, []*processors.Transfer{notApplicable, errored, failed}, got)
 		assert.Empty(t, internal.processed)
 	})
 
