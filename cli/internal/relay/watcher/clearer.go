@@ -42,7 +42,7 @@ type ClearStore interface {
 // sequences rather than the client's whole history.
 type Clearer struct {
 	chainID string
-	routes  map[string]config.ClientEnd
+	routes  routes
 	chain   Chain
 	storage ClearStore
 	abandon bool
@@ -322,10 +322,8 @@ func (c *clientClearer) querySendEventsAndBuildRows(ctx context.Context, sequenc
 			// endpoint would serve, not about packets we declined to record
 			found[event.Packet.Sequence] = struct{}{}
 
-			// a send naming a counterparty we do not relay to is not ours to
-			// record, the same check the subscription path makes
-			route, configured := c.routes[event.Packet.SourceClient]
-			if !configured || event.Packet.DestinationClient != route.ClientID {
+			route, ok := c.routes.destination(event)
+			if !ok {
 				c.logger.Warn(
 					"Skipping outstanding packet with unconfigured destination client",
 					"clientID", event.Packet.SourceClient,

@@ -59,7 +59,7 @@ type Config struct {
 type Watcher struct {
 	chainID   string
 	clientIDs []string
-	routes    map[string]config.ClientEnd
+	routes    routes
 	cfg       Config
 
 	chain   Chain
@@ -74,11 +74,10 @@ type Watcher struct {
 	wg     sync.WaitGroup
 }
 
-// stream is one open subscription and the events it feeds. The zero value is
-// the gap between a dropped subscription and its replacement.
+// stream is one open subscription. The zero value is the gap before the
+// first subscription and between a dropped one and its replacement.
 type stream struct {
 	sub    v2.Subscription
-	events chan v2.PacketEvent
 	cancel context.CancelFunc
 }
 
@@ -122,7 +121,9 @@ func New(
 	}
 }
 
-func (w *Watcher) Start() error {
+// Start launches the clearing and subscription loops. A subscription that
+// cannot be opened is retried with backoff; the clearer covers the gap.
+func (w *Watcher) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	w.cancel = cancel
 
@@ -132,24 +133,9 @@ func (w *Watcher) Start() error {
 		w.runClearer(ctx)
 	})
 
-	eventsChan := make(chan v2.PacketEvent, eventBuffer)
-	metrics.subscription(ctx, w.chainID, false)
-
-	// run clearer only if:
-	// - client has NO websocket endpoint
-	// - client has websocket endpoint, but subscription fails
-	eventStream, err := w.subscribe(ctx, eventsChan)
-	if err != nil {
-		w.logger.Error("Unable to subscribe to received packets, falling back to periodic clearing", "err", err)
-
-		return nil
-	}
-
 	w.wg.Go(func() {
-		w.runSubscription(ctx, eventStream)
+		w.runSubscription(ctx)
 	})
-
-	return nil
 }
 
 func (w *Watcher) Stop() error {
@@ -187,19 +173,8 @@ func (w *Watcher) HandleEvent(ctx context.Context, event v2.PacketEvent) error {
 
 	metrics.sendPacket(ctx, w.chainID)
 
-	// the subscription filters on the source client alone, so the counterparty
-	// the packet actually names is checked here, as the explicit relay path does
-	route, configured := w.routes[event.Packet.SourceClient]
-
-	switch {
-	case !configured:
-		w.logger.Warn(
-			"Skipping packet from unconfigured client",
-			"clientID", event.Packet.SourceClient,
-			"sequence", event.Packet.Sequence,
-		)
-		return nil
-	case event.Packet.DestinationClient != route.ClientID:
+	route, ok := w.routes.destination(event)
+	if !ok {
 		w.logger.Debug(
 			"Skipping packet with unconfigured destination client",
 			"clientID", event.Packet.SourceClient,
@@ -240,20 +215,19 @@ func (w *Watcher) subscribe(ctx context.Context, events chan v2.PacketEvent) (st
 
 	metrics.subscription(ctx, w.chainID, true)
 
-	return stream{sub, events, cancel}, nil
+	return stream{sub, cancel}, nil
 }
 
-// connects to live events and recovers broken subscriptions.
-func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
-	defer func() {
-		metrics.subscription(ctx, w.chainID, false)
-		eventStream.close(true)
-	}()
-
-	// nil by default, non-nil when it's time to reconnect
-	var reconnectChan <-chan time.Time
+// connects to live events and recovers broken subscriptions. The first
+// subscribe is attempted at once; it and every later one retry with backoff.
+func (w *Watcher) runSubscription(ctx context.Context) {
+	metrics.subscription(ctx, w.chainID, false)
 
 	backoff := w.cfg.MinBackoff
+
+	// nil while subscribed, non-nil when it's time to (re)connect
+	var reconnectChan <-chan time.Time
+
 	triggerReconnect := func(msg string, err error) {
 		w.logger.Warn(msg, "backoff", backoff.String(), "err", err)
 		reconnectChan = time.After(backoff)
@@ -262,7 +236,33 @@ func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 
 	// eventsChan *outlives* each subscription, so a reconnect
 	// keeps whatever the dropped one had already buffered.
-	eventsChan := eventStream.events
+	eventsChan := make(chan v2.PacketEvent, eventBuffer)
+
+	var eventStream stream
+
+	// connect subscribes, scheduling a retry if that fails.
+	connect := func() bool {
+		newStream, err := w.subscribe(ctx, eventsChan)
+		if err != nil {
+			triggerReconnect("Subscribing to send packets failed, retrying", err)
+			return false
+		}
+
+		eventStream = newStream
+		reconnectChan = nil
+
+		// future: consider gradual backoff decrease
+		backoff = w.cfg.MinBackoff
+
+		return true
+	}
+
+	connect()
+
+	defer func() {
+		metrics.subscription(ctx, w.chainID, false)
+		eventStream.close()
+	}()
 
 	for {
 		select {
@@ -274,25 +274,17 @@ func (w *Watcher) runSubscription(ctx context.Context, eventStream stream) {
 			return
 		case err := <-eventStream.errs():
 			metrics.subscription(ctx, w.chainID, false)
-			eventStream.close(false)
+			eventStream.close()
 			eventStream = stream{}
 			triggerReconnect("Send packet subscription ended, reconnecting", err)
 		case <-reconnectChan:
-			newStream, err := w.subscribe(ctx, eventsChan)
-			if err != nil {
-				triggerReconnect("Subscribing to send packets failed, retrying", err)
+			if !connect() {
 				continue
 			}
 
-			eventStream = newStream
-			reconnectChan = nil
+			w.logger.Info("Subscribed to send packets", "clientIDs", w.clientIDs)
 
-			// future: consider gradual backoff decrease
-			backoff = w.cfg.MinBackoff
-
-			w.logger.Info("Resubscribed to send packets", "clientIDs", w.clientIDs)
-
-			// trigger clearer
+			// a reconnect may have missed sends; clear them now
 			w.clearRequest()
 		}
 	}
@@ -359,17 +351,13 @@ func (w *Watcher) clear(ctx context.Context) {
 }
 
 // close releases all of a subscription's resources
-func (s stream) close(closeChan bool) {
+func (s stream) close() {
 	if s.sub == nil {
 		return
 	}
 
 	s.sub.Unsubscribe()
 	s.cancel()
-
-	if closeChan {
-		close(s.events)
-	}
 }
 
 // errs is nil while nothing is subscribed, so the loop simply waits out a gap.
@@ -381,17 +369,32 @@ func (s stream) errs() <-chan error {
 	return s.sub.Err()
 }
 
-// routesOf maps each watched client to the end its packets are relayed to.
-func routesOf(chainID string, connections []config.ConnectionConfig) map[string]config.ClientEnd {
-	routes := make(map[string]config.ClientEnd, len(connections))
+// routes maps each watched client to the end its packets are relayed to.
+type routes map[string]config.ClientEnd
+
+func routesOf(chainID string, connections []config.ConnectionConfig) routes {
+	r := make(routes, len(connections))
 
 	for _, conn := range connections {
 		if source, destination, ok := conn.SourceEnd(chainID); ok {
-			routes[source.ClientID] = destination
+			r[source.ClientID] = destination
 		}
 	}
 
-	return routes
+	return r
+}
+
+// destination returns the end a send packet is relayed to. Chains filter sends
+// on the source client alone, so a packet naming a counterparty other than the
+// configured one is not ours to relay, the same check the explicit relay path
+// makes.
+func (r routes) destination(event v2.PacketEvent) (config.ClientEnd, bool) {
+	route, ok := r[event.Packet.SourceClient]
+	if !ok || event.Packet.DestinationClient != route.ClientID {
+		return config.ClientEnd{}, false
+	}
+
+	return route, true
 }
 
 func packetRow(chainID, destChainID string, event v2.PacketEvent) store.UpsertPacket {

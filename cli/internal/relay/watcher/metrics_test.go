@@ -25,11 +25,14 @@ func TestSubscriptionHealth(t *testing.T) {
 		chain := newFakeChain(t)
 		w := newTestWatcher(chain, db)
 		chain.failNextSub(assert.AnError)
-		require.NoError(t, w.Start())
-		assertSubscriptionUp(t, reader, 0)
-		require.NoError(t, w.Stop())
-		require.NoError(t, w.Start())
+		w.Start()
 		defer func() { require.NoError(t, w.Stop()) }()
+		synctest.Wait()
+		assertSubscriptionUp(t, reader, 0)
+
+		// the failed first subscribe is retried like any other
+		time.Sleep(DefaultMinBackoff)
+		synctest.Wait()
 		assertSubscriptionUp(t, reader, 1)
 		time.Sleep(time.Second)
 		assertSubscriptionUp(t, reader, 1)
