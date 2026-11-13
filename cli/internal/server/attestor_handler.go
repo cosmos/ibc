@@ -30,7 +30,16 @@ type AttestorService interface {
 		attestor string,
 		req attestor.PacketAttestationRequest,
 	) (attestor.Attestation, error)
-	Info(alias string) (attestor.Info, bool)
+	Info(alias string) (attestor.Info, error)
+}
+
+// attestorCodes maps the attestor service's domain errors.
+var attestorCodes = []errorCode{
+	{attestor.ErrNotFound, connect.CodeNotFound},
+	{attestor.ErrCommitmentNotFound, connect.CodeNotFound},
+	{attestor.ErrInvalidInput, connect.CodeInvalidArgument},
+	{attestor.ErrNotFinalized, connect.CodeFailedPrecondition},
+	{attestor.ErrReceiptExists, connect.CodeFailedPrecondition},
 }
 
 var (
@@ -62,15 +71,8 @@ func (h *AttestorHandler) LatestHeight(
 	req *connect.Request[proto.LatestHeightRequest],
 ) (*connect.Response[proto.LatestHeightResponse], error) {
 	height, err := h.service.LatestHeight(ctx, req.Msg.Attestor)
-	switch {
-	case errors.Is(err, attestor.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, attestor.ErrNotFinalized):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
-	case err != nil:
-		// todo: move to interceptor
-		h.logger.Error("LatestAttestableHeight", "err", err)
-		return nil, errInternal
+	if err != nil {
+		return nil, connectError(h.logger, "LatestHeight", err, attestorCodes)
 	}
 
 	return connect.NewResponse(&proto.LatestHeightResponse{Height: height}), nil
@@ -81,17 +83,8 @@ func (h *AttestorHandler) StateAttestation(
 	req *connect.Request[proto.StateAttestationRequest],
 ) (*connect.Response[proto.StateAttestationResponse], error) {
 	attestation, err := h.service.StateAttestation(ctx, req.Msg.Attestor, req.Msg.Height)
-	switch {
-	case errors.Is(err, attestor.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, attestor.ErrInvalidInput):
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, attestor.ErrNotFinalized):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
-	case err != nil:
-		// todo: move to interceptor
-		h.logger.Error("StateAttestation", "err", err)
-		return nil, errInternal
+	if err != nil {
+		return nil, connectError(h.logger, "StateAttestation", err, attestorCodes)
 	}
 
 	return connect.NewResponse(&proto.StateAttestationResponse{
@@ -109,17 +102,8 @@ func (h *AttestorHandler) PacketAttestation(
 	}
 
 	attestation, err := h.service.PacketAttestation(ctx, req.Msg.Attestor, packetReq)
-	switch {
-	case errors.Is(err, attestor.ErrNotFound), errors.Is(err, attestor.ErrCommitmentNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, err)
-	case errors.Is(err, attestor.ErrInvalidInput):
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	case errors.Is(err, attestor.ErrNotFinalized), errors.Is(err, attestor.ErrReceiptExists):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
-	case err != nil:
-		// todo: move to interceptor
-		h.logger.Error("PacketAttestation", "err", err)
-		return nil, errInternal
+	if err != nil {
+		return nil, connectError(h.logger, "PacketAttestation", err, attestorCodes)
 	}
 
 	return connect.NewResponse(&proto.PacketAttestationResponse{
@@ -131,9 +115,9 @@ func (h *AttestorHandler) Info(
 	_ context.Context,
 	req *connect.Request[proto.InfoRequest],
 ) (*connect.Response[proto.InfoResponse], error) {
-	info, ok := h.service.Info(req.Msg.Attestor)
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, attestor.ErrNotFound)
+	info, err := h.service.Info(req.Msg.Attestor)
+	if err != nil {
+		return nil, connectError(h.logger, "Info", err, attestorCodes)
 	}
 
 	return connect.NewResponse(&proto.InfoResponse{

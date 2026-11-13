@@ -26,9 +26,6 @@ type Attestor interface {
 	// process's Service.
 	Name() string
 
-	// IsLocal returns true if the attestor is local.
-	IsLocal() bool
-
 	// Address is the attestor's signing address.
 	Address() string
 
@@ -109,11 +106,6 @@ func (s *Service) CheckReady(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// Add adds an attestor to the service. Not thread-safe.
-func (s *Service) Add(id string, attestor Attestor) {
-	s.attestors[id] = MetricsWrapper(attestor)
-}
-
 // Get returns the attestor registered under alias
 func (s *Service) Get(alias string) (Attestor, bool) {
 	a, ok := s.attestors[alias]
@@ -121,16 +113,16 @@ func (s *Service) Get(alias string) (Attestor, bool) {
 }
 
 // Info returns identity information for the attestor registered under alias.
-func (s *Service) Info(alias string) (Info, bool) {
+func (s *Service) Info(alias string) (Info, error) {
 	a, ok := s.attestors[alias]
 	if !ok {
-		return Info{}, false
+		return Info{}, ErrNotFound
 	}
 
 	return Info{
 		ChainID: a.ChainID(),
 		Address: a.Address(),
-	}, true
+	}, nil
 }
 
 func (s *Service) LatestHeight(ctx context.Context, attestor string) (uint64, error) {

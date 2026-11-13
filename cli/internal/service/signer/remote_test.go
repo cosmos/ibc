@@ -46,7 +46,6 @@ func TestRemote(t *testing.T) {
 
 		// ASSERT
 		require.NoError(t, err)
-		assert.False(t, signer.IsLocal())
 		assert.Equal(t, EDDSA, signer.Type())
 		assert.Equal(t, pubKey, signer.PublicKey())
 		assert.Equal(t, signature, actualSignature)
