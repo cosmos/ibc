@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
@@ -242,7 +241,7 @@ func (s *Service) Relay(ctx context.Context, request RelayRequest) ([]ObservedPa
 
 	events, err := client.TxPacketEvents(ctx, hashBytes)
 	if err != nil {
-		if errors.Is(err, ethereum.NotFound) {
+		if errors.Is(err, v2.ErrTxNotFound) {
 			return nil, errors.Wrapf(
 				ErrNotFound, "no packets found: transaction %s on chain %s", txHash, chainID,
 			)

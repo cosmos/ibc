@@ -16,24 +16,7 @@ var packetArgs = mustPacketArgs()
 
 // EncodePacket encodes an IBC packet as the Solidity router tuple.
 func EncodePacket(p channeltypesv2.Packet) ([]byte, error) {
-	payloads := make([]ics26router.IICS26RouterMsgsPayload, len(p.Payloads))
-	for i, item := range p.Payloads {
-		payloads[i] = ics26router.IICS26RouterMsgsPayload{
-			SourcePort: item.SourcePort,
-			DestPort:   item.DestinationPort,
-			Version:    item.Version,
-			Encoding:   item.Encoding,
-			Value:      item.Value,
-		}
-	}
-
-	data, err := packetArgs.Pack(ics26router.IICS26RouterMsgsPacket{
-		Sequence:         p.Sequence,
-		SourceClient:     p.SourceClient,
-		DestClient:       p.DestinationClient,
-		TimeoutTimestamp: p.TimeoutTimestamp,
-		Payloads:         payloads,
-	})
+	data, err := packetArgs.Pack(ToRouterPacket(p))
 	if err != nil {
 		return nil, fmt.Errorf("encode packet: %w", err)
 	}
@@ -55,8 +38,35 @@ func DecodePacket(data []byte) (channeltypesv2.Packet, error) {
 		return channeltypesv2.Packet{}, fmt.Errorf("copy packet: %w", err)
 	}
 
-	payloads := make([]channeltypesv2.Payload, len(decoded.Packet.Payloads))
-	for i, item := range decoded.Packet.Payloads {
+	return FromRouterPacket(decoded.Packet), nil
+}
+
+// ToRouterPacket converts an IBC packet to the router's ABI struct.
+func ToRouterPacket(p channeltypesv2.Packet) ics26router.IICS26RouterMsgsPacket {
+	payloads := make([]ics26router.IICS26RouterMsgsPayload, len(p.Payloads))
+	for i, item := range p.Payloads {
+		payloads[i] = ics26router.IICS26RouterMsgsPayload{
+			SourcePort: item.SourcePort,
+			DestPort:   item.DestinationPort,
+			Version:    item.Version,
+			Encoding:   item.Encoding,
+			Value:      item.Value,
+		}
+	}
+
+	return ics26router.IICS26RouterMsgsPacket{
+		Sequence:         p.Sequence,
+		SourceClient:     p.SourceClient,
+		DestClient:       p.DestinationClient,
+		TimeoutTimestamp: p.TimeoutTimestamp,
+		Payloads:         payloads,
+	}
+}
+
+// FromRouterPacket converts the router's ABI struct to an IBC packet.
+func FromRouterPacket(p ics26router.IICS26RouterMsgsPacket) channeltypesv2.Packet {
+	payloads := make([]channeltypesv2.Payload, len(p.Payloads))
+	for i, item := range p.Payloads {
 		payloads[i] = channeltypesv2.Payload{
 			SourcePort:      item.SourcePort,
 			DestinationPort: item.DestPort,
@@ -67,12 +77,12 @@ func DecodePacket(data []byte) (channeltypesv2.Packet, error) {
 	}
 
 	return channeltypesv2.Packet{
-		Sequence:          decoded.Packet.Sequence,
-		SourceClient:      decoded.Packet.SourceClient,
-		DestinationClient: decoded.Packet.DestClient,
-		TimeoutTimestamp:  decoded.Packet.TimeoutTimestamp,
+		Sequence:          p.Sequence,
+		SourceClient:      p.SourceClient,
+		DestinationClient: p.DestClient,
+		TimeoutTimestamp:  p.TimeoutTimestamp,
 		Payloads:          payloads,
-	}, nil
+	}
 }
 
 func mustPacketArgs() abi.Arguments {
