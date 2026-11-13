@@ -42,6 +42,12 @@ const (
 	pollInterval          = 50 * time.Millisecond
 )
 
+// BlockInterval is how often a managed Anvil mines while interval mining is on.
+const BlockInterval = time.Second
+
+// blockTimeSecs is BlockInterval in the whole seconds Anvil's flags and RPCs take.
+const blockTimeSecs = int(BlockInterval / time.Second)
+
 type Spec struct {
 	ID      string
 	ChainID uint64
@@ -121,7 +127,7 @@ func launchAnvil(
 		// avoids creating ambient identities, and quiet mode keeps its mnemonic out of diagnostics.
 		"--accounts", "0",
 		"--quiet",
-		"--block-time", "1",
+		"--block-time", strconv.Itoa(blockTimeSecs),
 		"--mixed-mining",
 	}
 

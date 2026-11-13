@@ -161,10 +161,7 @@ func (e *EVM) AwaitTransactionReceipt(ctx context.Context, hash common.Hash) (*t
 }
 
 func (e *EVM) transactionWait() chainevm.TransactionWait {
-	return chainevm.TransactionWait{
-		Timeout:      e.chain.timing.CompletionBudget,
-		PollInterval: e.chain.timing.PollInterval,
-	}
+	return e.chain.timing.transactionWait()
 }
 
 func (e *EVM) Logs(ctx context.Context, query ethereum.FilterQuery) ([]types.Log, error) {
@@ -350,6 +347,31 @@ func (m *Mining) AdvanceTime(ctx context.Context, d time.Duration) error {
 	return m.chain.use(func() error { return m.controller.AdvanceTime(ctx, d) })
 }
 
+// DropPending discards every transaction waiting to be mined.
+func (m *Mining) DropPending(ctx context.Context) error {
+	return m.chain.use(func() error { return m.controller.DropPendingTransactions(ctx) })
+}
+
+// SetNextBaseFee sets the base fee of the next mined block.
+func (m *Mining) SetNextBaseFee(ctx context.Context, fee *big.Int) error {
+	return m.chain.use(func() error { return m.controller.SetNextBlockBaseFee(ctx, fee) })
+}
+
+// Snapshot records the chain state for a later Revert.
+func (m *Mining) Snapshot(ctx context.Context) (string, error) {
+	var id string
+	err := m.chain.use(func() (err error) {
+		id, err = m.controller.Snapshot(ctx)
+		return err
+	})
+	return id, err
+}
+
+// Revert restores the state Snapshot recorded under id.
+func (m *Mining) Revert(ctx context.Context, id string) error {
+	return m.chain.use(func() error { return m.controller.Revert(ctx, id) })
+}
+
 func (m *Mining) WithPaused(ctx context.Context, fn func() error) error {
 	return m.chain.use(func() (err error) {
 		if pauseErr := m.controller.PauseMining(ctx); pauseErr != nil {
@@ -377,22 +399,16 @@ func (n *NodeLifecycle) Start(ctx context.Context) error {
 	return n.chain.use(func() error { return n.controller.StartNode(ctx) })
 }
 
-func blockTiming(block time.Duration) Timing {
-	return Timing{
-		BlockInterval:    block,
-		CompletionBudget: 20 * block,
-		PollInterval:     clampPoll(block / 4),
-	}
+// transactionWait bounds one transaction on a Chain with this timing.
+func (t Timing) transactionWait() chainevm.TransactionWait {
+	return chainevm.TransactionWait{Timeout: t.CompletionBudget, PollInterval: t.PollInterval}
 }
 
-func clampPoll(d time.Duration) time.Duration {
-	const minPoll, maxPoll = 50 * time.Millisecond, 250 * time.Millisecond
-	switch {
-	case d < minPoll:
-		return minPoll
-	case d > maxPoll:
-		return maxPoll
-	default:
-		return d
+func blockTiming(block time.Duration) Timing {
+	wait := chainevm.BlockWait(block)
+	return Timing{
+		BlockInterval:    block,
+		CompletionBudget: wait.Timeout,
+		PollInterval:     wait.PollInterval,
 	}
 }

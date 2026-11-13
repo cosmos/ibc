@@ -234,12 +234,15 @@ func (i ExistingIBCInstance) validateIBCInstance() error {
 // identified existing state have different durability and mutation semantics.
 // A Connection may combine either variant at each end.
 type ClientSpec interface {
-	clientKind() clientkind.Kind
+	// ClientKind is how the Client verifies its counterparty.
+	ClientKind() clientkind.Kind
 	clientIBCInstance() IBCInstanceID
 	// clientAuthority is the Authority that creates the Client's contract;
 	// existing Clients have none.
 	clientAuthority() (AuthorityID, bool)
-	clientAttestors() []AttestorSpec
+	// ClientAttestors are the Attestors an attestation Client trusts; other
+	// kinds have none.
+	ClientAttestors() []AttestorSpec
 }
 
 // NewClient declares an attestation IBC Client to create on its host IBC
@@ -253,10 +256,10 @@ type NewClient struct {
 	Attestors             []AttestorSpec
 }
 
-func (NewClient) clientKind() clientkind.Kind            { return clientkind.Attestation }
+func (NewClient) ClientKind() clientkind.Kind            { return clientkind.Attestation }
 func (c NewClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
 func (c NewClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
-func (c NewClient) clientAttestors() []AttestorSpec      { return c.Attestors }
+func (c NewClient) ClientAttestors() []AttestorSpec      { return c.Attestors }
 
 // BesuTrustingPeriod is the trusting period, in seconds, e2e tests give Besu
 // clients.
@@ -274,10 +277,10 @@ type NewBesuClient struct {
 	TrustLevel     besumsgs.IBesuLightClientMsgsTrustThreshold
 }
 
-func (NewBesuClient) clientKind() clientkind.Kind            { return clientkind.Besu }
+func (NewBesuClient) ClientKind() clientkind.Kind            { return clientkind.Besu }
 func (c NewBesuClient) clientIBCInstance() IBCInstanceID     { return c.IBCInstance }
 func (c NewBesuClient) clientAuthority() (AuthorityID, bool) { return c.Authority, true }
-func (NewBesuClient) clientAttestors() []AttestorSpec        { return nil }
+func (NewBesuClient) ClientAttestors() []AttestorSpec        { return nil }
 
 // ExistingClient identifies an already-created IBC Client by its protocol ID
 // and explicit kind. Attestors are only valid for attestation clients.
@@ -288,10 +291,10 @@ type ExistingClient struct {
 	Attestors   []AttestorSpec
 }
 
-func (c ExistingClient) clientKind() clientkind.Kind        { return c.Kind }
+func (c ExistingClient) ClientKind() clientkind.Kind        { return c.Kind }
 func (c ExistingClient) clientIBCInstance() IBCInstanceID   { return c.IBCInstance }
 func (ExistingClient) clientAuthority() (AuthorityID, bool) { return "", false }
-func (c ExistingClient) clientAttestors() []AttestorSpec    { return c.Attestors }
+func (c ExistingClient) ClientAttestors() []AttestorSpec    { return c.Attestors }
 
 func snapshotClient(spec ClientSpec) ClientSpec {
 	switch client := spec.(type) {
@@ -518,7 +521,7 @@ func (s Spec) validate() error {
 			}
 			// only Anvil is known not to be Besu; an attached Chain may be either
 			counterpartyChain := instanceChains[ends[1-i].declaration.clientIBCInstance()]
-			if end.declaration.clientKind() == clientkind.Besu && contains(anvilChains, counterpartyChain) {
+			if end.declaration.ClientKind() == clientkind.Besu && contains(anvilChains, counterpartyChain) {
 				return errorsf(
 					"Besu IBC Client %q tracks Chain %q, which runs Anvil rather than Besu",
 					label,
@@ -546,7 +549,7 @@ func (s Spec) validate() error {
 			}
 			ids[id] = label
 
-			clientAttestors := end.declaration.clientAttestors()
+			clientAttestors := end.declaration.ClientAttestors()
 			for _, attestor := range clientAttestors {
 				if err := requireValue("Attestor id", string(attestor.ID)); err != nil {
 					return err

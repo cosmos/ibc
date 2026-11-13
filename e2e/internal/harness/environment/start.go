@@ -186,7 +186,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 			if authority, ok := declaration.clientAuthority(); ok {
 				requiredAuthorities[authority] = struct{}{}
 			}
-			for _, attestor := range declaration.clientAttestors() {
+			for _, attestor := range declaration.ClientAttestors() {
 				requiredAuthorities[attestor.Authority] = struct{}{}
 				authority, ok := runtime.authority(attestor.Authority)
 				if ok && (authority.SignerGRPC == "") != (authority.SignerRemoteKeyID == "") {
@@ -244,7 +244,7 @@ func validateRuntime(spec Spec, runtime Runtime) error {
 	for _, connection := range spec.Connections {
 		for _, end := range connection.ends() {
 			label := clientLabel(connection.ID, end.label)
-			for _, attestor := range end.declaration.clientAttestors() {
+			for _, attestor := range end.declaration.ClientAttestors() {
 				account, _ := runtime.evmAccount(attestor.Authority)
 				address := account.Address().Hex()
 				if previous, exists := attestorAddresses[address]; exists {
@@ -319,7 +319,7 @@ func productionDrivers() drivers {
 func validateProductionPrerequisites(spec Spec, _ Runtime) error {
 	hasAttestors := false
 	for _, connection := range spec.Connections {
-		if len(connection.A.clientAttestors()) != 0 || len(connection.B.clientAttestors()) != 0 {
+		if len(connection.A.ClientAttestors()) != 0 || len(connection.B.ClientAttestors()) != 0 {
 			hasAttestors = true
 			break
 		}
@@ -375,7 +375,7 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 		evmChainID: spec.EVMChainID,
 		rpcURL:     adapter.RPCURL(),
 		wsURL:      adapter.WSURL(),
-		timing:     blockTiming(time.Second),
+		timing:     blockTiming(anvil.BlockInterval),
 		impl:       adapter,
 		mining:     &Mining{controller: adapter},
 		node:       &NodeLifecycle{controller: adapter},
@@ -389,13 +389,14 @@ func acquireAnvil(ctx context.Context, spec ManagedAnvil, ws workspace) (chainAc
 }
 
 func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcquisition, error) {
+	timing := blockTiming(besuBlockPeriod)
 	adapter, err := besu.Start(ctx, besu.Spec{
 		ID:          string(spec.ID),
 		ChainID:     spec.EVMChainID,
 		Consensus:   spec.Consensus,
 		WorkDir:     filepath.Join(ws.privateDir, "besu-"+resourcePathToken(string(spec.ID))),
 		RunID:       ws.runID,
-		BlockPeriod: besuBlockPeriod,
+		BlockPeriod: timing.BlockInterval,
 		Followers:   spec.Followers,
 	})
 	if err != nil {
@@ -407,7 +408,7 @@ func acquireBesu(ctx context.Context, spec ManagedBesu, ws workspace) (chainAcqu
 			evmChainID: spec.EVMChainID,
 			rpcURL:     adapter.RPCURL(),
 			wsURL:      adapter.WSURL(),
-			timing:     blockTiming(besuBlockPeriod),
+			timing:     timing,
 			impl:       adapter,
 			funding:    &Funding{controller: adapter},
 			validators: &Validators{controller: adapter},

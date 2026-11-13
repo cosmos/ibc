@@ -83,6 +83,8 @@ func TestMiningWithPausedUsesFreshContextToResume(t *testing.T) {
 }
 
 type recordingMining struct {
+	// the controls WithPaused does not use are left unimplemented
+	chainimpl.BlockController
 	pauses             int
 	resumes            int
 	resumeContextError error
@@ -99,9 +101,6 @@ func (m *recordingMining) ResumeMining(ctx context.Context) error {
 	return nil
 }
 
-func (*recordingMining) MineBlocks(context.Context, int) error            { return nil }
-func (*recordingMining) AdvanceTime(context.Context, time.Duration) error { return nil }
-
 func TestMiningWithPausedJoinsCallbackAndResumeFailures(t *testing.T) {
 	callbackErr := errors.New("callback")
 	resumeErr := errors.New("resume")
@@ -114,12 +113,14 @@ func TestMiningWithPausedJoinsCallbackAndResumeFailures(t *testing.T) {
 	require.ErrorIs(t, err, resumeErr)
 }
 
-type failingResumeMining struct{ resumeErr error }
+type failingResumeMining struct {
+	// the controls WithPaused does not use are left unimplemented
+	chainimpl.BlockController
+	resumeErr error
+}
 
-func (*failingResumeMining) PauseMining(context.Context) error                { return nil }
-func (m *failingResumeMining) ResumeMining(context.Context) error             { return m.resumeErr }
-func (*failingResumeMining) MineBlocks(context.Context, int) error            { return nil }
-func (*failingResumeMining) AdvanceTime(context.Context, time.Duration) error { return nil }
+func (*failingResumeMining) PauseMining(context.Context) error    { return nil }
+func (m *failingResumeMining) ResumeMining(context.Context) error { return m.resumeErr }
 
 func bindTestMining(controller chainimpl.BlockController) *Mining {
 	mining := &Mining{controller: controller}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -37,11 +38,12 @@ func (ac *Chain) PauseMining(ctx context.Context) error {
 	})
 }
 
-// ResumeMining restores interval mining only. Transactions may wait up to one second.
+// ResumeMining restores interval mining only. Transactions may wait up to one
+// BlockInterval.
 func (ac *Chain) ResumeMining(ctx context.Context) error {
 	return ac.WithEVMClient(func(client *evm.EVMClient) error {
-		if err := client.RPCClient().CallContext(ctx, nil, "evm_setIntervalMining", 1); err != nil {
-			return fmt.Errorf("evm_setIntervalMining 1: %w", err)
+		if err := client.RPCClient().CallContext(ctx, nil, "evm_setIntervalMining", blockTimeSecs); err != nil {
+			return fmt.Errorf("evm_setIntervalMining %d: %w", blockTimeSecs, err)
 		}
 		return nil
 	})
@@ -62,6 +64,49 @@ func (ac *Chain) AdvanceTime(ctx context.Context, d time.Duration) error {
 		}
 		if err := client.RPCClient().CallContext(ctx, nil, "anvil_mine", hexutil.Uint64(1)); err != nil {
 			return fmt.Errorf("apply time advance: anvil_mine 1: %w", err)
+		}
+		return nil
+	})
+}
+
+func (ac *Chain) DropPendingTransactions(ctx context.Context) error {
+	return ac.WithEVMClient(func(client *evm.EVMClient) error {
+		if err := client.RPCClient().CallContext(ctx, nil, "anvil_dropAllTransactions"); err != nil {
+			return fmt.Errorf("anvil_dropAllTransactions: %w", err)
+		}
+		return nil
+	})
+}
+
+func (ac *Chain) SetNextBlockBaseFee(ctx context.Context, fee *big.Int) error {
+	return ac.WithEVMClient(func(client *evm.EVMClient) error {
+		if err := client.RPCClient().
+			CallContext(ctx, nil, "anvil_setNextBlockBaseFeePerGas", hexutil.EncodeBig(fee)); err != nil {
+			return fmt.Errorf("anvil_setNextBlockBaseFeePerGas %s: %w", fee, err)
+		}
+		return nil
+	})
+}
+
+func (ac *Chain) Snapshot(ctx context.Context) (string, error) {
+	var id string
+	err := ac.WithEVMClient(func(client *evm.EVMClient) error {
+		if err := client.RPCClient().CallContext(ctx, &id, "evm_snapshot"); err != nil {
+			return fmt.Errorf("evm_snapshot: %w", err)
+		}
+		return nil
+	})
+	return id, err
+}
+
+func (ac *Chain) Revert(ctx context.Context, id string) error {
+	return ac.WithEVMClient(func(client *evm.EVMClient) error {
+		var reverted bool
+		if err := client.RPCClient().CallContext(ctx, &reverted, "evm_revert", id); err != nil {
+			return fmt.Errorf("evm_revert %s: %w", id, err)
+		}
+		if !reverted {
+			return fmt.Errorf("evm_revert %s: snapshot not found", id)
 		}
 		return nil
 	})

@@ -245,10 +245,8 @@ func Start(ctx context.Context, spec Spec) (result *Chain, err error) {
 		api:      votingAPI(spec.Consensus),
 		logID:    spec.ID,
 		treasury: treasury,
-		wait: evm.TransactionWait{
-			Timeout:      20 * time.Duration(periodSecs) * time.Second,
-			PollInterval: 250 * time.Millisecond,
-		},
+		// the adapter's own transactions: funding and validator votes
+		wait: evm.BlockWait(time.Duration(periodSecs) * time.Second),
 	}
 	defer func() {
 		if result == nil {
