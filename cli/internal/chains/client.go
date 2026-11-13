@@ -77,10 +77,6 @@ type Client interface {
 		destClientID string,
 	) (v2.WriteAckStatus, error)
 
-	// WaitForChain blocks until the chain's latest block time catches up to
-	// the current time.
-	WaitForChain(ctx context.Context) error
-
 	// GetBlockHeader returns the header at height, used by the attestor to
 	// read block timestamps for state attestations.
 	GetBlockHeader(ctx context.Context, height uint64) (v2.BlockHeader, error)

@@ -1031,40 +1031,6 @@ func (c *Client) PacketWriteAckStatus(
 	return v2.WriteAckStatusUnknown, v2.ErrWriteAckNotFoundForPacket
 }
 
-func (c *Client) WaitForChain(ctx context.Context) error {
-	const initialTick = time.Millisecond
-	const tick = time.Second
-
-	ticker := time.NewTicker(initialTick)
-	defer ticker.Stop()
-
-	start := time.Now()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			latest, err := c.eth.HeaderByNumber(ctx, nil)
-			if err != nil {
-				return errors.Wrapf(err, "getting latest header on chain %s", c.chainID)
-			}
-
-			latestTime := time.Unix(int64(latest.Time), 0)
-			if latestTime.After(start) {
-				return nil
-			}
-
-			if time.Since(start) > 30*time.Second {
-				c.logger.Warn("Chain time is behind current time for more than 30s, waiting", "chainTime", latestTime)
-			} else {
-				c.logger.Debug("Chain time is behind current time, waiting", "chainTime", latestTime)
-			}
-
-			ticker.Reset(tick)
-		}
-	}
-}
-
 var (
 	blockFinalized = big.NewInt(rpc.FinalizedBlockNumber.Int64())
 	blockLatest    = big.NewInt(rpc.LatestBlockNumber.Int64())

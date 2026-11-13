@@ -12,10 +12,6 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
-// waitForChainTimeout bounds how long batch delivery waits for the target
-// chain to catch up to the current time before simulation.
-const waitForChainTimeout = 2 * time.Minute
-
 // TxStorage persists batch delivery results transactionally.
 type TxStorage interface {
 	Transact(ctx context.Context, fn func(store.Repository) error) error

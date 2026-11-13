@@ -126,13 +126,6 @@ func relayPackets(
 		}
 	}
 
-	waitCtx, cancel := context.WithTimeout(ctx, waitForChainTimeout)
-	defer cancel()
-
-	if err = chainClient.WaitForChain(waitCtx); err != nil {
-		return nil, errors.Wrap(err, "waiting for chain")
-	}
-
 	relay := clientRelay{
 		logger:      logger,
 		txBuilder:   txBuilder,
