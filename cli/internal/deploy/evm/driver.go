@@ -7,16 +7,13 @@ package evm
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/attestation"
@@ -31,6 +28,7 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/besu"
 	chainsevm "github.com/lfdt-ibc/ibc/cli/internal/chains/evm"
 	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
 	"github.com/lfdt-ibc/ibc/cli/routeraccess"
 	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/accessmanager"
 )
@@ -50,26 +48,27 @@ var (
 // Driver implements deploy.Target for EVM chains.
 type Driver struct {
 	chainID *big.Int
-	key     *ecdsa.PrivateKey
-	backend backend
+	// deployer signs deployment and wiring transactions as from
+	deployer signer.Signer
+	from     common.Address
+	backend  backend
 }
 
 // Options configures an EVM driver.
 type Options struct {
-	ChainID        string
-	RPCURL         string
-	DeployerKeyHex string
+	ChainID  string
+	RPCURL   string
+	Deployer signer.Signer
 }
 
-// New connects to the chain and validates its ID. Empty DeployerKeyHex
-// builds a read-only driver: queries only, no provisioning or wiring.
+// New connects to the chain and validates its ID. A nil Deployer builds a
+// read-only driver: queries only, no provisioning or wiring.
 func New(ctx context.Context, opts Options) (*Driver, error) {
-	var key *ecdsa.PrivateKey
-	if opts.DeployerKeyHex != "" {
+	var from common.Address
+	if opts.Deployer != nil {
 		var err error
-		key, err = crypto.HexToECDSA(strings.TrimPrefix(opts.DeployerKeyHex, "0x"))
-		if err != nil {
-			return nil, fmt.Errorf("deployer key: %w", err)
+		if from, err = signer.EVMAddress(opts.Deployer); err != nil {
+			return nil, fmt.Errorf("deployer: %w", err)
 		}
 	}
 	client, err := ethclient.DialContext(ctx, opts.RPCURL)
@@ -83,13 +82,13 @@ func New(ctx context.Context, opts Options) (*Driver, error) {
 	if chainID.String() != opts.ChainID {
 		return nil, fmt.Errorf("rpc %s reports chain id %s, config says %s", opts.RPCURL, chainID, opts.ChainID)
 	}
-	return &Driver{chainID: chainID, key: key, backend: client}, nil
+	return &Driver{chainID: chainID, deployer: opts.Deployer, from: from, backend: client}, nil
 }
 
 // requireSigner errors if called on a driver built without a deployer
 // signer; every mutating operation must call it first.
 func (d *Driver) requireSigner() error {
-	if d.key == nil {
+	if d.deployer == nil {
 		return fmt.Errorf("no deployer signer configured for this chain: set chains[].deployer or pass --deployer")
 	}
 	return nil
@@ -132,7 +131,7 @@ func (d *Driver) ProvisionCore(ctx context.Context, _ deploy.CoreParams) (deploy
 	amAddr, amTx, am, err := accessmanager.DeployAccessManager(
 		opts,
 		d.backend,
-		crypto.PubkeyToAddress(d.key.PublicKey),
+		d.from,
 	)
 	if err != nil {
 		return deploy.CoreRef{}, fmt.Errorf("deploy AccessManager: %w", err)
@@ -399,12 +398,7 @@ func (d *Driver) transactOpts(ctx context.Context) (*bind.TransactOpts, error) {
 	if err := d.requireSigner(); err != nil {
 		return nil, err
 	}
-	opts, err := bind.NewKeyedTransactorWithChainID(d.key, d.chainID)
-	if err != nil {
-		return nil, err
-	}
-	opts.Context = ctx
-	return opts, nil
+	return signer.NewEVMTransactor(ctx, d.deployer, d.chainID)
 }
 
 // awaitMined waits for tx and errors on revert. Mined transactions are

@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,7 +27,6 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/internal/deploy/evm"
 	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
 	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
-	"github.com/lfdt-ibc/ibc/cli/keyfile"
 )
 
 const (
@@ -153,36 +151,30 @@ func resolveDeployerAlias(chain config.ChainConfig, flagAlias string) string {
 	return chain.Deployer
 }
 
-// deployerKeyHex resolves a local ECDSA signer's private key for the target.
-func deployerKeyHex(cfg config.Config, alias string) (string, error) {
+// deployerSigner looks up the deployer signer named by alias.
+func deployerSigner(cfg config.Config, alias string) (config.SignerConfig, error) {
 	if alias == "" {
-		return "", errors.New("no deployer configured: set chains[].deployer or pass --deployer")
+		return config.SignerConfig{}, errors.New("no deployer configured: set chains[].deployer or pass --deployer")
 	}
-	var sc *config.SignerConfig
-	for i := range cfg.Signers {
-		if cfg.Signers[i].Alias == alias {
-			sc = &cfg.Signers[i]
-			break
-		}
+	sc, ok := cfg.Signer(alias)
+	if !ok {
+		return config.SignerConfig{}, errors.Errorf("deployer signer %q not found in config", alias)
 	}
-	if sc == nil {
-		return "", errors.Errorf("deployer signer %q not found in config", alias)
-	}
-	if sc.Type != config.SignerLocal {
-		return "", errors.Errorf("deployer signer %q must be a local key (deployment tooling needs the raw key)", alias)
-	}
-	path, err := config.ExpandHome(sc.File)
+	return sc, nil
+}
+
+// loadDeployer builds the deployer's signer, local or remote. A remote
+// deployer signs each transaction through its KMS.
+func loadDeployer(ctx context.Context, cfg config.Config, alias string) (signer.Signer, error) {
+	sc, err := deployerSigner(cfg, alias)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	key, err := signer.LocalKeyFromFile(config.KeyFileFallbacks(path)...)
+	s, _, err := signer.NewSignerFromConfig(ctx, sc)
 	if err != nil {
-		return "", err
+		return nil, errors.Wrapf(err, "deployer signer %q", alias)
 	}
-	if key.Type() != keyfile.ECDSA {
-		return "", errors.Errorf("deployer signer %q must be an ecdsa key", alias)
-	}
-	return hex.EncodeToString(key.PrivateKey()), nil
+	return s, nil
 }
 
 // newTarget builds the deploy target for a chain based on its configured
@@ -198,25 +190,19 @@ func newTarget(
 	if !ok {
 		return nil, errors.Errorf("chain %q not declared in config", chainID)
 	}
-	var keyHex string
+	var deployer signer.Signer
 	if needSigner {
-		alias := resolveDeployerAlias(chain, deployerFlag)
 		var err error
-		keyHex, err = deployerKeyHex(cfg, alias)
+		deployer, err = loadDeployer(ctx, cfg, resolveDeployerAlias(chain, deployerFlag))
 		if err != nil {
 			return nil, err
 		}
 	}
-	switch chain.Type() {
-	case config.ChainTypeEVM:
-		return evm.New(ctx, evm.Options{
-			ChainID:        chainID,
-			RPCURL:         chain.EVM.RPC,
-			DeployerKeyHex: keyHex,
-		})
-	default:
-		return nil, errors.Errorf("chain %q has no supported deployment target", chainID)
-	}
+	return evm.New(ctx, evm.Options{
+		ChainID:  chainID,
+		RPCURL:   chain.EVM.RPC,
+		Deployer: deployer,
+	})
 }
 
 func confirmOrAbort(results []deploy.StepResult) error {
@@ -848,15 +834,16 @@ func populateRenderedConfig(merged config.Config) error {
 
 // deployerAddress derives the deployer's EVM address, for use as the default
 // IFT owner.
-func deployerAddress(cfg config.Config, alias string) (string, error) {
-	if alias == "" {
-		return "", errors.New("no deployer configured: set chains[].deployer or pass --deployer")
+func deployerAddress(ctx context.Context, cfg config.Config, alias string) (string, error) {
+	deployer, err := loadDeployer(ctx, cfg, alias)
+	if err != nil {
+		return "", err
 	}
-	sc, ok := cfg.Signer(alias)
-	if !ok {
-		return "", errors.Errorf("deployer signer %q not found in config", alias)
+	address, err := signer.EVMAddress(deployer)
+	if err != nil {
+		return "", errors.Wrapf(err, "deployer signer %q", alias)
 	}
-	return signer.EVMAddressOf(sc)
+	return address.Hex(), nil
 }
 
 func deployGMP(cmd *cobra.Command, _ []string) error {
@@ -889,7 +876,7 @@ func deployIFT(cmd *cobra.Command, _ []string) error {
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagDeployChain)
 	}
-	deployer, err := deployerAddress(cfg, resolveDeployerAlias(chain, flagDeployDeployer))
+	deployer, err := deployerAddress(cmd.Context(), cfg, resolveDeployerAlias(chain, flagDeployDeployer))
 	if err != nil {
 		return err
 	}

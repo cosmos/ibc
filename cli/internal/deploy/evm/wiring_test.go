@@ -27,6 +27,7 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/besu/besutest"
 	"github.com/lfdt-ibc/ibc/cli/internal/deploy"
 	"github.com/lfdt-ibc/ibc/cli/internal/deploy/manifest"
+	"github.com/lfdt-ibc/ibc/cli/internal/service/signer"
 	"github.com/lfdt-ibc/ibc/gen/go/solidity-abi/accessmanager"
 )
 
@@ -72,7 +73,9 @@ func newSimDriver(t *testing.T) (*Driver, *simulated.Backend, common.Address) {
 		}
 	}()
 
-	d := &Driver{chainID: big.NewInt(simChainID), backend: sim.Client(), key: key}
+	deployer, err := signer.NewLocalSecp256k1Signer(crypto.FromECDSA(key))
+	require.NoError(t, err)
+	d := &Driver{chainID: big.NewInt(simChainID), backend: sim.Client(), deployer: deployer, from: addr}
 	return d, sim, addr
 }
 

@@ -113,12 +113,12 @@ func DecodeHex(raw string) ([]byte, error) {
 	return hex.DecodeString(strings.TrimPrefix(raw, "0x"))
 }
 
-// EVMAddressOf derives the EVM address of a configured signer. Only local
-// ECDSA signers resolve; remote signers would need a KMS round trip for
-// their public key and are rejected.
+// EVMAddressOf derives the EVM address of a configured local ECDSA signer
+// from its key file. Remote signers are rejected, so resolving an address
+// never calls a KMS.
 func EVMAddressOf(cfg config.SignerConfig) (string, error) {
 	if cfg.Type != config.SignerLocal {
-		return "", errors.Errorf("cannot derive an address for remote signer %q", cfg.Alias)
+		return "", errors.Errorf("remote signer %q has no local key", cfg.Alias)
 	}
 
 	path, err := config.ExpandHome(cfg.File)

@@ -4,15 +4,12 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -81,7 +78,7 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 		return errors.Errorf("invalid --amount %q", flagTxIFTAmount)
 	}
 
-	backend, key, chainID, cfg, err := dialIFTChain(cmd.Context())
+	backend, from, chainID, cfg, err := dialIFTChain(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -96,11 +93,10 @@ func txIFTMint(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	opts, err := bind.NewKeyedTransactorWithChainID(key, chainID)
+	opts, err := signer.NewEVMTransactor(cmd.Context(), from, chainID)
 	if err != nil {
 		return err
 	}
-	opts.Context = cmd.Context()
 
 	tx, err := contract.Mint(opts, common.HexToAddress(to), amount)
 	if err != nil {
@@ -125,7 +121,7 @@ func txIFTSend(cmd *cobra.Command, _ []string) error {
 		return errors.Errorf("invalid --amount %q", flagTxIFTAmount)
 	}
 
-	backend, key, chainID, cfg, err := dialIFTChain(cmd.Context())
+	backend, from, chainID, cfg, err := dialIFTChain(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -140,11 +136,10 @@ func txIFTSend(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	opts, err := bind.NewKeyedTransactorWithChainID(key, chainID)
+	opts, err := signer.NewEVMTransactor(cmd.Context(), from, chainID)
 	if err != nil {
 		return err
 	}
-	opts.Context = cmd.Context()
 
 	if flagTxIFTTimeout <= 0 {
 		return errors.Errorf("invalid --timeout %s: must be positive", flagTxIFTTimeout)
@@ -176,9 +171,6 @@ func queryIFTBalance(cmd *cobra.Command, _ []string) error {
 	chain, ok := cfg.Chain(flagQueryIFTChain)
 	if !ok {
 		return errors.Errorf("chain %q not declared in config", flagQueryIFTChain)
-	}
-	if chain.Type() != config.ChainTypeEVM {
-		return errors.Errorf("chain %q is not an EVM chain", flagQueryIFTChain)
 	}
 
 	account, err := resolveAddress(cfg, flagQueryIFTAccount)
@@ -231,7 +223,7 @@ func parseIFTAmount(s string) *big.Int {
 
 // dialIFTChain resolves --chain's RPC and --from's signer from config, and
 // dials the chain.
-func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *big.Int, config.Config, error) {
+func dialIFTChain(ctx context.Context) (*ethclient.Client, signer.Signer, *big.Int, config.Config, error) {
 	cfg, err := setupHomeWithConfig()
 	if err != nil {
 		return nil, nil, nil, config.Config{}, err
@@ -241,17 +233,10 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 	if !ok {
 		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q not declared in config", flagTxIFTChain)
 	}
-	if chain.Type() != config.ChainTypeEVM {
-		return nil, nil, nil, config.Config{}, errors.Errorf("chain %q is not an EVM chain", flagTxIFTChain)
-	}
 
-	keyHex, err := deployerKeyHex(cfg, flagTxIFTFrom)
+	from, err := loadDeployer(ctx, cfg, flagTxIFTFrom)
 	if err != nil {
 		return nil, nil, nil, config.Config{}, err
-	}
-	key, err := crypto.HexToECDSA(strings.TrimPrefix(keyHex, "0x"))
-	if err != nil {
-		return nil, nil, nil, config.Config{}, errors.Wrap(err, "signer key")
 	}
 
 	backend, err := ethclient.DialContext(ctx, chain.EVM.RPC)
@@ -264,7 +249,7 @@ func dialIFTChain(ctx context.Context) (*ethclient.Client, *ecdsa.PrivateKey, *b
 		return nil, nil, nil, config.Config{}, errors.Wrap(err, "query chain id")
 	}
 
-	return backend, key, chainID, cfg, nil
+	return backend, from, chainID, cfg, nil
 }
 
 // resolveAddress accepts either a raw EVM address or a config signer alias,
