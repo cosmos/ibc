@@ -63,21 +63,21 @@ func TestMetrics(t *testing.T) {
 		for _, tt := range []struct {
 			name     string
 			status   store.RelayStatus
-			expected map[relayType]float64
+			expected map[Leg]float64
 		}{
 			{
 				name:   "ack",
 				status: store.RelayStatusCompleteWithAck,
-				expected: map[relayType]float64{
-					relayTypeSendToRecv: 30,
-					relayTypeRecvToAck:  45,
+				expected: map[Leg]float64{
+					LegSendToRecv: 30,
+					LegRecvToAck:  45,
 				},
 			},
 			{
 				name:   "timeout",
 				status: store.RelayStatusCompleteWithTimeout,
-				expected: map[relayType]float64{
-					relayTypeSendToTimeout: 90,
+				expected: map[Leg]float64{
+					LegSendToTimeout: 90,
 				},
 			},
 			{
@@ -132,8 +132,8 @@ func TestMetrics(t *testing.T) {
 
 		// ACT
 		suite.instruments.txSubmitted(suite.ctx, "destination", "destination-client", "0xrecv")
-		suite.instruments.txRetry(suite.ctx, tr, relayTypeSendToRecv, "0xrecv")
-		suite.instruments.txRetry(suite.ctx, tr, relayTypeSendToRecv, "0xrecv")
+		suite.instruments.txRetry(suite.ctx, tr, LegSendToRecv, "0xrecv")
+		suite.instruments.txRetry(suite.ctx, tr, LegSendToRecv, "0xrecv")
 
 		// ASSERT
 		var data metricdata.ResourceMetrics
@@ -155,7 +155,7 @@ func TestMetrics(t *testing.T) {
 					otel.AttrDestChainID.String("destination"),
 					otel.AttrClientID.String("source-client"),
 					otel.AttrDestClientID.String("destination-client"),
-					otel.AttrType.String(string(relayTypeSendToRecv)),
+					otel.AttrType.String(string(LegSendToRecv)),
 				)
 				assert.Equal(t, expectedAttributes.ToSlice(), sum.DataPoints[0].Attributes.ToSlice())
 
@@ -201,7 +201,7 @@ func TestMetrics(t *testing.T) {
 				Status:                 store.RelayStatusDeliverRecvPacket,
 				PacketTimeoutTimestamp: time.Now().Add(time.Hour),
 			}, slog.Default())
-			tr.ProcessingError = ErrRetryingRecvPacket
+			tr.ProcessingError = ErrRetryingRelayTx
 
 			// ACT
 			_, err := NewStateFinisher(&fakeStatusStorage{}).Process(suite.ctx, tr)
@@ -263,9 +263,9 @@ func TestMetrics(t *testing.T) {
 
 			// ASSERT
 			require.NoError(t, err)
-			assertCompletionMetrics(t, suite, tr, map[relayType]float64{
-				relayTypeSendToRecv: 60,
-				relayTypeRecvToAck:  60,
+			assertCompletionMetrics(t, suite, tr, map[Leg]float64{
+				LegSendToRecv: 60,
+				LegRecvToAck:  60,
 			})
 
 			// ACT #2
@@ -273,9 +273,9 @@ func TestMetrics(t *testing.T) {
 
 			// ASSERT #2
 			require.NoError(t, err)
-			assertCompletionMetrics(t, suite, tr, map[relayType]float64{
-				relayTypeSendToRecv: 60,
-				relayTypeRecvToAck:  60,
+			assertCompletionMetrics(t, suite, tr, map[Leg]float64{
+				LegSendToRecv: 60,
+				LegRecvToAck:  60,
 			})
 		})
 
@@ -328,7 +328,7 @@ func assertCompletionMetrics(
 	t *testing.T,
 	suite *metricsTestSuite,
 	tr *Transfer,
-	expected map[relayType]float64,
+	expected map[Leg]float64,
 ) {
 	t.Helper()
 
@@ -353,16 +353,16 @@ func assertCompletionMetrics(
 }
 
 func (s *metricsTestSuite) collectCompletionMetrics(t *testing.T) (
-	map[relayType]metricdata.DataPoint[int64],
-	map[relayType]metricdata.HistogramDataPoint[float64],
+	map[Leg]metricdata.DataPoint[int64],
+	map[Leg]metricdata.HistogramDataPoint[float64],
 ) {
 	t.Helper()
 
 	var data metricdata.ResourceMetrics
 	require.NoError(t, s.reader.Collect(s.ctx, &data))
 
-	completed := make(map[relayType]metricdata.DataPoint[int64])
-	durations := make(map[relayType]metricdata.HistogramDataPoint[float64])
+	completed := make(map[Leg]metricdata.DataPoint[int64])
+	durations := make(map[Leg]metricdata.HistogramDataPoint[float64])
 	for _, scope := range data.ScopeMetrics {
 		for _, metric := range scope.Metrics {
 			switch points := metric.Data.(type) {
@@ -371,14 +371,14 @@ func (s *metricsTestSuite) collectCompletionMetrics(t *testing.T) (
 					continue
 				}
 				for _, point := range points.DataPoints {
-					completed[relayType(attributeString(t, point.Attributes, otel.AttrType))] = point
+					completed[Leg(attributeString(t, point.Attributes, otel.AttrType))] = point
 				}
 			case metricdata.Histogram[float64]:
 				if metric.Name != "relay_duration" {
 					continue
 				}
 				for _, point := range points.DataPoints {
-					durations[relayType(attributeString(t, point.Attributes, otel.AttrType))] = point
+					durations[Leg(attributeString(t, point.Attributes, otel.AttrType))] = point
 				}
 			}
 		}
@@ -387,7 +387,7 @@ func (s *metricsTestSuite) collectCompletionMetrics(t *testing.T) (
 	return completed, durations
 }
 
-func completionAttributes(tr *Transfer, kind relayType) attribute.Set {
+func completionAttributes(tr *Transfer, kind Leg) attribute.Set {
 	return attribute.NewSet(
 		otel.AttrChainID.String(tr.SourceChainID),
 		otel.AttrDestChainID.String(tr.DestinationChainID),

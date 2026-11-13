@@ -14,12 +14,15 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/internal/store"
 )
 
-type relayType string
+// Leg is the hop of a packet's relay a metric describes, from the event that
+// starts it to the one that completes it. Its value is the metric type label.
+type Leg string
 
+// Relay legs
 const (
-	relayTypeSendToRecv    relayType = "send_to_recv"
-	relayTypeSendToTimeout relayType = "send_to_timeout"
-	relayTypeRecvToAck     relayType = "recv_to_ack"
+	LegSendToRecv    Leg = "send_to_recv"
+	LegSendToTimeout Leg = "send_to_timeout"
+	LegRecvToAck     Leg = "recv_to_ack"
 )
 
 type instrumentation struct {
@@ -39,7 +42,7 @@ const (
 )
 
 type completedRelayLeg struct {
-	kind       relayType
+	kind       Leg
 	startedAt  *time.Time
 	finishedAt *time.Time
 }
@@ -117,9 +120,9 @@ func (m *instrumentation) txConfirmed(ctx context.Context, chainID, clientID, tx
 }
 
 // one txHash might carry multiple transfers
-func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind relayType, txHash string) {
+func (m *instrumentation) txRetry(ctx context.Context, tr *Transfer, kind Leg, txHash string) {
 	chainID := tr.SourceChainID
-	if kind == relayTypeSendToRecv {
+	if kind == LegSendToRecv {
 		chainID = tr.DestinationChainID
 	}
 
@@ -166,12 +169,12 @@ func completedRelayLegs(tr *Transfer) []completedRelayLeg {
 	case store.RelayStatusCompleteWithAck:
 		return []completedRelayLeg{
 			{
-				kind:       relayTypeSendToRecv,
+				kind:       LegSendToRecv,
 				startedAt:  &tr.SourceTxTime,
 				finishedAt: tr.RecvTxTime,
 			},
 			{
-				kind:       relayTypeRecvToAck,
+				kind:       LegRecvToAck,
 				startedAt:  tr.RecvTxTime,
 				finishedAt: tr.AckTxTime,
 			},
@@ -179,7 +182,7 @@ func completedRelayLegs(tr *Transfer) []completedRelayLeg {
 	case store.RelayStatusCompleteWithTimeout:
 		return []completedRelayLeg{
 			{
-				kind:       relayTypeSendToTimeout,
+				kind:       LegSendToTimeout,
 				startedAt:  &tr.SourceTxTime,
 				finishedAt: tr.TimeoutTxTime,
 			},
