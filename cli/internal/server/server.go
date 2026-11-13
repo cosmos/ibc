@@ -139,7 +139,7 @@ func (s *Server) start(ln net.Listener) {
 }
 
 func (s *Server) setupReflection() {
-	if !s.useReflection || s.reflectionRegistered || len(s.serviceNames) == 0 {
+	if !s.useReflection || s.reflectionRegistered {
 		return
 	}
 

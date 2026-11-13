@@ -12,8 +12,7 @@
  * Ported from cosmos/docs. That site froze next/ -> latest/ -> archive. This
  * site has no next/ tier: latest/ is the working tree, so the freeze is
  * latest/ -> vX.Y.x/ plus stamping plus registry update, and latest/ is left
- * untouched. (sync-latest-to-next.js is carried unused in case a next/ tier is
- * stood up later.) The release-notes fetch and changelog generation steps were
+ * untouched. The release-notes fetch and changelog generation steps were
  * dropped with manage-changelogs.js, which was not ported.
  *
  * Usage:
@@ -46,7 +45,6 @@ const colors = { red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m', blue: '
 
 function printInfo(msg)    { console.log(`${colors.blue}ℹ${colors.reset} ${msg}`); }
 function printSuccess(msg) { console.log(`${colors.green}✓${colors.reset} ${msg}`); }
-function printWarning(msg) { console.log(`${colors.yellow}⚠${colors.reset} ${msg}`); }
 function printError(msg)   { console.log(`${colors.red}✗${colors.reset} ${msg}`); }
 
 async function prompt(question) {

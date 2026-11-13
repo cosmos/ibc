@@ -12,11 +12,7 @@ import (
 	"github.com/lfdt-ibc/ibc/cli/internal/otel"
 )
 
-const (
-	typeRemote     = "remote"
-	typeLocalECDSA = "local_ecdsa"
-	typeLocalEDDSA = "local_eddsa"
-)
+const typeLocalEDDSA = "local_eddsa"
 
 type instrumentation struct {
 	Operation metric.Float64Histogram

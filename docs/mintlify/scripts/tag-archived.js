@@ -106,15 +106,6 @@ function discoverArchivedVersions(product) {
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 
-/**
- * Returns the relative page path within a product+version dir.
- * e.g. sdk/v0.50/learn/concepts/accounts.mdx → learn/concepts/accounts
- */
-function relativePagePath(filePath, productDir) {
-  const rel = path.relative(productDir, filePath);
-  return rel.replace(/\.mdx$/, '');
-}
-
 const SECTION_LANDING = ['overview', 'index', 'README'];
 
 /**
