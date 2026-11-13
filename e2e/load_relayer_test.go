@@ -204,7 +204,7 @@ func newLoadTestRelayer(t *testing.T) *loadTestRelayer {
 
 	withConfig := func(cfg *ibccli.RelayerConfig) {
 		cfg.ClearInterval = 1 * time.Second
-		cfg.ClearOnStart = true
+		cfg.ClearOnStart = new(true)
 
 		for i := range cfg.Chains {
 			cfg.Chains[i].PacketBatchSize = packetBatchSize

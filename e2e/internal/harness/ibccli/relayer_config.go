@@ -34,8 +34,8 @@ type RelayerConfig struct {
 	// chains behind the harness never serve a moving "finalized" tag.
 	FinalityOffset uint64
 	// ClearOnStart controls whether the relayer runs a clearing pass at startup.
-	// Default is true.
-	ClearOnStart bool
+	// Nil leaves it unset, so the CLI default (true) applies.
+	ClearOnStart *bool
 	// ClearInterval overrides the clearing cadence.
 	ClearInterval time.Duration
 
@@ -240,7 +240,7 @@ const (
 
 type relayerFileConfig struct {
 	DispatchPollInterval string                    `yaml:"dispatchPollInterval,omitempty"`
-	ClearOnStart         bool                      `yaml:"clearOnStart,omitempty"`
+	ClearOnStart         *bool                     `yaml:"clearOnStart,omitempty"`
 	ClearInterval        string                    `yaml:"clearInterval,omitempty"`
 	ChainOverrides       []chainOverrideFileConfig `yaml:"chainOverrides,omitempty"`
 	Connections          []ConnectionFileConfig    `yaml:"connections"`

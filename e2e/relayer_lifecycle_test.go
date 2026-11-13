@@ -33,7 +33,7 @@ func TestAutoRelay_PacketIsClearedOnRestart(t *testing.T) {
 	// Given relayer deployment with clearing enabled
 	route := e2etest.AtoB(e2etest.ChainA, e2etest.ChainB)
 	configMutator := func(cfg *ibccli.RelayerConfig) {
-		cfg.ClearOnStart = true
+		cfg.ClearOnStart = new(true)
 		cfg.ClearInterval = 2 * time.Second
 	}
 
@@ -81,7 +81,7 @@ func TestAutoRelay_AllPacketsAreClearedOnStart(t *testing.T) {
 	routeBA := e2etest.BtoA(e2etest.ChainB, e2etest.ChainA)
 
 	configMutator := func(cfg *ibccli.RelayerConfig) {
-		cfg.ClearOnStart = true
+		cfg.ClearOnStart = new(true)
 		cfg.ClearInterval = 2 * time.Second
 	}
 
@@ -140,7 +140,7 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 	// Given NO clearOnStart and long clearInterval
 	// (so the clearing pass is not triggered)
 	configMutator := func(cfg *ibccli.RelayerConfig) {
-		cfg.ClearOnStart = false
+		cfg.ClearOnStart = new(false)
 		cfg.ClearInterval = 1 * time.Hour
 
 		for i := range cfg.Chains {

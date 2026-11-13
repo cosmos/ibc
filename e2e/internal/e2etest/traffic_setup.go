@@ -394,7 +394,7 @@ func buildConfig(
 		SignerAlias:    relayerSignerAlias,
 		SignerKeyFile:  signerKeyPath,
 		FinalityOffset: ibccli.HarnessFinalityOffset,
-		ClearOnStart:   false,
+		ClearOnStart:   new(false),
 		ClearInterval:  5 * time.Second,
 		Observability:  env.ObservabilityEnabled(),
 	}
