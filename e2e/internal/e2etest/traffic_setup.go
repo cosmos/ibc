@@ -130,10 +130,10 @@ func (d *Deployment) RouteClients(id RouteID) (RouteClients, bool) {
 	return clients, ok
 }
 
-// Deploy writes a temporary black-box configuration, runs its migration,
-// deploys TestERC20, Counter, and an IFT token with its batch shim on each
-// Chain, and registers the IFT bridges for each route. It does not start the
-// relayer.
+// Deploy deploys TestERC20, Counter, and an IFT token with its send-call
+// constructor and batch shim on each Chain, registers the IFT bridges for each
+// route, then writes a temporary black-box configuration and runs its
+// migration. It does not start the relayer.
 func Deploy(
 	t testing.TB,
 	env *environment.Environment,

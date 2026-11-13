@@ -316,7 +316,7 @@ func TestRenderRelayConfig(t *testing.T) {
 	require.True(t, *conn.ClientB.AutoRelay.Enabled)
 	require.Equal(t, "signer-b", conn.ClientB.Signer)
 
-	// Reconciliation allocates unique aliases for new connections.
+	// Every connection between the same chain pair gets the same alias.
 	conn2 := out.Connections[1]
 	require.Equal(t, "1-2", conn2.Alias)
 	require.Equal(t, "custom-a", conn2.ClientA.ClientID)

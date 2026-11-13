@@ -31,9 +31,9 @@ type Options struct {
 	TimeoutBatchTimeout time.Duration
 }
 
-// OptionsFromConfig maps chain overrides onto pipeline options: recv batching
-// follows the destination chain, ack and timeout batching follow the source
-// chain.
+// OptionsFromConfig maps a route's config onto pipeline options: signer aliases
+// come from the route's connection ends, recv batching follows the destination
+// chain, and ack and timeout batching follow the source chain.
 func OptionsFromConfig(cfg config.Config, route processors.Route) Options {
 	opts := Options{
 		RecvBatchSize:       DefaultBatchSize,

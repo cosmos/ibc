@@ -92,7 +92,7 @@ func AwaitPacketsFromCatalyst(
 					errs = append(errs, err)
 				}
 				if awaited%100 == 0 {
-					logger.Logf("AwaitPacketsFromCatalyst[%s]: %d packets succeeded", route.Source, awaited)
+					logger.Logf("AwaitPacketsFromCatalyst[%s]: %d packets awaited", route.Source, awaited)
 				}
 				mu.Unlock()
 			}
