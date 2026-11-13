@@ -167,14 +167,16 @@ func TestAutoRelay_SubscriptionReconnect(t *testing.T) {
 
 	// ACT #1: break the relayer's websocket subscription through the proxy.
 	chainWSProxy.Kill()
-	time.Sleep(time.Second)
 
 	// ACT #2: send packet while relayer is disconnected.
 	transfer2 := mustSend(t, transferApp, big.NewInt(200_000))
 
-	// ACT #3: restore the proxy; the relayer resubscribes and triggers ws reconnection + clearing pass.
+	// ACT #3: restore the proxy; the relayer resubscribes on its backoff and
+	// triggers a clearing pass.
 	chainWSProxy.Revive()
-	time.Sleep(time.Second)
+	timing := chainA.Timing()
+	require.Eventually(t, chainWSProxy.Connected, timing.CompletionBudget, timing.PollInterval,
+		"relayer must reconnect its websocket subscription")
 
 	// ACT/ASSERT #3: send packet2 after reconnect; the resubscribed watcher should pick it up.
 	transfer3 := mustSend(t, transferApp, big.NewInt(300_000))

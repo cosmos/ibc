@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"math"
 	"math/big"
@@ -594,24 +593,11 @@ func (bc *Chain) CollectLogs(ctx context.Context) map[string]string {
 		if n.container == nil {
 			continue
 		}
-		if data := containerLogs(ctx, n.container); data != "" {
+		if data := container.Logs(ctx, n.container); data != "" {
 			logs[fmt.Sprintf("%s-%d", bc.logID, i)] = data
 		}
 	}
 	return logs
-}
-
-func containerLogs(ctx context.Context, c testcontainers.Container) string {
-	reader, err := c.Logs(ctx)
-	if err != nil {
-		return ""
-	}
-	defer reader.Close() //nolint:errcheck
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return ""
-	}
-	return string(data)
 }
 
 func besuStartupError(bc *Chain, err error) error {

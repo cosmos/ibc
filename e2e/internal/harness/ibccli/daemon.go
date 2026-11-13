@@ -59,6 +59,7 @@ type Relayer struct {
 	client       relayerv2.RelayerApiServiceClient
 	chainIDs     map[string]string
 	waitPolicies map[string]WaitPolicy
+	logPath      string
 	h            *processHandle
 }
 
@@ -97,11 +98,8 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: stderr pipe: %w", err)
 	}
-	logFile, err := os.OpenFile(
-		filepath.Join(r.configHome, "relayer.log"),
-		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
-		0o600,
-	)
+	logPath := filepath.Join(r.configHome, "relayer.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("ibc relayer run: create log: %w", err)
 	}
@@ -110,6 +108,7 @@ func startRelayer(ctx context.Context, r *Driver, opts RelayerOptions) (*Relayer
 	d := &Relayer{
 		chainIDs:     opts.ChainIDs,
 		waitPolicies: opts.WaitPolicies,
+		logPath:      logPath,
 	}
 
 	if startErr := cmd.Start(); startErr != nil {
@@ -228,6 +227,9 @@ func (d *Relayer) awaitReady(ctx context.Context, readyCh <-chan readyResult) (r
 }
 
 func (d *Relayer) Ready() relayerv2.ProcessReadiness { return d.readiness }
+
+// LogPath is where the relayer's structured log is written.
+func (d *Relayer) LogPath() string { return d.logPath }
 
 // WaitPolicy returns the configured packet wait policy for routeID.
 func (d *Relayer) WaitPolicy(routeID string) (WaitPolicy, bool) {

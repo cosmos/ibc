@@ -95,6 +95,14 @@ func (p *WebSocketProxy) Revive() {
 	p.t.Logf("WebSocketProxy %s revived", p.URL())
 }
 
+// Connected reports whether the proxy is carrying a client connection.
+func (p *WebSocketProxy) Connected() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return len(p.conns) > 0
+}
+
 func (p *WebSocketProxy) acceptLoop() {
 	for {
 		clientConn, err := p.listener.Accept()

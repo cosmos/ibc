@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/ibc-contracts/packages/go-abigen/ibcmulticall"
@@ -366,7 +365,7 @@ func (d *deployCLI) sendIFT(t *testing.T, route e2etest.Route, ift, to, amount s
 	require.NoErrorf(t, json.Unmarshal(stdout, &send), "tx ift send stdout: %s", stdout)
 
 	router := d.manifest(t, chainID).Core.Router
-	block, sequence := sentPacket(ctx, t, chain.RPCURL(), router, d.clientID(), send.TxHash)
+	block, sequence := sentPacket(ctx, t, chain, router, d.clientID(), send.TxHash)
 	return e2etest.PacketTx{
 		RouteID:           route.ID,
 		Source:            route.Source,
@@ -430,8 +429,8 @@ func TestDeployConnection(t *testing.T) {
 	// driver's ChainRPC values are env-var templates only the CLI process
 	// expands, so dial the chains' real RPC URLs.
 	manifestA := d.manifest(t, d.chainAID)
-	assertPublicRelaying(ctx, t, d.chainA.RPCURL(), manifestA)
-	assertPublicRelaying(ctx, t, d.chainB.RPCURL(), d.manifest(t, d.chainBID))
+	assertPublicRelaying(ctx, t, d.chainA, manifestA)
+	assertPublicRelaying(ctx, t, d.chainB, d.manifest(t, d.chainBID))
 	require.NotNil(t, manifestA.GMP)
 	require.Equal(t, "gmpport", manifestA.GMP.Port)
 
@@ -568,49 +567,54 @@ func readManifest(t testing.TB, manifestDir, chainID string) deployManifest {
 }
 
 // assertPublicRelaying checks both relay entrypoints and their shared authority.
-func assertPublicRelaying(ctx context.Context, t testing.TB, rpcURL string, m deployManifest) {
+func assertPublicRelaying(ctx context.Context, t testing.TB, chain *environment.Chain, m deployManifest) {
 	t.Helper()
 	authority := m.TargetData["accessManager"]
 	require.NotEmpty(t, authority, "manifest carries no accessManager in targetData")
 
 	routerABI, err := ics26router.ContractMetaData.GetAbi()
 	require.NoError(t, err)
-	client, err := ethclient.DialContext(ctx, rpcURL)
-	require.NoError(t, err)
-	defer client.Close()
-
-	manager, err := accessmanager.NewAccessManagerCaller(common.HexToAddress(authority), client)
-	require.NoError(t, err)
-	multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), client)
-	require.NoError(t, err)
-	gotAuthority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
-	require.NoError(t, err)
-	require.Equal(t, common.HexToAddress(authority), gotAuthority)
 	multicallABI, err := ibcmulticall.ContractMetaData.GetAbi()
 	require.NoError(t, err)
-	caller := common.HexToAddress("0x1000000000000000000000000000000000000001")
-	for _, tc := range []struct {
-		caller, target common.Address
-		selector       [4]byte
-	}{
-		{caller, common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
-		{caller, common.HexToAddress(m.Core.Multicall), [4]byte(multicallABI.Methods["multicall"].ID)},
-		{common.HexToAddress(m.Core.Multicall), common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
-	} {
-		permission, callErr := manager.CanCall(&bind.CallOpts{Context: ctx}, tc.caller, tc.target, tc.selector)
-		require.NoError(t, callErr)
-		require.True(t, permission.Immediate, "relay method is not publicly callable")
-	}
+	evm, err := chain.EVM()
+	require.NoError(t, err)
+	require.NoError(t, evm.UseContractCaller(func(client bind.ContractCaller) error {
+		manager, err := accessmanager.NewAccessManagerCaller(common.HexToAddress(authority), client)
+		require.NoError(t, err)
+		multicall, err := ibcmulticall.NewContractCaller(common.HexToAddress(m.Core.Multicall), client)
+		require.NoError(t, err)
+		gotAuthority, err := multicall.Authority(&bind.CallOpts{Context: ctx})
+		require.NoError(t, err)
+		require.Equal(t, common.HexToAddress(authority), gotAuthority)
+		caller := common.HexToAddress("0x1000000000000000000000000000000000000001")
+		for _, tc := range []struct {
+			caller, target common.Address
+			selector       [4]byte
+		}{
+			{caller, common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
+			{caller, common.HexToAddress(m.Core.Multicall), [4]byte(multicallABI.Methods["multicall"].ID)},
+			{common.HexToAddress(m.Core.Multicall), common.HexToAddress(m.Core.Router), [4]byte(routerABI.Methods["recvPacket"].ID)},
+		} {
+			permission, callErr := manager.CanCall(&bind.CallOpts{Context: ctx}, tc.caller, tc.target, tc.selector)
+			require.NoError(t, callErr)
+			require.True(t, permission.Immediate, "relay method is not publicly callable")
+		}
+		return nil
+	}))
 }
 
 // sentPacket returns the block and sequence of the one packet the router
 // sent over clientID in txHash.
-func sentPacket(ctx context.Context, t testing.TB, rpcURL, router, clientID, txHash string) (uint64, uint64) {
+func sentPacket(
+	ctx context.Context,
+	t testing.TB,
+	chain *environment.Chain,
+	router, clientID, txHash string,
+) (uint64, uint64) {
 	t.Helper()
-	client, err := ethclient.DialContext(ctx, rpcURL)
+	evm, err := chain.EVM()
 	require.NoError(t, err)
-	defer client.Close()
-	receipt, err := client.TransactionReceipt(ctx, common.HexToHash(txHash))
+	receipt, err := evm.TransactionReceipt(ctx, common.HexToHash(txHash))
 	require.NoError(t, err)
 	packets, err := e2etest.SentPackets(common.HexToAddress(router), clientID, receipt)
 	require.NoError(t, err)
