@@ -163,9 +163,9 @@ type Target interface {
 	// ProvisionClient deploys a light client governed by router, without
 	// registering it.
 	ProvisionClient(ctx context.Context, router string, spec ClientSpec) (ClientRef, error)
-	// RegisterClient registers a provisioned client on the router and returns
-	// the registered client ID.
-	RegisterClient(ctx context.Context, router string, spec ClientSpec, client ClientRef) (string, error)
+	// RegisterClient registers a provisioned client on the router under its
+	// client ID.
+	RegisterClient(ctx context.Context, router string, client manifest.Client) error
 	// ClientRegistered reports whether clientID is registered on router,
 	// returning the registered client address when it is.
 	ClientRegistered(ctx context.Context, router, clientID string) (string, bool, error)

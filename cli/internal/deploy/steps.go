@@ -189,10 +189,11 @@ func ClientSteps(t Target, dir, chainID string, spec ClientSpec) []Step {
 			if err != nil {
 				return err
 			}
-			if _, regErr := t.RegisterClient(ctx, m.Core.Router, spec, ref); regErr != nil {
-				return regErr
+			client := specToClient(spec, ref.Address)
+			if err := t.RegisterClient(ctx, m.Core.Router, client); err != nil {
+				return err
 			}
-			m.UpsertClient(specToClient(spec, ref.Address))
+			m.UpsertClient(client)
 			return m.Save(dir)
 		},
 	}}
