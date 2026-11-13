@@ -135,7 +135,7 @@ jobs:
         with:
           sqlc-version: "1.30.0"
 
-      - uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1
+      - uses: bufbuild/buf-action@37ac33d8960807670a6e9719080e885197b09cc6 # v1
         if: needs.changes.outputs.proto == 'true'
         with:
           setup_only: true
